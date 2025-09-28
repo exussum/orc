@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orc"
+dependencies = [
+  "APScheduler==3.11.0",
+  "requests==2.32.3"
+]
+version = "0.0.2"
+
+[project.scripts]
+orc = "orc:orc.worker"
