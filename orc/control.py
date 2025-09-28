@@ -1,7 +1,7 @@
 from enum import Enum
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from orc import config
 
@@ -37,7 +37,7 @@ def build_schedule():
         "results"
     ]
     reset = today.replace(hour=1)
-    sunrise = datetime.fromisoformat(sun_result["sunrise"]).timedelta(hours=-1)
+    sunrise = datetime.fromisoformat(sun_result["sunrise"]) - timedelta(hours=1)
     core_start = today.replace(hour=9, minute=15, second=0)
     core_end = today.replace(hour=22, minute=30, second=0)
 
