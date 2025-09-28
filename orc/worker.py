@@ -10,7 +10,7 @@ def add_day_jobs(scheduler):
         scheduler.add_job(f, DateTrigger(time))
 
 
-if __name__ == "__main__":
+def main():
     scheduler = BlockingScheduler()
 
     def f():

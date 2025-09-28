@@ -8,7 +8,7 @@ dependencies = [
   "APScheduler==3.11.0",
   "requests==2.32.3"
 ]
-version = "0.0.2"
+version = "0.0.1"
 
 [project.scripts]
-orc = "orc:orc.worker"
+orc = "orc.worker:main"

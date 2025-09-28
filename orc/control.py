@@ -23,11 +23,9 @@ def set_light(light, on=None, brightness=None):
                 f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}"
             )
         else:
-            print(
-                requests.get(
-                    f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}"
-                ).content
-            )
+            requests.get(
+                f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}"
+            ).content
 
     return f
 
@@ -43,7 +41,11 @@ def build_schedule():
     core_start = today.replace(hour=9, minute=15, second=0)
     core_end = today.replace(hour=22, minute=30, second=0)
 
-    result = [(reset, set_light(e, on=False)) for e in Lights if e != Lights.BEDROOM_NIGHT_LIGHT]
+    result = [
+        (reset, set_light(e, on=False))
+        for e in Lights
+        if e != Lights.BEDROOM_NIGHT_LIGHT
+    ]
     result.append((sunrise, set_light(Lights.LIVING_ROOM_DESK_LAMP, on=True)))
     result.append((sunrise, set_light(Lights.LIVING_ROOM_FLOOR_LAMP, on=True)))
     result.append((core_start, set_light(Lights.BEDROOM_NIGHT_LIGHT, on=False)))
