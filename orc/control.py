@@ -62,6 +62,8 @@ def build_schedule():
         (reset, set_light(e, on=False)) for e in Light if e != Light.BEDROOM_NIGHT_LIGHT
     ]
     result.append((sunrise, set_light(Light.LIVING_ROOM_FLOOR_LAMP, on=True)))
+    result.append((sunrise, set_light(Light.KITCHEN_LIGHTS, on=True)))
+    result.append((core_start, set_light(Light.KITCHEN_LIGHTS, on=False)))
     result.extend(((core_start, set_sound(e, 40)) for e in Sound))
     result.append((core_start, set_light(Light.LIVING_ROOM_DESK_LAMP, on=True)))
     result.append((core_start, set_light(Light.BEDROOM_NIGHT_LIGHT, on=False)))
