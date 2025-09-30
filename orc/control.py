@@ -37,6 +37,15 @@ def set_light(light, on=None, brightness=None):
     return f
 
 
+def cast_initialize(sound):
+    def f():
+        requests.get(
+            f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}"
+        )
+
+    return f
+
+
 def set_sound(sound, lvl):
     def f():
         requests.get(
@@ -63,11 +72,17 @@ def build_schedule():
     ]
     result.append((sunrise, set_light(Light.LIVING_ROOM_FLOOR_LAMP, on=True)))
     result.append((sunrise, set_light(Light.KITCHEN_LIGHTS, on=True)))
-    result.append((core_start, set_light(Light.KITCHEN_LIGHTS, on=False)))
+    result.extend(
+        ((core_start - timedelta(minutes=1), cast_initialize(e)) for e in Sound)
+    )
     result.extend(((core_start, set_sound(e, 40)) for e in Sound))
+    result.append((core_start, set_light(Light.KITCHEN_LIGHTS, on=False)))
     result.append((core_start, set_light(Light.LIVING_ROOM_DESK_LAMP, on=True)))
     result.append((core_start, set_light(Light.BEDROOM_NIGHT_LIGHT, on=False)))
     result.append((core_start, set_light(Light.ENTANCE_DESK_LAMP, brightness=100)))
     result.append((sunset, set_light(Light.BEDROOM_NIGHT_LIGHT, on=True)))
+    result.extend(
+        ((core_end - timedelta(minutes=1), cast_initialize(e)) for e in Sound)
+    )
     result.extend(((core_end, set_sound(e, 10)) for e in Sound))
     return result
