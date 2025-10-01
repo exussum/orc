@@ -62,7 +62,7 @@ def build_schedule():
         "results"
     ]
     reset = today.replace(hour=1)
-    sunrise = datetime.fromisoformat(sun_result["sunrise"]) - timedelta(minutes=30)
+    sunrise = datetime.fromisoformat(sun_result["sunrise"]) - timedelta(minutes=60)
     sunset = datetime.fromisoformat(sun_result["sunset"]) + timedelta(minutes=60)
     core_start = today.replace(hour=9, minute=0, second=0)
     core_end = today.replace(hour=22, minute=0, second=0)
