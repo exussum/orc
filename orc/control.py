@@ -63,26 +63,20 @@ def build_schedule():
     ]
     reset = today.replace(hour=1)
     sunrise = datetime.fromisoformat(sun_result["sunrise"]) - timedelta(minutes=30)
-    sunset = datetime.fromisoformat(sun_result["sunset"]) + timedelta(minutes=30)
+    sunset = datetime.fromisoformat(sun_result["sunset"]) + timedelta(minutes=60)
     core_start = today.replace(hour=9, minute=0, second=0)
     core_end = today.replace(hour=22, minute=0, second=0)
 
-    result = [
-        (reset, set_light(e, on=False)) for e in Light if e != Light.BEDROOM_NIGHT_LIGHT
-    ]
+    result = [(reset, set_light(e, on=False)) for e in Light if e != Light.BEDROOM_NIGHT_LIGHT ]
     result.append((sunrise, set_light(Light.LIVING_ROOM_FLOOR_LAMP, on=True)))
     result.append((sunrise, set_light(Light.KITCHEN_LIGHTS, on=True)))
-    result.extend(
-        ((core_start - timedelta(minutes=1), cast_initialize(e)) for e in Sound)
-    )
+    result.extend(((core_start - timedelta(minutes=1), cast_initialize(e)) for e in Sound))
     result.extend(((core_start, set_sound(e, 40)) for e in Sound))
     result.append((core_start, set_light(Light.KITCHEN_LIGHTS, on=False)))
     result.append((core_start, set_light(Light.LIVING_ROOM_DESK_LAMP, on=True)))
     result.append((core_start, set_light(Light.BEDROOM_NIGHT_LIGHT, on=False)))
     result.append((core_start, set_light(Light.ENTANCE_DESK_LAMP, brightness=100)))
     result.append((sunset, set_light(Light.BEDROOM_NIGHT_LIGHT, on=True)))
-    result.extend(
-        ((core_end - timedelta(minutes=1), cast_initialize(e)) for e in Sound)
-    )
+    result.extend(((core_end - timedelta(minutes=1), cast_initialize(e)) for e in Sound))
     result.extend(((core_end, set_sound(e, 10)) for e in Sound))
     return result
