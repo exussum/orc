@@ -12,3 +12,4 @@ version = "0.0.1"
 
 [project.scripts]
 orc = "orc.worker:main"
+test = "orc.worker:test"
