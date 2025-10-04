@@ -1,34 +1,17 @@
-from enum import Enum
 import time
+from zoneinfo import ZoneInfo
 import requests
+from enum import Enum
 from datetime import datetime, timedelta
+from dataclasses import replace
 
 from orc import config
-
-
-def build_enums(config):
-    json = requests.get(f"{config.BASE_URL}/devices{config.ACCESS_TOKEN}").json()
-
-    enums = []
-    for name, cfg in (
-        ("Light", config.LIGHT_NAME_TO_HUBITAT),
-        ("Sound", config.AUDIO_NAME_TO_HUBITAT),
-    ):
-        enums.append(
-            Enum(name, {cfg[e["label"]]: e["id"] for e in json if e["label"] in cfg})
-        )
-    return tuple(enums)
-
-
-Light, Sound = build_enums(config)
 
 
 def set_light(light, on=None, brightness=None):
     def f():
         if brightness:
-            requests.get(
-                f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}"
-            )
+            requests.get(f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}")
         else:
             requests.get(
                 f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}"
@@ -39,44 +22,44 @@ def set_light(light, on=None, brightness=None):
 
 def cast_initialize(sound):
     def f():
-        requests.get(
-            f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}"
-        )
+        requests.get(f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}").json()
 
     return f
 
 
 def set_sound(sound, lvl):
     def f():
-        requests.get(
-            f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}"
-        )
+        requests.get(f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}").json()
 
     return f
 
 
 def build_schedule():
-    today = datetime.now()
+    now = datetime.now(tz=ZoneInfo("America/New_York"))
+    sun_result = requests.get(f"{config.SUNRISE_URL}&date={now.date()}").json()["results"]
+    sunrise = datetime.fromisoformat(sun_result["sunrise"])
+    sunset = datetime.fromisoformat(sun_result["sunset"])
 
-    sun_result = requests.get(f"{config.SUNRISE_URL}&date={today.date()}").json()[
-        "results"
-    ]
-    reset = today.replace(hour=1)
-    sunrise = datetime.fromisoformat(sun_result["sunrise"]) - timedelta(minutes=60)
-    sunset = datetime.fromisoformat(sun_result["sunset"]) + timedelta(minutes=60)
-    core_start = today.replace(hour=9, minute=0, second=0)
-    core_end = today.replace(hour=22, minute=0, second=0)
+    result = []
+    for e in config.CONFIGS:
+        if e.when == "sunrise":
+            time = sunrise
+        elif e.when == "sunset":
+            time = sunset
+        else:
+            time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
+        time = time + e.offset
 
-    result = [(reset, set_light(e, on=False)) for e in Light if e != Light.BEDROOM_NIGHT_LIGHT ]
-    result.append((sunrise, set_light(Light.LIVING_ROOM_FLOOR_LAMP, on=True)))
-    result.append((sunrise, set_light(Light.KITCHEN_LIGHTS, on=True)))
-    result.extend(((core_start - timedelta(minutes=1), cast_initialize(e)) for e in Sound))
-    result.extend(((core_start, set_sound(e, 40)) for e in Sound))
-    result.append((core_start, set_light(Light.KITCHEN_LIGHTS, on=False)))
-    result.append((core_start, set_light(Light.LIVING_ROOM_DESK_LAMP, on=True)))
-    result.append((core_start, set_light(Light.BEDROOM_NIGHT_LIGHT, on=False)))
-    result.append((core_start, set_light(Light.ENTANCE_DESK_LAMP, brightness=100)))
-    result.append((sunset, set_light(Light.BEDROOM_NIGHT_LIGHT, on=True)))
-    result.extend(((core_end - timedelta(minutes=1), cast_initialize(e)) for e in Sound))
-    result.extend(((core_end, set_sound(e, 10)) for e in Sound))
+        what = [e.what] if isinstance(e.what, Enum) else e.what
+
+        for w in what:
+            if isinstance(e, config.LightConfig):
+                f = set_light(w, brightness=e.state) if isinstance(e.state, int) else set_light(w, on=e.state == "on")
+            else:
+                f = cast_initialize(w) if e.state == "initialize" else set_sound(w, e.state)
+
+            debug_config = replace(e)
+            debug_config.what = w
+            result.append((time, f, debug_config))
+
     return result
