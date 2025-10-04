@@ -1,12 +1,13 @@
-from enum import Enum
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+import time
+from enum import Enum
 from orc import control
 
 
 def add_day_jobs(scheduler):
-    for time, f in control.build_schedule():
+    for time, f, _ in control.build_schedule():
         scheduler.add_job(f, DateTrigger(time))
 
 
@@ -23,3 +24,11 @@ def main():
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
         pass
+
+
+def test():
+    for when, f, e in sorted(control.build_schedule(), key=lambda e: e[0]):
+        print(e)
+        time.sleep(1)
+        f()
+        time.sleep(1)
