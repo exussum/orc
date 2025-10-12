@@ -27,8 +27,8 @@ def main():
 
 
 def test():
-    for when, f, e in sorted(control.build_schedule(), key=lambda e: e[0]):
+    for when, e in sorted(control.build_schedule(), key=lambda e: e[0]):
         print(e)
         time.sleep(1)
-        f()
+        control.execute(e)
         time.sleep(1)

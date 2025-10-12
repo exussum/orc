@@ -9,34 +9,33 @@ from orc import config
 
 
 def set_light(light, on=None, brightness=None):
-    def f():
-        if brightness:
-            requests.get(f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}")
-        else:
-            requests.get(
-                f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}"
-            ).content
-
-    return f
+    if brightness:
+        requests.get(
+            f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}"
+        )
+    else:
+        requests.get(
+            f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}"
+        ).content
 
 
 def cast_initialize(sound):
-    def f():
-        requests.get(f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}").json()
-
-    return f
+    requests.get(
+        f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}"
+    ).json()
 
 
 def set_sound(sound, lvl):
-    def f():
-        requests.get(f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}").json()
-
-    return f
+    requests.get(
+        f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}"
+    ).json()
 
 
 def build_schedule():
     now = datetime.now(tz=ZoneInfo("America/New_York"))
-    sun_result = requests.get(f"{config.SUNRISE_URL}&date={now.date()}").json()["results"]
+    sun_result = requests.get(f"{config.SUNRISE_URL}&date={now.date()}").json()[
+        "results"
+    ]
     sunrise = datetime.fromisoformat(sun_result["sunrise"])
     sunset = datetime.fromisoformat(sun_result["sunset"])
 
@@ -50,16 +49,29 @@ def build_schedule():
             time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
         time = time + e.offset
 
-        what = [e.what] if isinstance(e.what, Enum) else e.what
-
-        for w in what:
-            if isinstance(e, config.LightConfig):
-                f = set_light(w, brightness=e.state) if isinstance(e.state, int) else set_light(w, on=e.state == "on")
-            else:
-                f = cast_initialize(w) if e.state == "initialize" else set_sound(w, e.state)
-
-            debug_config = replace(e)
-            debug_config.what = w
-            result.append((time, f, debug_config))
+        result.append((time, e))
 
     return result
+
+
+def execute(rule):
+    if isinstance(rule, config.RoutineConfig):
+        for e in rule.items:
+            execute(e)
+    else:
+        what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+        sleep = time.sleep if len(what) > 1 else (lambda _: 1)
+        for w in what:
+            if isinstance(rule, config.LightConfig):
+                (
+                    set_light(w, brightness=rule.state)
+                    if isinstance(rule.state, int)
+                    else set_light(w, on=rule.state == "on")
+                )
+            else:
+                (
+                    cast_initialize(w)
+                    if rule.state == "initialize"
+                    else set_sound(w, rule.state)
+                )
+            sleep(1)
