@@ -17,11 +17,7 @@ hubitat_config = requests.get(f"{BASE_URL}/devices{ACCESS_TOKEN}").json()
 def build_enum(name, hub_name_to_token, hubitat_config):
     return Enum(
         name,
-        {
-            hub_name_to_token[e["label"]]: e["id"]
-            for e in hubitat_config
-            if e["label"] in hub_name_to_token
-        },
+        {hub_name_to_token[e["label"]]: e["id"] for e in hubitat_config if e["label"] in hub_name_to_token},
     )
 
 
@@ -63,9 +59,7 @@ CONFIGS = scan(
         state="on",
         offset="-60 minutes",
     ),
-    LightConfig(
-        name="partner leaving", when="sunrise", what=Light.ENTANCE_DESK_LAMP, state=1
-    ),
+    LightConfig(name="partner leaving", when="sunrise", what=Light.ENTANCE_DESK_LAMP, state=1),
     RoutineConfig(
         name="up and atom",
         when="9:00",
