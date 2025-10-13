@@ -10,32 +10,22 @@ from orc import config
 
 def set_light(light, on=None, brightness=None):
     if brightness:
-        requests.get(
-            f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}"
-        )
+        requests.get(f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}")
     else:
-        requests.get(
-            f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}"
-        ).content
+        requests.get(f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}").content
 
 
 def cast_initialize(sound):
-    requests.get(
-        f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}"
-    ).json()
+    requests.get(f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}").json()
 
 
 def set_sound(sound, lvl):
-    requests.get(
-        f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}"
-    ).json()
+    requests.get(f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}").json()
 
 
 def build_schedule():
     now = datetime.now(tz=ZoneInfo("America/New_York"))
-    sun_result = requests.get(f"{config.SUNRISE_URL}&date={now.date()}").json()[
-        "results"
-    ]
+    sun_result = requests.get(f"{config.SUNRISE_URL}&date={now.date()}").json()["results"]
     sunrise = datetime.fromisoformat(sun_result["sunrise"])
     sunset = datetime.fromisoformat(sun_result["sunset"])
 
@@ -69,9 +59,5 @@ def execute(rule):
                     else set_light(w, on=rule.state == "on")
                 )
             else:
-                (
-                    cast_initialize(w)
-                    if rule.state == "initialize"
-                    else set_sound(w, rule.state)
-                )
+                (cast_initialize(w) if rule.state == "initialize" else set_sound(w, rule.state))
             sleep(1)
