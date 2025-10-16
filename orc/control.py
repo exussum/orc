@@ -23,14 +23,32 @@ def set_sound(sound, lvl):
     requests.get(f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}").json()
 
 
+def calculate_theme(today):
+    if today.day not in (0, 6) or True:
+        today_iso = today.strftime("%Y-%m-%d")
+        market_schedule = requests.get(f"{config.MARKET_HOLIDAYS_URL}").json()
+        theme_name = (
+            "holiday"
+            if next((e for e in market_schedule if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
+            else "non-holiday"
+        )
+    else:
+        theme_name = "holiday"
+    return theme_name
+
+
 def build_schedule():
     now = datetime.now(tz=ZoneInfo("America/New_York"))
     sun_result = requests.get(f"{config.SUNRISE_URL}&date={now.date()}").json()["results"]
     sunrise = datetime.fromisoformat(sun_result["sunrise"])
     sunset = datetime.fromisoformat(sun_result["sunset"])
 
+    theme = calculate_theme(now.date())
+    print(theme)
+    cfg = next((e for e in config.CONFIGS if e.days == theme))
+
     result = []
-    for e in config.CONFIGS:
+    for e in cfg.configs:
         if e.when == "sunrise":
             time = sunrise
         elif e.when == "sunset":

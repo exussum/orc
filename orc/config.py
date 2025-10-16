@@ -4,12 +4,13 @@ import itertools
 import os
 import requests
 
-from orc.model import LightConfig, SoundConfig, RoutineConfig, scan
+from orc.model import LightConfig, SoundConfig, RoutineConfig, scan, Theme
 from orc import model
 
 BASE_URL = os.getenv("BASE_URL")
 ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN")
 SUNRISE_URL = os.getenv("SUNRISE_URL")
+MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL")
 
 hubitat_config = requests.get(f"{BASE_URL}/devices{ACCESS_TOKEN}").json()
 
@@ -46,33 +47,81 @@ Sound = build_enum(
 )
 
 CONFIGS = scan(
-    LightConfig(
-        name="reset",
-        when="1:00",
-        what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT},
-        state="off",
-    ),
-    LightConfig(
-        name="partner up",
-        when="sunrise",
-        what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS],
-        state="on",
-        offset="-60 minutes",
-    ),
-    LightConfig(name="partner leaving", when="sunrise", what=Light.ENTANCE_DESK_LAMP, state=1),
-    RoutineConfig(
-        name="up and atom",
-        when="9:00",
-        items=[
-            SoundConfig(what=Sound, state=40),
-            LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+    Theme(
+        days="non-holiday",
+        name="workday",
+        configs=(
             LightConfig(
-                what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP],
-                state="on",
+                name="reset",
+                when="1:00",
+                what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT},
+                state="off",
             ),
-            LightConfig(what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
-        ],
+            LightConfig(
+                name="partner up",
+                when="sunrise",
+                what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS],
+                state="on",
+                offset="-60 minutes",
+            ),
+            LightConfig(name="partner leaving", when="sunrise", what=Light.ENTANCE_DESK_LAMP, state=1),
+            RoutineConfig(
+                name="up and atom",
+                when="9:00",
+                items=(
+                    SoundConfig(what=Sound, state=40),
+                    LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+                    LightConfig(
+                        what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP],
+                        state="on",
+                    ),
+                    LightConfig(what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
+                ),
+            ),
+            LightConfig(when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
+            SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
+        ),
     ),
-    LightConfig(when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
-    SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
+    Theme(name="away", configs=()),
+    Theme(
+        name="babysitting",
+        configs=(
+            LightConfig(when="sunrise", what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
+            LightConfig(when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
+        ),
+    ),
+    Theme(
+        days="holiday",
+        name="day off",
+        configs=(
+            LightConfig(
+                name="reset",
+                when="1:00",
+                what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT},
+                state="off",
+            ),
+            LightConfig(
+                name="partner up",
+                when="sunrise",
+                what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS],
+                state="on",
+                offset="-60 minutes",
+            ),
+            RoutineConfig(
+                name="up and atom",
+                when="10:00",
+                items=(
+                    SoundConfig(what=Sound, state=40),
+                    LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+                    LightConfig(
+                        what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP],
+                        state="on",
+                    ),
+                    LightConfig(what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
+                ),
+            ),
+            LightConfig(when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
+            SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
+        ),
+    ),
 )
