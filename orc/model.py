@@ -1,7 +1,7 @@
 from dataclasses import dataclass, KW_ONLY, replace
 from enum import Enum
 from datetime import time, timedelta
-from typing import Optional, List
+from typing import Optional, Tuple
 
 
 @dataclass
@@ -37,13 +37,28 @@ class SoundConfig(SimpleConfig):
 
 @dataclass
 class RoutineConfig(ScheduledConfig):
-    items: SimpleConfig
+    items: Tuple[SimpleConfig]
 
 
-def scan(*configs):
-    for e in configs:
-        if isinstance(e, RoutineConfig):
-            for w in e.items:
-                w.offset = e.offset
-                w.when = e.when
-    return configs
+@dataclass
+class Theme:
+    name: str
+    configs: Tuple[ScheduledConfig]
+    days: Optional[str] = None
+
+
+def scan(*themes):
+    theme_names = set()
+
+    for theme in themes:
+        if theme.name in theme_names:
+            raise ValueError(f"Theme name repeated: {theme.name}")
+            theme_names.add(theme.name)
+
+        for e in theme.configs:
+            if isinstance(e, RoutineConfig):
+                for w in e.items:
+                    w.offset = e.offset
+                    w.when = e.when
+
+    return themes
