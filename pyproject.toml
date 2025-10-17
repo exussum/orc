@@ -3,12 +3,19 @@ requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
 [project]
+version = "0.0.1"
 name = "orc"
 dependencies = [
   "APScheduler==3.11.0",
-  "requests==2.32.3"
+  "requests==2.32.3",
+  "Flask_Admin==1.6.1",
 ]
-version = "0.0.1"
+
+
+[tool.isort]
+profile = "black"
+src_paths = ["orc"]
+
 
 [project.scripts]
 orc = "orc.worker:main"

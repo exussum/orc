@@ -1,6 +1,6 @@
-from dataclasses import dataclass, KW_ONLY, replace
-from enum import Enum
+from dataclasses import KW_ONLY, dataclass, replace
 from datetime import time, timedelta
+from enum import Enum
 from typing import Optional, Tuple
 
 
