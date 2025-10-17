@@ -1,24 +1,31 @@
-from datetime import timedelta, datetime
-from enum import Enum
 import itertools
 import os
+from collections import defaultdict
+from datetime import datetime, timedelta
+from enum import Enum
+
 import requests
 
-from orc.model import LightConfig, SoundConfig, RoutineConfig, scan, Theme
 from orc import model
+from orc.model import LightConfig, RoutineConfig, SoundConfig, Theme, scan
 
 BASE_URL = os.getenv("BASE_URL")
 ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN")
 SUNRISE_URL = os.getenv("SUNRISE_URL")
 MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL")
 
-hubitat_config = requests.get(f"{BASE_URL}/devices{ACCESS_TOKEN}").json()
+CONFIGS = ()
+
+# hubitat_config = requests.get(f"{BASE_URL}/devices{ACCESS_TOKEN}").json()
+hubitat_config = {}
 
 
 def build_enum(name, hub_name_to_token, hubitat_config):
+    id_lookup = {e["label"]: e["id"] for e in hubitat_config}
+
     return Enum(
         name,
-        {hub_name_to_token[e["label"]]: e["id"] for e in hubitat_config if e["label"] in hub_name_to_token},
+        {token: id_lookup.get(name, -default) for (default, (name, token)) in enumerate(hub_name_to_token.items())},
     )
 
 
@@ -35,6 +42,7 @@ Light = build_enum(
     },
     hubitat_config,
 )
+
 Sound = build_enum(
     "Sound",
     {
@@ -45,6 +53,8 @@ Sound = build_enum(
     },
     hubitat_config,
 )
+
+# fmt: off
 
 CONFIGS = scan(
     Theme(
@@ -97,3 +107,5 @@ CONFIGS = scan(
         ),
     ),
 )
+
+# fmt:on
