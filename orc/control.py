@@ -1,9 +1,12 @@
 import time
-from zoneinfo import ZoneInfo
-import requests
-from enum import Enum
-from datetime import datetime, timedelta
 from dataclasses import replace
+from datetime import datetime, timedelta
+from enum import Enum
+from zoneinfo import ZoneInfo
+
+import requests
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 
 from orc import config
 
@@ -44,7 +47,6 @@ def build_schedule():
     sunset = datetime.fromisoformat(sun_result["sunset"])
 
     theme = calculate_theme(now.date())
-    print(theme)
     cfg = next((e for e in config.CONFIGS if e.days == theme))
 
     result = []
@@ -79,3 +81,13 @@ def execute(rule):
             else:
                 (cast_initialize(w) if rule.state == "initialize" else set_sound(w, rule.state))
             sleep(1)
+
+
+def setup_scheduler(scheduler):
+    def f():
+        for time, rule in build_schedule():
+            scheduler.add_job(lambda: execute(rule), DateTrigger(time))
+
+    f()
+    scheduler.add_job(f, CronTrigger.from_crontab("30 0 * * *"))
+    return scheduler
