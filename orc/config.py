@@ -25,7 +25,10 @@ def build_enum(name, hub_name_to_token, hubitat_config):
 
     return Enum(
         name,
-        {token: id_lookup.get(name, -default) for (default, (name, token)) in enumerate(hub_name_to_token.items())},
+        {
+            token: id_lookup.get(name, -(default + 1))
+            for (default, (name, token)) in enumerate(hub_name_to_token.items())
+        },
     )
 
 

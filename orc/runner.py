@@ -36,8 +36,5 @@ def test():
     for when, e in sorted(build_schedule(), key=lambda e: e[0]):
         print(e)
         time.sleep(1)
-        import pdb
-
-        pdb.set_trace()
         execute(e)
         time.sleep(1)

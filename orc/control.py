@@ -72,15 +72,18 @@ def execute(rule):
         what = [rule.what] if isinstance(rule.what, Enum) else rule.what
         sleep = time.sleep if len(what) > 1 else (lambda _: 1)
         for w in what:
-            if isinstance(rule, config.LightConfig):
-                (
-                    set_light(w, brightness=rule.state)
-                    if isinstance(rule.state, int)
-                    else set_light(w, on=rule.state == "on")
-                )
+            if w.value < 0:
+                print(f"Device {w} not found")
             else:
-                (cast_initialize(w) if rule.state == "initialize" else set_sound(w, rule.state))
-            sleep(1)
+                if isinstance(rule, config.LightConfig):
+                    (
+                        set_light(w, brightness=rule.state)
+                        if isinstance(rule.state, int)
+                        else set_light(w, on=rule.state == "on")
+                    )
+                else:
+                    (cast_initialize(w) if rule.state == "initialize" else set_sound(w, rule.state))
+                sleep(1)
 
 
 def setup_scheduler(scheduler):
