@@ -1,4 +1,6 @@
 import time
+from collections import deque
+from enum import Enum
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -7,19 +9,22 @@ from flask_admin import BaseView, expose
 from flask_admin.base import Admin, AdminIndexView
 
 from orc.control import build_schedule, execute, setup_scheduler
+from orc.model import RoutineConfig
 
 
 def web():
     app = Flask(__name__)
     app.config["FLASK_ADMIN_SWATCH"] = "Slate"
+    scheduler = setup_scheduler(BackgroundScheduler())
 
     class OrcAdminView(AdminIndexView):
         @expose("/")
         def index(self):
-            return self.render("admin/orc.html")
+            jobs = scheduler.get_jobs()
+            return self.render("orc.html", jobs=jobs)
 
+    scheduler.start()
     admin = Admin(app, name="ORChestration", template_mode="bootstrap3", index_view=OrcAdminView(url="/"))
-    setup_scheduler(BackgroundScheduler()).start()
     app.run()
 
 
@@ -33,7 +38,7 @@ def worker():
 
 
 def test():
-    for when, e in sorted(build_schedule(), key=lambda e: e[0]):
+    for when, e in sorted(build_schedule(), key=lambda x: x[0]):
         print(e)
         time.sleep(1)
         execute(e)
