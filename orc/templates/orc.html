@@ -1,0 +1,12 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+    <table>
+    {% for job in jobs %}
+        <tr>
+        <td>{{ job.id}}</td>
+        <td>{{ job.name }}</td>
+        <td>{{ job.next_run_time }}</td>
+        </tr>
+    {% endfor %}
+{% endblock %}

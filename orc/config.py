@@ -1,12 +1,8 @@
-import itertools
 import os
-from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import Enum
 
-import requests
-
-from orc import model
+from orc import dal, model
 from orc.model import LightConfig, RoutineConfig, SoundConfig, Theme, scan
 
 BASE_URL = os.getenv("BASE_URL")
@@ -14,14 +10,11 @@ ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN")
 SUNRISE_URL = os.getenv("SUNRISE_URL")
 MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL")
 
-CONFIGS = ()
-
-# hubitat_config = requests.get(f"{BASE_URL}/devices{ACCESS_TOKEN}").json()
-hubitat_config = {}
+hubitat_config = dal.get_config()
 
 
 def build_enum(name, hub_name_to_token, hubitat_config):
-    id_lookup = {e["label"]: e["id"] for e in hubitat_config}
+    id_lookup = {e["label"]: int(e["id"]) for e in hubitat_config}
 
     return Enum(
         name,
@@ -77,7 +70,7 @@ CONFIGS = scan(
                     LightConfig(what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
                 ),
             ),
-            LightConfig(when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
+            LightConfig(name="dog light", when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
             SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
         ),
     ),
@@ -93,11 +86,11 @@ CONFIGS = scan(
         days="holiday",
         name="day off",
         configs=(
-            LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off",),
+            LightConfig(name="reset", when="2:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off",),
             LightConfig(name="partner up", when="sunrise", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on", offset="-60 minutes",),
             RoutineConfig(
                 name="up and atom",
-                when="10:00",
+                when="9:30",
                 items=(
                     SoundConfig(what=Sound, state=40),
                     LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
@@ -105,7 +98,7 @@ CONFIGS = scan(
                     LightConfig(what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
                 ),
             ),
-            LightConfig(when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
+            LightConfig(name="dog light", when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
             SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
         ),
     ),
