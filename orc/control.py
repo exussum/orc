@@ -73,11 +73,12 @@ def execute(rule):
 def _make_rule_lambda(rule):
     """
     solves for:
-    
+
     for e in range(2):
        lambda: print(e)
     """
     return lambda: execute(rule)
+
 
 def setup_scheduler(scheduler):
     def f():
@@ -89,6 +90,7 @@ def setup_scheduler(scheduler):
                 id=f"{rule.name}-{time.date().isoformat()}",
                 replace_existing=True,
             )
+
     f()
     scheduler.add_job(
         f,
