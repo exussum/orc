@@ -1,7 +1,10 @@
 import random
 import time
 from collections import deque
+from datetime import datetime
 from enum import Enum
+from functools import wraps
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -22,36 +25,44 @@ def web():
     class OrcAdminView(AdminIndexView):
         version = str(random.random())
 
+        @staticmethod
+        def versioned(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                global version
+                if not request.headers.get("orc-version") == OrcAdminView.version:
+                    return {"version": OrcAdminView.version}, 412
+                func(*args, **kwargs)
+                OrcAdminView.version = str(random.random())
+                return {"version": OrcAdminView.version}, 200
+
+            return wrapper
+
         @expose("/")
         def index(self):
-            jobs = [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger)]
+            now = datetime.now(tz=ZoneInfo("America/New_York"))
+            jobs = [
+                e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now
+            ]
             jobs = sorted(jobs, key=lambda e: e.trigger.run_date)
             return self.render("orc.html", version=self.version, jobs=jobs), 200, {"Cache-control": "no-store"}
 
-        @expose("/<id>/run")
-        def run(self, id):
-            if not request.headers["orc-version"] == self.version:
-                return {"version": self.version}, 412
-
-            job = scheduler.get_job(id)
-            job.func()
-
-            self.version = str(random.random())
-            return {"version": self.version}, 200
-
+        @versioned
         @expose("/<id>/pause")
-        def run(self, id):
-            if not request.headers["orc-version"] == self.version:
-                return {"version": self.version}, 412
-
+        def pause(self, id):
+            print("hi")
             job = scheduler.get_job(id)
             if job.next_run_time:
                 job.pause()
             else:
                 job.resume()
 
-            self.version = str(random.random())
-            return {"version": self.version}, 200
+        @versioned
+        @expose("/<id>/run")
+        def run(self, id):
+            print("hrm")
+            job = scheduler.get_job(id)
+            job.func()
 
     scheduler.start()
     admin = Admin(app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(url="/"))
