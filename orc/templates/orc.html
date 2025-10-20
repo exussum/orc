@@ -1,12 +1,73 @@
 {% extends 'admin/master.html' %}
 
 {% block body %}
-    <table>
+    <table class="table">
+        <tr>
+        <th class="col-1">Run</th>
+        <th class="col-1">Enabled</th>
+        <th>Job</th>
+        <th>When</th>
+        </tr>
     {% for job in jobs %}
         <tr>
-        <td>{{ job.id}}</td>
+        <td class="col-1">
+            <button class="btn btn-primary orc-runner" data-id="{{ job.id }}">&nbsp;</button>
+        </td>
+        <td class="col-1">
+            <div class="form-group">
+               <div class="custom-control custom-switch">
+                 <input type="checkbox" class="custom-control-input orc-enable" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
+                 <label class="custom-control-label" for="enable-{{ job.id }}"></label>
+               </div>
+             </div>
+        </td>
         <td>{{ job.name }}</td>
-        <td>{{ job.next_run_time }}</td>
+        <td>{{ job.trigger.run_date.date() }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
         </tr>
     {% endfor %}
+    </table>
+
+{% endblock %}
+
+{% block tail %}
+    <script>
+        let version = "{{ version }}";
+        async function _call(url, e, onSuccess=()=>{}, onFailure=()=>{}) {
+          e.prop("disabled", true);
+          let response = null;
+          try {
+            console.log(version);
+            response = await fetch(url, { headers: {
+              "orc-version": version
+            }});
+            console.log(response);
+
+            if (!response.ok) {
+              throw new Error(`Response status: ${response.status}`);
+            }
+            version = (await response.json()).version;
+            console.log(version);
+            return true;
+          } catch (error) {
+            if(response.status == 412) {
+                location.reload();
+            }
+            console.error(error.message);
+            return false;
+          } finally {
+            e.prop("disabled", false);
+          }
+        }
+        
+        async function run(e) { _call(`/${e.data("id")}/run`, e); }
+        async function pause(e) { 
+            var newStatus = e.prop("checked");
+            if(!await _call(`/${e.data("id")}/pause`, e)) {
+                e.prop("checked", !newStatus);
+            }
+        }
+
+        $(".orc-runner").on("click", (e) => { run($(e.currentTarget)); });
+        $(".orc-enable").change((e) => { pause($(e.currentTarget)); });
+    </script>
 {% endblock %}

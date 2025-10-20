@@ -10,7 +10,6 @@ from orc import config, dal
 
 
 def calculate_theme(today):
-    print(today.weekday)
     if today.weekday() not in (5, 6):
         today_iso = today.strftime("%Y-%m-%d")
         market_schedule = dal.get_holidays()
@@ -26,6 +25,7 @@ def calculate_theme(today):
 
 def build_schedule():
     timezone = ZoneInfo("America/New_York")
+    result = []
     for x in range(2):
         now = datetime.now(tz=timezone) + timedelta(days=x)
         sun_result = dal.get_sun_cycle(now.date())
@@ -33,10 +33,8 @@ def build_schedule():
         sunset = datetime.fromisoformat(sun_result["sunset"])
 
         theme = calculate_theme(now.date())
-        print(theme)
         cfg = next((e for e in config.CONFIGS if e.days == theme))
 
-        result = []
         for e in cfg.configs:
             if e.when == "sunrise":
                 time = sunrise
@@ -69,20 +67,28 @@ def execute(rule):
                     )
                 else:
                     (cast_initialize(w) if rule.state == "initialize" else dal.set_sound(w, rule.state))
-                sleep(1)
+                sleep(0.1)
 
+
+def _make_rule_lambda(rule):
+    """
+    solves for:
+    
+    for e in range(2):
+       lambda: print(e)
+    """
+    return lambda: execute(rule)
 
 def setup_scheduler(scheduler):
     def f():
         for time, rule in build_schedule():
             scheduler.add_job(
-                lambda: execute(rule),
+                _make_rule_lambda(rule),
                 DateTrigger(time),
                 name=rule.name,
                 id=f"{rule.name}-{time.date().isoformat()}",
                 replace_existing=True,
             )
-
     f()
     scheduler.add_job(
         f,
