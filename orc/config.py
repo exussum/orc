@@ -57,19 +57,18 @@ CONFIGS = scan(
         days="non-holiday",
         name="workday",
         configs=(
-            LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off",),
-            LightConfig(name="partner up", when="sunrise", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on", offset="-60 minutes",),
-            LightConfig(name="partner leaving", when="7:00", what=Light.ENTANCE_DESK_LAMP, state=1),
-            RoutineConfig(
-                name="up and atom",
-                when="9:00",
-                items=(
-                    SoundConfig(what=Sound, state=40),
-                    LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
-                    LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on",),
-                    LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
-                ),
-            ),
+            LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
+            LightConfig(name="partner up", when="sunrise", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on", offset="-60 minutes"),
+            RoutineConfig(name="partner leaving", when="7:00", items=(
+                LightConfig(what=Light.ENTANCE_DESK_LAMP, state=1),
+                LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off")
+            )),
+            RoutineConfig(name="up and atom", when="9:00", items=(
+                SoundConfig(what=Sound, state=40),
+                LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+                LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
+                LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
+            )),
             LightConfig(name="dog light", when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
             SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
         ),
@@ -86,18 +85,16 @@ CONFIGS = scan(
         days="holiday",
         name="day off",
         configs=(
-            LightConfig(name="reset", when="2:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off",),
-            LightConfig(name="partner up", when="7:00", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on", offset="-60 minutes",),
-            RoutineConfig(
-                name="up and atom",
-                when="9:30",
-                items=(
-                    SoundConfig(what=Sound, state=40),
-                    LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
-                    LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on",),
-                    LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
-                ),
-            ),
+            LightConfig(name="reset", when="2:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
+            RoutineConfig(name="partner up", when="7:00", items=(
+                LightConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on", offset="-60 minutes"),
+                LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
+            )),
+            RoutineConfig(name="up and atom", when="9:30", items=(
+                SoundConfig(what=Sound, state=40),
+                LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+                LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
+            )),
             LightConfig(name="dog light", when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
             SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
         ),
