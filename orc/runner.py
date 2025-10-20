@@ -1,15 +1,14 @@
-import time
-from flask import request
 import random
+import time
 from collections import deque
 from enum import Enum
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
-from flask import Flask
+from apscheduler.triggers.cron import CronTrigger
+from flask import Flask, request
 from flask_admin import BaseView, expose
 from flask_admin.base import Admin, AdminIndexView
-from apscheduler.triggers.cron import CronTrigger
 
 from orc.control import build_schedule, execute, setup_scheduler
 from orc.model import RoutineConfig
@@ -31,28 +30,28 @@ def web():
 
         @expose("/<id>/run")
         def run(self, id):
-                if not request.headers['orc-version'] == self.version:
-                    return {"version": self.version}, 412
+            if not request.headers["orc-version"] == self.version:
+                return {"version": self.version}, 412
 
-                job = scheduler.get_job(id)
-                job.func()
+            job = scheduler.get_job(id)
+            job.func()
 
-                self.version = str(random.random())
-                return {"version": self.version}, 200
+            self.version = str(random.random())
+            return {"version": self.version}, 200
 
         @expose("/<id>/pause")
         def run(self, id):
-                if not request.headers['orc-version'] == self.version:
-                    return {"version": self.version}, 412
+            if not request.headers["orc-version"] == self.version:
+                return {"version": self.version}, 412
 
-                job = scheduler.get_job(id)
-                if(job.next_run_time):
-                    job.pause()
-                else:
-                    job.resume()
+            job = scheduler.get_job(id)
+            if job.next_run_time:
+                job.pause()
+            else:
+                job.resume()
 
-                self.version = str(random.random())
-                return {"version": self.version}, 200
+            self.version = str(random.random())
+            return {"version": self.version}, 200
 
     scheduler.start()
     admin = Admin(app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(url="/"))
