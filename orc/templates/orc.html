@@ -22,7 +22,7 @@
              </div>
         </td>
         <td>{{ job.name }}</td>
-        <td>{{ job.trigger.run_date.date() }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
+        <td>{{ job.trigger.run_date.date().strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
         </tr>
     {% endfor %}
     </table>
@@ -36,17 +36,13 @@
           e.prop("disabled", true);
           let response = null;
           try {
-            console.log(version);
-            response = await fetch(url, { headers: {
-              "orc-version": version
-            }});
-            console.log(response);
+            response = await fetch(url, {headers: {"orc-version": version}});
 
             if (!response.ok) {
               throw new Error(`Response status: ${response.status}`);
             }
+
             version = (await response.json()).version;
-            console.log(version);
             return true;
           } catch (error) {
             if(response.status == 412) {
