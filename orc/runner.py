@@ -66,7 +66,7 @@ def web():
 
     scheduler.start()
     admin = Admin(app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(url="/"))
-    app.run(debug=True)
+    app.run(host="0.0.0.0")
 
 
 def worker():
