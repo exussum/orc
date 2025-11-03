@@ -58,7 +58,7 @@ CONFIGS = scan(
         name="workday",
         configs=(
             LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
-            LightConfig(name="partner up", when="3:05", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
+            LightConfig(name="partner up", when="6:15", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
             RoutineConfig(name="partner leaving", when="7:00", items=(
                 LightConfig(what=Light.ENTANCE_DESK_LAMP, state=1),
                 LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off")
