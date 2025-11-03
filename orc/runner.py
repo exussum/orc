@@ -20,7 +20,7 @@ from orc.model import RoutineConfig
 
 def web():
     app = Flask(__name__)
-    app.config["FLASK_ADMIN_SWATCH"] = "Cyborg"
+    app.config["FLASK_ADMIN_SWATCH"] = "cyborg"
     scheduler = setup_scheduler(BackgroundScheduler())
 
     class OrcAdminView(AdminIndexView):
