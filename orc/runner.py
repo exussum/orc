@@ -6,6 +6,7 @@ from enum import Enum
 from functools import wraps
 from zoneinfo import ZoneInfo
 
+from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,7 +30,6 @@ def web():
         def versioned(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
-                global version
                 if not request.headers.get("orc-version") == OrcAdminView.version:
                     return {"version": OrcAdminView.version}, 412
                 func(*args, **kwargs)
@@ -50,7 +50,6 @@ def web():
         @versioned
         @expose("/<id>/pause")
         def pause(self, id):
-            print("hi")
             job = scheduler.get_job(id)
             if job.next_run_time:
                 job.pause()
@@ -60,10 +59,13 @@ def web():
         @versioned
         @expose("/<id>/run")
         def run(self, id):
-            print("hrm")
             job = scheduler.get_job(id)
             job.func()
 
+    def bump_version(event):
+        OrcAdminView.version = str(random.random())
+
+    scheduler.add_listener(bump_version, EVENT_JOB_EXECUTED)
     scheduler.start()
     admin = Admin(app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(url="/"))
     app.run(host="0.0.0.0")
