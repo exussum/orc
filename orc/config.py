@@ -103,4 +103,11 @@ CONFIGS = scan(
     ),
 )
 
+TV_LIGHTS_CONFIG = RoutineConfig(items=(
+    LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP, Light.OFFICE_FLOOR_LAMP], state="off"),
+    LightConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP, Light.OFFICE_FLOOR_LAMP], state=1),
+    LightConfig(what=Light.KITCHEN_LIGHTS, state="on")
+))
+
+
 # fmt:on

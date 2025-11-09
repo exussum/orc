@@ -23,6 +23,10 @@ def calculate_theme(today):
     return theme_name
 
 
+def capture_lights():
+    return config.RoutineConfig(items=[dal.get_light_state(e) for e in config.Light])
+
+
 def build_schedule():
     timezone = ZoneInfo("America/New_York")
     result = []
