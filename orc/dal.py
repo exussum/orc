@@ -3,6 +3,15 @@ import requests
 from orc import config
 
 
+def get_light_state(light):
+    attrs = requests.get(f"{config.BASE_URL}/devices/{light.value}{config.ACCESS_TOKEN}").json()["attributes"]
+    attrs = {e["name"]: e["currentValue"] for e in attrs}
+
+    return config.LightConfig(
+        what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"]
+    )
+
+
 def set_light(light, on=None, brightness=None):
     if brightness:
         requests.get(f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}")
