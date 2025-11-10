@@ -21,7 +21,9 @@ def web():
     scheduler.add_listener(OrcAdminView.bump_version, EVENT_JOB_EXECUTED)
     scheduler.start()
 
-    admin = Admin(app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(url="/"))
+    admin = Admin(
+        app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(scheduler=scheduler, url="/")
+    )
     app.run(host="0.0.0.0")
 
 
