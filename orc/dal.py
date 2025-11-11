@@ -13,7 +13,6 @@ def get_light_state(light):
 
 
 def set_light(light, on=None, brightness=None):
-    return
     if brightness:
         requests.get(f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}")
     else:
