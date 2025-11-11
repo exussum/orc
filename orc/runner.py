@@ -8,7 +8,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
 from flask_admin.base import Admin
 
-import orc.control as ctrl
+from orc import api
 from orc.model import RoutineConfig
 from orc.view import OrcAdminView
 
@@ -17,7 +17,7 @@ def web():
     app = Flask(__name__)
     app.config["FLASK_ADMIN_SWATCH"] = "cyborg"
 
-    scheduler = ctrl.setup_scheduler(BackgroundScheduler())
+    scheduler = api.setup_scheduler(BackgroundScheduler())
     scheduler.add_listener(OrcAdminView.bump_version, EVENT_JOB_EXECUTED)
     scheduler.start()
 
