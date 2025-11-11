@@ -1,4 +1,5 @@
 import time
+from collections import namedtuple as nt
 from datetime import datetime, timedelta
 from enum import Enum
 from zoneinfo import ZoneInfo
@@ -7,6 +8,41 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from orc import config, dal
+
+SnapShot = nt("SnapShot", "end routine")
+
+
+def non_cron_jobs(scheduler):
+    now = datetime.now(tz=ZoneInfo("America/New_York"))
+    return [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now]
+
+
+class ThemeManager:
+    def __init__(self, scheduler):
+        self.snapshot = None
+        self.scheduler = scheduler
+
+    def replace_config(self, target_config, end):
+        now = datetime.now(tz=ZoneInfo("America/New_York"))
+
+        if not self.snapshot or self.snapshot.end <= now:
+            self.snapshot = SnapShot(end, capture_lights())
+
+        # set theme pause
+        for e in (j for j in non_cron_jobs(self.scheduler) if j.trigger.run_date < end):
+            e.pause()
+
+        execute(target_config)
+
+    def resume(self, target_config):
+        if self.snapshot and datetime.now(tz=ZoneInfo("America/New_York")) < self.snapshot.end:
+            execute(self.snapshot.routine)
+            self.snapshot = None
+        else:
+            execute(target_config)
+
+        for e in non_cron_jobs(self.scheduler):
+            e.resume()
 
 
 def calculate_theme(today):
