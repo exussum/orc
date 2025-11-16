@@ -9,28 +9,33 @@ from apscheduler.triggers.date import DateTrigger
 
 from orc import config, dal
 
-SnapShot = nt("SnapShot", "end routine")
+SnapShot = nt("SnapShot", "routine end")
+ThemeOverride = nt("ThemeOverride", "name start end")
 
 
 def non_cron_jobs(scheduler):
     now = datetime.now(tz=ZoneInfo("America/New_York"))
     return [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now]
 
+def pause_jobs(scheduler, up_to):
+    for e in (j for j in non_cron_jobs(scheduler) if j.trigger.run_date < up_to):
+        e.pause()
 
-class ThemeManager:
-    def __init__(self, scheduler):
+def resume_jobs(scheduler):
+    for e in non_cron_jobs(scheduler):
+        e.resume()
+
+
+class ConfigManager:
+    def __init__(self):
         self.snapshot = None
-        self.scheduler = scheduler
+        self.theme_override = None
 
     def replace_config(self, target_config, end):
         now = datetime.now(tz=ZoneInfo("America/New_York"))
 
         if not self.snapshot or self.snapshot.end <= now:
-            self.snapshot = SnapShot(end, capture_lights())
-
-        # set theme pause
-        for e in (j for j in non_cron_jobs(self.scheduler) if j.trigger.run_date < end):
-            e.pause()
+            self.snapshot = SnapShot(capture_lights(), end)
 
         execute(target_config)
 
@@ -41,29 +46,34 @@ class ThemeManager:
         else:
             execute(target_config)
 
-        for e in non_cron_jobs(self.scheduler):
-            e.resume()
+    def set_theme_override(self, name, start, end):
+        self.theme_override = ThemeOverride(name, start, end)
 
+    def calculate_theme(self, today):
+        if self.theme_override:
+            if self.theme_override.start <= today <= self.theme_override.end:
+                return self.theme_override.name
+            elif self.theme_override.end < today:
+                self.theme_override = None
 
-def calculate_theme(today):
-    if today.weekday() not in (5, 6):
-        today_iso = today.strftime("%Y-%m-%d")
-        market_schedule = dal.get_holidays()
-        theme_name = (
-            "holiday"
-            if next((e for e in market_schedule if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
-            else "non-holiday"
-        )
-    else:
-        theme_name = "holiday"
-    return theme_name
+        if today.weekday() not in (5, 6):
+            today_iso = today.strftime("%Y-%m-%d")
+            market_schedule = dal.get_holidays()
+            theme_name = (
+                "holiday"
+                if next((e for e in market_schedule if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
+                else "work day"
+            )
+        else:
+            theme_name = "day off"
+        return theme_name
 
 
 def capture_lights():
     return config.RoutineConfig(items=[dal.get_light_state(e) for e in config.Light])
 
 
-def build_schedule():
+def get_schedule(config_manager):
     timezone = ZoneInfo("America/New_York")
     result = []
     for x in range(2):
@@ -72,8 +82,7 @@ def build_schedule():
         sunrise = datetime.fromisoformat(sun_result["sunrise"])
         sunset = datetime.fromisoformat(sun_result["sunset"])
 
-        theme = calculate_theme(now.date())
-        cfg = next((e for e in config.CONFIGS if e.days == theme))
+        cfg = next((e for e in config.CONFIGS if e.name == config_manager.calculate_theme(now.date())))
 
         for e in cfg.configs:
             if e.when == "sunrise":
@@ -120,9 +129,9 @@ def _make_rule_lambda(rule):
     return lambda: execute(rule)
 
 
-def setup_scheduler(scheduler):
+def setup_scheduler(scheduler, config_manager):
     def f():
-        for time, rule in build_schedule():
+        for time, rule in get_schedule(config_manager):
             scheduler.add_job(
                 _make_rule_lambda(rule),
                 DateTrigger(time),
