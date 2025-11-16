@@ -54,8 +54,7 @@ Sound = build_enum(
 
 CONFIGS = scan(
     Theme(
-        days="non-holiday",
-        name="workday",
+        name="work day",
         configs=(
             LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
             LightConfig(name="partner up", when="6:15", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
@@ -83,7 +82,6 @@ CONFIGS = scan(
         ),
     ),
     Theme(
-        days="holiday",
         name="day off",
         configs=(
             LightConfig(name="reset", when="2:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
@@ -93,10 +91,10 @@ CONFIGS = scan(
             )),
             RoutineConfig(name="up and atom", when="9:30", items=(
                 SoundConfig(what=Sound, state=40),
-                LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+                LightConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
                 LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
             )),
-            LightConfig(name="reset office light", when="9:05", what=Light.OFFICE_DESK_LAMP, state="off"),
+            LightConfig(name="reset office light", when="9:35", what=Light.OFFICE_DESK_LAMP, state="off"),
             LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on"),
             SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
         ),

@@ -1,6 +1,6 @@
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from functools import wraps
 from typing import List
 from zoneinfo import ZoneInfo
@@ -18,10 +18,10 @@ class OrcAdminView(AdminIndexView):
     version = str(random.random())
     snapshot = None
 
-    def __init__(self, url, scheduler):
+    def __init__(self, url, config_manager, scheduler):
         super(AdminIndexView, self).__init__(url=url)
         self.scheduler = scheduler
-        self.theme_manager = api.ThemeManager(scheduler)
+        self.config_manager = config_manager
 
     @classmethod
     def bump_version(cls):
@@ -31,11 +31,11 @@ class OrcAdminView(AdminIndexView):
     def versioned(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if not request.headers.get("orc-version") == self.version:
-                return {"version": self.version}, 412
+            if not request.headers.get("orc-version") == OrcAdminView.version:
+                return {"version": OrcAdminView.version}, 412
             func(*args, **kwargs)
-            self.version = str(random.random())
-            return {"version": self.version}, 200
+            OrcAdminView.version = str(random.random())
+            return {"version": OrcAdminView.version}, 200
 
         return wrapper
 
@@ -52,14 +52,23 @@ class OrcAdminView(AdminIndexView):
         else:
             end = now.replace(hour=23, minute=59)
 
-        self.theme_manager.replace_config(config.CONFIG_TV_LIGHTS, end)
+        api.pause_jobs(end)
+        self.config_manager.replace_config(config.CONFIG_TV_LIGHTS, end)
         self.bump_version()
         return {}, 200
 
     @expose("/tv_mode_off")
     def tv_mode_off(self):
-        self.theme_manager.resume(config.CONFIG_FRONT_ROOMS)
+        self.config_manager.resume(config.CONFIG_FRONT_ROOMS)
+        api.resume_jobs()
         self.bump_version()
+        return {}, 200
+
+    @expose("/activate_theme")
+    def activate_theme(self):
+        self.config_manager.set_theme_override("away", date(2025,11,14), date(2025,11,14))
+        self.scheduler.remove_all_jobs()
+        api.setup_scheduler(self.scheduler, self.config_manager)
         return {}, 200
 
     @versioned

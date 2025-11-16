@@ -12,23 +12,24 @@ from orc import api
 from orc.model import RoutineConfig
 from orc.view import OrcAdminView
 
-
 def web():
     app = Flask(__name__)
     app.config["FLASK_ADMIN_SWATCH"] = "cyborg"
 
-    scheduler = api.setup_scheduler(BackgroundScheduler())
-    scheduler.add_listener(OrcAdminView.bump_version, EVENT_JOB_EXECUTED)
+    config_manager = api.ConfigManager()
+    scheduler = api.setup_scheduler(BackgroundScheduler(), config_manager)
+    scheduler.add_listener(lambda e: OrcAdminView.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start()
 
     admin = Admin(
-        app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(scheduler=scheduler, url="/")
+        app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(config_manager=config_manager, scheduler=scheduler, url="/")
     )
     app.run(host="0.0.0.0")
 
 
 def worker():
-    scheduler = ctrl.setup_scheduler(BlockingScheduler())
+    config_manager = api.ConfigManager()
+    scheduler = ctrl.setup_scheduler(BlockingScheduler(), config_manager)
 
     try:
         scheduler.start()
@@ -37,8 +38,8 @@ def worker():
 
 
 def test():
-    for when, e in sorted(ctrl.build_schedule(), key=lambda x: x[0]):
+    for when, e in sorted(api.get_schedule(api.ConfigManager()), key=lambda x: x[0]):
         print(e)
         time.sleep(1)
-        ctrl.execute(e)
+        api.execute(e)
         time.sleep(1)
