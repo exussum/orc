@@ -44,7 +44,6 @@ class RoutineConfig(ScheduledConfig):
 class Theme:
     name: str
     configs: Tuple[ScheduledConfig]
-    days: Optional[str] = None
 
 
 def scan(*themes):
