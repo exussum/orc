@@ -15,6 +15,7 @@ from orc.view import OrcAdminView
 def web():
     app = Flask(__name__)
     app.config["FLASK_ADMIN_SWATCH"] = "cyborg"
+    app.config["TEMPLATES_AUTO_RELOAD"] = True;
 
     config_manager = api.ConfigManager()
     scheduler = api.setup_scheduler(BackgroundScheduler(), config_manager)
