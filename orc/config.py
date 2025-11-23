@@ -2,8 +2,8 @@ import os
 from datetime import datetime, timedelta
 from enum import Enum
 
-from orc import dal, model
-from orc.model import LightConfig, RoutineConfig, SoundConfig, Theme, scan
+import orc.model as m
+from orc import dal
 
 BASE_URL = os.getenv("BASE_URL")
 ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN")
@@ -52,65 +52,65 @@ Sound = build_enum(
 
 # fmt: off
 
-CONFIGS = scan(
-    Theme(
+CONFIGS = m.scan(
+    m.Theme(
         name="work day",
         configs=(
-            LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
-            LightConfig(name="partner up", when="6:15", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
-            RoutineConfig(name="partner leaving", when="7:00", items=(
-                LightConfig(what=Light.ENTANCE_DESK_LAMP, state=1),
-                LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off")
+            m.LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
+            m.LightConfig(name="partner up", when="6:15", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
+            m.RoutineConfig(name="partner leaving", when="7:00", items=(
+                m.LightSubConfig(what=Light.ENTANCE_DESK_LAMP, state=1),
+                m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off")
             )),
-            RoutineConfig(name="up and atom", when="9:00", items=(
-                SoundConfig(what=Sound, state=40),
-                LightConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
-                LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
-                LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
+            m.RoutineConfig(name="up and atom", when="9:00", items=(
+                m.SoundSubConfig(what=Sound, state=40),
+                m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
+                m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
+                m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
             )),
-            LightConfig(name="reset office light", when="9:05", what=Light.OFFICE_DESK_LAMP, state="off"),
-            LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on"),
-            SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
+            m.LightConfig(name="reset office light", when="9:05", what=Light.OFFICE_DESK_LAMP, state="off"),
+            m.LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on"),
+            m.SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
         ),
     ),
-    Theme(name="away", configs=()),
-    Theme(
-        name="babysitting",
+    m.Theme(name="away", configs=()),
+    m.Theme(
+        name="babysitter",
         configs=(
-            LightConfig(when="sunrise", what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
-            LightConfig(when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
+            m.LightConfig(name="nightlight off", when="sunrise", what=Light.BEDROOM_NIGHT_LIGHT, state="off"),
+            m.LightConfig(name="nightlight on", when="sunset", what=Light.BEDROOM_NIGHT_LIGHT, state="on"),
         ),
     ),
-    Theme(
+    m.Theme(
         name="day off",
         configs=(
-            LightConfig(name="reset", when="2:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
-            RoutineConfig(name="partner up", when="7:00", items=(
-                LightConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
-                LightConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
+            m.LightConfig(name="reset", when="2:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off"),
+            m.RoutineConfig(name="partner up", when="7:00", items=(
+                m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
+                m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
             )),
-            RoutineConfig(name="up and atom", when="9:30", items=(
-                SoundConfig(what=Sound, state=40),
-                LightConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
-                LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
+            m.RoutineConfig(name="up and atom", when="9:30", items=(
+                m.SoundSubConfig(what=Sound, state=40),
+                m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
+                m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
             )),
-            LightConfig(name="reset office light", when="9:35", what=Light.OFFICE_DESK_LAMP, state="off"),
-            LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on"),
-            SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
+            m.LightConfig(name="reset office light", when="9:35", what=Light.OFFICE_DESK_LAMP, state="off"),
+            m.LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on"),
+            m.SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
         ),
     ),
 )
 
-CONFIG_TV_LIGHTS = RoutineConfig(items=(
-    LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP, Light.OFFICE_FLOOR_LAMP], state="off"),
-    LightConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=1),
-    LightConfig(what=Light.KITCHEN_LIGHTS, state="on")
+CONFIG_TV_LIGHTS = m.AdHocRoutineConfig(name="tv lights", items=(
+    m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP, Light.OFFICE_FLOOR_LAMP], state="off"),
+    m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=1),
+    m.LightSubConfig(what=Light.KITCHEN_LIGHTS, state="on")
 ))
 
-CONFIG_FRONT_ROOMS = RoutineConfig(items=(
-    LightConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
-    LightConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
-    LightConfig(what=[Light.OFFICE_DESK_LAMP, Light.OFFICE_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="off"),
+CONFIG_FRONT_ROOMS = m.AdHocRoutineConfig(name="front rooms", items=(
+    m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
+    m.LightSubConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+    m.LightSubConfig(what=[Light.OFFICE_DESK_LAMP, Light.OFFICE_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="off"),
 ))
 
 
