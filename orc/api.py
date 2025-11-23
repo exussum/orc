@@ -17,9 +17,11 @@ def non_cron_jobs(scheduler):
     now = datetime.now(tz=ZoneInfo("America/New_York"))
     return [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now]
 
+
 def pause_jobs(scheduler, up_to):
     for e in (j for j in non_cron_jobs(scheduler) if j.trigger.run_date < up_to):
         e.pause()
+
 
 def resume_jobs(scheduler):
     for e in non_cron_jobs(scheduler):

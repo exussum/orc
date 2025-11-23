@@ -1,17 +1,16 @@
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 from functools import wraps
 from typing import List
 from zoneinfo import ZoneInfo
 
 from apscheduler.triggers.cron import CronTrigger
-from flask import request
+from flask import redirect, request
 from flask_admin import expose
 from flask_admin.base import AdminIndexView
 
-from orc import config
-from orc import api
+from orc import api, config
 
 
 class OrcAdminView(AdminIndexView):
@@ -42,7 +41,13 @@ class OrcAdminView(AdminIndexView):
     @expose("/")
     def index(self):
         jobs = sorted(api.non_cron_jobs(self.scheduler), key=lambda e: e.trigger.run_date)
-        return self.render("orc.html", version=self.version, jobs=jobs), 200, {"Cache-control": "no-store"}
+        theme_override = self.config_manager.theme_override
+        theme = (
+            theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat())
+            if theme_override
+            else None
+        )
+        return self.render("orc.html", version=self.version, jobs=jobs, theme=theme), 200, {"Cache-control": "no-store"}
 
     @expose("/tv_mode_on")
     def tv_mode_on(self):
@@ -64,12 +69,19 @@ class OrcAdminView(AdminIndexView):
         self.bump_version()
         return {}, 200
 
-    @expose("/activate_theme")
-    def activate_theme(self):
-        self.config_manager.set_theme_override("away", date(2025,11,14), date(2025,11,14))
+    @expose("/set_theme", methods=["POST"])
+    def set_theme(self):
+        if not request.form["theme"]:
+            self.config_manager.theme_override = None
+        else:
+            self.config_manager.set_theme_override(
+                request.form["theme"],
+                date.fromisoformat(request.form["start"]),
+                date.fromisoformat(request.form["end"]),
+            )
         self.scheduler.remove_all_jobs()
         api.setup_scheduler(self.scheduler, self.config_manager)
-        return {}, 200
+        return redirect("/")
 
     @versioned
     @expose("/<id>/pause")
