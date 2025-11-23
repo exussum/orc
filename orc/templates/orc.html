@@ -7,10 +7,10 @@
             align-items: baseline; 
             height: 2lh;
         }
-        div.orc-theme-form {
+        div#orc-theme-form {
             overflow: visible;
         }
-        div.orc-theme-form-elements {
+        div#orc-theme-form-elements {
             display: grid;
             grid-template-columns: 2fr 2fr 1fr;
             background-color: transparent;
@@ -52,28 +52,28 @@
 
 {% block menu_links %}
     <div class="nav">
-        <form class="orc-theme-form">
-            <div class="orc-theme-form-elements">
+        <form id="orc-theme-form" action="set_theme" method="POST">
+            <div id="orc-theme-form-elements">
                 <div>
                     <label for="orc-theme-select">Theme:</label>
                 </div>
                 <div>
-                    <select class="form-control orc-theme-changer" id="orc-theme-select">
+                    <select name="theme" class="form-control orc-theme-changer" id="orc-theme-select">
                         <option value="">default</option>
                         <option value="away">away</option>
                         <option value="babysitter">babysitter</option>
                     </select>
                 </div>
                 <div>
-                    <input type="button" class="btn btn-primary" value="⏎"/>
+                    <input id="orc-theme-submit" type="submit" class="btn btn-primary" value="⏎"/>
                 </div>
                 <div class="orc-theme-schedule"><label>Start</label></div>
                 <div class="orc-theme-schedule orc-theme-form-date-input">
-                    <input type="date" value="start" class="form-control orc-theme-changer" id="orc-theme-select-start"/>
+                    <input type="date" value="{{ theme.start }}" name="start" class="form-control orc-theme-changer" id="orc-theme-select-start"/>
                 </div>
                 <div class="orc-theme-schedule"><label>End</label></div>
                 <div class="orc-theme-schedule orc-theme-form-date-input">
-                    <input type="date" value="end" class="form-control orc-theme-changer" id="orc-theme-select-end"/>
+                    <input type="date" value="{{ theme.end }}" name="end" class="form-control orc-theme-changer" id="orc-theme-select-end"/>
                 </div>
             </div>
         </form>
@@ -83,6 +83,12 @@
 {% block tail %}
     <script>
         let version = "{{ version }}";
+
+        const startEl = document.querySelector("#orc-theme-select-start");
+        const endEl = document.querySelector("#orc-theme-select-end");
+        const selectEl = document.querySelector("#orc-theme-select");
+        const scheduleEl = document.querySelectorAll(".orc-theme-schedule");
+        const formEl = document.querySelector("#orc-theme-form");
 
         async function _call(url, el, onSuccess = () => {}, onFailure = () => {}) {
             el.disabled = true;
@@ -115,26 +121,37 @@
             }
         }
 
-        const startEl = document.querySelector("#orc-theme-select-end");
-        const endEl = document.querySelector("#orc-theme-select-end");
-        const selectEl = document.querySelector("#orc-theme-select");
+        function date() {
+            const now = new Date();
+            return now.getFullYear() + "-" + (now.getMonth() + 1) + "-" + now.getDate();
+        }
+
+        function formUpdated() {
+            document.querySelector("#orc-theme-submit").disabled = selectEl.value && !(startEl.value && endEl.value);
+        }
 
         document.querySelectorAll(".orc-runner").forEach(el => { el.addEventListener("click", e => run(e.currentTarget)); });
         document.querySelectorAll(".orc-enable").forEach(el => { el.addEventListener("change", e => pause(e.currentTarget)); });
 
         document.querySelectorAll(".orc-theme-changer").forEach(el => { 
             el.addEventListener("change", e => { 
-                if(!selectEl.value || (startEl.value && endEl.value)) 
-                    console.log("hi");
+                formUpdated();
             });
         });
 
         selectEl.addEventListener("change", e => {
-            document.querySelectorAll(".orc-theme-schedule").forEach(el => { el.style.visibility = e.target.value === "" ? "hidden" : "visible"; })
+            scheduleEl.forEach(el => { el.style.visibility = e.target.value === "" ? "hidden" : "visible"; });
+            formEl.style.backgroundColor = e.target.value === "" ? "transparent" : "black";
+            if(e.target.value === "") {
+                startEl.value = ""
+                endEl.value = ""
+            }
         });
+        selectEl.value = "{{ theme.name }}";
+        selectEl.dispatchEvent(new Event("change"));
 
+        startEl.min = date();
         startEl.addEventListener("change", e => {
-            e.target.value = e.target.min = new Date().toISOString().split("T")[0];
             if (e.target.value) {
                 endEl.disabled = false;
                 endEl.value = endEl.min = e.target.value;
@@ -142,6 +159,7 @@
                 endEl.disabled = true;
                 endEl.value = null;
             }
+            formUpdated();
         });
     </script>
 {% endblock %}
