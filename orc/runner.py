@@ -12,10 +12,11 @@ from orc import api
 from orc.model import RoutineConfig
 from orc.view import OrcAdminView
 
+
 def web():
     app = Flask(__name__)
     app.config["FLASK_ADMIN_SWATCH"] = "cyborg"
-    app.config["TEMPLATES_AUTO_RELOAD"] = True;
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     config_manager = api.ConfigManager()
     scheduler = api.setup_scheduler(BackgroundScheduler(), config_manager)
@@ -23,7 +24,10 @@ def web():
     scheduler.start()
 
     admin = Admin(
-        app, name="ORChestration", template_mode="bootstrap4", index_view=OrcAdminView(config_manager=config_manager, scheduler=scheduler, url="/")
+        app,
+        name="ORChestration",
+        template_mode="bootstrap4",
+        index_view=OrcAdminView(config_manager=config_manager, scheduler=scheduler, url="/"),
     )
     app.run(host="0.0.0.0")
 

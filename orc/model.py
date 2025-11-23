@@ -7,9 +7,13 @@ from typing import Optional, Tuple
 @dataclass
 class ScheduledConfig:
     _: KW_ONLY
-    name: Optional[str] = None
-    when: Optional[str] = None
+    name: str
+    when: str
     offset: Optional[str] = timedelta()
+
+    def __init__(self, **kwargs):
+
+        super(ScheduledConfig, self).__init__(**kwargs)
 
     def __post_init__(self):
         if not isinstance(self.offset, timedelta) and self.offset:
@@ -19,6 +23,13 @@ class ScheduledConfig:
         if self.when and not isinstance(self.when, time) and ":" in self.when:
             hour, minute = tuple(self.when.split(":"))
             self.when = time(int(hour), int(minute))
+
+
+@dataclass
+class SubConfig:
+    _: KW_ONLY
+    what: object
+    state: object
 
 
 @dataclass
@@ -33,6 +44,20 @@ class LightConfig(SimpleConfig):
 
 class SoundConfig(SimpleConfig):
     pass
+
+
+class LightSubConfig(SubConfig):
+    pass
+
+
+class SoundSubConfig(SubConfig):
+    pass
+
+
+@dataclass
+class AdHocRoutineConfig:
+    name: str
+    items: Tuple[SimpleConfig]
 
 
 @dataclass
