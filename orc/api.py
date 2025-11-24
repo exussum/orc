@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
-from orc import config, dal
+from orc import config, dal, model as m
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
@@ -19,7 +19,7 @@ def non_cron_jobs(scheduler):
 
 
 def pause_jobs(scheduler, up_to):
-    for e in (j for j in non_cron_jobs(scheduler) if j.trigger.run_date < up_to):
+    for e in (j for j in non_cron_jobs(scheduler) if j.trigger.run_date <= up_to):
         e.pause()
 
 
@@ -72,7 +72,7 @@ class ConfigManager:
 
 
 def capture_lights():
-    return config.RoutineConfig(items=[dal.get_light_state(e) for e in config.Light])
+    return m.AdHocRoutineConfig(name="snapshot", items=[dal.get_light_state(e) for e in config.Light])
 
 
 def get_schedule(config_manager):
@@ -100,7 +100,7 @@ def get_schedule(config_manager):
 
 
 def execute(rule):
-    if isinstance(rule, config.RoutineConfig):
+    if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig ):
         for e in rule.items:
             execute(e)
     else:
@@ -110,14 +110,12 @@ def execute(rule):
             if w.value < 0:
                 print(f"Device {w} not found")
             else:
-                if isinstance(rule, config.LightConfig):
-                    (
-                        dal.set_light(w, brightness=rule.state)
-                        if isinstance(rule.state, int)
-                        else dal.set_light(w, on=rule.state == "on")
-                    )
+                if isinstance(rule, m.LightConfig | m.LightSubConfig):
+                    dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on")
+                elif isinstance(rule, m.SoundConfig | m.SoundSubConfig):
+                    cast_initialize(w) if rule.state == "initialize" else dal.set_sound(w, rule.state)
                 else:
-                    (cast_initialize(w) if rule.state == "initialize" else dal.set_sound(w, rule.state))
+                    raise Exception("Unknown rule type")
                 sleep(0.1)
 
 
