@@ -1,6 +1,7 @@
 import requests
 
-from orc import config, model as m
+from orc import config
+from orc import model as m
 
 
 def get_light_state(light):
