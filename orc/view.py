@@ -57,7 +57,7 @@ class OrcAdminView(AdminIndexView):
         else:
             end = now.replace(hour=23, minute=59)
 
-        api.pause_jobs(end)
+        api.pause_jobs(self.scheduler, end)
         self.config_manager.replace_config(config.CONFIG_TV_LIGHTS, end)
         self.bump_version()
         return {}, 200
@@ -65,7 +65,7 @@ class OrcAdminView(AdminIndexView):
     @expose("/tv_mode_off")
     def tv_mode_off(self):
         self.config_manager.resume(config.CONFIG_FRONT_ROOMS)
-        api.resume_jobs()
+        api.resume_jobs(self.scheduler)
         self.bump_version()
         return {}, 200
 
