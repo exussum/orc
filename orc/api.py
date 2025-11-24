@@ -7,7 +7,8 @@ from zoneinfo import ZoneInfo
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
-from orc import config, dal, model as m
+from orc import config, dal
+from orc import model as m
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
@@ -100,7 +101,7 @@ def get_schedule(config_manager):
 
 
 def execute(rule):
-    if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig ):
+    if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
         for e in rule.items:
             execute(e)
     else:
@@ -111,7 +112,11 @@ def execute(rule):
                 print(f"Device {w} not found")
             else:
                 if isinstance(rule, m.LightConfig | m.LightSubConfig):
-                    dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on")
+                    (
+                        dal.set_light(w, brightness=rule.state)
+                        if isinstance(rule.state, int)
+                        else dal.set_light(w, on=rule.state == "on")
+                    )
                 elif isinstance(rule, m.SoundConfig | m.SoundSubConfig):
                     cast_initialize(w) if rule.state == "initialize" else dal.set_sound(w, rule.state)
                 else:
