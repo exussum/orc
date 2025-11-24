@@ -97,7 +97,7 @@
             try {
                 response = await fetch(url, {headers: { "orc-version": version }});
                 if (!response.ok) {
-                    throw new Error(`Response status: ${response.status}`);
+                    throw Error(`Response status: ${response.status}`);
                 }
                 version = (await response.json()).version;
                 return true;
@@ -112,7 +112,7 @@
             }
         }
 
-        async function run(el) { _call(`/${el.dataset.id}/run`, el); }
+        async function run(el) { await _call(`/${el.dataset.id}/run`, el); }
         async function pause(el) {
             const newStatus = el.checked;
 
