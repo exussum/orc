@@ -1,13 +1,13 @@
 import requests
 
-from orc import config
+from orc import config, model as m
 
 
 def get_light_state(light):
     attrs = requests.get(f"{config.BASE_URL}/devices/{light.value}{config.ACCESS_TOKEN}").json()["attributes"]
     attrs = {e["name"]: e["currentValue"] for e in attrs}
 
-    return config.LightConfig(
+    return m.LightSubConfig(
         what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"]
     )
 
