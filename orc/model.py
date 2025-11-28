@@ -1,5 +1,5 @@
-from dataclasses import KW_ONLY, dataclass, replace
-from datetime import time, timedelta
+from dataclasses import KW_ONLY, dataclass
+from datetime import time
 from enum import Enum
 from typing import Optional, Tuple
 
@@ -9,17 +9,11 @@ class ScheduledConfig:
     _: KW_ONLY
     name: str
     when: str
-    offset: Optional[str] = timedelta()
 
     def __init__(self, **kwargs):
-
         super(ScheduledConfig, self).__init__(**kwargs)
 
     def __post_init__(self):
-        if not isinstance(self.offset, timedelta) and self.offset:
-            parts = self.offset.split(" ")
-            amt = int(parts[0])
-            self.offset = timedelta(**{parts[1]: amt})
         if self.when and not isinstance(self.when, time) and ":" in self.when:
             hour, minute = tuple(self.when.split(":"))
             self.when = time(int(hour), int(minute))
@@ -30,12 +24,15 @@ class SubConfig:
     _: KW_ONLY
     what: object
     state: object
+    mandatory: bool = False
 
 
 @dataclass
 class SimpleConfig(ScheduledConfig):
+    _: KW_ONLY
     what: object
     state: object
+    mandatory: bool = False
 
 
 class LightConfig(SimpleConfig):
@@ -56,7 +53,6 @@ class SoundSubConfig(SubConfig):
 
 @dataclass
 class AdHocRoutineConfig:
-    name: str
     items: Tuple[SimpleConfig]
 
 
@@ -82,7 +78,6 @@ def scan(*themes):
         for e in theme.configs:
             if isinstance(e, RoutineConfig):
                 for w in e.items:
-                    w.offset = e.offset
                     w.when = e.when
 
     return themes
