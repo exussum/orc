@@ -2,7 +2,7 @@ My home automation worker.
 
 How to test locally:
 
-`python -c 'from orc.worker import test; test()'`
+`python -c 'from orc.runner import web; web()'`
 
 How to deploy:
 

@@ -51,13 +51,7 @@ class OrcAdminView(AdminIndexView):
 
     @expose("/tv_mode_on")
     def tv_mode_on(self):
-        now = datetime.now(tz=ZoneInfo("America/New_York"))
-        if now.hour <= 20:
-            end = now + timedelta(hours=4)
-        else:
-            end = now.replace(hour=23, minute=59)
-
-        api.pause_jobs(self.scheduler, end)
+        end = datetime.now(tz=config.TZ) + timedelta(hours=4)
         self.config_manager.replace_config(config.CONFIG_TV_LIGHTS, end)
         self.bump_version()
         return {}, 200
@@ -65,7 +59,6 @@ class OrcAdminView(AdminIndexView):
     @expose("/tv_mode_off")
     def tv_mode_off(self):
         self.config_manager.resume(config.CONFIG_FRONT_ROOMS)
-        api.resume_jobs(self.scheduler)
         self.bump_version()
         return {}, 200
 

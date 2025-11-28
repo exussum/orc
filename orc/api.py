@@ -2,7 +2,6 @@ import time
 from collections import namedtuple as nt
 from datetime import datetime, timedelta
 from enum import Enum
-from zoneinfo import ZoneInfo
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -15,18 +14,20 @@ ThemeOverride = nt("ThemeOverride", "name start end")
 
 
 def non_cron_jobs(scheduler):
-    now = datetime.now(tz=ZoneInfo("America/New_York"))
+    now = datetime.now(tz=config.TZ)
     return [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now]
 
 
-def pause_jobs(scheduler, up_to):
-    for e in (j for j in non_cron_jobs(scheduler) if j.trigger.run_date <= up_to):
-        e.pause()
+def unwrap_rule(f):
+    def wrapper(*args):
+        rule = args[-1]
+        if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
+            for e in rule.items:
+                f(*(args[:-1] + (e,)))
+        else:
+            f(*args)
 
-
-def resume_jobs(scheduler):
-    for e in non_cron_jobs(scheduler):
-        e.resume()
+    return wrapper
 
 
 class ConfigManager:
@@ -35,7 +36,7 @@ class ConfigManager:
         self.theme_override = None
 
     def replace_config(self, target_config, end):
-        now = datetime.now(tz=ZoneInfo("America/New_York"))
+        now = datetime.now(tz=config.TZ)
 
         if not self.snapshot or self.snapshot.end <= now:
             self.snapshot = SnapShot(capture_lights(), end)
@@ -43,11 +44,17 @@ class ConfigManager:
         execute(target_config)
 
     def resume(self, target_config):
-        if self.snapshot and datetime.now(tz=ZoneInfo("America/New_York")) < self.snapshot.end:
-            execute(self.snapshot.routine)
-            self.snapshot = None
+        if self.snapshot and datetime.now(tz=config.TZ) < self.snapshot.end:
+            old_snapshot, self.snapshot = self.snapshot, None
+            execute(old_snapshot.routine)
         else:
             execute(target_config)
+
+    def update_snapshot(self, rule):
+        what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+        items = {e.what: e for e in self.snapshot.routine.items}
+        items.update({e: rule for e in what})
+        self.snapshot.routine.items = tuple(items.values())
 
     def set_theme_override(self, name, start, end):
         self.theme_override = ThemeOverride(name, start, end)
@@ -71,16 +78,50 @@ class ConfigManager:
             theme_name = "day off"
         return theme_name
 
+    @unwrap_rule
+    def route_rule(self, rule):
+        print("running...")
+        if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
+            for e in rule.items:
+                self.route_rule(e)
+        elif rule.mandatory and self.snapshot:
+            print("executing with snapshot")
+            self.update_snapshot(rule)
+            execute(rule)
+        elif not self.snapshot:
+            print("executing without")
+            execute(rule)
+
+
+@unwrap_rule
+def execute(rule):
+    what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+    sleep = time.sleep if len(what) > 1 else (lambda _: 1)
+    for w in what:
+        if w.value < 0:
+            print(f"Device {w} not found")
+        else:
+            if isinstance(rule, m.LightConfig | m.LightSubConfig):
+                (
+                    dal.set_light(w, brightness=rule.state)
+                    if isinstance(rule.state, int)
+                    else dal.set_light(w, on=rule.state == "on")
+                )
+            elif isinstance(rule, m.SoundConfig | m.SoundSubConfig):
+                dal.set_sound(w, rule.state)
+            else:
+                raise Exception("Unknown rule type")
+            sleep(0.1)
+
 
 def capture_lights():
-    return m.AdHocRoutineConfig(name="snapshot", items=[dal.get_light_state(e) for e in config.Light])
+    return m.AdHocRoutineConfig(items=[dal.get_light_state(e) for e in config.Light])
 
 
 def get_schedule(config_manager):
-    timezone = ZoneInfo("America/New_York")
     result = []
     for x in range(2):
-        now = datetime.now(tz=timezone) + timedelta(days=x)
+        now = datetime.now(tz=config.TZ) + timedelta(days=x)
         sun_result = dal.get_sun_cycle(now.date())
         sunrise = datetime.fromisoformat(sun_result["sunrise"])
         sunset = datetime.fromisoformat(sun_result["sunset"])
@@ -94,51 +135,26 @@ def get_schedule(config_manager):
                 time = sunset
             else:
                 time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
-            time = time + e.offset
-            result.append((time.astimezone(timezone), e))
+            result.append((time.astimezone(config.TZ), e))
 
     return result
 
 
-def execute(rule):
-    if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
-        for e in rule.items:
-            execute(e)
-    else:
-        what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-        sleep = time.sleep if len(what) > 1 else (lambda _: 1)
-        for w in what:
-            if w.value < 0:
-                print(f"Device {w} not found")
-            else:
-                if isinstance(rule, m.LightConfig | m.LightSubConfig):
-                    (
-                        dal.set_light(w, brightness=rule.state)
-                        if isinstance(rule.state, int)
-                        else dal.set_light(w, on=rule.state == "on")
-                    )
-                elif isinstance(rule, m.SoundConfig | m.SoundSubConfig):
-                    cast_initialize(w) if rule.state == "initialize" else dal.set_sound(w, rule.state)
-                else:
-                    raise Exception("Unknown rule type")
-                sleep(0.1)
-
-
-def _make_rule_lambda(rule):
+def _make_rule_lambda(config_manager, rule):
     """
     solves for:
 
     for e in range(2):
        lambda: print(e)
     """
-    return lambda: execute(rule)
+    return lambda: config_manager.route_rule(rule)
 
 
 def setup_scheduler(scheduler, config_manager):
     def f():
         for time, rule in get_schedule(config_manager):
             scheduler.add_job(
-                _make_rule_lambda(rule),
+                _make_rule_lambda(config_manager, rule),
                 DateTrigger(time),
                 name=rule.name,
                 id=f"{rule.name}-{time.date().isoformat()}",
