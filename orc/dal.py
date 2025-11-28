@@ -1,3 +1,5 @@
+import time
+
 import requests
 
 from orc import config
@@ -20,11 +22,9 @@ def set_light(light, on=None, brightness=None):
         requests.get(f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}").content
 
 
-def cast_initialize(sound):
-    requests.get(f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}").json()
-
-
 def set_sound(sound, lvl):
+    requests.get(f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}").json()
+    time.sleep(0.1)
     requests.get(f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}").json()
 
 
@@ -33,7 +33,9 @@ def get_config():
 
 
 def get_holidays():
-    return requests.get(f"{config.MARKET_HOLIDAYS_URL}").json()
+    result = requests.get(f"{config.MARKET_HOLIDAYS_URL}").json()
+    print(result)
+    return result
 
 
 def get_sun_cycle(date):
