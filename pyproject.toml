@@ -1,21 +1,23 @@
 [build-system]
-requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
-
-[project]
-version = "0.0.1"
-name = "orc"
-dependencies = [
-  "APScheduler==3.11.0",
-  "requests==2.32.3",
-  "Flask_Admin==1.6.1",
+requires = [
+    "hatchling >= 1.26",
 ]
 
+[project]
+dependencies = [
+    "APScheduler==3.11.0",
+    "Flask_Admin==1.6.1",
+    "requests==2.32.3",
+]
+name = "orc"
+version = "0.0.1"
 
-[tool.isort]
-profile = "black"
-src_paths = ["orc"]
-
+[project.optional-dependencies]
+test = [
+    "pytest==9.0.1",
+    "mock==5.2.0",
+]
 
 [project.scripts]
 orc = "orc.worker:main"
@@ -23,3 +25,18 @@ test = "orc.worker:test"
 
 [tool.black]
 line-length = 120
+
+[tool.isort]
+profile = "black"
+src_paths = [
+    "orc",
+]
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+pythonpath = [
+    ".",
+]
+testpaths = [
+    "tests",
+]
