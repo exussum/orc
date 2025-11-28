@@ -60,7 +60,7 @@ CONFIGS = m.scan(
     m.Theme(
         name="work day",
         configs=(
-            m.LightConfig(name="reset", when="13:50", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off", mandatory=True),
+            m.LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off", mandatory=True),
             m.LightConfig(name="partner up", when="6:15", what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
             m.RoutineConfig(name="partner leaving", when="7:00", items=(
                 m.LightSubConfig(what=Light.ENTANCE_DESK_LAMP, state=1),
@@ -74,7 +74,7 @@ CONFIGS = m.scan(
             )),
             m.LightConfig(name="reset office light", when="9:05", what=Light.OFFICE_DESK_LAMP, state="off"),
             m.LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on", mandatory=True),
-            m.SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
+            m.SoundConfig(name="quiet time", when="23:00", what=Sound, state=10, mandatory=True),
         ),
     ),
     m.Theme(name="away", configs=()),
@@ -88,7 +88,7 @@ CONFIGS = m.scan(
     m.Theme(
         name="day off",
         configs=(
-            m.LightConfig(name="reset", when="13:50", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off", mandatory=True),
+            m.LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off", mandatory=True),
             m.RoutineConfig(name="partner up", when="7:00", items=(
                 m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
                 m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
@@ -100,7 +100,7 @@ CONFIGS = m.scan(
             )),
             m.LightConfig(name="reset office light", when="9:35", what=Light.OFFICE_DESK_LAMP, state="off"),
             m.LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on", mandatory=True),
-            m.SoundConfig(name="quiet time", when="23:00", what=Sound, state=10),
+            m.SoundConfig(name="quiet time", when="23:00", what=Sound, state=10, mandatory=True),
         ),
     ),
 )

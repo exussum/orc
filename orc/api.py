@@ -80,16 +80,13 @@ class ConfigManager:
 
     @unwrap_rule
     def route_rule(self, rule):
-        print("running...")
         if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
             for e in rule.items:
                 self.route_rule(e)
         elif rule.mandatory and self.snapshot:
-            print("executing with snapshot")
             self.update_snapshot(rule)
             execute(rule)
         elif not self.snapshot:
-            print("executing without")
             execute(rule)
 
 
