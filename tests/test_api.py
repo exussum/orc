@@ -41,19 +41,24 @@ class TestManagingConfig:
         target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.TZ))
         target.resume(routine)
         assert execute.call_args_list == [call(routine)]
+        assert not target.snapshot
 
 
 @patch("orc.api.dal.set_light")
 class TestUpdatingSnapshot:
-    def test_snapshot_update_overwrite(self, set_light, snapshot_config):
-        rule = m.LightConfig(what=Light.b, state="on", when="9:00", name="b", mandatory=True)
+    def test_snapshot_update_overwrite_set(self, set_light, snapshot_config):
+        rule = m.LightConfig(what=set((Light.b,)), state="on", when="9:00", name="b", mandatory=True)
 
         target = api.ConfigManager()
         target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
         target.route_rule(rule)
+        target.route_rule(rule)
 
-        assert target.snapshot.routine.items == (m.LightSubConfig(what=Light.a, state="on"), rule)
-        assert set_light.call_args_list == [call(Light.b, on=True)]
+        assert target.snapshot.routine.items == (
+            m.LightSubConfig(what=Light.a, state="on"),
+            m.LightConfig(what=Light.b, state="on", when="9:00", name="b", mandatory=True),
+        )
+        assert set_light.call_args_list == [call(Light.b, on=True), call(Light.b, on=True)]
 
     def test_snapshot_update_add(self, set_light, snapshot_config):
         rule = m.LightConfig(what=Light.c, state="on", when="9:00", name="b", mandatory=True)
