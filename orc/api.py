@@ -1,5 +1,6 @@
 import time
 from collections import namedtuple as nt
+from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
 
@@ -45,15 +46,18 @@ class ConfigManager:
 
     def resume(self, target_config):
         if self.snapshot and datetime.now(tz=config.TZ) < self.snapshot.end:
-            old_snapshot, self.snapshot = self.snapshot, None
-            execute(old_snapshot.routine)
+            routine = self.snapshot.routine
         else:
-            execute(target_config)
+            routine = target_config
+        self.snapshot = None
+        execute(routine)
 
     def update_snapshot(self, rule):
         what = [rule.what] if isinstance(rule.what, Enum) else rule.what
         items = {e.what: e for e in self.snapshot.routine.items}
-        items.update({e: rule for e in what})
+
+        # Explode out the rule w/o creating a sub config explicitly
+        items.update({e: replace(rule, what=e) for e in what})
         self.snapshot.routine.items = tuple(items.values())
 
     def set_theme_override(self, name, start, end):
