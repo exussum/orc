@@ -45,14 +45,14 @@ class TestManagingConfig:
 
 
 @patch("orc.api.dal.set_light")
-class TestUpdatingSnapshot:
+class TestRouteRule:
     def test_snapshot_update_overwrite_set(self, set_light, snapshot_config):
         rule = m.LightConfig(what=set((Light.b,)), state="on", when="9:00", name="b", mandatory=True)
 
         target = api.ConfigManager()
         target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
-        target.route_rule(rule)
-        target.route_rule(rule)
+        target.route_rule(rule, False)
+        target.route_rule(rule, False)
 
         assert target.snapshot.routine.items == (
             m.LightSubConfig(what=Light.a, state="on"),
@@ -65,7 +65,7 @@ class TestUpdatingSnapshot:
 
         target = api.ConfigManager()
         target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
-        target.route_rule(rule)
+        target.route_rule(rule, False)
 
         assert target.snapshot.routine.items == (
             m.LightSubConfig(what=Light.a, state="on"),
@@ -74,18 +74,34 @@ class TestUpdatingSnapshot:
         )
         assert set_light.call_args_list == [call(Light.c, on=True)]
 
-    def test_snapshot_update_ignored(self, set_light, snapshot_config):
+    def test_rule_ignored(self, set_light, snapshot_config):
         rule = m.LightConfig(what=Light.c, state="on", when="9:00", name="b")
 
         target = api.ConfigManager()
         target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
-        target.route_rule(rule)
+        target.route_rule(rule, False)
 
         assert target.snapshot.routine.items == (
             m.LightSubConfig(what=Light.a, state="on"),
             m.LightSubConfig(what=Light.b, state="off"),
         )
         assert set_light.call_args_list == []
+
+    def test_snapshot_bypassed(self, set_light, snapshot_config):
+        rule = m.LightConfig(what=Light.c, state="on", when="9:00", name="b")
+
+        target = api.ConfigManager()
+        target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
+
+        target.route_rule(rule, True)
+
+        assert target.snapshot.routine.items == (
+            m.LightSubConfig(what=Light.a, state="on"),
+            m.LightSubConfig(what=Light.b, state="off"),
+        )
+        assert set_light.call_args_list == [call(Light.c, on=True)]
+
+
 
 
 def test_unwrapper_function_single_rule():
