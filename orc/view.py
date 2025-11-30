@@ -89,4 +89,4 @@ class OrcAdminView(AdminIndexView):
     @expose("/<id>/run")
     def run(self, id):
         job = self.scheduler.get_job(id)
-        job.func()
+        job.func(True)

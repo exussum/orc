@@ -83,14 +83,15 @@ class ConfigManager:
         return theme_name
 
     @unwrap_rule
-    def route_rule(self, rule):
+    def route_rule(self, rule, force):
+        print(force)
         if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
             for e in rule.items:
                 self.route_rule(e)
         elif rule.mandatory and self.snapshot:
             self.update_snapshot(rule)
             execute(rule)
-        elif not self.snapshot:
+        elif not self.snapshot or force:
             execute(rule)
 
 
@@ -148,7 +149,7 @@ def _make_rule_lambda(config_manager, rule):
     for e in range(2):
        lambda: print(e)
     """
-    return lambda: config_manager.route_rule(rule)
+    return lambda force=False: config_manager.route_rule(rule, force)
 
 
 def setup_scheduler(scheduler, config_manager):
