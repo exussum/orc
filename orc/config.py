@@ -67,10 +67,10 @@ CONFIGS = m.scan(
                 m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off")
             )),
             m.RoutineConfig(name="up and atom", when="9:00", items=(
-                m.SoundSubConfig(what=Sound, state=40),
                 m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
                 m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
                 m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
+                m.SoundSubConfig(what=Sound, state=40),
             )),
             m.LightConfig(name="reset office light", when="9:05", what=Light.OFFICE_DESK_LAMP, state="off"),
             m.LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on", mandatory=True),
@@ -94,9 +94,9 @@ CONFIGS = m.scan(
                 m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
             )),
             m.RoutineConfig(name="up and atom", when="9:30", items=(
-                m.SoundSubConfig(what=Sound, state=40),
                 m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
                 m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
+                m.SoundSubConfig(what=Sound, state=40),
             )),
             m.LightConfig(name="reset office light", when="9:35", what=Light.OFFICE_DESK_LAMP, state="off"),
             m.LightConfig(name="sunset lights", when="sunset", what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="on", mandatory=True),
