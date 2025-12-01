@@ -102,8 +102,6 @@ class TestRouteRule:
         assert set_light.call_args_list == [call(Light.c, on=True)]
 
 
-
-
 def test_unwrapper_function_single_rule():
     calls = []
     rule = m.LightSubConfig(what=Light.a, state="on")
