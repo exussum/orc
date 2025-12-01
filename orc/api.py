@@ -84,10 +84,9 @@ class ConfigManager:
 
     @unwrap_rule
     def route_rule(self, rule, force):
-        print(force)
         if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
             for e in rule.items:
-                self.route_rule(e)
+                self.route_rule(e, force)
         elif rule.mandatory and self.snapshot:
             self.update_snapshot(rule)
             execute(rule)
