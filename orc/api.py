@@ -39,13 +39,13 @@ class ConfigManager:
     def replace_config(self, target_config, end):
         now = datetime.now(tz=config.TZ)
 
-        if not self.snapshot or self.snapshot.end <= now:
+        if not self.snapshot:
             self.snapshot = SnapShot(capture_lights(), end)
 
         execute(target_config)
 
     def resume(self, target_config):
-        if self.snapshot and datetime.now(tz=config.TZ) < self.snapshot.end:
+        if self.snapshot and datetime.now(tz=config.TZ) <= self.snapshot.end:
             routine = self.snapshot.routine
         else:
             routine = target_config
@@ -89,6 +89,9 @@ class ConfigManager:
                 self.route_rule(e, force)
         elif rule.mandatory and self.snapshot:
             self.update_snapshot(rule)
+            execute(rule)
+        elif self.snapshot and datetime.now(tz=config.TZ) > self.snapshot.end:
+            self.snapshot = None
             execute(rule)
         elif not self.snapshot or force:
             execute(rule)
