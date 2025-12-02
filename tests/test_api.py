@@ -78,7 +78,7 @@ class TestRouteRule:
         rule = m.LightConfig(what=Light.c, state="on", when="9:00", name="b")
 
         target = api.ConfigManager()
-        target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
+        target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.TZ))
         target.route_rule(rule, False)
 
         assert target.snapshot.routine.items == (
@@ -87,11 +87,21 @@ class TestRouteRule:
         )
         assert set_light.call_args_list == []
 
+    def test_rule_old_snapshot(self, set_light, snapshot_config):
+        rule = m.LightConfig(what=Light.c, state="on", when="9:00", name="b")
+
+        target = api.ConfigManager()
+        target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.TZ))
+        target.route_rule(rule, False)
+
+        assert target.snapshot == None
+        assert set_light.call_args_list == [call(Light.c, on=True)]
+
     def test_snapshot_bypassed(self, set_light, snapshot_config):
         rule = m.LightConfig(what=Light.c, state="on", when="9:00", name="b")
 
         target = api.ConfigManager()
-        target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
+        target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.TZ))
 
         target.route_rule(rule, True)
 
