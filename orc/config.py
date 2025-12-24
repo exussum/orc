@@ -91,7 +91,7 @@ CONFIGS = m.scan(
             m.LightConfig(name="reset", when="1:00", what=set(Light) - {Light.BEDROOM_NIGHT_LIGHT}, state="off", mandatory=True),
             m.RoutineConfig(name="partner up", when="7:00", items=(
                 m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
-                m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT, Light.KITCHEN_LIGHTS], state="off"),
+                m.LightSubConfig(what=[Light.BEDROOM_NIGHT_LIGHT], state="off"),
             )),
             m.RoutineConfig(name="up and atom", when="9:30", items=(
                 m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=100),
@@ -104,18 +104,33 @@ CONFIGS = m.scan(
         ),
     ),
 )
-
-CONFIG_TV_LIGHTS = m.AdHocRoutineConfig(items=(
-    m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP, Light.OFFICE_FLOOR_LAMP], state="off"),
-    m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=1),
-    m.LightSubConfig(what=Light.KITCHEN_LIGHTS, state="on")
-))
-
-CONFIG_FRONT_ROOMS = m.AdHocRoutineConfig(items=(
-    m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
-    m.LightSubConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
-    m.LightSubConfig(what=[Light.OFFICE_DESK_LAMP, Light.OFFICE_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="off"),
-))
-
-
 # fmt:on
+
+BUTTON_CONFIGS = {
+    "Partial TV Lights": m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(
+                what=[Light.LIVING_ROOM_DESK_LAMP, Light.OFFICE_FLOOR_LAMP, Light.OFFICE_DESK_LAMP], state="off"
+            ),
+            m.LightSubConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+            m.LightSubConfig(what=Light.LIVING_ROOM_FLOOR_LAMP, state="on"),
+        )
+    ),
+    "TV Lights": m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(
+                what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP, Light.OFFICE_FLOOR_LAMP], state="off"
+            ),
+            m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=1),
+            m.LightSubConfig(what=Light.KITCHEN_LIGHTS, state="on"),
+        )
+    ),
+    "Front Rooms": m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=[Light.LIVING_ROOM_DESK_LAMP, Light.LIVING_ROOM_FLOOR_LAMP], state="on"),
+            m.LightSubConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
+            m.LightSubConfig(what=[Light.OFFICE_DESK_LAMP, Light.OFFICE_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="off"),
+        )
+    ),
+    "Early Morning Lights": m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
+}
