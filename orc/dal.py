@@ -34,6 +34,8 @@ def get_config():
 
 def get_holidays():
     result = requests.get(f"{config.MARKET_HOLIDAYS_URL}").json()
+    if "error" in result:
+        raise Exception(result["error"])
     return result
 
 
