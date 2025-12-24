@@ -13,14 +13,9 @@ from flask_admin.base import AdminIndexView
 from orc import api, config
 
 
-class OrcAdminView(AdminIndexView):
+class VersionedView:
     version = str(random.random())
     snapshot = None
-
-    def __init__(self, url, config_manager, scheduler):
-        super(AdminIndexView, self).__init__(url=url)
-        self.scheduler = scheduler
-        self.config_manager = config_manager
 
     @classmethod
     def bump_version(cls):
@@ -30,13 +25,47 @@ class OrcAdminView(AdminIndexView):
     def versioned(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if not request.headers.get("orc-version") == OrcAdminView.version:
-                return {"version": OrcAdminView.version}, 412
+            if not request.headers.get("orc-version") == VersionedView.version:
+                return {"version": VersionedView.version}, 412
             func(*args, **kwargs)
-            OrcAdminView.version = str(random.random())
-            return {"version": OrcAdminView.version}, 200
+            VersionedView.version = str(random.random())
+            return {"version": VersionedView.version}, 200
 
         return wrapper
+
+
+class ButtonView(AdminIndexView, VersionedView):
+    def __init__(self, name, url, config_manager):
+        super(AdminIndexView, self).__init__(url=url, name=name)
+        self.config_manager = config_manager
+
+    @expose("/")
+    def index(self):
+        return self.render("button.html", version=self.version, buttons=(config.BUTTON_CONFIGS.keys())), 200
+
+    @expose("/button/<id>")
+    def press(self, id, remote=False):
+        if remote:
+            if id == "TV Lights":
+                end = datetime.now(tz=config.TZ) + timedelta(hours=4)
+                self.config_manager.replace_config(config.BUTTON_CONFIGS["TV Lights"], end)
+            elif id == "Partial TV Lights":
+                end = datetime.now(tz=config.TZ) + timedelta(hours=4)
+                self.config_manager.replace_config(config.BUTTON_CONFIGS["Partial TV Lights"], end)
+            elif id == "Front Rooms":
+                self.config_manager.resume(config.BUTTON_CONFIGS["Front Rooms"])
+        else:
+            api.execute(config.BUTTON_CONFIGS[id])
+
+        self.bump_version()
+        return {}, 200
+
+
+class ScheduleView(AdminIndexView, VersionedView):
+    def __init__(self, name, url, config_manager, scheduler):
+        super(AdminIndexView, self).__init__(url=url, name=name)
+        self.scheduler = scheduler
+        self.config_manager = config_manager
 
     @expose("/")
     def index(self):
@@ -47,20 +76,11 @@ class OrcAdminView(AdminIndexView):
             if theme_override
             else None
         )
-        return self.render("orc.html", version=self.version, jobs=jobs, theme=theme), 200, {"Cache-control": "no-store"}
-
-    @expose("/tv_mode_on")
-    def tv_mode_on(self):
-        end = datetime.now(tz=config.TZ) + timedelta(hours=4)
-        self.config_manager.replace_config(config.CONFIG_TV_LIGHTS, end)
-        self.bump_version()
-        return {}, 200
-
-    @expose("/tv_mode_off")
-    def tv_mode_off(self):
-        self.config_manager.resume(config.CONFIG_FRONT_ROOMS)
-        self.bump_version()
-        return {}, 200
+        return (
+            self.render("schedule.html", version=self.version, jobs=jobs, theme=theme),
+            200,
+            {"Cache-control": "no-store"},
+        )
 
     @expose("/set_theme", methods=["POST"])
     def set_theme(self):
@@ -76,7 +96,7 @@ class OrcAdminView(AdminIndexView):
         api.setup_scheduler(self.scheduler, self.config_manager)
         return redirect("/")
 
-    @versioned
+    @VersionedView.versioned
     @expose("/<id>/pause")
     def pause(self, id):
         job = self.scheduler.get_job(id)
@@ -85,7 +105,7 @@ class OrcAdminView(AdminIndexView):
         else:
             job.resume()
 
-    @versioned
+    @VersionedView.versioned
     @expose("/<id>/run")
     def run(self, id):
         job = self.scheduler.get_job(id)

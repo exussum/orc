@@ -114,11 +114,11 @@
             }
         }
 
-        async function run(el) { await _call(`/${el.dataset.id}/run`, el); }
+        async function run(el) { await _call(`${el.dataset.id}/run`, el); }
         async function pause(el) {
             const newStatus = el.checked;
 
-            if (!await _call(`/${el.dataset.id}/pause`, el)) {
+            if (!await _call(`${el.dataset.id}/pause`, el)) {
                 el.checked = !newStatus;
             }
         }

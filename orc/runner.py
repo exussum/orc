@@ -10,7 +10,7 @@ from flask_admin.base import Admin
 
 from orc import api
 from orc.model import RoutineConfig
-from orc.view import OrcAdminView
+from orc.view import ButtonView, ScheduleView
 
 
 def web():
@@ -27,8 +27,9 @@ def web():
         app,
         name="ORChestration",
         template_mode="bootstrap4",
-        index_view=OrcAdminView(config_manager=config_manager, scheduler=scheduler, url="/"),
+        index_view=ButtonView(config_manager=config_manager, url="/", name="Remote"),
     )
+    admin.add_view(ScheduleView(config_manager=config_manager, scheduler=scheduler, url="/schedule", name="Schedule"))
     app.run(host="0.0.0.0")
 
 
