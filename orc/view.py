@@ -44,8 +44,8 @@ class ButtonView(AdminIndexView, VersionedView):
         return self.render("button.html", version=self.version, buttons=(config.BUTTON_CONFIGS.keys())), 200
 
     @expose("/button/<id>")
-    def press(self, id, remote=False):
-        if remote:
+    def press(self, id):
+        if request.args.get("remote"):
             if id == "TV Lights":
                 end = datetime.now(tz=config.TZ) + timedelta(hours=4)
                 self.config_manager.replace_config(config.BUTTON_CONFIGS["TV Lights"], end)
