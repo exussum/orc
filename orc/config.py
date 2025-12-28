@@ -110,10 +110,16 @@ BUTTON_CONFIGS = {
     "Partial TV Lights": m.AdHocRoutineConfig(
         items=(
             m.LightSubConfig(
-                what=[Light.LIVING_ROOM_DESK_LAMP, Light.OFFICE_FLOOR_LAMP, Light.OFFICE_DESK_LAMP], state="off"
+                what=[
+                    Light.ENTANCE_DESK_LAMP,
+                    Light.LIVING_ROOM_DESK_LAMP,
+                    Light.OFFICE_FLOOR_LAMP,
+                    Light.OFFICE_DESK_LAMP,
+                ],
+                state="off",
             ),
-            m.LightSubConfig(what=Light.ENTANCE_DESK_LAMP, state=100),
             m.LightSubConfig(what=Light.LIVING_ROOM_FLOOR_LAMP, state="on"),
+            m.LightSubConfig(what=[Light.ENTANCE_DESK_LAMP, Light.OFFICE_DESK_LAMP], state=1),
         )
     ),
     "TV Lights": m.AdHocRoutineConfig(
@@ -133,4 +139,10 @@ BUTTON_CONFIGS = {
         )
     ),
     "Early Morning Lights": m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
+    "Test": m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=Light, state="off"),
+            m.LightSubConfig(what=Light, state="on"),
+        )
+    ),
 }

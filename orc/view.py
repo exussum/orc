@@ -1,4 +1,5 @@
 import random
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from functools import wraps
@@ -45,7 +46,7 @@ class ButtonView(AdminIndexView, VersionedView):
 
     @expose("/button/<id>")
     def press(self, id):
-        if request.args.get("remote"):
+        if request.args.get("remote") or id == "Test":
             if id == "TV Lights":
                 end = datetime.now(tz=config.TZ) + timedelta(hours=4)
                 self.config_manager.replace_config(config.BUTTON_CONFIGS["TV Lights"], end)
@@ -53,6 +54,11 @@ class ButtonView(AdminIndexView, VersionedView):
                 end = datetime.now(tz=config.TZ) + timedelta(hours=4)
                 self.config_manager.replace_config(config.BUTTON_CONFIGS["Partial TV Lights"], end)
             elif id == "Front Rooms":
+                self.config_manager.resume(config.BUTTON_CONFIGS["Front Rooms"])
+            else:
+                end = datetime.now(tz=config.TZ)
+                self.config_manager.replace_config(config.BUTTON_CONFIGS["Test"], end)
+                time.sleep(5)
                 self.config_manager.resume(config.BUTTON_CONFIGS["Front Rooms"])
         else:
             api.execute(config.BUTTON_CONFIGS[id])
