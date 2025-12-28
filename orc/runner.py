@@ -10,7 +10,7 @@ from flask_admin.base import Admin
 
 from orc import api
 from orc.model import RoutineConfig
-from orc.view import ButtonView, ScheduleView
+from orc.view import ButtonView, ScheduleView, VersionedView
 
 
 def web():
@@ -20,7 +20,7 @@ def web():
 
     config_manager = api.ConfigManager()
     scheduler = api.setup_scheduler(BackgroundScheduler(), config_manager)
-    scheduler.add_listener(lambda e: OrcAdminView.bump_version(), EVENT_JOB_EXECUTED)
+    scheduler.add_listener(lambda e: VersionedView.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start()
 
     admin = Admin(
