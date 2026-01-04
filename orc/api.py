@@ -19,12 +19,22 @@ def non_cron_jobs(scheduler):
     return [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now]
 
 
-def unwrap_rule(f):
+def unwrap_rule_container(f):
     def wrapper(*args):
-        rule = args[-1]
-        if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
-            for e in rule.items:
-                f(*(args[:-1] + (e,)))
+        if isinstance(args[0], m.RoutineConfig | m.AdHocRoutineConfig):
+            for e in args[0].items:
+                f(*((e,) + args[1:]))
+        elif len(args) > 1 and isinstance(args[1], m.RoutineConfig | m.AdHocRoutineConfig):
+            for e in args[1].items:
+                f(
+                    *(
+                        (
+                            args[0],
+                            e,
+                        )
+                        + args[2:]
+                    )
+                )
         else:
             f(*args)
 
@@ -82,12 +92,9 @@ class ConfigManager:
             theme_name = "day off"
         return theme_name
 
-    @unwrap_rule
+    @unwrap_rule_container
     def route_rule(self, rule, force):
-        if isinstance(rule, m.RoutineConfig | m.AdHocRoutineConfig):
-            for e in rule.items:
-                self.route_rule(e, force)
-        elif rule.mandatory and self.snapshot:
+        if rule.mandatory and self.snapshot:
             self.update_snapshot(rule)
             execute(rule)
         elif self.snapshot and datetime.now(tz=config.TZ) > self.snapshot.end:
@@ -97,7 +104,7 @@ class ConfigManager:
             execute(rule)
 
 
-@unwrap_rule
+@unwrap_rule_container
 def execute(rule):
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
@@ -174,3 +181,28 @@ def setup_scheduler(scheduler, config_manager):
         replace_existing=True,
     )
     return scheduler
+
+
+def squish_theme(theme):
+    rules = defaultdict(list)
+    for rule in theme.items:
+        what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+        for e in what:
+            rules[e].append(m.LightSubConfig(what=e, state=rule.state))
+
+    items = []
+
+
+def squish(items):
+    if not items:
+        return ()
+
+    result = (items[-1],)
+    if isinstance(result[0].state, int):
+        return result
+
+    for e in range(len(items) - 2, -1, -1):
+        if isinstance(items[e].state, int):
+            result = (items[e], result[0])
+            break
+    return result
