@@ -34,6 +34,8 @@ Light = build_enum(
     {
         "night light": "BEDROOM_NIGHT_LIGHT",
         "entrance desk lamp": "ENTANCE_DESK_LAMP",
+        "entrance bulb 1": "ENTRANCE_BULB_1",
+        "entrance bulb 2": "ENTRANCE_BULB_2",
         "kitchen lights": "KITCHEN_LIGHTS",
         "living room desk lamp": "LIVING_ROOM_DESK_LAMP",
         "living room floor lamp": "LIVING_ROOM_FLOOR_LAMP",
@@ -163,6 +165,10 @@ BUTTON_CONFIGS = {
         )
     ),
     "Early Morning Lights": m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR_LAMP, Light.KITCHEN_LIGHTS], state="on"),
+    "All Lights On": m.AdHocRoutineConfig(
+        items=(m.LightSubConfig(what=Light, state="on"), m.LightSubConfig(what=Light, state=100))
+    ),
+    "All Lights Off": m.AdHocRoutineConfig(items=(m.LightSubConfig(what=Light, state="off"),)),
     "Test": m.AdHocRoutineConfig(
         items=(
             m.LightSubConfig(what=Light, state="off"),
