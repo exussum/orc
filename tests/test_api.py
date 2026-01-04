@@ -116,7 +116,7 @@ def test_unwrapper_function_single_rule():
     calls = []
     rule = m.LightSubConfig(what=Light.a, state="on")
 
-    @api.unwrap_rule
+    @api.unwrap_rule_container
     def target(e):
         calls.append(e)
 
@@ -128,7 +128,7 @@ def test_unwrapper_function_single_rule():
 def test_unwrapper_function_routine(snapshot_config):
     calls = []
 
-    @api.unwrap_rule
+    @api.unwrap_rule_container
     def target(e):
         calls.append(e)
 
@@ -142,7 +142,7 @@ def test_unwrapper_class_single_rule():
     rule = m.LightSubConfig(what=Light.a, state="on")
 
     class Foo:
-        @api.unwrap_rule
+        @api.unwrap_rule_container
         def target(self, e):
             calls.append(e)
 
@@ -155,10 +155,44 @@ def test_unwrapper_class_routine(snapshot_config):
     calls = []
 
     class Foo:
-        @api.unwrap_rule
+        @api.unwrap_rule_container
         def target(self, e):
             calls.append(e)
 
     Foo().target(snapshot_config)
 
     assert calls == list(snapshot_config.items)
+
+
+def test_squish_dim_then_off():
+    config = (
+        m.LightSubConfig(what=Light.a, state=10),
+        m.LightSubConfig(what=Light.a, state="on"),
+        m.LightSubConfig(what=Light.a, state=20),
+        m.LightSubConfig(what=Light.a, state="on"),
+        m.LightSubConfig(what=Light.a, state="off"),
+    )
+    assert api.squish(config) == (
+        m.LightSubConfig(what=Light.a, state=20),
+        m.LightSubConfig(what=Light.a, state="off"),
+    )
+
+
+def test_squish_just_off():
+    config = (m.LightSubConfig(what=Light.a, state="on"), m.LightSubConfig(what=Light.a, state="off"))
+    assert api.squish(config) == (m.LightSubConfig(what=Light.a, state="off"),)
+
+
+def test_squish_dim_on():
+    config = (m.LightSubConfig(what=Light.a, state=20), m.LightSubConfig(what=Light.a, state="on"))
+    assert api.squish(config) == (m.LightSubConfig(what=Light.a, state=20), m.LightSubConfig(what=Light.a, state="on"))
+
+
+def test_squish_0_on():
+    config = (m.LightSubConfig(what=Light.a, state=0), m.LightSubConfig(what=Light.a, state="on"))
+    assert api.squish(config) == (m.LightSubConfig(what=Light.a, state=0), m.LightSubConfig(what=Light.a, state="on"))
+
+
+def test_squish_just_on():
+    config = (m.LightSubConfig(what=Light.a, state="off"), m.LightSubConfig(what=Light.a, state="on"))
+    assert api.squish(config) == (m.LightSubConfig(what=Light.a, state="on"),)
