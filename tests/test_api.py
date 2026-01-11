@@ -196,3 +196,47 @@ def test_squish_0_on():
 def test_squish_just_on():
     config = (m.LightSubConfig(what=Light.a, state="off"), m.LightSubConfig(what=Light.a, state="on"))
     assert api.squish(config) == (m.LightSubConfig(what=Light.a, state="on"),)
+
+
+def test_theme_squish_everything_off_start():
+    routine = m.AdHocRoutineConfig(
+        items=(m.LightSubConfig(what=Light, state="off"), m.LightSubConfig(what=Light.a, state="on"))
+    )
+    assert api.squish_routines(routine) == m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=Light.a, state="on", mandatory=False),
+            m.LightSubConfig(what=Light.b, state="off", mandatory=False),
+            m.LightSubConfig(what=Light.c, state="off", mandatory=False),
+        )
+    )
+
+
+def test_theme_squish_double_on():
+    routine = m.AdHocRoutineConfig(
+        items=(m.LightSubConfig(what=Light, state="on"), m.LightSubConfig(what=Light.a, state="on"))
+    )
+    assert api.squish_routines(routine) == m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=Light.a, state="on", mandatory=False),
+            m.LightSubConfig(what=Light.b, state="on", mandatory=False),
+            m.LightSubConfig(what=Light.c, state="on", mandatory=False),
+        )
+    )
+
+
+def test_theme_squish_dim_then_off():
+    routine = m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=Light, state="off"),
+            m.LightSubConfig(what=Light.a, state=10),
+            m.LightSubConfig(what=Light, state="off"),
+        )
+    )
+    assert api.squish_routines(routine) == m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=Light.a, state=10, mandatory=False),
+            m.LightSubConfig(what=Light.a, state="off", mandatory=False),
+            m.LightSubConfig(what=Light.b, state="off", mandatory=False),
+            m.LightSubConfig(what=Light.c, state="off", mandatory=False),
+        )
+    )
