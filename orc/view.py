@@ -12,6 +12,7 @@ from flask_admin import expose
 from flask_admin.base import AdminIndexView
 
 from orc import api, config
+from orc import model as m
 
 
 class VersionedView:
@@ -56,12 +57,17 @@ class ButtonView(AdminIndexView, VersionedView):
             elif id == "Front Rooms":
                 self.config_manager.resume(config.BUTTON_CONFIGS["Front Rooms"])
             else:
-                end = datetime.now(tz=config.TZ)
-                self.config_manager.replace_config(config.BUTTON_CONFIGS["Test"], end)
-                time.sleep(5)
+                end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
+                self.config_manager.replace_config(m.LightSubConfig(what=config.Light, state="off"), end)
+                time.sleep(1)
+                api.test(config.BUTTON_CONFIGS["Test"])
+                time.sleep(1)
                 self.config_manager.resume(config.BUTTON_CONFIGS["Front Rooms"])
         else:
-            api.execute(config.BUTTON_CONFIGS[id])
+            routine = api.squish_routines(
+                m.AdHocRoutineConfig(items=(config.CONFIG_RESET_LIGHT,)), config.BUTTON_CONFIGS[id]
+            )
+            api.execute(routine)
 
         self.bump_version()
         return {}, 200

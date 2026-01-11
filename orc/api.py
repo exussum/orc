@@ -1,4 +1,6 @@
 import time
+from itertools import chain
+from collections import defaultdict
 from collections import namedtuple as nt
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -183,14 +185,21 @@ def setup_scheduler(scheduler, config_manager):
     return scheduler
 
 
-def squish_theme(theme):
-    rules = defaultdict(list)
-    for rule in theme.items:
-        what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-        for e in what:
-            rules[e].append(m.LightSubConfig(what=e, state=rule.state))
+def test(theme):
+    for e in theme.items:
+        execute(e)
+        time.sleep(1)
 
-    items = []
+
+def squish_routines(*routines):
+    rules = defaultdict(list)
+    for routine in routines:
+        for rule in routine.items:
+            what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+            for e in what:
+                rules[e].append(m.LightSubConfig(what=e, state=rule.state))
+
+    return m.AdHocRoutineConfig(items=tuple(chain.from_iterable(squish(e) for e in rules.values())))
 
 
 def squish(items):
