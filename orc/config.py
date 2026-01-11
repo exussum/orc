@@ -1,6 +1,7 @@
+import itertools
 import os
-from datetime import datetime, timedelta
 from dataclasses import replace
+from datetime import datetime, timedelta
 from enum import Enum
 from zoneinfo import ZoneInfo
 
@@ -38,7 +39,7 @@ Light = build_enum(
         "entrance bulb 1": "ENTRANCE_BULB_1",
         "entrance bulb 2": "ENTRANCE_BULB_2",
         "kitchen lights": "KITCHEN",
-        "living room desk lamp": "g_LAMP",
+        "living room desk lamp": "LIVING_ROOM_DESK",
         "living room floor lamp": "LIVING_ROOM_FLOOR",
         "office desk lamp": "OFFICE_DESK",
         "office table lamp": "OFFICE_TABLE",
@@ -72,7 +73,7 @@ CONFIG_UP_AND_ATOM = m.RoutineConfig(
     when="9:00",
     items=(
         m.LightSubConfig(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=100),
-        m.LightSubConfig(what=[Light.g_LAMP, Light.LIVING_ROOM_FLOOR], state="on"),
+        m.LightSubConfig(what=[Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR], state="on"),
         m.LightSubConfig(what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN], state="off"),
         m.SoundSubConfig(what=Sound, state=40),
         m.LightSubConfig(what=[Light.OFFICE_TABLE, Light.BEDROOM_NIGHTLIGHT], state="off"),
@@ -143,7 +144,14 @@ BUTTON_CONFIGS = {
     "Partial TV Lights": m.AdHocRoutineConfig(
         items=(
             m.LightSubConfig(
-                what=set(Light) - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN, Light.LIVING_ROOM_FLOOR, Light.BEDROOM_NIGHTLIGHT},
+                what=set(Light)
+                - {
+                    Light.ENTANCE_DESK,
+                    Light.OFFICE_TABLE,
+                    Light.KITCHEN,
+                    Light.LIVING_ROOM_FLOOR,
+                    Light.BEDROOM_NIGHTLIGHT,
+                },
                 state="off",
             ),
             m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN], state="on"),
@@ -162,18 +170,23 @@ BUTTON_CONFIGS = {
     ),
     "Front Rooms": m.AdHocRoutineConfig(
         items=(
-            m.LightSubConfig(what=[Light.g_LAMP, Light.LIVING_ROOM_FLOOR], state="on"),
+            m.LightSubConfig(what=[Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR], state="on"),
             m.LightSubConfig(what=Light.ENTANCE_DESK, state=100),
-            m.LightSubConfig(what=[Light.OFFICE_DESK, Light.OFFICE_TABLE, Light.OFFICE_FLOOR, Light.KITCHEN], state="off"),
+            m.LightSubConfig(
+                what=[Light.OFFICE_DESK, Light.OFFICE_TABLE, Light.OFFICE_FLOOR, Light.KITCHEN], state="off"
+            ),
         )
     ),
-    "Early Morning Lights": m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN], state="on"),
-    "All Lights On": m.AdHocRoutineConfig(items=(m.LightSubConfig(what=Light, state="on"), m.LightSubConfig(what=Light, state=100))),
+    "Early Morning Lights": m.AdHocRoutineConfig(
+        items=(m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN], state="on"),)
+    ),
+    "All Lights On": m.AdHocRoutineConfig(
+        items=(m.LightSubConfig(what=Light, state="on"), m.LightSubConfig(what=Light, state=100))
+    ),
     "All Lights Off": m.AdHocRoutineConfig(items=(m.LightSubConfig(what=Light, state="off"),)),
     "Test": m.AdHocRoutineConfig(
-        items=(
-            m.LightSubConfig(what=Light, state="off"),
-            m.LightSubConfig(what=Light, state="on"),
+        items=tuple(
+            m.LightSubConfig(what=e, state=s) for (e, s) in tuple(itertools.product(list(Light), ["on", "off"]))
         )
     ),
 }
