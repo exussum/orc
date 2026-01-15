@@ -186,10 +186,10 @@ def setup_scheduler(scheduler, config_manager):
 
 
 def test(theme):
+    time.sleep(1)
     for e in theme.items:
         execute(e)
         time.sleep(1)
-
 
 def squish_routines(*routines):
     rules = defaultdict(list)

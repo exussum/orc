@@ -34,16 +34,18 @@ def build_enum(name, hub_name_to_token, hubitat_config):
 Light = build_enum(
     "Light",
     {
-        "night light": "BEDROOM_NIGHTLIGHT",
+        "bedroom night light": "BEDROOM_NIGHTLIGHT",
+        "bedroom lamp": "BEDROOM_LAMP",
         "entrance desk lamp": "ENTANCE_DESK",
         "entrance bulb 1": "ENTRANCE_BULB_1",
         "entrance bulb 2": "ENTRANCE_BULB_2",
-        "kitchen lights": "KITCHEN",
         "living room desk lamp": "LIVING_ROOM_DESK",
         "living room floor lamp": "LIVING_ROOM_FLOOR",
+        "kitchen lights": "KITCHEN_CABINET",
+        "kitchen overhead": "KITCHEN_OVERHEAD",
+        "office floor lamp": "OFFICE_FLOOR",
         "office desk lamp": "OFFICE_DESK",
         "office table lamp": "OFFICE_TABLE",
-        "office floor lamp": "OFFICE_FLOOR",
     },
     hubitat_config,
 )
@@ -54,7 +56,7 @@ Sound = build_enum(
         "Living room mini": "LIVING_ROOM_MINI",
         "Bedroom display": "BEDROOM_DISPLAY",
         "Office display": "OFFICE_DISPLAY",
-        "Kitchen mini": "KITCHEN_MINI",
+        "Kitchen mini": "KITCHEN_CABINET_MINI",
     },
     hubitat_config,
 )
@@ -65,7 +67,7 @@ CONFIG_RESET_LIGHT = m.LightConfig(
 )
 
 CONFIG_PARTNER_UP = m.LightConfig(
-    name="partner up", when="6:15", what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN], state="on"
+    name="partner up", when="6:15", what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state="on"
 )
 
 CONFIG_UP_AND_ATOM = m.RoutineConfig(
@@ -74,7 +76,7 @@ CONFIG_UP_AND_ATOM = m.RoutineConfig(
     items=(
         m.LightSubConfig(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=100),
         m.LightSubConfig(what=[Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR], state="on"),
-        m.LightSubConfig(what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN], state="off"),
+        m.LightSubConfig(what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET], state="off"),
         m.SoundSubConfig(what=Sound, state=40),
         m.LightSubConfig(what=[Light.OFFICE_TABLE, Light.BEDROOM_NIGHTLIGHT], state="off"),
     ),
@@ -83,7 +85,7 @@ CONFIG_UP_AND_ATOM = m.RoutineConfig(
 CONFIG_SUNSET_LIGHTS = m.LightConfig(
     name="sunset lights",
     when="sunset",
-    what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN],
+    what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET],
     state="on",
     mandatory=True,
 )
@@ -95,7 +97,7 @@ CONFIG_PARTNER_LEAVING = m.RoutineConfig(
     when="7:00",
     items=(
         m.LightSubConfig(what=Light.ENTANCE_DESK, state=1),
-        m.LightSubConfig(what=Light.KITCHEN, state="off"),
+        m.LightSubConfig(what=Light.KITCHEN_CABINET, state="off"),
     ),
 )
 
@@ -140,7 +142,29 @@ CONFIGS = m.scan(
     ),
 )
 
-BUTTON_CONFIGS = {
+ROOM_CONFIGS = {
+    "Living Room": m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.LIVING_ROOM_DESK], state="on"),
+            m.LightSubConfig(what=[Light.ENTANCE_DESK], state=100),
+        ),
+    ),
+    "Office": m.AdHocRoutineConfig(
+        items=(
+            m.LightSubConfig(what=Light.OFFICE_FLOOR, state="on"),
+            m.LightSubConfig(what=Light.OFFICE_DESK, state=50),
+            m.LightSubConfig(what=Light.OFFICE_TABLE, state=100),
+        )
+    ),
+    "Kitchen": m.AdHocRoutineConfig(
+        m.LightSubConfig(what=[Light.KITCHEN_CABINET, Light.KITCHEN_OVERHEAD], state="on"),
+    ),
+    "Bedroom": m.AdHocRoutineConfig(
+        m.LightSubConfig(what=Light.BEDROOM_LAMP, state="on"),
+    ),
+}
+
+THEME_CONFIGS = {
     "Partial TV Lights": m.AdHocRoutineConfig(
         items=(
             m.LightSubConfig(
@@ -148,23 +172,24 @@ BUTTON_CONFIGS = {
                 - {
                     Light.ENTANCE_DESK,
                     Light.OFFICE_TABLE,
-                    Light.KITCHEN,
+                    Light.KITCHEN_CABINET,
                     Light.LIVING_ROOM_FLOOR,
                     Light.BEDROOM_NIGHTLIGHT,
                 },
                 state="off",
             ),
-            m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN], state="on"),
+            m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state="on"),
             m.LightSubConfig(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=1),
         )
     ),
     "TV Lights": m.AdHocRoutineConfig(
         items=(
             m.LightSubConfig(
-                what=set(Light) - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN, Light.BEDROOM_NIGHTLIGHT},
+                what=set(Light)
+                - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN_CABINET, Light.BEDROOM_NIGHTLIGHT},
                 state="off",
             ),
-            m.LightSubConfig(what=Light.KITCHEN, state="on"),
+            m.LightSubConfig(what=Light.KITCHEN_CABINET, state="on"),
             m.LightSubConfig(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=1),
         )
     ),
@@ -173,13 +198,16 @@ BUTTON_CONFIGS = {
             m.LightSubConfig(what=[Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR], state="on"),
             m.LightSubConfig(what=Light.ENTANCE_DESK, state=100),
             m.LightSubConfig(
-                what=[Light.OFFICE_DESK, Light.OFFICE_TABLE, Light.OFFICE_FLOOR, Light.KITCHEN], state="off"
+                what=[Light.OFFICE_DESK, Light.OFFICE_TABLE, Light.OFFICE_FLOOR, Light.KITCHEN_CABINET], state="off"
             ),
         )
     ),
     "Early Morning Lights": m.AdHocRoutineConfig(
-        items=(m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN], state="on"),)
+        items=(m.LightSubConfig(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state="on"),)
     ),
+}
+
+OTHER_CONFIGS = {
     "All Lights On": m.AdHocRoutineConfig(
         items=(m.LightSubConfig(what=Light, state="on"), m.LightSubConfig(what=Light, state=100))
     ),
