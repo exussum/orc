@@ -45,29 +45,35 @@ class ButtonView(AdminIndexView, VersionedView):
     def index(self):
         return self.render("button.html", version=self.version, buttons=(config.BUTTON_CONFIGS.keys())), 200
 
-    @expose("/button/<id>")
-    def press(self, id):
-        if request.args.get("remote") or id == "Test":
-            if id == "TV Lights":
-                end = datetime.now(tz=config.TZ) + timedelta(hours=4)
-                self.config_manager.replace_config(config.BUTTON_CONFIGS["TV Lights"], end)
-            elif id == "Partial TV Lights":
-                end = datetime.now(tz=config.TZ) + timedelta(hours=4)
-                self.config_manager.replace_config(config.BUTTON_CONFIGS["Partial TV Lights"], end)
-            elif id == "Front Rooms":
-                self.config_manager.resume(config.BUTTON_CONFIGS["Front Rooms"])
-            else:
-                end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
-                self.config_manager.replace_config(m.LightSubConfig(what=config.Light, state="off"), end)
-                time.sleep(1)
-                api.test(config.BUTTON_CONFIGS["Test"])
-                time.sleep(1)
-                self.config_manager.resume(config.BUTTON_CONFIGS["Front Rooms"])
-        else:
+    @expose("/remote/<id>")
+    def remote(self, id):
+        if id in ("TV Lights", "Partial TV Lights"):
+            end = datetime.now(tz=config.TZ) + timedelta(hours=4)
+            self.config_manager.replace_config(config.THEME_CONFIGS[id], end)
+        elif id == "Front Rooms":
+            self.config_manager.resume(config.THEME_CONFIGS[id])
+
+    @expose("/console/<id>")
+    def console(self, id):
+        if id == "Test":
+            end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
+            self.config_manager.replace_config(m.LightSubConfig(what=config.Light, state="off"), end)
+            api.test(config.BUTTON_CONFIGS[id])
+            self.config_manager.resume(config.THEME_CONFIGS["Front Rooms"])
+        elif id in config.THEME_CONFIGS:
             routine = api.squish_routines(
-                m.AdHocRoutineConfig(items=(config.CONFIG_RESET_LIGHT,)), config.BUTTON_CONFIGS[id]
+                m.AdHocRoutineConfig(items=(config.CONFIG_RESET_LIGHT,)), config.THEME_CONFIGS[id]
             )
             api.execute(routine)
+        else:
+            if request.args.get("state") == "on":
+                api.execute(config.ROOM_CONFIGS[id])
+            elif request.args.get("state") == "off":
+                api.execute(m.AdHocRoutineConfig(items=(replace(e, state="off") for e in config.ROOM_CONFIGS[id])))
+            else:
+                items = itertools.chain((v.items for (k, v) in config.ROOM_CONFIGS if id != k))
+                api.execute(config.ROOM_CONFIGS[id])
+                api.execute(m.AdHocRoutineConfig(items=(replace(e, state="off") for e in items)))
 
         self.bump_version()
         return {}, 200
