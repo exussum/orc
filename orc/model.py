@@ -5,13 +5,24 @@ from typing import Optional, Tuple
 
 
 @dataclass
-class ScheduledConfig:
+class Config:
     _: KW_ONLY
+    what: object
+    state: object
+    mandatory: bool = False
+
+
+@dataclass
+class AdHocConfig:
+    items: Tuple[Config]
+
+
+@dataclass
+class RoutineConfig:
+    _: KW_ONLY
+    items: Tuple[Config]
     name: str
     when: str
-
-    def __init__(self, **kwargs):
-        super(ScheduledConfig, self).__init__(**kwargs)
 
     def __post_init__(self):
         if self.when and not isinstance(self.when, time) and ":" in self.when:
@@ -20,51 +31,9 @@ class ScheduledConfig:
 
 
 @dataclass
-class SubConfig:
-    _: KW_ONLY
-    what: object
-    state: object
-    mandatory: bool = False
-
-
-@dataclass
-class SimpleConfig(ScheduledConfig):
-    _: KW_ONLY
-    what: object
-    state: object
-    mandatory: bool = False
-
-
-class LightConfig(SimpleConfig):
-    pass
-
-
-class SoundConfig(SimpleConfig):
-    pass
-
-
-class LightSubConfig(SubConfig):
-    pass
-
-
-class SoundSubConfig(SubConfig):
-    pass
-
-
-@dataclass
-class AdHocRoutineConfig:
-    items: Tuple[SimpleConfig]
-
-
-@dataclass
-class RoutineConfig(ScheduledConfig):
-    items: Tuple[SimpleConfig]
-
-
-@dataclass
 class Theme:
     name: str
-    configs: Tuple[ScheduledConfig]
+    configs: Tuple[RoutineConfig]
 
 
 def scan(*themes):
