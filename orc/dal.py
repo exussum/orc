@@ -7,15 +7,20 @@ from orc import model as m
 
 
 def get_light_state(light):
-    attrs = requests.get(f"{config.BASE_URL}/devices/{light.value}{config.ACCESS_TOKEN}").json()["attributes"]
-    attrs = {e["name"]: e["currentValue"] for e in attrs}
-
-    return m.LightSubConfig(
-        what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"]
-    )
+    resp = requests.get(f"{config.BASE_URL}/devices/{light.value}{config.ACCESS_TOKEN}")
+    print(resp)
+    if resp.status_code == 200:
+        attrs = {e["name"]: e["currentValue"] for e in resp.json()["attributes"]}
+        return m.Config(
+            what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"]
+        )
+    else:
+        return m.Config(what=light, state="off")
 
 
 def set_light(light, on=None, brightness=None):
+    print(light, on, brightness)
+    return
     if brightness:
         requests.get(f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.ACCESS_TOKEN}")
     else:

@@ -3,10 +3,19 @@
 {% block head_css %}
     {{ super() }}
     <style>
-        div.orc-buttons {
+        hr.orc-hr {
+            border: revert;
+        }
+
+        div.orc-theme-buttoms {
             display: grid;
             grid-template-columns: 1fr 1fr;
         }
+        div.orc-room-buttoms {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+        }
+ 
         div.orc-button {
             width: 100px;
             margin-bottom: 20px;
@@ -21,14 +30,39 @@
 {% endblock %}
 
 {% block body %}
-    <div class="orc-buttons">
-    {% for id in buttons %}
+    <div class="orc-room-buttoms">
+    {% for id in room_configs %}
+        <div>{{ id }}</div>
         <div class="orc-button">
-            <div class="orc-button-label">{{ id }}</div>
-            <button class="btn btn-primary orc-runner" data-id="{{ id }}">&nbsp;</button>
+            <button class="btn btn-primary orc-runner" data-state="on" data-type="room" data-id="{{ id }}">💡</button>
+        </div>
+        <div class="orc-button">
+            <button class="btn btn-primary orc-runner" data-state="off" data-type="room" data-id="{{ id }}">&nbsp;</button>
+        </div>
+        <div class="orc-button">
+            <button class="btn btn-primary orc-runner" data-state="follow" data-type="room" data-id="{{ id }}">&nbsp;</button>
         </div>
     {% endfor %}
     </div>
+    <hr class="hr orc-hr"/>
+    <div class="orc-theme-buttoms">
+    {% for id in theme_configs %}
+        <div class="orc-button">
+            <div class="orc-button-label">{{ id }}</div>
+            <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}">&nbsp;</button>
+        </div>
+    {% endfor %}
+    </div>
+    <hr class="hr orc-hr"/>
+    <div class="orc-theme-buttoms">
+    {% for id in other_configs %}
+        <div class="orc-button">
+            <div class="orc-button-label">{{ id }}</div>
+            <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}">&nbsp;</button>
+        </div>
+    {% endfor %}
+    </div>
+
 {% endblock %}
 
 {% block tail %}
@@ -38,7 +72,7 @@
             let response = null;
 
             try {
-                response = await fetch(`/button/${el.dataset.id}`);
+                response = await fetch(`/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`);
                 if (!response.ok) {
                     throw Error(`Response status: ${response.status}`);
                 }
