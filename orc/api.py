@@ -1,10 +1,10 @@
 import time
-from itertools import chain
 from collections import defaultdict
 from collections import namedtuple as nt
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
+from itertools import chain
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -23,10 +23,10 @@ def non_cron_jobs(scheduler):
 
 def unwrap_rule_container(f):
     def wrapper(*args):
-        if isinstance(args[0], m.RoutineConfig | m.AdHocRoutineConfig):
+        if isinstance(args[0], m.RoutineConfig | m.AdHocConfig):
             for e in args[0].items:
                 f(*((e,) + args[1:]))
-        elif len(args) > 1 and isinstance(args[1], m.RoutineConfig | m.AdHocRoutineConfig):
+        elif len(args) > 1 and isinstance(args[1], m.RoutineConfig | m.AdHocConfig):
             for e in args[1].items:
                 f(
                     *(
@@ -114,21 +114,21 @@ def execute(rule):
         if w.value < 0:
             print(f"Device {w} not found")
         else:
-            if isinstance(rule, m.LightConfig | m.LightSubConfig):
+            if isinstance(w, config.Light):
                 (
                     dal.set_light(w, brightness=rule.state)
                     if isinstance(rule.state, int)
                     else dal.set_light(w, on=rule.state == "on")
                 )
-            elif isinstance(rule, m.SoundConfig | m.SoundSubConfig):
+            elif isinstance(w, config.Sound):
                 dal.set_sound(w, rule.state)
             else:
-                raise Exception("Unknown rule type")
+                raise Exception("Unknown type")
             sleep(0.1)
 
 
 def capture_lights():
-    return m.AdHocRoutineConfig(items=[dal.get_light_state(e) for e in config.Light])
+    return m.AdHocConfig(items=[dal.get_light_state(e) for e in config.Light])
 
 
 def get_schedule(config_manager):
@@ -191,15 +191,16 @@ def test(theme):
         execute(e)
         time.sleep(1)
 
+
 def squish_routines(*routines):
     rules = defaultdict(list)
     for routine in routines:
         for rule in routine.items:
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             for e in what:
-                rules[e].append(m.LightSubConfig(what=e, state=rule.state))
+                rules[e].append(m.Config(what=e, state=rule.state))
 
-    return m.AdHocRoutineConfig(items=tuple(chain.from_iterable(squish(e) for e in rules.values())))
+    return m.AdHocConfig(items=tuple(chain.from_iterable(squish(e) for e in rules.values())))
 
 
 def squish(items):
