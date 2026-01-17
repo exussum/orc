@@ -1,6 +1,7 @@
+import itertools
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from functools import wraps
 from typing import List
@@ -43,37 +44,59 @@ class ButtonView(AdminIndexView, VersionedView):
 
     @expose("/")
     def index(self):
-        return self.render("button.html", version=self.version, buttons=(config.BUTTON_CONFIGS.keys())), 200
+        return (
+            self.render(
+                "button.html",
+                version=self.version,
+                other_configs=config.OTHER_CONFIGS,
+                room_configs=config.ROOM_CONFIGS,
+                theme_configs=config.THEME_CONFIGS,
+            ),
+            200,
+        )
 
     @expose("/remote/<id>")
     def remote(self, id):
         if id in ("TV Lights", "Partial TV Lights"):
             end = datetime.now(tz=config.TZ) + timedelta(hours=4)
             self.config_manager.replace_config(config.THEME_CONFIGS[id], end)
-        elif id == "Front Rooms":
+        else:
             self.config_manager.resume(config.THEME_CONFIGS[id])
+
+        self.bump_version()
+        return {}, 200
 
     @expose("/console/<id>")
     def console(self, id):
         if id == "Test":
             end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
-            self.config_manager.replace_config(m.LightSubConfig(what=config.Light, state="off"), end)
-            api.test(config.BUTTON_CONFIGS[id])
+            self.config_manager.replace_config(m.LightSimpleConfig(what=config.Light, state="off"), end)
+            api.test(config.OTHER_CONFIGS[id])
             self.config_manager.resume(config.THEME_CONFIGS["Front Rooms"])
+        elif id in config.OTHER_CONFIGS:
+            api.execute(config.OTHER_CONFIGS[id])
         elif id in config.THEME_CONFIGS:
             routine = api.squish_routines(
-                m.AdHocRoutineConfig(items=(config.CONFIG_RESET_LIGHT,)), config.THEME_CONFIGS[id]
+                m.AdHocConfig(items=(config.CONFIG_RESET_LIGHT.items)), config.THEME_CONFIGS[id]
             )
             api.execute(routine)
+
+        self.bump_version()
+        return {}, 200
+
+    @expose("/room/<id>")
+    def room(self, id, state):
+        state = request.args.get["state"]
+        if state == "on":
+            api.execute(config.ROOM_CONFIGS[id])
+        elif state == "off":
+            api.execute(m.AdHocConfig(items=(replace(e, state="off") for e in config.ROOM_CONFIGS[id].items)))
+        elif state == "follow":
+            items = itertools.chain.from_iterable(v.items for (k, v) in config.ROOM_CONFIGS.items() if id != k)
+            api.execute(config.ROOM_CONFIGS[id])
+            api.execute(m.AdHocConfig(items=(replace(e, state="off") for e in items)))
         else:
-            if request.args.get("state") == "on":
-                api.execute(config.ROOM_CONFIGS[id])
-            elif request.args.get("state") == "off":
-                api.execute(m.AdHocRoutineConfig(items=(replace(e, state="off") for e in config.ROOM_CONFIGS[id])))
-            else:
-                items = itertools.chain((v.items for (k, v) in config.ROOM_CONFIGS if id != k))
-                api.execute(config.ROOM_CONFIGS[id])
-                api.execute(m.AdHocRoutineConfig(items=(replace(e, state="off") for e in items)))
+            raise Exception("Unknown state")
 
         self.bump_version()
         return {}, 200
