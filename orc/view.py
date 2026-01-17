@@ -85,8 +85,8 @@ class ButtonView(AdminIndexView, VersionedView):
         return {}, 200
 
     @expose("/room/<id>")
-    def room(self, id, state):
-        state = request.args.get["state"]
+    def room(self, id):
+        state = request.args.get("state")
         if state == "on":
             api.execute(config.ROOM_CONFIGS[id])
         elif state == "off":
