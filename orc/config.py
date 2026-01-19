@@ -177,6 +177,10 @@ ROOM_CONFIGS = {
 }
 
 THEME_CONFIGS = {
+    "Bed Time": m.AdHocConfig(items=(
+        m.Config(what=set(Light) - {Light.BEDROOM_NIGHTLIGHT,}, state="off"),
+        m.Config(what=Light.BEDROOM_NIGHTLIGHT, state="on"),
+    )),
     "Partial TV Lights": m.AdHocConfig(
         items=(
             m.Config(
@@ -203,15 +207,6 @@ THEME_CONFIGS = {
             ),
             m.Config(what=Light.KITCHEN_CABINET, state="on"),
             m.Config(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=1),
-        )
-    ),
-    "Front Rooms": m.AdHocConfig(
-        items=(
-            m.Config(what=[Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR], state="on"),
-            m.Config(what=Light.ENTANCE_DESK, state=100),
-            m.Config(
-                what=[Light.OFFICE_DESK, Light.OFFICE_TABLE, Light.OFFICE_FLOOR, Light.KITCHEN_CABINET], state="off"
-            ),
         )
     ),
     "Early Morning Lights": m.AdHocConfig(
