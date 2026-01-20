@@ -24,7 +24,7 @@ orc = "orc.worker:main"
 test = "orc.worker:test"
 
 [tool.black]
-line-length = 120
+line-length = 140
 
 [tool.isort]
 profile = "black"
