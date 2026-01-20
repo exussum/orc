@@ -10,11 +10,9 @@ def get_light_state(light):
     resp = requests.get(f"{config.BASE_URL}/devices/{light.value}{config.ACCESS_TOKEN}")
     if resp.status_code == 200:
         attrs = {e["name"]: e["currentValue"] for e in resp.json()["attributes"]}
-        return m.Config(
-            what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"]
-        )
+        return m.Config(what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"])
     else:
-        return m.Config(what=light, state="off")
+        return m.Config(what=light, state=config.OFF)
 
 
 def set_light(light, on=None, brightness=None):
