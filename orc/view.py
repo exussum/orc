@@ -70,15 +70,13 @@ class ButtonView(AdminIndexView, VersionedView):
     def console(self, id):
         if id == "Test":
             end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
-            self.config_manager.replace_config(m.LightSimpleConfig(what=config.Light, state="off"), end)
+            self.config_manager.replace_config(m.LightSimpleConfig(what=config.Light, state=config.OFF), end)
             api.test(config.OTHER_CONFIGS[id])
-            self.config_manager.resume(config.THEME_CONFIGS["Front Rooms"])
+            self.config_manager.resume(config.DEFAULT_CONFIG)
         elif id in config.OTHER_CONFIGS:
             api.execute(config.OTHER_CONFIGS[id])
         elif id in config.THEME_CONFIGS:
-            routine = api.squish_routines(
-                m.AdHocConfig(items=(config.CONFIG_RESET_LIGHT.items)), config.THEME_CONFIGS[id]
-            )
+            routine = api.squish_routines(m.AdHocConfig(items=(config.CONFIG_RESET_LIGHT.items)), config.THEME_CONFIGS[id])
             api.execute(routine)
 
         self.bump_version()
@@ -87,14 +85,14 @@ class ButtonView(AdminIndexView, VersionedView):
     @expose("/room/<id>")
     def room(self, id):
         state = request.args.get("state")
-        if state == "on":
+        if state == config.ON:
             api.execute(config.ROOM_CONFIGS[id])
-        elif state == "off":
-            api.execute(m.AdHocConfig(items=(replace(e, state="off") for e in config.ROOM_CONFIGS[id].items)))
+        elif state == config.OFF:
+            api.execute(m.AdHocConfig(items=(replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
         elif state == "follow":
             items = itertools.chain.from_iterable(v.items for (k, v) in config.ROOM_CONFIGS.items() if id != k)
             api.execute(config.ROOM_CONFIGS[id])
-            api.execute(m.AdHocConfig(items=(replace(e, state="off") for e in items)))
+            api.execute(m.AdHocConfig(items=(replace(e, state=config.OFF) for e in items)))
         else:
             raise Exception("Unknown state")
 
@@ -113,9 +111,7 @@ class ScheduleView(AdminIndexView, VersionedView):
         jobs = sorted(api.non_cron_jobs(self.scheduler), key=lambda e: e.trigger.run_date)
         theme_override = self.config_manager.theme_override
         theme = (
-            theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat())
-            if theme_override
-            else None
+            theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
         )
         return (
             self.render("schedule.html", version=self.version, jobs=jobs, theme=theme),
