@@ -86,9 +86,7 @@ class ConfigManager:
             today_iso = today.strftime("%Y-%m-%d")
             market_schedule = dal.get_holidays()
             theme_name = (
-                "day off"
-                if next((e for e in market_schedule if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
-                else "work day"
+                "day off" if next((e for e in market_schedule if e["date"] == today_iso and e["exchange"] == "NYSE"), None) else "work day"
             )
         else:
             theme_name = "day off"
@@ -115,11 +113,7 @@ def execute(rule):
             print(f"Device {w} not found")
         else:
             if isinstance(w, config.Light):
-                (
-                    dal.set_light(w, brightness=rule.state)
-                    if isinstance(rule.state, int)
-                    else dal.set_light(w, on=rule.state == "on")
-                )
+                (dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on"))
             elif isinstance(w, config.Sound):
                 dal.set_sound(w, rule.state)
             else:
