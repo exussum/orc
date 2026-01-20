@@ -220,8 +220,9 @@ OTHER_CONFIGS = {
     "All Lights Off": m.AdHocConfig(items=(m.Config(what=Light, state=OFF),)),
     "Video Conference": m.AdHocConfig(
         items=(
-            m.Config(what=(Light.OFFICE_TABLE, Light.OFFICE_FLOOR), state=OFF),
-            m.Config(what=Light.OFFICE_TABLE, state=50),
+            m.Config(what=Light.OFFICE_TABLE, state=OFF),
+            m.Config(what=Light.OFFICE_FLOOR, state=ON),
+            m.Config(what=Light.OFFICE_DESK, state=50),
         )
     ),
     "Test": m.AdHocConfig(items=tuple(m.Config(what=e, state=s) for (e, s) in tuple(itertools.product(list(Light), [ON, OFF])))),
