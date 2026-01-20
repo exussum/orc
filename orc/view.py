@@ -61,7 +61,7 @@ class ButtonView(AdminIndexView, VersionedView):
             end = datetime.now(tz=config.TZ) + timedelta(hours=4)
             self.config_manager.replace_config(config.THEME_CONFIGS[id], end)
         else:
-            self.config_manager.resume(config.THEME_CONFIGS[id])
+            self.config_manager.resume(config.ALL_CONFIGS[id])
 
         self.bump_version()
         return {}, 200
