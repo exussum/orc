@@ -24,10 +24,7 @@ def build_enum(name, hub_name_to_token, hubitat_config):
 
     return Enum(
         name,
-        {
-            token: id_lookup.get(name, -(default + 1))
-            for (default, (name, token)) in enumerate(hub_name_to_token.items())
-        },
+        {token: id_lookup.get(name, -(default + 1)) for (default, (name, token)) in enumerate(hub_name_to_token.items())},
     )
 
 
@@ -61,17 +58,20 @@ Sound = build_enum(
     hubitat_config,
 )
 
+OFF = "off"
+ON = "on"
+
 
 CONFIG_RESET_LIGHT = m.RoutineConfig(
     name="reset",
     when="1:00",
-    items=(m.Config(what=set(Light) - {Light.BEDROOM_NIGHTLIGHT}, state="off", mandatory=True),),
+    items=(m.Config(what=set(Light) - {Light.BEDROOM_NIGHTLIGHT}, state=OFF, mandatory=True),),
 )
 
 CONFIG_PARTNER_UP = m.RoutineConfig(
     name="partner up",
     when="6:15",
-    items=(m.Config(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state="on"),),
+    items=(m.Config(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state=ON),),
 )
 
 CONFIG_UP_AND_ATOM = m.RoutineConfig(
@@ -79,10 +79,10 @@ CONFIG_UP_AND_ATOM = m.RoutineConfig(
     when="9:00",
     items=(
         m.Config(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=100),
-        m.Config(what=[Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR], state="on"),
-        m.Config(what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET], state="off"),
+        m.Config(what=[Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR], state=ON),
+        m.Config(what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET], state=OFF),
         m.Config(what=Sound, state=40),
-        m.Config(what=[Light.OFFICE_TABLE, Light.BEDROOM_NIGHTLIGHT], state="off"),
+        m.Config(what=[Light.OFFICE_TABLE, Light.BEDROOM_NIGHTLIGHT], state=OFF),
     ),
 )
 
@@ -92,22 +92,20 @@ CONFIG_SUNSET_LIGHTS = m.RoutineConfig(
     items=(
         m.Config(
             what=[Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET],
-            state="on",
+            state=ON,
             mandatory=True,
         ),
     ),
 )
 
-CONFIG_QUIET_TIME = m.RoutineConfig(
-    name="quiet time", when="23:00", items=(m.Config(what=Sound, state=10, mandatory=True),)
-)
+CONFIG_QUIET_TIME = m.RoutineConfig(name="quiet time", when="23:00", items=(m.Config(what=Sound, state=10, mandatory=True),))
 
 CONFIG_PARTNER_LEAVING = m.RoutineConfig(
     name="partner leaving",
     when="7:00",
     items=(
         m.Config(what=Light.ENTANCE_DESK, state=1),
-        m.Config(what=Light.KITCHEN_CABINET, state="off"),
+        m.Config(what=Light.KITCHEN_CABINET, state=OFF),
     ),
 )
 
@@ -130,11 +128,9 @@ CONFIGS = m.scan(
             m.RoutineConfig(
                 name="nightlight off",
                 when="sunrise",
-                items=(m.Config(what=Light.BEDROOM_NIGHTLIGHT, state="off"),),
+                items=(m.Config(what=Light.BEDROOM_NIGHTLIGHT, state=OFF),),
             ),
-            m.RoutineConfig(
-                name="nightlight on", when="sunset", items=(m.Config(what=Light.BEDROOM_NIGHTLIGHT, state="on"),)
-            ),
+            m.RoutineConfig(name="nightlight on", when="sunset", items=(m.Config(what=Light.BEDROOM_NIGHTLIGHT, state=ON),)),
         ),
     ),
     m.Theme(
@@ -161,26 +157,34 @@ CONFIGS = m.scan(
 ROOM_CONFIGS = {
     "Living Room": m.AdHocConfig(
         items=(
-            m.Config(what=(Light.LIVING_ROOM_FLOOR, Light.LIVING_ROOM_DESK), state="on"),
+            m.Config(what=(Light.LIVING_ROOM_FLOOR, Light.LIVING_ROOM_DESK), state=ON),
             m.Config(what=Light.ENTANCE_DESK, state=100),
         ),
     ),
     "Office": m.AdHocConfig(
         items=(
-            m.Config(what=Light.OFFICE_FLOOR, state="on"),
+            m.Config(what=Light.OFFICE_FLOOR, state=ON),
             m.Config(what=Light.OFFICE_DESK, state=50),
             m.Config(what=Light.OFFICE_TABLE, state=100),
         )
     ),
-    "Kitchen": m.AdHocConfig(items=(m.Config(what=(Light.KITCHEN_CABINET, Light.KITCHEN_OVERHEAD), state="on"),)),
-    "Bedroom": m.AdHocConfig(items=(m.Config(what=Light.BEDROOM_LAMP, state="on"),)),
+    "Kitchen": m.AdHocConfig(items=(m.Config(what=(Light.KITCHEN_CABINET, Light.KITCHEN_OVERHEAD), state=ON),)),
+    "Bedroom": m.AdHocConfig(items=(m.Config(what=Light.BEDROOM_LAMP, state=ON),)),
 }
 
 THEME_CONFIGS = {
-    "Bed Time": m.AdHocConfig(items=(
-        m.Config(what=set(Light) - {Light.BEDROOM_NIGHTLIGHT,}, state="off"),
-        m.Config(what=Light.BEDROOM_NIGHTLIGHT, state="on"),
-    )),
+    "Bed Time": m.AdHocConfig(
+        items=(
+            m.Config(
+                what=set(Light)
+                - {
+                    Light.BEDROOM_NIGHTLIGHT,
+                },
+                state=OFF,
+            ),
+            m.Config(what=Light.BEDROOM_NIGHTLIGHT, state=ON),
+        )
+    ),
     "Partial TV Lights": m.AdHocConfig(
         items=(
             m.Config(
@@ -192,32 +196,35 @@ THEME_CONFIGS = {
                     Light.LIVING_ROOM_FLOOR,
                     Light.BEDROOM_NIGHTLIGHT,
                 },
-                state="off",
+                state=OFF,
             ),
-            m.Config(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state="on"),
+            m.Config(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state=ON),
             m.Config(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=1),
         )
     ),
     "TV Lights": m.AdHocConfig(
         items=(
             m.Config(
-                what=set(Light)
-                - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN_CABINET, Light.BEDROOM_NIGHTLIGHT},
-                state="off",
+                what=set(Light) - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN_CABINET, Light.BEDROOM_NIGHTLIGHT},
+                state=OFF,
             ),
-            m.Config(what=Light.KITCHEN_CABINET, state="on"),
+            m.Config(what=Light.KITCHEN_CABINET, state=ON),
             m.Config(what=[Light.ENTANCE_DESK, Light.OFFICE_TABLE], state=1),
         )
     ),
-    "Early Morning Lights": m.AdHocConfig(
-        items=(m.Config(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state="on"),)
-    ),
+    "Early Morning Lights": m.AdHocConfig(items=(m.Config(what=[Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET], state=ON),)),
 }
 
 OTHER_CONFIGS = {
-    "All Lights On": m.AdHocConfig(items=(m.Config(what=Light, state="on"), m.Config(what=Light, state=100))),
-    "All Lights Off": m.AdHocConfig(items=(m.Config(what=Light, state="off"),)),
-    "Test": m.AdHocConfig(
-        items=tuple(m.Config(what=e, state=s) for (e, s) in tuple(itertools.product(list(Light), ["on", "off"])))
+    "All Lights On": m.AdHocConfig(items=(m.Config(what=Light, state=ON), m.Config(what=Light, state=100))),
+    "All Lights Off": m.AdHocConfig(items=(m.Config(what=Light, state=OFF),)),
+    "Video Conference": m.AdHocConfig(
+        items=(
+            m.Config(what=(Light.OFFICE_TABLE, Light.OFFICE_FLOOR), state=OFF),
+            m.Config(what=Light.OFFICE_TABLE, state=50),
+        )
     ),
+    "Test": m.AdHocConfig(items=tuple(m.Config(what=e, state=s) for (e, s) in tuple(itertools.product(list(Light), [ON, OFF])))),
 }
+
+DEFAULT_CONFIG = ROOM_CONFIGS["Living Room"]
