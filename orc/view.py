@@ -131,7 +131,7 @@ class ScheduleView(AdminIndexView, VersionedView):
             )
         self.scheduler.remove_all_jobs()
         api.setup_scheduler(self.scheduler, self.config_manager)
-        return redirect("/")
+        return redirect("/schedule/")
 
     @VersionedView.versioned
     @expose("/<id>/pause")
