@@ -164,7 +164,7 @@ ROOM_CONFIGS = {
     "Office": m.AdHocConfig(
         items=(
             m.Config(what=Light.OFFICE_FLOOR, state=ON),
-            m.Config(what=Light.OFFICE_DESK, state=50),
+            m.Config(what=Light.OFFICE_DESK, state=35),
             m.Config(what=Light.OFFICE_TABLE, state=100),
         )
     ),
