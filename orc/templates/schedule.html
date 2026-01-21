@@ -5,10 +5,6 @@
     <style>
         div#admin-navbar-collapse {
             align-items: baseline; 
-            height: 2lh;
-        }
-        div#orc-theme-form {
-            overflow: visible;
         }
         div#orc-theme-form-elements {
             display: grid;
@@ -52,7 +48,7 @@
 
 {% block menu_links %}
     <div class="nav">
-        <form id="orc-theme-form" action="set_theme" method="POST">
+        <form action="set_theme" method="POST">
             <div id="orc-theme-form-elements">
                 <div>
                     <label for="orc-theme-select">Theme:</label>
@@ -91,7 +87,6 @@
         const endEl = document.querySelector("#orc-theme-select-end");
         const selectEl = document.querySelector("#orc-theme-select");
         const scheduleEl = document.querySelectorAll(".orc-theme-schedule");
-        const formEl = document.querySelector("#orc-theme-form");
 
         async function _call(url, el, onSuccess = () => {}, onFailure = () => {}) {
             el.disabled = true;
@@ -143,8 +138,7 @@
         });
 
         selectEl.addEventListener("change", e => {
-            scheduleEl.forEach(el => { el.style.visibility = e.target.value === "" ? "hidden" : "visible"; });
-            formEl.style.backgroundColor = e.target.value === "" ? "transparent" : "black";
+            scheduleEl.forEach(el => { el.style.display = e.target.value === "" ? "none" : "block"; });
             if(e.target.value === "") {
                 startEl.value = ""
                 endEl.value = ""
