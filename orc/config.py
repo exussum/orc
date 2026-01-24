@@ -103,10 +103,7 @@ CONFIG_QUIET_TIME = m.RoutineConfig(name="quiet time", when="23:00", items=(m.Co
 CONFIG_PARTNER_LEAVING = m.RoutineConfig(
     name="partner leaving",
     when="7:00",
-    items=(
-        m.Config(what=Light.ENTANCE_DESK, state=1),
-        m.Config(what=Light.KITCHEN_CABINET, state=OFF),
-    ),
+    items=(m.Config(what=Light.ENTANCE_DESK, state=1),),
 )
 
 CONFIGS = m.scan(
