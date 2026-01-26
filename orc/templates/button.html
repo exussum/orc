@@ -74,6 +74,7 @@
 
             try {
                 response = await fetch(`/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`);
+                console.log(response);
                 if (!response.ok) {
                     throw Error(`Response status: ${response.status}`);
                 }

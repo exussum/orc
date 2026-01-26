@@ -23,10 +23,10 @@ def non_cron_jobs(scheduler):
 
 def unwrap_rule_container(f):
     def wrapper(*args):
-        if isinstance(args[0], m.RoutineConfig | m.AdHocConfig):
+        if isinstance(args[0], m.Routine | m.Configs):
             for e in args[0].items:
                 f(*((e,) + args[1:]))
-        elif len(args) > 1 and isinstance(args[1], m.RoutineConfig | m.AdHocConfig):
+        elif len(args) > 1 and isinstance(args[1], m.Routine | m.Configs):
             for e in args[1].items:
                 f(
                     *(
@@ -122,7 +122,7 @@ def execute(rule):
 
 
 def capture_lights():
-    return m.AdHocConfig(items=[dal.get_light_state(e) for e in config.Light])
+    return m.Configs(items=[dal.get_light_state(e) for e in config.Light])
 
 
 def get_schedule(config_manager):
@@ -186,15 +186,16 @@ def test(theme):
         time.sleep(1)
 
 
-def squish_routines(*routines):
+def squish_configs(*routines):
     rules = defaultdict(list)
     for routine in routines:
         for rule in routine.items:
+
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             for e in what:
                 rules[e].append(m.Config(what=e, state=rule.state))
 
-    return m.AdHocConfig(items=tuple(chain.from_iterable(squish(e) for e in rules.values())))
+    return m.Configs(items=tuple(chain.from_iterable(squish(e) for e in rules.values())))
 
 
 def squish(items):
