@@ -6,23 +6,22 @@ from typing import Optional, Tuple
 
 @dataclass
 class Config:
-    _: KW_ONLY
     what: object
     state: object
+    _: KW_ONLY
     mandatory: bool = False
 
 
 @dataclass
-class AdHocConfig:
+class Configs:
     items: Tuple[Config]
 
 
 @dataclass
-class RoutineConfig:
-    _: KW_ONLY
-    items: Tuple[Config]
+class Routine:
     name: str
     when: str
+    items: Tuple[Config]
 
     def __post_init__(self):
         if self.when and not isinstance(self.when, time) and ":" in self.when:
@@ -33,7 +32,7 @@ class RoutineConfig:
 @dataclass
 class Theme:
     name: str
-    configs: Tuple[RoutineConfig]
+    configs: Tuple[Routine]
 
 
 def scan(*themes):
@@ -45,7 +44,7 @@ def scan(*themes):
             theme_names.add(theme.name)
 
         for e in theme.configs:
-            if isinstance(e, RoutineConfig):
+            if isinstance(e, Routine):
                 for w in e.items:
                     w.when = e.when
 
