@@ -9,7 +9,7 @@ from flask import Flask
 from flask_admin.base import Admin
 
 from orc import api
-from orc.model import RoutineConfig
+from orc.model import Routine
 from orc.view import ButtonView, ScheduleView, VersionedView
 
 
