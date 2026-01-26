@@ -1,4 +1,3 @@
-import itertools
 import random
 import time
 from dataclasses import dataclass, replace
@@ -53,6 +52,7 @@ class ButtonView(AdminIndexView, VersionedView):
                 theme_configs=config.THEME_CONFIGS,
             ),
             200,
+            {"Cache-control": "max-age=604800"},
         )
 
     @expose("/remote/<id>")
@@ -70,14 +70,13 @@ class ButtonView(AdminIndexView, VersionedView):
     def console(self, id):
         if id == "Test":
             end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
-            self.config_manager.replace_config(m.LightSimpleConfig(what=config.Light, state=config.OFF), end)
+            self.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
             api.test(config.OTHER_CONFIGS[id])
             self.config_manager.resume(config.DEFAULT_CONFIG)
         elif id in config.OTHER_CONFIGS:
             api.execute(config.OTHER_CONFIGS[id])
         elif id in config.THEME_CONFIGS:
-            routine = api.squish_routines(m.AdHocConfig(items=(config.CONFIG_RESET_LIGHT.items)), config.THEME_CONFIGS[id])
-            api.execute(routine)
+            api.execute(api.squish_configs(m.Configs((config.CONFIG_RESET_LIGHT.items)), config.THEME_CONFIGS[id]))
 
         self.bump_version()
         return {}, 200
@@ -88,16 +87,17 @@ class ButtonView(AdminIndexView, VersionedView):
         if state == config.ON:
             api.execute(config.ROOM_CONFIGS[id])
         elif state == config.OFF:
-            api.execute(m.AdHocConfig(items=(replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
+            api.execute(m.Configs((replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
         elif state == "follow":
-            items = itertools.chain.from_iterable(v.items for (k, v) in config.ROOM_CONFIGS.items() if id != k)
-            api.execute(config.ROOM_CONFIGS[id])
-            api.execute(m.AdHocConfig(items=(replace(e, state=config.OFF) for e in items)))
+            api.execute(api.squish_configs(config.ROOM_CONFIGS_OFF, config.ROOM_CONFIGS[id]))
         else:
             raise Exception("Unknown state")
 
         self.bump_version()
-        return {}, 200
+        return (
+            {},
+            200,
+        )
 
 
 class ScheduleView(AdminIndexView, VersionedView):
