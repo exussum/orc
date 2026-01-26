@@ -130,7 +130,7 @@ def get_schedule(config_manager):
     for x in range(2):
         now = datetime.now(tz=config.TZ) + timedelta(days=x)
         sun_result = dal.get_sun_cycle(now.date())
-        sunrise = datetime.fromisoformat(sun_result["sunrise"])
+        sunrise = datetime.fromisoformat(sun_result["sunrise"]) + timedelta(minutes=30)
         sunset = datetime.fromisoformat(sun_result["sunset"])
 
         cfg = next((e for e in config.CONFIGS if e.name == config_manager.calculate_theme(now.date())))
