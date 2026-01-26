@@ -58,7 +58,7 @@ class ButtonView(AdminIndexView, VersionedView):
     @expose("/remote/<id>")
     def remote(self, id):
         if id in ("TV Lights", "Partial TV Lights"):
-            end = datetime.now(tz=config.TZ) + timedelta(hours=4)
+            end = datetime.now(tz=config.TZ) + timedelta(hours=3)
             self.config_manager.replace_config(config.THEME_CONFIGS[id], end)
         else:
             self.config_manager.resume(config.ALL_CONFIGS[id])
