@@ -19,7 +19,7 @@ config.Light = Light
 
 @pytest.fixture
 def snapshot_config():
-    return m.Configs(items=(m.Config(Light.a, config.ON), m.Config(Light.b, config.OFF)))
+    return m.Configs(m.Config(Light.a, config.ON), m.Config(Light.b, config.OFF))
 
 
 @patch("orc.api.execute")
@@ -206,40 +206,32 @@ def test_squish_just_on():
 
 
 def test_theme_squish_everything_off_start():
-    routine = m.Configs(items=(m.Config(Light, config.OFF), m.Config(Light.a, config.ON)))
+    routine = m.Configs(m.Config(Light, config.OFF), m.Config(Light.a, config.ON))
     assert api.squish_configs(routine) == m.Configs(
-        items=(
-            m.Config(Light.a, config.ON, mandatory=False),
-            m.Config(Light.b, config.OFF, mandatory=False),
-            m.Config(Light.c, config.OFF, mandatory=False),
-        )
+        m.Config(Light.a, config.ON, mandatory=False),
+        m.Config(Light.b, config.OFF, mandatory=False),
+        m.Config(Light.c, config.OFF, mandatory=False),
     )
 
 
 def test_theme_squish_double_on():
-    routine = m.Configs(items=(m.Config(Light, config.ON), m.Config(Light.a, config.ON)))
+    routine = m.Configs(m.Config(Light, config.ON), m.Config(Light.a, config.ON))
     assert api.squish_configs(routine) == m.Configs(
-        items=(
-            m.Config(Light.a, config.ON, mandatory=False),
-            m.Config(Light.b, config.ON, mandatory=False),
-            m.Config(Light.c, config.ON, mandatory=False),
-        )
+        m.Config(Light.a, config.ON, mandatory=False),
+        m.Config(Light.b, config.ON, mandatory=False),
+        m.Config(Light.c, config.ON, mandatory=False),
     )
 
 
 def test_theme_squish_dim_then_off():
     routine = m.Configs(
-        items=(
-            m.Config(Light, config.OFF),
-            m.Config(Light.a, 10),
-            m.Config(Light, config.OFF),
-        )
+        m.Config(Light, config.OFF),
+        m.Config(Light.a, 10),
+        m.Config(Light, config.OFF),
     )
     assert api.squish_configs(routine) == m.Configs(
-        items=(
-            m.Config(Light.a, 10, mandatory=False),
-            m.Config(Light.a, config.OFF, mandatory=False),
-            m.Config(Light.b, config.OFF, mandatory=False),
-            m.Config(Light.c, config.OFF, mandatory=False),
-        )
+        m.Config(Light.a, 10, mandatory=False),
+        m.Config(Light.a, config.OFF, mandatory=False),
+        m.Config(Light.b, config.OFF, mandatory=False),
+        m.Config(Light.c, config.OFF, mandatory=False),
     )

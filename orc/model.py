@@ -16,6 +16,9 @@ class Config:
 class Configs:
     items: Tuple[Config]
 
+    def __init__(self, *items):
+        self.items = tuple(items)
+
 
 @dataclass
 class Routine:
@@ -33,6 +36,10 @@ class Routine:
 class Theme:
     name: str
     configs: Tuple[Routine]
+
+    def __init__(self, name, *configs):
+        self.name = name
+        self.configs = tuple(configs)
 
 
 def scan(*themes):
