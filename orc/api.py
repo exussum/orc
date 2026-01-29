@@ -122,7 +122,7 @@ def execute(rule):
 
 
 def capture_lights():
-    return m.Configs(items=[dal.get_light_state(e) for e in config.Light])
+    return m.Configs(dal.get_light_state(e) for e in config.Light)
 
 
 def get_schedule(config_manager):
@@ -186,16 +186,16 @@ def test(theme):
         time.sleep(1)
 
 
-def squish_configs(*routines):
+def squish_configs(*configs):
     rules = defaultdict(list)
-    for routine in routines:
+    for routine in configs:
         for rule in routine.items:
 
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             for e in what:
                 rules[e].append(m.Config(what=e, state=rule.state))
 
-    return m.Configs(items=tuple(chain.from_iterable(squish(e) for e in rules.values())))
+    return m.Configs(*tuple(chain.from_iterable(squish(e) for e in rules.values())))
 
 
 def squish(items):
