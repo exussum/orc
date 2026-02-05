@@ -25,6 +25,7 @@ class Routine:
     name: str
     when: str
     items: Tuple[Config]
+    _: KW_ONLY
 
     def __post_init__(self):
         if self.when and not isinstance(self.when, time) and ":" in self.when:
@@ -56,3 +57,14 @@ def scan(*themes):
                     w.when = e.when
 
     return themes
+
+
+def build_enum(name, hub_name_to_token, hubitat_config):
+    id_lookup = {e["label"]: int(e["id"]) for e in hubitat_config}
+         
+    result = Enum(
+        name, 
+        {token: id_lookup.get(name, -(default + 1)) for (default, (name, token)) in enumerate(hub_name_to_token.items())},
+    ) 
+    result.__class__.__sub__ = lambda self, e: set(self) - e
+    return result
