@@ -163,7 +163,7 @@ OTHER_CONFIGS = {
         Config(Light.OFFICE_FLOOR, ON),
         Config(Light.OFFICE_DESK, 50),
     ),
-    "Test": Configs(Config(e, s) for (e, s) in tuple(itertools.product(Light, [ON, OFF]))),
+    "Test": Configs(*(Config(e, s) for (e, s) in tuple(itertools.product(Light, [ON, OFF])))),
 }
 
 ROOM_CONFIGS_OFF = Configs(
