@@ -133,7 +133,7 @@ def get_schedule(config_manager):
         sunrise = datetime.fromisoformat(sun_result["sunrise"]) + timedelta(minutes=30)
         sunset = datetime.fromisoformat(sun_result["sunset"])
 
-        cfg = next((e for e in config.CONFIGS if e.name == config_manager.calculate_theme(now.date())))
+        cfg = next((e for e in config.THEMES if e.name == config_manager.calculate_theme(now.date())))
 
         for e in cfg.configs:
             if e.when == "sunrise":
