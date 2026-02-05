@@ -50,6 +50,7 @@ class ButtonView(AdminIndexView, VersionedView):
                 other_configs=config.OTHER_CONFIGS,
                 room_configs=config.ROOM_CONFIGS,
                 theme_configs=config.THEME_CONFIGS,
+                schedule_routines=config.SCHEDULE_ROUTINES
             ),
             200,
             {"Cache-control": "max-age=604800"},
@@ -75,6 +76,8 @@ class ButtonView(AdminIndexView, VersionedView):
             self.config_manager.resume(config.DEFAULT_CONFIG)
         elif id in config.OTHER_CONFIGS:
             api.execute(config.OTHER_CONFIGS[id])
+        elif id in config.SCHEDULE_ROUTINES:
+            api.execute(config.SCHEDULE_ROUTINES[id])
         elif id in config.THEME_CONFIGS:
             api.execute(api.squish_configs(m.Configs(*config.CONFIG_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
 
@@ -87,7 +90,7 @@ class ButtonView(AdminIndexView, VersionedView):
         if state == config.ON:
             api.execute(config.ROOM_CONFIGS[id])
         elif state == config.OFF:
-            api.execute(m.Configs((replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
+            api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
         elif state == "follow":
             api.execute(api.squish_configs(config.ROOM_CONFIGS_OFF, config.ROOM_CONFIGS[id]))
         else:
