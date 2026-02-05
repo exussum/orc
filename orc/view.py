@@ -50,7 +50,7 @@ class ButtonView(AdminIndexView, VersionedView):
                 other_configs=config.OTHER_CONFIGS,
                 room_configs=config.ROOM_CONFIGS,
                 theme_configs=config.THEME_CONFIGS,
-                schedule_routines=config.SCHEDULE_ROUTINES
+                schedule_routines=config.SCHEDULE_ROUTINES,
             ),
             200,
             {"Cache-control": "max-age=604800"},
