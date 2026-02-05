@@ -1,4 +1,4 @@
-{% extends 'admin/master.html' %}
+{% extends 'base.html' %}
 
 {% block head_css %}
     {{ super() }}
@@ -8,18 +8,14 @@
             border: revert;
         }
 
-        div.orc-theme-buttoms {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-        }
-        div.orc-room-buttoms {
+        div.orc-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr 1fr;
         }
- 
+
         div.orc-button {
             width: 100px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             text-align: center;
         }
         div.orc-button-label {
@@ -31,7 +27,7 @@
 {% endblock %}
 
 {% block body %}
-    <div class="orc-room-buttoms">
+    <div class="orc-buttons">
     {% for id in room_configs %}
         <div>{{ id }}</div>
         <div class="orc-button">
@@ -46,7 +42,7 @@
     {% endfor %}
     </div>
     <hr class="hr orc-hr"/>
-    <div class="orc-theme-buttoms">
+    <div class="orc-buttons">
     {% for id in theme_configs %}
         <div class="orc-button">
             <div class="orc-button-label">{{ id }}</div>
@@ -55,7 +51,7 @@
     {% endfor %}
     </div>
     <hr class="hr orc-hr"/>
-    <div class="orc-theme-buttoms">
+    <div class="orc-buttons">
     {% for id in other_configs %}
         <div class="orc-button">
             <div class="orc-button-label">{{ id }}</div>
@@ -63,7 +59,16 @@
         </div>
     {% endfor %}
     </div>
+    <hr class="hr orc-hr"/>
+    <div class="btn-group dropup">
+        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Routines</button>
 
+        <div class="dropdown-menu">
+        {% for id in schedule_routines %}
+            <a class="dropdown-item orc-runner" href="#" data-type="console" data-id="{{id}}">{{id}}</a>
+        {% endfor %}
+        </div>
+    </div>
 {% endblock %}
 
 {% block tail %}
