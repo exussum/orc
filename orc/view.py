@@ -79,7 +79,7 @@ class ButtonView(AdminIndexView, VersionedView):
         elif id in config.SCHEDULE_ROUTINES:
             api.execute(config.SCHEDULE_ROUTINES[id])
         elif id in config.THEME_CONFIGS:
-            api.execute(api.squish_configs(m.Configs(*config.CONFIG_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
+            api.execute(api.squish_configs(m.Configs(*config.ROUTINE_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
 
         self.bump_version()
         return {}, 200
