@@ -183,7 +183,7 @@ def test(theme):
     time.sleep(1)
     for e in theme.items:
         execute(e)
-        time.sleep(1)
+        time.sleep(2)
 
 
 def squish_configs(*configs):
