@@ -122,7 +122,7 @@ def execute(rule):
 
 
 def capture_lights():
-    return m.Configs(dal.get_light_state(e) for e in config.Light)
+    return m.Configs(*(dal.get_light_state(e) for e in config.Light))
 
 
 def get_schedule(config_manager):
