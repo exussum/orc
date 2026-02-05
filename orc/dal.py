@@ -21,6 +21,7 @@ def set_light(light, on=None, brightness=None):
     else:
         response = requests.get(f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.ACCESS_TOKEN}").content
 
+
 def set_sound(sound, lvl):
     requests.get(f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}").json()
     time.sleep(0.1)

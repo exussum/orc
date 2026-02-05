@@ -61,10 +61,10 @@ def scan(*themes):
 
 def build_enum(name, hub_name_to_token, hubitat_config):
     id_lookup = {e["label"]: int(e["id"]) for e in hubitat_config}
-         
+
     result = Enum(
-        name, 
+        name,
         {token: id_lookup.get(name, -(default + 1)) for (default, (name, token)) in enumerate(hub_name_to_token.items())},
-    ) 
+    )
     result.__class__.__sub__ = lambda self, e: set(self) - e
     return result
