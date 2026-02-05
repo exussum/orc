@@ -2,10 +2,9 @@ import itertools
 import os
 from dataclasses import replace
 from datetime import datetime, timedelta
-from enum import Enum
 from zoneinfo import ZoneInfo
 
-from orc.model import Theme, Routine, Config, scan, Configs
+from orc.model import Theme, Routine, Config, scan, Configs, build_enum
 from orc import dal
 
 BASE_URL = os.getenv("BASE_URL", "http://base.example.com")
@@ -18,17 +17,8 @@ hubitat_config = dal.get_config() if ENABLED else {}
 
 TZ = ZoneInfo("America/New_York")
 
-
-def build_enum(name, hub_name_to_token, hubitat_config):
-    id_lookup = {e["label"]: int(e["id"]) for e in hubitat_config}
-
-    result = Enum(
-        name,
-        {token: id_lookup.get(name, -(default + 1)) for (default, (name, token)) in enumerate(hub_name_to_token.items())},
-    )
-    result.__class__.__sub__ = lambda self, e: set(self) - e
-    return result
-
+OFF = "off"
+ON = "on"
 
 Light = build_enum(
     "Light",
@@ -60,27 +50,11 @@ Sound = build_enum(
     hubitat_config,
 )
 
-OFF = "off"
-ON = "on"
+ROUTINE_RESET_LIGHT = Routine("reset", "1:00", (Config(Light - {Light.BEDROOM_NIGHTLIGHT}, OFF, mandatory=True),),)
+ROUTINE_PARTNER_UP = Routine("partner up", "6:15", (Config({Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}, ON),),)
+ROUTINE_SUNRISE_LIGHTS = Routine("sunrise lights", "sunrise", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, OFF, mandatory=True),))
 
-
-CONFIG_RESET_LIGHT = Routine(
-    "reset",
-    "1:00",
-    (Config(Light - {Light.BEDROOM_NIGHTLIGHT}, OFF, mandatory=True),),
-)
-
-CONFIG_PARTNER_UP = Routine(
-    "partner up",
-    "6:15",
-    (Config({Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}, ON),),
-)
-
-CONFIG_SUNRISE_LIGHTS = Routine(
-    "sunrise lights", "sunrise", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, OFF, mandatory=True),)
-)
-
-CONFIG_UP_AND_ATOM = Routine(
+ROUTINE_UP_AND_ATOM = Routine(
     "up and atom",
     "9:00",
     (
@@ -91,63 +65,45 @@ CONFIG_UP_AND_ATOM = Routine(
     ),
 )
 
-CONFIG_SUNSET_LIGHTS = Routine(
-    "sunset lights",
-    "sunset",
-    (
-        Config(
-            {Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET},
-            ON,
-            mandatory=True,
-        ),
-    ),
-)
+ROUTINE_SUNSET_LIGHTS = Routine("sunset lights", "sunset", ( Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, ON, mandatory=True,),),)
+ROUTINE_QUIET_TIME = Routine("quiet time", "23:00", (Config(Sound, 10, mandatory=True),))
+ROUTINE_PARTNER_LEAVING = Routine("partner leaving", "7:00", (Config(Light.ENTANCE_DESK, 1),),)
+ROUTINE_NIGHTLIGHT_OFF = Routine("nightlight off", "sunrise", (Config(Light.BEDROOM_NIGHTLIGHT, OFF),),)
+ROUTINE_NIGHTLIGHT_ON = Routine("nightlight on", "sunset", (Config(Light.BEDROOM_NIGHTLIGHT, ON),))
 
-CONFIG_QUIET_TIME = Routine("quiet time", "23:00", (Config(Sound, 10, mandatory=True),))
-
-CONFIG_PARTNER_LEAVING = Routine(
-    "partner leaving",
-    "7:00",
-    (Config(Light.ENTANCE_DESK, 1),),
-)
-
-CONFIGS = scan(
+THEMES = scan(
     Theme(
         "work day",
-        CONFIG_RESET_LIGHT,
-        replace(CONFIG_PARTNER_UP, when="6:15"),
-        CONFIG_PARTNER_LEAVING,
-        CONFIG_SUNRISE_LIGHTS,
-        replace(CONFIG_UP_AND_ATOM, when="9:00"),
-        CONFIG_SUNSET_LIGHTS,
-        CONFIG_QUIET_TIME,
+        ROUTINE_RESET_LIGHT,
+        replace(ROUTINE_PARTNER_UP, when="6:15"),
+        ROUTINE_PARTNER_LEAVING,
+        ROUTINE_SUNRISE_LIGHTS,
+        replace(ROUTINE_UP_AND_ATOM, when="9:00"),
+        ROUTINE_SUNSET_LIGHTS,
+        ROUTINE_QUIET_TIME,
     ),
-    Theme("away", CONFIG_RESET_LIGHT),
+    Theme("away", ROUTINE_RESET_LIGHT),
     Theme(
         "babysitter",
-        Routine(
-            "nightlight off",
-            "sunrise",
-            (Config(Light.BEDROOM_NIGHTLIGHT, OFF),),
-        ),
-        Routine(name="nightlight on", when="sunset", items=(Config(Light.BEDROOM_NIGHTLIGHT, ON),)),
+        ROUTINE_NIGHTLIGHT_OFF,
+        ROUTINE_NIGHTLIGHT_ON,
     ),
     Theme(
         "home alone",
-        CONFIG_RESET_LIGHT,
-        CONFIG_SUNRISE_LIGHTS,
-        replace(CONFIG_UP_AND_ATOM, when="9:30"),
-        CONFIG_SUNSET_LIGHTS,
-        CONFIG_QUIET_TIME,
+        ROUTINE_RESET_LIGHT,
+        ROUTINE_SUNRISE_LIGHTS,
+        replace(ROUTINE_UP_AND_ATOM, when="9:30"),
+        ROUTINE_SUNSET_LIGHTS,
+        ROUTINE_QUIET_TIME,
     ),
     Theme(
         "day off",
-        CONFIG_RESET_LIGHT,
-        replace(CONFIG_PARTNER_UP, when="7:00"),
-        CONFIG_SUNRISE_LIGHTS,
-        replace(CONFIG_UP_AND_ATOM, when="9:30"),
-        CONFIG_SUNSET_LIGHTS,
-        CONFIG_QUIET_TIME,
+        ROUTINE_RESET_LIGHT,
+        replace(ROUTINE_PARTNER_UP, when="7:00"),
+        ROUTINE_SUNRISE_LIGHTS,
+        replace(ROUTINE_UP_AND_ATOM, when="9:30"),
+        ROUTINE_SUNSET_LIGHTS,
+        ROUTINE_QUIET_TIME,
     ),
 )
 
@@ -164,23 +120,6 @@ ROOM_CONFIGS = {
     "Kitchen": Configs(Config((Light.KITCHEN_CABINET, Light.KITCHEN_OVERHEAD), ON)),
     "Bedroom": Configs(Config(Light.BEDROOM_LAMP, ON)),
 }
-
-ROOM_CONFIGS_OFF = Configs(
-    Config(
-        (
-            Light.LIVING_ROOM_FLOOR,
-            Light.LIVING_ROOM_DESK,
-            Light.ENTANCE_DESK,
-            Light.OFFICE_FLOOR,
-            Light.OFFICE_DESK,
-            Light.OFFICE_TABLE,
-            Light.KITCHEN_CABINET,
-            Light.KITCHEN_OVERHEAD,
-            Light.BEDROOM_LAMP,
-        ),
-        OFF,
-    )
-)
 
 THEME_CONFIGS = {
     "Bed Time": Configs(
@@ -225,6 +164,37 @@ OTHER_CONFIGS = {
         Config(Light.OFFICE_DESK, 50),
     ),
     "Test": Configs(Config(e, s) for (e, s) in tuple(itertools.product(Light, [ON, OFF]))),
+}
+
+ROOM_CONFIGS_OFF = Configs(
+    Config(
+        (
+            Light.LIVING_ROOM_FLOOR,
+            Light.LIVING_ROOM_DESK,
+            Light.ENTANCE_DESK,
+            Light.OFFICE_FLOOR,
+            Light.OFFICE_DESK,
+            Light.OFFICE_TABLE,
+            Light.KITCHEN_CABINET,
+            Light.KITCHEN_OVERHEAD,
+            Light.BEDROOM_LAMP,
+        ),
+        OFF,
+    )
+)
+
+SCHEDULE_ROUTINES = {
+    e.name: e for e in (
+        ROUTINE_RESET_LIGHT,
+        ROUTINE_PARTNER_UP,
+        ROUTINE_PARTNER_LEAVING,
+        ROUTINE_SUNRISE_LIGHTS,
+        ROUTINE_UP_AND_ATOM,
+        ROUTINE_SUNSET_LIGHTS,
+        ROUTINE_QUIET_TIME,
+        ROUTINE_NIGHTLIGHT_ON,
+        ROUTINE_NIGHTLIGHT_OFF,
+    )
 }
 
 DEFAULT_CONFIG = ROOM_CONFIGS["Living Room"]
