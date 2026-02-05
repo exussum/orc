@@ -50,12 +50,12 @@ Sound = build_enum(
     hubitat_config,
 )
 
-ROUTINE_RESET_LIGHT = Routine("reset", "1:00", (Config(Light - {Light.BEDROOM_NIGHTLIGHT}, OFF, mandatory=True),),)
-ROUTINE_PARTNER_UP = Routine("partner up", "6:15", (Config({Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}, ON),),)
-ROUTINE_SUNRISE_LIGHTS = Routine("sunrise lights", "sunrise", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, OFF, mandatory=True),))
+ROUTINE_RESET_LIGHT = Routine("Reset", "1:00", (Config(Light - {Light.BEDROOM_NIGHTLIGHT}, OFF, mandatory=True),))
+ROUTINE_PARTNER_UP = Routine("Partner up", "6:15", (Config({Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}, ON),))
+ROUTINE_SUNRISE_LIGHTS = Routine("Sunrise Lights", "sunrise", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, OFF, mandatory=True),))
 
 ROUTINE_UP_AND_ATOM = Routine(
-    "up and atom",
+    "Up and Atom",
     "9:00",
     (
         Config({Light.ENTANCE_DESK, Light.OFFICE_TABLE}, 100),
@@ -65,11 +65,11 @@ ROUTINE_UP_AND_ATOM = Routine(
     ),
 )
 
-ROUTINE_SUNSET_LIGHTS = Routine("sunset lights", "sunset", ( Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, ON, mandatory=True,),),)
-ROUTINE_QUIET_TIME = Routine("quiet time", "23:00", (Config(Sound, 10, mandatory=True),))
-ROUTINE_PARTNER_LEAVING = Routine("partner leaving", "7:00", (Config(Light.ENTANCE_DESK, 1),),)
-ROUTINE_NIGHTLIGHT_OFF = Routine("nightlight off", "sunrise", (Config(Light.BEDROOM_NIGHTLIGHT, OFF),),)
-ROUTINE_NIGHTLIGHT_ON = Routine("nightlight on", "sunset", (Config(Light.BEDROOM_NIGHTLIGHT, ON),))
+ROUTINE_SUNSET_LIGHTS = Routine("Sunset Lights", "sunset", ( Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, ON, mandatory=True,),))
+ROUTINE_QUIET_TIME = Routine("Quiet Time", "23:00", (Config(Sound, 10, mandatory=True),))
+ROUTINE_PARTNER_LEAVING = Routine("Partner Leaving", "7:00", (Config(Light.ENTANCE_DESK, 1),))
+ROUTINE_NIGHTLIGHT_OFF = Routine("Nightlight Off", "sunrise", (Config(Light.BEDROOM_NIGHTLIGHT, OFF),))
+ROUTINE_NIGHTLIGHT_ON = Routine("Nightlight On", "sunset", (Config(Light.BEDROOM_NIGHTLIGHT, ON),))
 
 THEMES = scan(
     Theme(
@@ -123,10 +123,7 @@ ROOM_CONFIGS = {
 
 THEME_CONFIGS = {
     "Bed Time": Configs(
-        Config(
-            Light - {Light.BEDROOM_NIGHTLIGHT},
-            OFF,
-        ),
+        Config(Light - {Light.BEDROOM_NIGHTLIGHT}, OFF),
         Config(Light.BEDROOM_NIGHTLIGHT, ON),
     ),
     "Partial TV Lights": Configs(
