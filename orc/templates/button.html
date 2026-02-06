@@ -43,23 +43,28 @@
     {% endfor %}
     </div>
     <hr class="hr orc-hr"/>
-    <div class="orc-buttons">
-    {% for id in theme_configs %}
-        <div class="orc-button">
-            <div class="orc-button-label">{{ id }}</div>
-            <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}"><i class="bi bi-clipboard-check"></i></button>
+    <div>
+        <div>Theme</div>
+        <div class="orc-buttons">
+        {% for id in theme_configs %}
+            <div class="orc-button">
+                <div class="orc-button-label">{{ id }}</div>
+                <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}"><i class="bi bi-clipboard-check"></i></button>
+            </div>
+        {% endfor %}
         </div>
-    {% endfor %}
     </div>
     <hr class="hr orc-hr"/>
-    <div class="orc-buttons">
-    {% for id in other_configs %}
-        <div class="orc-button">
-            <div class="orc-button-label">{{ id }}</div>
-            <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}"><i class="bi bi-rocket-takeoff"></i></button>
+    <div>
+        <div>Super Routine</div>
+        <div class="orc-buttons">
+        {% for id in other_configs %}
+            <div class="orc-button">
+                <div class="orc-button-label">{{ id }}</div>
+                <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}"><i class="bi bi-rocket-takeoff"></i></button>
+            </div>
+        {% endfor %}
         </div>
-    {% endfor %}
-    </div>
     <hr class="hr orc-hr"/>
     <div class="btn-group dropup">
         <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Routines</button>
