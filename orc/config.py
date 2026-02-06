@@ -65,7 +65,7 @@ ROUTINE_UP_AND_ATOM = Routine(
     ),
 )
 
-ROUTINE_SUNSET_LIGHTS = Routine("Sunset Lights", "sunset", ( Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, ON, mandatory=True,),))
+ROUTINE_SUNSET_LIGHTS = Routine("Sunset Lights", "sunset", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, ON, mandatory=True,),))
 ROUTINE_QUIET_TIME = Routine("Quiet Time", "23:00", (Config(Sound, 10, mandatory=True),))
 ROUTINE_PARTNER_LEAVING = Routine("Partner Leaving", "7:00", (Config(Light.ENTANCE_DESK, 1),))
 ROUTINE_NIGHTLIGHT_OFF = Routine("Nightlight Off", "sunrise", (Config(Light.BEDROOM_NIGHTLIGHT, OFF),))
