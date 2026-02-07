@@ -35,7 +35,7 @@ def web():
 
 def worker():
     config_manager = api.ConfigManager()
-    scheduler = ctrl.setup_scheduler(BlockingScheduler(), config_manager)
+    scheduler = api.setup_scheduler(BlockingScheduler(), config_manager)
 
     try:
         scheduler.start()
