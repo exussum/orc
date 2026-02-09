@@ -7,7 +7,7 @@ requires = [
 [project]
 dependencies = [
     "APScheduler==3.11.0",
-    "Flask_Admin==1.6.1",
+    "Flask==3.1.2",
     "requests==2.32.3",
 ]
 name = "orc"
