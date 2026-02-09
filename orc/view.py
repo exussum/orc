@@ -1,21 +1,21 @@
 import random
+from flask import current_app as app
+from functools import wraps
 import time
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from functools import wraps
-from typing import List
 from zoneinfo import ZoneInfo
 
 from apscheduler.triggers.cron import CronTrigger
-from flask import redirect, request
-from flask_admin import expose
-from flask_admin.base import AdminIndexView
+from flask import redirect, request, render_template, Blueprint
 
 from orc import api, config
 from orc import model as m
 
+bp = Blueprint("button", __name__)
 
-class VersionedView:
+
+class VersionManager:
     version = str(random.random())
     snapshot = None
 
@@ -27,126 +27,113 @@ class VersionedView:
     def versioned(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if not request.headers.get("orc-version") == VersionedView.version:
-                return {"version": VersionedView.version}, 412
+            if not request.headers.get("orc-version") == VersionManager.version:
+                return {"version": VersionManager.version}, 412
             func(*args, **kwargs)
-            VersionedView.version = str(random.random())
-            return {"version": VersionedView.version}, 200
+            VersionManager.version = str(random.random())
+            return {"version": VersionManager.version}, 200
 
         return wrapper
 
 
-class ButtonView(AdminIndexView, VersionedView):
-    def __init__(self, name, url, config_manager):
-        super(AdminIndexView, self).__init__(url=url, name=name)
-        self.config_manager = config_manager
+@bp.route("/")
+def index():
+    return (
+        render_template(
+            "button.html",
+            other_configs=config.OTHER_CONFIGS,
+            room_configs=config.ROOM_CONFIGS,
+            theme_configs=config.THEME_CONFIGS,
+            schedule_routines=config.SCHEDULE_ROUTINES,
+        ),
+        200,
+        {"Cache-control": "max-age=604800"},
+    )
 
-    @expose("/")
-    def index(self):
-        return (
-            self.render(
-                "button.html",
-                version=self.version,
-                other_configs=config.OTHER_CONFIGS,
-                room_configs=config.ROOM_CONFIGS,
-                theme_configs=config.THEME_CONFIGS,
-                schedule_routines=config.SCHEDULE_ROUTINES,
-            ),
-            200,
-            {"Cache-control": "max-age=604800"},
+
+@bp.route("/remote/<id>")
+def remote(id):
+    if id in ("TV Lights", "Partial TV Lights"):
+        end = datetime.now(tz=config.TZ) + timedelta(hours=3)
+        app.config_manager.replace_config(config.THEME_CONFIGS[id], end)
+    else:
+        app.config_manager.resume(config.ALL_CONFIGS[id])
+        app.version_manager.bump_version()
+    return {}, 200
+
+
+@bp.route("/console/<id>")
+def console(id):
+    if id == "Test":
+        end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
+        app.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
+        api.test(config.OTHER_CONFIGS[id])
+        app.config_manager.resume(config.DEFAULT_CONFIG)
+    elif id in config.OTHER_CONFIGS:
+        api.execute(config.OTHER_CONFIGS[id])
+    elif id in config.SCHEDULE_ROUTINES:
+        api.execute(config.SCHEDULE_ROUTINES[id])
+    elif id in config.THEME_CONFIGS:
+        api.execute(api.squish_configs(m.Configs(*config.ROUTINE_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
+    return {}, 200
+
+
+@bp.route("/room/<id>")
+def room(id):
+    state = request.args.get("state")
+    if state == config.ON:
+        api.execute(config.ROOM_CONFIGS[id])
+    elif state == config.OFF:
+        api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
+    elif state == "follow":
+        api.execute(api.squish_configs(config.ROOM_CONFIGS_OFF, config.ROOM_CONFIGS[id]))
+    else:
+        raise Exception("Unknown state")
+
+    return {}, 200
+
+
+@bp.route("/schedule/")
+def schedule():
+    jobs = sorted(api.non_cron_jobs(app.scheduler), key=lambda e: e.trigger.run_date)
+    theme_override = app.config_manager.theme_override
+
+    theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
+
+    return (
+        render_template("schedule.html", version=app.version_manager.version, jobs=jobs, theme=theme),
+        200,
+        {"Cache-control": "no-store"},
+    )
+
+
+@bp.route("/schedule/set_theme", methods=["POST"])
+def set_theme():
+    if not request.form["theme"]:
+        app.config_manager.theme_override = None
+    else:
+        app.config_manager.set_theme_override(
+            request.form["theme"],
+            date.fromisoformat(request.form["start"]),
+            date.fromisoformat(request.form["end"]),
         )
-
-    @expose("/remote/<id>")
-    def remote(self, id):
-        if id in ("TV Lights", "Partial TV Lights"):
-            end = datetime.now(tz=config.TZ) + timedelta(hours=3)
-            self.config_manager.replace_config(config.THEME_CONFIGS[id], end)
-        else:
-            self.config_manager.resume(config.ALL_CONFIGS[id])
-
-        self.bump_version()
-        return {}, 200
-
-    @expose("/console/<id>")
-    def console(self, id):
-        if id == "Test":
-            end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
-            self.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
-            api.test(config.OTHER_CONFIGS[id])
-            self.config_manager.resume(config.DEFAULT_CONFIG)
-        elif id in config.OTHER_CONFIGS:
-            api.execute(config.OTHER_CONFIGS[id])
-        elif id in config.SCHEDULE_ROUTINES:
-            api.execute(config.SCHEDULE_ROUTINES[id])
-        elif id in config.THEME_CONFIGS:
-            api.execute(api.squish_configs(m.Configs(*config.ROUTINE_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
-
-        self.bump_version()
-        return {}, 200
-
-    @expose("/room/<id>")
-    def room(self, id):
-        state = request.args.get("state")
-        if state == config.ON:
-            api.execute(config.ROOM_CONFIGS[id])
-        elif state == config.OFF:
-            api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
-        elif state == "follow":
-            api.execute(api.squish_configs(config.ROOM_CONFIGS_OFF, config.ROOM_CONFIGS[id]))
-        else:
-            raise Exception("Unknown state")
-
-        self.bump_version()
-        return (
-            {},
-            200,
-        )
+    app.scheduler.remove_all_jobs()
+    api.setup_scheduler(app.scheduler, app.config_manager)
+    return redirect("/schedule/")
 
 
-class ScheduleView(AdminIndexView, VersionedView):
-    def __init__(self, name, url, config_manager, scheduler):
-        super(AdminIndexView, self).__init__(url=url, name=name)
-        self.scheduler = scheduler
-        self.config_manager = config_manager
+@bp.route("/schedule/<id>/pause")
+@VersionManager.versioned
+def pause(id):
+    job = app.scheduler.get_job(id)
+    if job.next_run_time:
+        job.pause()
+    else:
+        job.resume()
 
-    @expose("/")
-    def index(self):
-        jobs = sorted(api.non_cron_jobs(self.scheduler), key=lambda e: e.trigger.run_date)
-        theme_override = self.config_manager.theme_override
-        theme = (
-            theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
-        )
-        return (
-            self.render("schedule.html", version=self.version, jobs=jobs, theme=theme),
-            200,
-            {"Cache-control": "no-store"},
-        )
 
-    @expose("/set_theme", methods=["POST"])
-    def set_theme(self):
-        if not request.form["theme"]:
-            self.config_manager.theme_override = None
-        else:
-            self.config_manager.set_theme_override(
-                request.form["theme"],
-                date.fromisoformat(request.form["start"]),
-                date.fromisoformat(request.form["end"]),
-            )
-        self.scheduler.remove_all_jobs()
-        api.setup_scheduler(self.scheduler, self.config_manager)
-        return redirect("/schedule/")
-
-    @VersionedView.versioned
-    @expose("/<id>/pause")
-    def pause(self, id):
-        job = self.scheduler.get_job(id)
-        if job.next_run_time:
-            job.pause()
-        else:
-            job.resume()
-
-    @VersionedView.versioned
-    @expose("/<id>/run")
-    def run(self, id):
-        job = self.scheduler.get_job(id)
-        job.func(True)
+@bp.route("/schedule/<id>/run")
+@VersionManager.versioned
+def run(id):
+    job = app.scheduler.get_job(id)
+    job.func(True)
