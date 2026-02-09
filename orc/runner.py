@@ -10,26 +10,22 @@ from flask_admin.base import Admin
 
 from orc import api
 from orc.model import Routine
-from orc.view import ButtonView, ScheduleView, VersionedView
+from orc.view import bp, VersionManager
 
 
 def web():
-    app = Flask(__name__)
-    app.config["FLASK_ADMIN_SWATCH"] = "cyborg"
-    app.config["TEMPLATES_AUTO_RELOAD"] = True
-
     config_manager = api.ConfigManager()
+    version_manager = VersionManager()
     scheduler = api.setup_scheduler(BackgroundScheduler(), config_manager)
-    scheduler.add_listener(lambda e: VersionedView.bump_version(), EVENT_JOB_EXECUTED)
+    scheduler.add_listener(lambda e: scheduler.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start()
 
-    admin = Admin(
-        app,
-        name="ORChestration",
-        template_mode="bootstrap4",
-        index_view=ButtonView(config_manager=config_manager, url="/", name="Remote"),
-    )
-    admin.add_view(ScheduleView(config_manager=config_manager, scheduler=scheduler, url="/schedule", name="Schedule"))
+    app = Flask(__name__)
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.register_blueprint(bp)
+    app.scheduler = scheduler
+    app.config_manager = config_manager
+    app.version_manager = VersionManager()
     app.run(host="0.0.0.0")
 
 
