@@ -10,7 +10,7 @@ from flask_admin.base import Admin
 
 from orc import api
 from orc.model import Routine
-from orc.view import bp, VersionManager
+from orc.view import VersionManager, bp
 
 
 def web():
