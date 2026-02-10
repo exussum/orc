@@ -4,8 +4,8 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from orc.model import Theme, Routine, Config, scan, Configs, build_enum
 from orc import dal
+from orc.model import Config, Configs, Routine, Theme, build_enum, scan
 
 BASE_URL = os.getenv("BASE_URL", "http://base.example.com")
 ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN", "example-token")
@@ -52,7 +52,9 @@ Sound = build_enum(
 
 ROUTINE_RESET_LIGHT = Routine("Reset", "1:00", (Config(Light - {Light.BEDROOM_NIGHTLIGHT}, OFF, mandatory=True),))
 ROUTINE_PARTNER_UP = Routine("Partner up", "6:15", (Config({Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}, ON),))
-ROUTINE_SUNRISE_LIGHTS = Routine("Sunrise Lights", "sunrise", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, OFF, mandatory=True),))
+ROUTINE_SUNRISE_LIGHTS = Routine(
+    "Sunrise Lights", "sunrise", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, OFF, mandatory=True),)
+)
 
 ROUTINE_UP_AND_ATOM = Routine(
     "Up and Atom",
@@ -65,7 +67,17 @@ ROUTINE_UP_AND_ATOM = Routine(
     ),
 )
 
-ROUTINE_SUNSET_LIGHTS = Routine("Sunset Lights", "sunset", (Config({Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}, ON, mandatory=True,),))
+ROUTINE_SUNSET_LIGHTS = Routine(
+    "Sunset Lights",
+    "sunset",
+    (
+        Config(
+            {Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET},
+            ON,
+            mandatory=True,
+        ),
+    ),
+)
 ROUTINE_QUIET_TIME = Routine("Quiet Time", "23:00", (Config(Sound, 10, mandatory=True),))
 ROUTINE_PARTNER_LEAVING = Routine("Partner Leaving", "7:00", (Config(Light.ENTANCE_DESK, 1),))
 ROUTINE_NIGHTLIGHT_OFF = Routine("Nightlight Off", "sunrise", (Config(Light.BEDROOM_NIGHTLIGHT, OFF),))
@@ -156,11 +168,13 @@ OTHER_CONFIGS = {
     "All Lights On": Configs(Config(Light, ON), Config(Light, 100)),
     "All Lights Off": Configs(Config(Light, OFF)),
     "Video Conference": Configs(
-        Config(Light.OFFICE_TABLE, OFF),
+        Config(Light.OFFICE_TABLE, 5),
         Config(Light.OFFICE_FLOOR, ON),
         Config(Light.OFFICE_DESK, 50),
     ),
     "Test": Configs(*(Config(e, s) for (e, s) in tuple(itertools.product(Light, [ON, OFF])))),
+    "Restore Snapshot": None,
+    "Replay Day": None,
 }
 
 ROOM_CONFIGS_OFF = Configs(
@@ -181,7 +195,8 @@ ROOM_CONFIGS_OFF = Configs(
 )
 
 SCHEDULE_ROUTINES = {
-    e.name: e for e in (
+    e.name: e
+    for e in (
         ROUTINE_RESET_LIGHT,
         ROUTINE_PARTNER_UP,
         ROUTINE_PARTNER_LEAVING,
