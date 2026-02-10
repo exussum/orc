@@ -16,8 +16,12 @@ SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
 
 
+def local_now():
+    return datetime.now(tz=config.TZ)
+
+
 def non_cron_jobs(scheduler):
-    now = datetime.now(tz=config.TZ)
+    now = local_now()
     return [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now]
 
 
@@ -49,7 +53,7 @@ class ConfigManager:
         self.theme_override = None
 
     def replace_config(self, target_config, end):
-        now = datetime.now(tz=config.TZ)
+        now = local_now()
 
         if not self.snapshot:
             self.snapshot = SnapShot(capture_lights(), end)
@@ -57,7 +61,7 @@ class ConfigManager:
         execute(target_config)
 
     def resume(self, target_config):
-        if self.snapshot and datetime.now(tz=config.TZ) <= self.snapshot.end:
+        if self.snapshot and local_now() <= self.snapshot.end:
             routine = self.snapshot.routine
         else:
             routine = target_config
@@ -97,7 +101,7 @@ class ConfigManager:
         if rule.mandatory and self.snapshot:
             self.update_snapshot(rule)
             execute(rule)
-        elif self.snapshot and datetime.now(tz=config.TZ) > self.snapshot.end:
+        elif self.snapshot and local_now() > self.snapshot.end:
             self.snapshot = None
             execute(rule)
         elif not self.snapshot or force:
@@ -128,7 +132,7 @@ def capture_lights():
 def get_schedule(config_manager):
     result = []
     for x in range(2):
-        now = datetime.now(tz=config.TZ) + timedelta(days=x)
+        now = local_now() + timedelta(days=x)
         sun_result = dal.get_sun_cycle(now.date())
         sunrise = datetime.fromisoformat(sun_result["sunrise"]) + timedelta(minutes=30)
         sunset = datetime.fromisoformat(sun_result["sunset"])
@@ -195,7 +199,9 @@ def squish_configs(*configs):
             for e in what:
                 rules[e].append(m.Config(what=e, state=rule.state))
 
-    return m.Configs(*tuple(chain.from_iterable(squish(e) for e in rules.values())))
+    rules = list(chain.from_iterable(squish(e) for e in rules.values()))
+    rules.sort(key=lambda e: isinstance(e.state, str))
+    return m.Configs(*rules)
 
 
 def squish(items):

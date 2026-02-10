@@ -1,13 +1,14 @@
 import random
-from flask import current_app as app
-from functools import wraps
 import time
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
+from functools import wraps
 from zoneinfo import ZoneInfo
 
 from apscheduler.triggers.cron import CronTrigger
-from flask import redirect, request, render_template, Blueprint
+from flask import Blueprint
+from flask import current_app as app
+from flask import redirect, render_template, request
 
 from orc import api, config
 from orc import model as m
@@ -54,7 +55,7 @@ def index():
 @bp.route("/remote/<id>")
 def remote(id):
     if id in ("TV Lights", "Partial TV Lights"):
-        end = datetime.now(tz=config.TZ) + timedelta(hours=3)
+        end = api.local_now() + timedelta(hours=3)
         app.config_manager.replace_config(config.THEME_CONFIGS[id], end)
     else:
         app.config_manager.resume(config.ALL_CONFIGS[id])
@@ -65,10 +66,17 @@ def remote(id):
 @bp.route("/console/<id>")
 def console(id):
     if id == "Test":
-        end = datetime.now(tz=config.TZ) + timedelta(minutes=10)
+        end = api.local_now() + timedelta(minutes=10)
         app.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
         api.test(config.OTHER_CONFIGS[id])
         app.config_manager.resume(config.DEFAULT_CONFIG)
+    elif id == "Restore Snapshot":
+        app.config_manager.resume(config.DEFAULT_CONFIG)
+    elif id == "Replay Day":
+        now = api.local_now()
+        jobs = sorted(api.get_schedule(app.config_manager), key=lambda x: x[0])
+        configs = (config for (when, config) in jobs if when <= now)
+        api.execute(api.squish_configs(*configs))
     elif id in config.OTHER_CONFIGS:
         api.execute(config.OTHER_CONFIGS[id])
     elif id in config.SCHEDULE_ROUTINES:
