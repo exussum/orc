@@ -8,6 +8,10 @@
             border: revert;
         }
 
+        div.orc-input-filtered {
+           visibility: collapse;  
+        }
+
         div.orc-room-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr 1fr;
@@ -91,8 +95,8 @@
 
             try {
                 response = await fetch(`/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`);
-                console.log(response);
                 if (!response.ok) {
+                    console.log(response);
                     throw Error(`Response status: ${response.status}`);
                 }
                 return true;
@@ -103,5 +107,16 @@
             }
         }
         document.querySelectorAll(".orc-runner").forEach(el => { el.addEventListener("click", e => run(e.currentTarget)); });
+
+        const expertRoutines = ["Test", "Restore Snapshot", "Video Conference"];
+        const isPowerUser = localStorage.getItem("isPowerUser");
+
+        document.querySelectorAll(".orc-button").forEach(el => {
+            let dataSelector = el.querySelector(".orc-runner");
+            if(isPowerUser !== "true" && expertRoutines.includes(dataSelector.getAttribute("data-id"))) {
+                el.classList.add("orc-input-filtered");
+            }
+        });
+
     </script>
 {% endblock %}
