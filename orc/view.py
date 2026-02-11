@@ -72,7 +72,7 @@ def console(id):
         app.config_manager.resume(config.DEFAULT_CONFIG)
     elif id == "Restore Snapshot":
         app.config_manager.resume(config.DEFAULT_CONFIG)
-    elif id == "Replay Day":
+    elif id == "Back on Schedule":
         now = api.local_now()
         jobs = sorted(api.get_schedule(app.config_manager), key=lambda x: x[0])
         configs = (config for (when, config) in jobs if when <= now)

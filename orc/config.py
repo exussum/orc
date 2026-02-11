@@ -174,7 +174,7 @@ OTHER_CONFIGS = {
     ),
     "Test": Configs(*(Config(e, s) for (e, s) in tuple(itertools.product(Light, [ON, OFF])))),
     "Restore Snapshot": None,
-    "Replay Day": None,
+    "Back on Schedule": None,
 }
 
 ROOM_CONFIGS_OFF = Configs(
