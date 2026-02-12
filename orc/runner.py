@@ -8,7 +8,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
 from flask_admin.base import Admin
 
-from orc import api
+from orc import api, config
 from orc.model import Routine
 from orc.view import VersionManager, bp
 
@@ -17,7 +17,7 @@ def web():
     config_manager = api.ConfigManager()
     version_manager = VersionManager()
     scheduler = api.setup_scheduler(BackgroundScheduler(), config_manager)
-    scheduler.add_listener(lambda e: scheduler.bump_version(), EVENT_JOB_EXECUTED)
+    scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start()
 
     app = Flask(__name__)
@@ -26,7 +26,11 @@ def web():
     app.scheduler = scheduler
     app.config_manager = config_manager
     app.version_manager = VersionManager()
-    app.run(host="0.0.0.0")
+
+    if config.SSL_KEY and config.SSL_CERT:
+        app.run(host="0.0.0.0", debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY))
+    else:
+        app.run(host="0.0.0.0", debug=True)
 
 
 def worker():
