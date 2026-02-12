@@ -11,6 +11,8 @@ BASE_URL = os.getenv("BASE_URL", "http://base.example.com")
 ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN", "example-token")
 SUNRISE_URL = os.getenv("SUNRISE_URL", "http://sunrise.example.com")
 MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL", "http://holidays.exmaple.com")
+SSL_KEY = os.getenv("SSL_KEY", "")
+SSL_CERT = os.getenv("SSL_CERT", "")
 ENABLED = os.getenv("ENABLED", "")
 
 hubitat_config = dal.get_config() if ENABLED else {}
