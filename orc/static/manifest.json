@@ -13,7 +13,7 @@
       "type": "image/png"
     }
   ],
-  "start_url": "https://remote.exussum.org:5000/",
+  "start_url": "https://remote.exussum.org/",
   "display": "standalone",
   "theme_color": "black",
   "background_color": "white"

@@ -28,7 +28,7 @@ def web():
     app.version_manager = VersionManager()
 
     if config.SSL_KEY and config.SSL_CERT:
-        app.run(host="0.0.0.0", debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY))
+        app.run(port=443, host="0.0.0.0", debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY))
     else:
         app.run(host="0.0.0.0", debug=True)
 
