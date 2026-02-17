@@ -1,43 +1,5 @@
 {% extends 'base.html' %}
 
-{% block head_css %}
-    {{ super() }}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-    <style>
-        hr.orc-hr {
-            border: revert;
-        }
-
-        div.orc-input-filtered {
-            display: none;
-        }
-
-        div.orc-room-buttons {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr;
-        }
-
-        div.orc-routine-buttons {
-            display: flex;
-            flex-direction: horizontal;
-            overflow: auto;
-        }
-
-        div.orc-button {
-            width: 75px;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        div.orc-button-label {
-            height: 4em;
-            font-size: 10px;
-            margin-bottom: 5px;
-            display: flex;
-            flex-flow: column-reverse;
-        }
-    </style>
-{% endblock %}
-
 {% block body %}
     <div class="orc-room-buttons">
     {% for id in room_configs %}
@@ -77,13 +39,28 @@
         {% endfor %}
         </div>
     <hr class="hr orc-hr"/>
-    <div class="btn-group dropup">
-        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Routines</button>
+    <div class="orc-power-user">
+        <div class="orc-routine-buttons orc-overflow">
+            <div>
+                <div class="btn-group dropup">
+                    <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Routines</button>
 
-        <div class="dropdown-menu">
-        {% for id in schedule_routines %}
-            <a class="dropdown-item orc-runner" href="#" data-type="console" data-id="{{id}}">{{id}}</a>
-        {% endfor %}
+                    <div class="dropdown-menu">
+                    {% for id in schedule_routines %}
+                        <a class="dropdown-item orc-runner" href="#" data-type="console" data-id="{{id}}">{{id}}</a>
+                    {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% if next_routine %}
+                <div class="orc-button-next">
+                    <div>
+                        <div><b>{{ next_routine.name }}</b></div>
+                        <div>Coming up at {{ next_routine.trigger.run_date.time().strftime("%I:%M %p") }}</div>
+                        </div>
+                    <button class="btn btn-primary orc-pause" data-type="console" data-id="{{ next_routine.id }}">Skip</i></button>
+                </div>
+            {% endif %}
         </div>
     </div>
 {% endblock %}
@@ -91,26 +68,21 @@
 {% block tail %}
     <script>
         async function run(el) {
-            el.disabled = true;
-            let response = null;
-
-            try {
-                response = await fetch(`/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`);
-                if (!response.ok) {
-                    console.log(response);
-                    throw Error(`Response status: ${response.status}`);
-                }
-                return true;
-            } catch (error) {
-                console.error(error.message);
-            } finally {
-                el.disabled = false;
-            }
+            await call(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
         }
-        document.querySelectorAll(".orc-runner").forEach(el => { el.addEventListener("click", e => run(e.currentTarget)); });
 
         const expertRoutines = ["Test", "Restore Snapshot", "Video Conference"];
         const isPowerUser = localStorage.getItem("isPowerUser");
+
+        document.querySelectorAll(".orc-runner").forEach(el => { 
+            el.addEventListener("click", e => { 
+                run(e.currentTarget); 
+            })
+        });
+
+        document.querySelector(".orc-pause").addEventListener("click", e => {
+            call(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).then(() => { location.reload() } );
+        });
 
         document.querySelectorAll(".orc-button").forEach(el => {
             let dataSelector = el.querySelector(".orc-runner");
