@@ -88,7 +88,7 @@ class ConfigManager:
 
         if today.weekday() not in (5, 6):
             today_iso = today.strftime("%Y-%m-%d")
-            market_schedule = dal.get_holidays()
+            market_schedule = dal.get_holidays(today.year)
             theme_name = (
                 "day off" if next((e for e in market_schedule if e["date"] == today_iso and e["exchange"] == "NYSE"), None) else "work day"
             )

@@ -1,4 +1,5 @@
 import time
+from functools import lru_cache
 
 import requests
 
@@ -32,7 +33,8 @@ def get_config():
     return requests.get(f"{config.BASE_URL}/devices{config.ACCESS_TOKEN}").json()
 
 
-def get_holidays():
+@lru_cache(maxsize=2)
+def get_holidays(year):
     result = requests.get(f"{config.MARKET_HOLIDAYS_URL}").json()
     if "error" in result:
         print(result["error"])
