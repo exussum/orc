@@ -1,0 +1,54 @@
+hr.orc-hr {
+    border: revert;
+}
+    
+div.orc-input-filtered {
+    display: none;
+}
+
+div.orc-room-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+    
+div.orc-routine-buttons {
+    display: flex;
+    flex-direction: horizontal;
+    overflow: auto;
+    justify-content: space-between;
+}
+
+div.orc-button {
+    width: 75px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+div.orc-button-label {
+    height: 4em;
+    font-size: 10px; 
+    margin-bottom: 5px;
+    display: flex;
+    flex-flow: column-reverse;
+}   
+div#admin-navbar-collapse {
+    align-items: baseline;
+}
+div#orc-theme-form-elements {
+    display: grid;
+    grid-template-columns: 2fr 2fr 1fr;
+    background-color: transparent;
+}
+div.orc-theme-form-date-input {
+    grid-column-start: 2;
+    grid-column-end: 4;
+}
+
+div.orc-button-next {
+    display: flex;
+    flex-direction;
+    gap: 10px;
+}
+
+div.orc-overflow {
+    overflow: visible;
+}

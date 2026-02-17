@@ -1,23 +1,5 @@
 {% extends 'base.html' %}
 
-{% block head_css %}
-    {{ super() }}
-    <style>
-        div#admin-navbar-collapse {
-            align-items: baseline; 
-        }
-        div#orc-theme-form-elements {
-            display: grid;
-            grid-template-columns: 2fr 2fr 1fr;
-            background-color: transparent;
-        }
-        div.orc-theme-form-date-input {
-            grid-column-start: 2;
-            grid-column-end: 4;
-        }
-    </style>
-{% endblock %}
-
 {% block body %}
     <table class="table">
         <tr>
@@ -46,6 +28,7 @@
     </table>
     <hr/>
     <button class="btn btn-primary" onClick='localStorage.setItem("isPowerUser", "true")'>Power User</button>
+    <button class="btn btn-primary" onClick='localStorage.setItem("isPowerUser", "not true")'>Regular User </button>
 {% endblock %}
 
 {% block menu_links %}
@@ -66,7 +49,7 @@
                     </select>
                 </div>
                 <div>
-                    <input id="orc-theme-submit" type="submit" class="btn btn-primary" value="⏎"/>
+                    <input id="orc-theme-submit" type="button" class="btn btn-primary" value="⏎" onClick="set_theme()"/>
                 </div>
                 <div class="orc-theme-schedule"><label>Start</label></div>
                 <div class="orc-theme-schedule orc-theme-form-date-input">
@@ -83,42 +66,22 @@
 
 {% block tail %}
     <script>
-        let version = "{{ version }}";
-
         const startEl = document.querySelector("#orc-theme-select-start");
         const endEl = document.querySelector("#orc-theme-select-end");
         const selectEl = document.querySelector("#orc-theme-select");
         const scheduleEl = document.querySelectorAll(".orc-theme-schedule");
 
-        async function _call(url, el, onSuccess = () => {}, onFailure = () => {}) {
-            el.disabled = true;
-            let response = null;
-
-            try {
-                response = await fetch(url, {headers: { "orc-version": version }});
-                if (!response.ok) {
-                    throw Error(`Response status: ${response.status}`);
-                }
-                version = (await response.json()).version;
-                return true;
-            } catch (error) {
-                console.error(error.message);
-                if (response && response.status === 412) {
-                    location.reload();
-                }
-                return false;
-            } finally {
-                el.disabled = false;
-            }
+        async function set_theme() {
+            fetch('/api/schedule/set_theme', {
+              method: 'POST',
+              body: JSON.stringify({ start: startEl.value, end: endEl.value , theme: scheduleEl.value })
+            }).then(
+              () => { }
+            ); 
         }
-
-        async function run(el) { await _call(`${el.dataset.id}/run`, el); }
+        async function run(el) { await call(`/api/schedule/${el.dataset.id}/run`, el); }
         async function pause(el) {
-            const newStatus = el.checked;
-
-            if (!await _call(`${el.dataset.id}/pause`, el)) {
-                el.checked = !newStatus;
-            }
+            await call(`/api/schedule/${el.dataset.id}/pause`, el, onFailure= () => { el.checked = !el.checked })
         }
 
         function date() {
