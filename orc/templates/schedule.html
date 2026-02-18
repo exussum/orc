@@ -33,7 +33,7 @@
 
 {% block menu_links %}
     <div class="nav">
-        <form action="set_theme" method="POST">
+        <form>
             <div id="orc-theme-form-elements">
                 <div>
                     <label for="orc-theme-select">Theme:</label>
@@ -74,7 +74,8 @@
         async function set_theme() {
             fetch('/api/schedule/set_theme', {
               method: 'POST',
-              body: JSON.stringify({ start: startEl.value, end: endEl.value , theme: scheduleEl.value })
+              headers: { "orc-version": version },
+              body: new URLSearchParams({ start: startEl.value, end: endEl.value , theme: selectEl.value })
             }).then(
               () => { }
             ); 
