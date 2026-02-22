@@ -81,7 +81,7 @@ ROUTINE_SUNSET_LIGHTS = Routine(
     ),
 )
 ROUTINE_QUIET_TIME = Routine("Quiet Time", "23:00", (Config(Sound, 10, mandatory=True),))
-ROUTINE_PARTNER_LEAVING = Routine("Partner Leaving", "7:00", (Config(Light.ENTANCE_DESK, 1),))
+ROUTINE_PARTNER_LEAVING = Routine("Partner Leaving", "7:00", (Config(Light.ENTANCE_DESK, 1), Config(Light.LIVING_ROOM_FLOOR, ON)))
 ROUTINE_NIGHTLIGHT_OFF = Routine("Nightlight Off", "sunrise", (Config(Light.BEDROOM_NIGHTLIGHT, OFF),))
 ROUTINE_NIGHTLIGHT_ON = Routine("Nightlight On", "sunset", (Config(Light.BEDROOM_NIGHTLIGHT, ON),))
 
