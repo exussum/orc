@@ -1,10 +1,8 @@
 import time
-from collections import defaultdict
 from collections import namedtuple as nt
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
-from itertools import chain
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -53,7 +51,6 @@ class ConfigManager:
         self.theme_override = None
 
     def replace_config(self, target_config, end):
-        now = local_now()
 
         if not self.snapshot:
             self.snapshot = SnapShot(capture_lights(), end)
@@ -188,32 +185,3 @@ def test(theme):
     for e in theme.items:
         execute(e)
         time.sleep(2)
-
-
-def squish_configs(*configs):
-    rules = defaultdict(list)
-    for routine in configs:
-        for rule in routine.items:
-
-            what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-            for e in what:
-                rules[e].append(m.Config(what=e, state=rule.state))
-
-    rules = list(chain.from_iterable(squish(e) for e in rules.values()))
-    rules.sort(key=lambda e: isinstance(e.state, str))
-    return m.Configs(*rules)
-
-
-def squish(items):
-    if not items:
-        return ()
-
-    result = (items[-1],)
-    if isinstance(result[0].state, int):
-        return result
-
-    for e in range(len(items) - 2, -1, -1):
-        if isinstance(items[e].state, int):
-            result = (items[e], result[0])
-            break
-    return result

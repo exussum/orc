@@ -1,14 +1,11 @@
 import random
-import time
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date, timedelta
 from functools import wraps
-from zoneinfo import ZoneInfo
 
-from apscheduler.triggers.cron import CronTrigger
 from flask import Blueprint
 from flask import current_app as app
-from flask import redirect, render_template, request, send_from_directory
+from flask import render_template, request
 
 from orc import api, config
 from orc import model as m
@@ -92,13 +89,13 @@ def console(id):
         now = api.local_now()
         jobs = sorted(api.get_schedule(app.config_manager), key=lambda x: x[0])
         configs = (config for (when, config) in jobs if when <= now)
-        api.execute(api.squish_configs(*configs))
+        api.execute(m.squish_configs(*configs))
     elif id in config.OTHER_CONFIGS:
         api.execute(config.OTHER_CONFIGS[id])
     elif id in config.SCHEDULE_ROUTINES:
         api.execute(config.SCHEDULE_ROUTINES[id])
     elif id in config.THEME_CONFIGS:
-        api.execute(api.squish_configs(m.Configs(*config.ROUTINE_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
+        api.execute(m.squish_configs(m.Configs(*config.ROUTINE_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
     else:
         raise Exception("Unknown routine")
     return {}, 200
@@ -112,7 +109,7 @@ def room(id):
     elif state == config.OFF:
         api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
     elif state == "follow":
-        api.execute(api.squish_configs(config.ROOM_CONFIGS_OFF, config.ROOM_CONFIGS[id]))
+        api.execute(m.squish_configs(config.ROOM_CONFIGS_OFF, config.ROOM_CONFIGS[id]))
     else:
         raise Exception("Unknown state")
 
