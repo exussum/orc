@@ -95,7 +95,7 @@ def console(id):
     elif id in config.SCHEDULE_ROUTINES:
         api.execute(config.SCHEDULE_ROUTINES[id])
     elif id in config.THEME_CONFIGS:
-        api.execute(m.squish_configs(m.Configs(*config.ROUTINE_RESET_LIGHT.items), config.THEME_CONFIGS[id]))
+        api.execute(m.squish_configs(config.RESET_CONFIG, config.THEME_CONFIGS[id]))
     else:
         raise Exception("Unknown routine")
     return {}, 200
