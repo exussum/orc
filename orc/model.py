@@ -85,7 +85,7 @@ def build_themes(doc, routine_section, theme_section, light, sound):
     routines = {}
 
     for type, e in doc_to_sub_tables(doc, routine_section):
-        configs = [Config(eval(c[2], {"__builtins__": {}}, {"Light": light, "Sound": sound}), c[3], mandatory=(c[4] == "True")) for c in e]
+        configs = [_build_config(c[2], sound, light, c[3], c[4]) for c in e]
         routines[type] = Routine(e[0][1], "", configs)
 
     result = []
@@ -97,18 +97,25 @@ def build_themes(doc, routine_section, theme_section, light, sound):
 def build_config(doc, section, light, sound):
     result = {}
     for type, e in doc_to_sub_tables(doc, section):
-        result[type] = Configs(*[Config(eval(c[1], {"__builtins__": {}}, {"Light": light, "Sound": sound}), c[2]) for c in e])
+        result[type] = Configs(*[_build_config(c[1], sound, light, c[2]) for c in e])
     return result
 
 
 def build_expr_config(doc, section, light, sound):
     result = {}
     for type, e in doc_to_sub_tables(doc, section):
-        result[type] = Configs(*itertools.chain(*(_run(c[1], sound, light) for c in e if c[1])))
+        result[type] = Configs(*itertools.chain(*(_build_config_from_expr(c[1], sound, light) for c in e if c[1])))
     return result
 
 
-def _run(cmd, sound, light):
+def _build_config(cmd, sound, light, state, mandatory=None):
+    if state not in ("on", "off"):
+        state = int(state)
+    mandatory = mandatory == "True"
+    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, mandatory=mandatory)
+
+
+def _build_config_from_expr(cmd, sound, light):
     return eval(cmd, {"__builtins__": {"Config": Config, "tuple": tuple, "itertools": itertools}}, {"Light": light, "Sound": sound})
 
 
