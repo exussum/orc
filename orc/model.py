@@ -126,8 +126,17 @@ def squish_configs(*configs, state_override=None):
                 rules[e].append(Config(what=e, state=rule.state if state_override is None else state_override))
 
     rules = list(chain.from_iterable(squish(e) for e in rules.values()))
-    rules.sort(key=lambda e: isinstance(e.state, str))
+    rules.sort(key=_op_cmp)
     return Configs(*rules)
+
+
+def _op_cmp(k):
+    if isinstance(k.state, int):
+        return -1
+    elif k.state == "on":
+        return 0
+    else:
+        return 1
 
 
 def squish(items):
