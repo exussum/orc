@@ -40,14 +40,18 @@ def index():
     jobs = sorted(api.non_cron_jobs(app.scheduler), key=lambda e: e.trigger.run_date)
     next_schedule = next((e for e in jobs if e.name in eligible and e.next_run_time), None)
 
-    return render_template(
-        "button.html",
-        other_configs=config.OTHER_CONFIGS,
-        room_configs=config.ROOM_CONFIGS,
-        theme_configs=config.THEME_CONFIGS,
-        schedule_routines=config.SCHEDULE_ROUTINES,
-        next_routine=next_schedule,
-        version=app.version_manager.version,
+    return (
+        render_template(
+            "button.html",
+            other_configs=config.OTHER_CONFIGS,
+            room_configs=config.ROOM_CONFIGS,
+            theme_configs=config.THEME_CONFIGS,
+            schedule_routines=config.SCHEDULE_ROUTINES,
+            next_routine=next_schedule,
+            version=app.version_manager.version,
+        ),
+        200,
+        {"Cache-control": "no-store"},
     )
 
 
