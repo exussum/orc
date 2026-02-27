@@ -1,4 +1,4 @@
-# Devices
+##### Devices
 
 | Type  | ID                   | Hubitat Name           |
 |-------|----------------------|------------------------|
@@ -19,7 +19,9 @@
 |       | OFFICE_DISPLAY       | Office display         |
 |       | KITCHEN_CABINET_MINI | Kitchen mini           |
 
-# Routines
+---
+
+##### Routines
 
 | ID                      | Name            | Expression                                        | State | Mandatory |
 |-------------------------|-----------------|---------------------------------------------------|-------|-----------|
@@ -36,7 +38,9 @@
 | ROUTINE_NIGHTLIGHT_OFF  | Nightlight Off  | Light.BEDROOM_NIGHTLIGHT                          | off   |           |
 | ROUTINE_NIGHTLIGHT_ON   | Nightlight On   | Light.BEDROOM_NIGHTLIGHT                          | on    |           |
 
-# Themes
+---
+
+##### Themes
 
 | Name       | ID                      | Time    |
 |------------|-------------------------|---------|
@@ -62,7 +66,9 @@
 |            | ROUTINE_SUNSET_LIGHTS   | sunset  |
 |            | ROUTINE_QUIET_TIME      | 23:00   |
 
-# Room Configs
+---
+
+##### Room Configs
 
 | Room        | IDs                                               | State |
 |-------------|---------------------------------------------------|-------|
@@ -74,8 +80,9 @@
 | Kitchen     | {Light.KITCHEN_CABINET, Light.KITCHEN_OVERHEAD}   | on    |
 | Bedroom     | Light.BEDROOM_LAMP                                | on    |
 
+---
 
-# Ad-Hoc Routines
+##### Ad-Hoc Routines
 
 | Theme                | Expression                                                                                                                 | State |
 |----------------------|----------------------------------------------------------------------------------------------------------------------------|-------|
@@ -89,7 +96,9 @@
 |                      | {Light.ENTANCE_DESK, Light.OFFICE_TABLE}                                                                                   | 1     |
 | Early Morning Lights | {Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}                                                                           | on    |
 
-# Super Routines
+---
+
+##### Super Routines
 
 | Name             | Expression                                                                  |
 |------------------|-----------------------------------------------------------------------------|
