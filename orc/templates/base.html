@@ -54,6 +54,7 @@
             <ul class="nav navbar-nav mr-auto">
               <li><a class="nav-link {% if request.url_rule.endpoint == "button.index" %}active{% endif %}" href="/">Remote</a></li>
               <li><a class="nav-link {% if request.url_rule.endpoint == "button.schedule" %}active{% endif %}" href="/schedule/">Schedule</a></li>
+              <li><a class="nav-link {% if request.url_rule.endpoint == "button.cfg" %}active{% endif %}" href="/config/">Config</a></li>
             </ul>
             {% block menu_links %}
             {% endblock %}

@@ -6,6 +6,7 @@ from functools import wraps
 from flask import Blueprint
 from flask import current_app as app
 from flask import render_template, request
+from mistletoe import Document, HtmlRenderer
 
 from orc import api, config
 from orc import model as m
@@ -67,6 +68,11 @@ def schedule():
         200,
         {"Cache-control": "no-store"},
     )
+
+
+@bp.route("/config/")
+def cfg():
+    return render_template("config.html", html=HtmlRenderer().render(Document(open(config.ORC_CONFIG))))
 
 
 @bp.route("/api/remote/<id>")
