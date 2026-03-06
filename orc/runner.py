@@ -1,3 +1,4 @@
+import pathlib
 import time
 
 from apscheduler.events import EVENT_JOB_EXECUTED
@@ -12,21 +13,26 @@ from orc.view import VersionManager, bp
 def web():
     config_manager = api.ConfigManager()
     version_manager = VersionManager()
-    scheduler = api.setup_scheduler(BackgroundScheduler(), config_manager)
-    scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
-    scheduler.start()
+
+    sound_file = (pathlib.Path(__file__) / ".." / "static" / "alert.mp3").resolve().as_posix()
+    setup_cal_scheduler = api.setup_cal_scheduler(BackgroundScheduler(), config_manager, sound_file)
+    setup_cal_scheduler.start()
+
+    iot_scheduler = api.setup_iot_scheduler(BackgroundScheduler(), config_manager)
+    iot_scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
+    iot_scheduler.start()
 
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.register_blueprint(bp)
-    app.scheduler = scheduler
+    app.scheduler = iot_scheduler
     app.config_manager = config_manager
     app.version_manager = VersionManager()
 
     if config.SSL_KEY and config.SSL_CERT:
-        app.run(port=443, host="0.0.0.0", debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY))
+        app.run(host="0.0.0.0", port=443, debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY), use_reloader=False)
     else:
-        app.run(host="0.0.0.0", debug=True)
+        app.run(host="0.0.0.0", debug=True, use_reloader=False)
 
 
 def worker():

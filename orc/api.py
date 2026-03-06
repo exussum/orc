@@ -158,7 +158,7 @@ def _make_rule_lambda(config_manager, rule):
     return lambda force=False: config_manager.route_rule(rule, force)
 
 
-def setup_scheduler(scheduler, config_manager):
+def setup_iot_scheduler(scheduler, config_manager):
     def f():
         for time, rule in get_schedule(config_manager):
             scheduler.add_job(
@@ -178,6 +178,44 @@ def setup_scheduler(scheduler, config_manager):
         replace_existing=True,
     )
     return scheduler
+
+
+def setup_cal_scheduler(scheduler, config_manager, sound_path):
+    schedule_cal_tasks(scheduler, config_manager, sound_path, True)
+    scheduler.add_job(
+        lambda: schedule_cal_tasks(scheduler, config_manager, sound_path),
+        CronTrigger.from_crontab("*/5 8-18 * * *"),
+        name="calendar trigger",
+        id="calendar trigger",
+    )
+    return scheduler
+
+
+def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
+    now = local_now()
+    if config_manager.calculate_theme(now) == "work day" and (now.time().minute in [55, 10, 25, 40] or force):
+        todays_calendar_by_id = {
+            e.uid.to_ical().decode(): e
+            for e in dal.read_ical(
+                now,
+                timedelta(hours=10),
+            )
+        }
+
+        for e in non_cron_jobs(scheduler):
+            scheduler.remove_job(e.id)
+
+        for id, event in todays_calendar_by_id.items():
+            print(now, event.start)
+            scheduler.add_job(
+                lambda: dal.play_alert(sound_path),
+                DateTrigger(event.start - timedelta(minutes=1)),
+                id=id,
+                replace_existing=True,
+            )
+        import pprint
+
+        pprint.pprint(scheduler.get_jobs())
 
 
 def test(theme):
