@@ -138,12 +138,15 @@ def squish_configs(*configs, state_override=None):
 
 
 def _op_cmp(k):
+    class_name = k.what.__class__.__name__
+
     if isinstance(k.state, int):
-        return -1
+        sub_sort = -1
     elif k.state == "on":
-        return 0
+        sub_sort = 0
     else:
-        return 1
+        sub_sort = 1
+    return (class_name, sub_sort)
 
 
 def squish(items):

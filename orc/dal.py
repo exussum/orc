@@ -1,6 +1,9 @@
 import time
 from functools import lru_cache
 
+import icalendar
+import playsound3
+import recurring_ical_events
 import requests
 
 from orc import config
@@ -24,9 +27,14 @@ def set_light(light, on=None, brightness=None):
 
 
 def set_sound(sound, lvl):
-    requests.get(f"{config.BASE_URL}/devices/{sound.value}/initialize{config.ACCESS_TOKEN}").json()
-    time.sleep(0.1)
+    requests.get(f"{config.BASE_URL}/devices/{sound.value}/speak/%20{config.ACCESS_TOKEN}").json()
+    time.sleep(1)
     requests.get(f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.ACCESS_TOKEN}").json()
+
+
+def play_alert(path):
+    print("*****")
+    playsound3.playsound(path)
 
 
 def get_config():
@@ -44,3 +52,9 @@ def get_holidays(year):
 
 def get_sun_cycle(date):
     return requests.get(f"{config.SUNRISE_URL}&date={date}").json()["results"]
+
+
+def read_ical(start, end):
+    ical_string = requests.get(config.ICS_URL).content
+    a_calendar = icalendar.Calendar.from_ical(ical_string)
+    return recurring_ical_events.of(a_calendar).between(start, end)
