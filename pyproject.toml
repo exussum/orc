@@ -8,6 +8,9 @@ requires = [
 dependencies = [
     "APScheduler==3.11.0",
     "Flask==3.1.2",
+    "icalendar==7.0.2",
+    "mistletoe==1.5.1",
+    "recurring-ical-events==3.8.1",
     "requests==2.32.3",
 ]
 name = "orc"
@@ -15,8 +18,8 @@ version = "0.0.1"
 
 [project.optional-dependencies]
 test = [
-    "pytest==9.0.1",
     "mock==5.2.0",
+    "pytest==9.0.1",
 ]
 
 [project.scripts]
