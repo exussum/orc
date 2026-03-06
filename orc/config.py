@@ -14,6 +14,7 @@ SSL_KEY = os.getenv("SSL_KEY", "")
 SSL_CERT = os.getenv("SSL_CERT", "")
 ORC_CONFIG = os.getenv("ORC_CONFIG", "config.md")
 ENABLED = os.getenv("ENABLED", "")
+ICS_URL = os.getenv("ICS_URL", "")
 
 hubitat_config = dal.get_config() if ENABLED else {}
 
