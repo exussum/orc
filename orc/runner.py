@@ -1,5 +1,5 @@
-import pathlib
 import time
+from pathlib import Path
 
 from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -14,7 +14,8 @@ def web():
     config_manager = api.ConfigManager()
     version_manager = VersionManager()
 
-    sound_file = (pathlib.Path(__file__) / ".." / "static" / "alert.mp3").resolve().as_posix()
+    sound_file = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
+
     setup_cal_scheduler = api.setup_cal_scheduler(BackgroundScheduler(), config_manager, sound_file)
     setup_cal_scheduler.start()
 
