@@ -33,7 +33,6 @@ def set_sound(sound, lvl):
 
 
 def play_alert(path):
-    print("*****")
     playsound3.playsound(path)
 
 
