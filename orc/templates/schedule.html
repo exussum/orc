@@ -77,7 +77,7 @@
               headers: { "orc-version": version },
               body: new URLSearchParams({ start: startEl.value, end: endEl.value , theme: selectEl.value })
             }).then(
-              () => { }
+              () => { location.reload(); }
             ); 
         }
         async function run(el) { await call(`/api/schedule/${el.dataset.id}/run`, el); }
