@@ -193,7 +193,7 @@ def setup_cal_scheduler(scheduler, config_manager, sound_path):
 
 def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
     now = local_now()
-    if config_manager.calculate_theme(now) == "work day" and (now.time().minute in [55, 10, 25, 40] or force):
+    if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40] or force):
         todays_calendar_by_id = {
             e.uid.to_ical().decode(): e
             for e in dal.read_ical(
