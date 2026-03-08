@@ -138,7 +138,7 @@ def set_theme():
             date.fromisoformat(request.form["end"]),
         )
     app.scheduler.remove_all_jobs()
-    api.setup_scheduler(app.scheduler, app.config_manager)
+    api.setup_iot_scheduler(app.scheduler, app.config_manager)
 
 
 @bp.route("/api/schedule/<id>/pause")
