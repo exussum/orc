@@ -52,3 +52,13 @@ div.orc-button-next {
 div.orc-overflow {
     overflow: visible;
 }
+
+div#orc-config td {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+div#orc-config th {
+    padding-left: 10px;
+    padding-right: 10px;
+}
