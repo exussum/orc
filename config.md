@@ -23,20 +23,20 @@
 
 ##### Routines
 
-| ID                      | Name            | Expression                                                             | State | Mandatory |
-|-------------------------|-----------------|------------------------------------------------------------------------|-------|-----------|
-| ROUTINE_RESET_LIGHT     | Reset           | Light - {Light.BEDROOM_NIGHTLIGHT}                                     | off   | True      |
-| ROUTINE_PARTNER_UP      | Partner up      | {Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}                       | on    |           |
-| ROUTINE_SUNRISE_LIGHTS  | Sunrise Lights  | {Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}                      | off   | True      |
-| ROUTINE_UP_AND_ATOM     | Up and Atom     | {Light.ENTANCE_DESK, Light.OFFICE_TABLE}                               | 100   |           |
-|                         |                 | {Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR}                      | on    |           |
-|                         |                 | Sound                                                                  | 40    |           |
-|                         |                 | {Light.OFFICE_TABLE, Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_OVERHEAD} | off   |           |
-| ROUTINE_SUNSET_LIGHTS   | Sunset Lights   | {Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}                      | on    | True      |
-| ROUTINE_QUIET_TIME      | Quiet Time      | Sound                                                                  | 10    | True      |
-| ROUTINE_PARTNER_LEAVING | Partner Leaving | Light.ENTANCE_DESK                                                     | 1     |           |
-| ROUTINE_NIGHTLIGHT_OFF  | Nightlight Off  | Light.BEDROOM_NIGHTLIGHT                                               | off   |           |
-| ROUTINE_NIGHTLIGHT_ON   | Nightlight On   | Light.BEDROOM_NIGHTLIGHT                                               | on    |           |
+| ID                      | Name            | Expression                                                            | State | Mandatory |
+|-------------------------|-----------------|-----------------------------------------------------------------------|-------|-----------|
+| ROUTINE_RESET_LIGHT     | Reset           | Light - {Light.BEDROOM_NIGHTLIGHT}                                    | off   | True      |
+| ROUTINE_PARTNER_UP      | Partner up      | {Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}                      | on    |           |
+| ROUTINE_SUNRISE_LIGHTS  | Sunrise Lights  | {Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}                     | off   | True      |
+| ROUTINE_UP_AND_ATOM     | Up and Atom     | {Light.ENTANCE_DESK, Light.OFFICE_TABLE}                              | 100   |           |
+|                         |                 | {Light.LIVING_ROOM_DESK, Light.LIVING_ROOM_FLOOR}                     | on    |           |
+|                         |                 | Sound                                                                 | 40    |           |
+|                         |                 | {Light.OFFICE_TABLE, Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET} | off   |           |
+| ROUTINE_SUNSET_LIGHTS   | Sunset Lights   | {Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}                     | on    | True      |
+| ROUTINE_QUIET_TIME      | Quiet Time      | Sound                                                                 | 10    | True      |
+| ROUTINE_PARTNER_LEAVING | Partner Leaving | Light.ENTANCE_DESK                                                    | 1     |           |
+| ROUTINE_NIGHTLIGHT_OFF  | Nightlight Off  | Light.BEDROOM_NIGHTLIGHT                                              | off   |           |
+| ROUTINE_NIGHTLIGHT_ON   | Nightlight On   | Light.BEDROOM_NIGHTLIGHT                                              | on    |           |
 
 ---
 
