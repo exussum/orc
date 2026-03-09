@@ -206,16 +206,12 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
             scheduler.remove_job(e.id)
 
         for id, event in todays_calendar_by_id.items():
-            print(now, event.start)
             scheduler.add_job(
                 lambda: dal.play_alert(sound_path),
                 DateTrigger(event.start - timedelta(minutes=1)),
                 id=id,
                 replace_existing=True,
             )
-        import pprint
-
-        pprint.pprint(scheduler.get_jobs())
 
 
 def test(theme):
