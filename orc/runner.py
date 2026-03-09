@@ -1,3 +1,4 @@
+import logging
 import time
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from orc.view import VersionManager, bp
 
 
 def web():
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
     config_manager = api.ConfigManager()
     version_manager = VersionManager()
 
@@ -25,9 +28,9 @@ def web():
 
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.config_manager = config_manager
     app.register_blueprint(bp)
     app.scheduler = iot_scheduler
-    app.config_manager = config_manager
     app.version_manager = VersionManager()
 
     if config.SSL_KEY and config.SSL_CERT:
