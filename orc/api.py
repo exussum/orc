@@ -14,13 +14,29 @@ SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
 
 
+class Job:
+    def __init__(self, job):
+        self.job = job
+
+    def __call__(self, *args, **kwargs):
+        self.job(*args, **kwargs)
+
+
+class CalendarJob(Job):
+    pass
+
+
+class IotJob(Job):
+    pass
+
+
 def local_now():
     return datetime.now(tz=config.TZ)
 
 
-def non_cron_jobs(scheduler):
+def jobs_by_type(scheduler, type):
     now = local_now()
-    return [e for e in scheduler.get_jobs() if not isinstance(e.trigger, CronTrigger) and e.trigger.run_date > now]
+    return [e for e in scheduler.get_jobs() if isinstance(e.func, type) and e.trigger.run_date > now]
 
 
 def unwrap_rule_container(f):
@@ -148,24 +164,18 @@ def get_schedule(config_manager):
     return result
 
 
-def _make_rule_lambda(config_manager, rule):
-    """
-    solves for:
-
-    for e in range(2):
-       lambda: print(e)
-    """
-    return lambda force=False: config_manager.route_rule(rule, force)
+def _make_iot_job(config_manager, rule):
+    return IotJob(lambda force=False: config_manager.route_rule(rule, force))
 
 
 def setup_iot_scheduler(scheduler, config_manager):
     def f():
         for time, rule in get_schedule(config_manager):
             scheduler.add_job(
-                _make_rule_lambda(config_manager, rule),
+                _make_iot_job(config_manager, rule),
                 DateTrigger(time),
                 name=rule.name,
-                id=f"{rule.name}-{time.date().isoformat()}",
+                id=f"iot-{rule.name}-{time.date().isoformat()}",
                 replace_existing=True,
             )
 
@@ -173,8 +183,6 @@ def setup_iot_scheduler(scheduler, config_manager):
     scheduler.add_job(
         f,
         CronTrigger.from_crontab("10 0 * * *"),
-        name="schedule todays events",
-        id="schedule todays events",
         replace_existing=True,
     )
     return scheduler
@@ -185,8 +193,6 @@ def setup_cal_scheduler(scheduler, config_manager, sound_path):
     scheduler.add_job(
         lambda: schedule_cal_tasks(scheduler, config_manager, sound_path),
         CronTrigger.from_crontab("*/5 8-18 * * *"),
-        name="calendar trigger",
-        id="calendar trigger",
     )
     return scheduler
 
@@ -198,18 +204,17 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
             e.uid.to_ical().decode(): e
             for e in dal.read_ical(
                 now,
-                timedelta(hours=10),
+                timedelta(hours=40),
             )
         }
 
-        for e in non_cron_jobs(scheduler):
+        for e in jobs_by_type(scheduler, CalendarJob):
             scheduler.remove_job(e.id)
 
         for id, event in todays_calendar_by_id.items():
             scheduler.add_job(
-                lambda: dal.play_alert(sound_path),
-                DateTrigger(event.start - timedelta(minutes=1)),
-                id=id,
+                CalendarJob(lambda: dal.play_alert(sound_path)),
+                DateTrigger(event.start - timedelta(minutes=5)),
                 replace_existing=True,
             )
 
