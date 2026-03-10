@@ -38,7 +38,7 @@ class VersionManager:
 @bp.route("/")
 def index():
     eligible = {r.name for (_, r) in api.get_schedule(app.config_manager) if not any(cfg.mandatory for cfg in r.items)}
-    jobs = sorted(api.non_cron_jobs(app.scheduler), key=lambda e: e.trigger.run_date)
+    jobs = sorted(api.jobs_by_type(app.scheduler, api.IotJob), key=lambda e: e.trigger.run_date)
     next_schedule = next((e for e in jobs if e.name in eligible and e.next_run_time), None)
 
     return (
@@ -58,7 +58,7 @@ def index():
 
 @bp.route("/schedule/")
 def schedule():
-    jobs = sorted(api.non_cron_jobs(app.scheduler), key=lambda e: e.trigger.run_date)
+    jobs = sorted(api.jobs_by_type(app.scheduler, api.IotJob), key=lambda e: e.trigger.run_date)
     theme_override = app.config_manager.theme_override
 
     theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None

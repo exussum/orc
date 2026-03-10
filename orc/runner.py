@@ -18,19 +18,18 @@ def web():
     version_manager = VersionManager()
 
     sound_file = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
+    scheduler = BackgroundScheduler(job_defaults={"misfire_grace_time": 60})
 
-    setup_cal_scheduler = api.setup_cal_scheduler(BackgroundScheduler(), config_manager, sound_file)
-    setup_cal_scheduler.start()
-
-    iot_scheduler = api.setup_iot_scheduler(BackgroundScheduler(), config_manager)
-    iot_scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
-    iot_scheduler.start()
+    api.setup_cal_scheduler(scheduler, config_manager, sound_file)
+    api.setup_iot_scheduler(scheduler, config_manager)
+    scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
+    scheduler.start()
 
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config_manager = config_manager
     app.register_blueprint(bp)
-    app.scheduler = iot_scheduler
+    app.scheduler = scheduler
     app.version_manager = VersionManager()
 
     if config.SSL_KEY and config.SSL_CERT:
