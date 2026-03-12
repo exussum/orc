@@ -10,7 +10,7 @@ dependencies = [
     "Flask==3.1.2",
     "icalendar==7.0.2",
     "mistletoe==1.5.1",
-    "playsound3==3.3.1",
+    "pygame==2.6.1",
     "recurring-ical-events==3.8.1",
     "requests==2.32.3",
 ]

@@ -3,7 +3,6 @@ import time
 from pathlib import Path
 
 from apscheduler.events import EVENT_JOB_EXECUTED
-from apscheduler.executors.pool import ProcessPoolExecutor, ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
@@ -19,9 +18,7 @@ def web():
     version_manager = VersionManager()
 
     sound_file = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
-    scheduler = BackgroundScheduler(
-        job_defaults={"misfire_grace_time": 60}, executors={"default": ThreadPoolExecutor(20), "fork": ProcessPoolExecutor(4)}
-    )
+    scheduler = BackgroundScheduler()
 
     api.setup_cal_scheduler(scheduler, config_manager, sound_file)
     api.setup_iot_scheduler(scheduler, config_manager)
