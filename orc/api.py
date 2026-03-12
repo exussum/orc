@@ -174,7 +174,6 @@ def setup_iot_scheduler(scheduler, config_manager):
                 name=rule.name,
                 id=f"iot-{rule.name}-{time.date().isoformat()}",
                 replace_existing=True,
-                executor="fork",
             )
 
     f()
@@ -212,7 +211,6 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
                 DateTrigger(event.start - timedelta(minutes=2)),
                 replace_existing=True,
                 name=event.summary.to_ical().decode("utf-8"),
-                executor="fork",
             )
 
 
