@@ -2,7 +2,7 @@ import time
 from functools import lru_cache
 
 import icalendar
-import playsound3
+import pygame
 import recurring_ical_events
 import requests
 
@@ -33,7 +33,11 @@ def set_sound(sound, lvl):
 
 
 def play_alert(path):
-    playsound3.playsound(path)
+    pygame.mixer.init()
+    sound = pygame.mixer.Sound(path)
+    playing = sound.play()
+    while playing.get_busy():
+        pygame.time.delay(100)
 
 
 def get_config():
