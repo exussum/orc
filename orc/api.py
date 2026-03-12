@@ -27,8 +27,8 @@ class IotJob:
         self.rule = rule
         self.config_manager = config_manager
 
-    def __call__(self):
-        self.config_manager.route_rule(self.rule)
+    def __call__(self, force=False):
+        self.config_manager.route_rule(self.rule, True)
 
 
 def local_now():
@@ -197,7 +197,7 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
             e.uid.to_ical().decode(): e
             for e in dal.read_ical(
                 now,
-                timedelta(hours=40),
+                timedelta(hours=10),
             )
         }
 
