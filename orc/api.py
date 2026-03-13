@@ -1,6 +1,7 @@
+import itertools
 import time
 from collections import namedtuple as nt
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import Enum
 
@@ -14,21 +15,34 @@ SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
 
 
+@dataclass
 class CalendarJob:
-    def __init__(self, sound_path):
-        self.sound_path = sound_path
+    sound_path: str
 
     def __call__(self):
         dal.play_alert(self.sound_path)
 
 
+@dataclass
 class IotJob:
-    def __init__(self, config_manager, rule):
-        self.rule = rule
-        self.config_manager = config_manager
+    config_manager: "m.ConfigManager"
+    rule: str
 
     def __call__(self, force=False):
         self.config_manager.route_rule(self.rule, True)
+
+
+@dataclass
+class CalendarEvent:
+    uuid: str
+    summary: str
+    datetime: datetime
+
+    @staticmethod
+    def from_cal(cal, type, offset):
+        return CalendarEvent(
+            cal.uid.to_ical().decode() + " " + type, cal.summary.to_ical().decode("utf-8"), cal.start.astimezone(m.TZ) + offset
+        )
 
 
 def local_now():
@@ -193,24 +207,23 @@ def setup_cal_scheduler(scheduler, config_manager, sound_path):
 def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
     now = local_now()
     if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40] or force):
-        todays_calendar_by_id = {
-            e.uid.to_ical().decode(): e
-            for e in dal.read_ical(
-                now,
-                timedelta(hours=10),
-            )
-        }
+        events = list(itertools.islice(dal.read_ical(now, timedelta(hours=20)), 50))
+        reminder_events = (CalendarEvent.from_cal(e, "reminder", timedelta(minutes=-2)) for e in events)
+        alarm_events = (CalendarEvent.from_cal(e, "alarm", timedelta()) for e in events)
+
+        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((reminder_events, alarm_events))}
 
         for e in jobs_by_type(scheduler, CalendarJob):
-            if e.id not in todays_calendar_by_id:
+            if e.id not in calendar_by_id:
                 scheduler.remove_job(e.id)
 
-        for id, event in todays_calendar_by_id.items():
+        for id, event in calendar_by_id.items():
             scheduler.add_job(
                 CalendarJob(sound_path),
-                DateTrigger(event.start - timedelta(minutes=2)),
+                DateTrigger(event.datetime),
                 replace_existing=True,
-                name=event.summary.to_ical().decode("utf-8"),
+                id=id,
+                name=event.summary,
             )
 
 
