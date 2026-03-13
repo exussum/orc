@@ -60,4 +60,5 @@ def get_sun_cycle(date):
 def read_ical(start, end):
     ical_string = requests.get(config.ICS_URL).content
     a_calendar = icalendar.Calendar.from_ical(ical_string)
-    return recurring_ical_events.of(a_calendar).between(start, end)
+    # between leaks out events that have already started
+    return (e for e in recurring_ical_events.of(a_calendar).between(start, end) if e.start >= start)
