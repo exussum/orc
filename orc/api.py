@@ -16,23 +16,6 @@ ThemeOverride = nt("ThemeOverride", "name start end")
 
 
 @dataclass
-class CalendarJob:
-    sound_path: str
-
-    def __call__(self):
-        dal.play_alert(self.sound_path)
-
-
-@dataclass
-class IotJob:
-    config_manager: "m.ConfigManager"
-    rule: str
-
-    def __call__(self, force=False):
-        self.config_manager.route_rule(self.rule, True)
-
-
-@dataclass
 class CalendarEvent:
     uuid: str
     summary: str
@@ -41,7 +24,7 @@ class CalendarEvent:
     @staticmethod
     def from_cal(cal, type, offset):
         return CalendarEvent(
-            cal.uid.to_ical().decode() + " " + type, cal.summary.to_ical().decode("utf-8"), cal.start.astimezone(m.TZ) + offset
+            cal.uid.to_ical().decode() + " " + type, cal.summary.to_ical().decode("utf-8"), cal.start.astimezone(config.TZ) + offset
         )
 
 
@@ -179,11 +162,21 @@ def get_schedule(config_manager):
     return result
 
 
+def _make_rule_lambda(config_manager, rule):
+    """
+    solves for:
+
+    for e in range(2):
+       lambda: print(e)
+    """
+    return lambda force: config_manager.route_rule(rule, force)
+
+
 def setup_iot_scheduler(scheduler, config_manager):
     def f():
         for time, rule in get_schedule(config_manager):
             scheduler.add_job(
-                IotJob(config_manager, rule),
+                m.IotJob(_make_rule_lambda(config_manager, rule)),
                 DateTrigger(time),
                 name=rule.name,
                 id=f"iot-{rule.name}-{time.date().isoformat()}",
@@ -213,13 +206,13 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
 
         calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((reminder_events, alarm_events))}
 
-        for e in jobs_by_type(scheduler, CalendarJob):
+        for e in jobs_by_type(scheduler, m.CalendarJob):
             if e.id not in calendar_by_id:
                 scheduler.remove_job(e.id)
 
         for id, event in calendar_by_id.items():
             scheduler.add_job(
-                CalendarJob(sound_path),
+                m.CalendarJob(lambda: dal.play_alert(sound_path)),
                 DateTrigger(event.datetime),
                 replace_existing=True,
                 id=id,
