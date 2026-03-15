@@ -4,9 +4,25 @@ from dataclasses import KW_ONLY, dataclass, replace
 from datetime import time
 from enum import Enum
 from itertools import chain
-from typing import Tuple
+from typing import Callable, Tuple
 
 from mistletoe.block_token import Heading, Table
+
+
+@dataclass
+class CalendarJob:
+    play: Callable[[], None]
+
+    def __call__(self):
+        self.play()
+
+
+@dataclass
+class IotJob:
+    run: Callable[[bool], None]
+
+    def __call__(self, force=False):
+        self.run(force)
 
 
 @dataclass
