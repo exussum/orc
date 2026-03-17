@@ -20,11 +20,15 @@ class CalendarEvent:
     uuid: str
     summary: str
     datetime: datetime
+    type: str
 
     @staticmethod
     def from_cal(cal, type, offset):
         return CalendarEvent(
-            cal.uid.to_ical().decode() + " " + type, cal.summary.to_ical().decode("utf-8"), cal.start.astimezone(config.TZ) + offset
+            cal.uid.to_ical().decode() + " " + type,
+            cal.summary.to_ical().decode("utf-8"),
+            cal.start.astimezone(config.TZ) + offset,
+            type,
         )
 
 
@@ -201,18 +205,19 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
     now = local_now()
     if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40] or force):
         events = list(itertools.islice(dal.read_ical(now, timedelta(hours=20)), 50))
-        reminder_events = (CalendarEvent.from_cal(e, "reminder", timedelta(minutes=-2)) for e in events)
+        warning_events = (CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2)) for e in events)
         alarm_events = (CalendarEvent.from_cal(e, "alarm", timedelta()) for e in events)
 
-        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((reminder_events, alarm_events))}
+        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
 
         for e in jobs_by_type(scheduler, m.CalendarJob):
             if e.id not in calendar_by_id:
                 scheduler.remove_job(e.id)
 
         for id, event in calendar_by_id.items():
+            play_sound = (lambda: dal.play_alert(sound_path)) if event.type == "warning" else (lambda: dal.play_text(event.summary))
             scheduler.add_job(
-                m.CalendarJob(lambda: dal.play_alert(sound_path)),
+                m.CalendarJob(play_sound),
                 DateTrigger(event.datetime),
                 replace_existing=True,
                 id=id,
