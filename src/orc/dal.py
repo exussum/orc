@@ -1,10 +1,14 @@
 import time
 from functools import lru_cache
+from importlib import resources
 
 import icalendar
+import numpy as np
 import pygame
 import recurring_ical_events
 import requests
+import sounddevice as sd
+from piper import PiperVoice
 
 from orc import config
 from orc import model as m
@@ -38,6 +42,17 @@ def play_alert(path):
     playing = sound.play()
     while playing.get_busy():
         pygame.time.delay(100)
+
+
+def play_text(text):
+    model_path = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
+    config_path = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
+    voice = PiperVoice.load(model_path, config_path)
+
+    with sd.OutputStream(samplerate=voice.config.sample_rate, channels=1, dtype="int16") as stream:
+        for audio_bytes in voice.synthesize(text):
+            stream.write(np.frombuffer(audio_bytes.audio_int16_bytes, dtype=np.int16))
+        stream.write(np.frombuffer(b"\x00" * 10000, dtype=np.int16))
 
 
 def get_config():
