@@ -8,7 +8,6 @@ from orc import model as m
 
 BASE_URL = os.getenv("BASE_URL", "http://base.example.com")
 ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN", "example-token")
-SUNRISE_URL = os.getenv("SUNRISE_URL", "http://sunrise.example.com")
 MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL", "http://holidays.exmaple.com")
 SSL_KEY = os.getenv("SSL_KEY", "")
 SSL_CERT = os.getenv("SSL_CERT", "")
@@ -19,6 +18,7 @@ ICS_URL = os.getenv("ICS_URL", "")
 hubitat_config = dal.get_config() if ENABLED else {}
 
 TZ = ZoneInfo("America/New_York")
+LAT_LONG = (40.7143, -74.0060)
 OFF = "off"
 ON = "on"
 
