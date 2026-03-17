@@ -7,6 +7,7 @@ from enum import Enum
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from suntime import Sun
 
 from orc import config, dal
 from orc import model as m
@@ -146,11 +147,11 @@ def capture_lights():
 
 def get_schedule(config_manager):
     result = []
+    sun = Sun(*config.LAT_LONG)
     for x in range(2):
         now = local_now() + timedelta(days=x)
-        sun_result = dal.get_sun_cycle(now.date())
-        sunrise = datetime.fromisoformat(sun_result["sunrise"]) + timedelta(minutes=30)
-        sunset = datetime.fromisoformat(sun_result["sunset"])
+        sunrise = sun.get_sunrise_time(now) + timedelta(minutes=30)
+        sunset = sun.get_sunset_time(now)
 
         cfg = next((e for e in config.THEMES if e.name == config_manager.calculate_theme(now.date())))
 

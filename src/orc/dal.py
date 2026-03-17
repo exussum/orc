@@ -68,10 +68,6 @@ def get_holidays(year):
     return result
 
 
-def get_sun_cycle(date):
-    return requests.get(f"{config.SUNRISE_URL}&date={date}").json()["results"]
-
-
 def read_ical(start, end):
     ical_string = requests.get(config.ICS_URL).content
     a_calendar = icalendar.Calendar.from_ical(ical_string)
