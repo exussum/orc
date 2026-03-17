@@ -167,13 +167,11 @@ def get_schedule(config_manager):
 
 
 def _make_rule_lambda(config_manager, rule):
-    """
-    solves for:
-
-    for e in range(2):
-       lambda: print(e)
-    """
     return lambda force: config_manager.route_rule(rule, force)
+
+
+def _make_lambda(f, *args, **kwargs):
+    return lambda: f(*args, **kwargs)
 
 
 def setup_iot_scheduler(scheduler, config_manager):
@@ -215,7 +213,7 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
                 scheduler.remove_job(e.id)
 
         for id, event in calendar_by_id.items():
-            play_sound = (lambda: dal.play_alert(sound_path)) if event.type == "warning" else (lambda: dal.play_text(event.summary))
+            play_sound = _make_lambda(dal.play_alert, sound_path) if event.type == "warning" else _make_lambda(dal.play_text, event.summary)
             scheduler.add_job(
                 m.CalendarJob(play_sound),
                 DateTrigger(event.datetime),
