@@ -161,7 +161,8 @@ def get_schedule(config_manager):
                 time = sunset
             else:
                 time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
-            result.append((time.astimezone(config.TZ), e))
+            if time >= now or x == 1:
+                result.append((time.astimezone(config.TZ), e))
 
     return result
 
