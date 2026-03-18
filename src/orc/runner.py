@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 from apscheduler.events import EVENT_JOB_EXECUTED
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
@@ -18,7 +19,7 @@ def web():
     version_manager = VersionManager()
 
     sound_file = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(executors={"default": ThreadPoolExecutor(1)})
 
     api.setup_cal_scheduler(scheduler, config_manager, sound_file)
     api.setup_iot_scheduler(scheduler, config_manager)

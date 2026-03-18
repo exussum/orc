@@ -4,9 +4,14 @@ from collections import namedtuple as nt
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import Enum
+from importlib import resources
 
+import numpy as np
+import pygame
+import sounddevice as sd
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from piper import PiperVoice
 from suntime import Sun
 
 from orc import config, dal
@@ -14,6 +19,10 @@ from orc import model as m
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
+
+_MODEL_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
+_CONFIG_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
+_VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH)
 
 
 @dataclass
@@ -215,7 +224,7 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
                 scheduler.remove_job(e.id)
 
         for id, event in calendar_by_id.items():
-            play_sound = _make_lambda(dal.play_alert, sound_path) if event.type == "warning" else _make_lambda(dal.play_text, event.summary)
+            play_sound = _make_lambda(play_alert, sound_path) if event.type == "warning" else _make_lambda(play_text, event.summary)
             scheduler.add_job(
                 m.CalendarJob(play_sound),
                 DateTrigger(event.datetime),
@@ -223,6 +232,21 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
                 id=id,
                 name=event.summary,
             )
+
+
+def play_text(text):
+    with sd.OutputStream(samplerate=_VOICE.config.sample_rate, channels=1, dtype="int16") as stream:
+        for audio_bytes in _VOICE.synthesize(text):
+            stream.write(np.frombuffer(audio_bytes.audio_int16_bytes, dtype=np.int16))
+        stream.write(np.frombuffer(b"\x00" * 10000, dtype=np.int16))
+
+
+def play_alert(path):
+    pygame.mixer.init()
+    sound = pygame.mixer.Sound(path)
+    playing = sound.play()
+    while playing.get_busy():
+        pygame.time.delay(100)
 
 
 def test(theme):
