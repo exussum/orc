@@ -109,5 +109,16 @@
 |                  | Config(Light.OFFICE_FLOOR, "on"),                                           |
 |                  | Config(Light.OFFICE_DESK, 50),                                              |
 | Test             | (Config(e, s) for (e, s) in tuple(itertools.product(Light, ["on", "off"]))) |
-| Restore Snapshot |                                                                             |
 | Back on Schedule |                                                                             |
+
+---
+
+### Button Highlights
+
+| Name                 | Start | End   |
+|----------------------|-------|-------|
+| Bed Time             | 21:00 | 23:59 |
+| Video Conference     | 9:00  | 22:00 |
+| Early Morning Lights | 2:00  | 6:00  |
+| TV Lights            | 10:00 | 16:00 |
+| Partial TV Lights    | 10:00 | 16:00 |
