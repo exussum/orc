@@ -50,8 +50,7 @@ class Routine:
 
     def __post_init__(self):
         if self.when and not isinstance(self.when, time) and ":" in self.when:
-            hour, minute = tuple(self.when.split(":"))
-            self.when = time(int(hour), int(minute))
+            self.when = _str_to_time(self.when)
 
 
 @dataclass
@@ -64,15 +63,22 @@ class Theme:
         self.configs = tuple(configs)
 
 
-def doc_to_sub_tables(doc, section):
+def _str_to_time(x):
+    hour, minute = tuple(x.split(":"))
+    return time(int(hour), int(minute))
+
+
+def doc_to_table(doc, section):
     # Heading store their contents in a subsequent child element
     # https://github.com/miyuchina/mistletoe/issues/99
     idx = next((i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section))
     markdown_table = next((e for e in doc.children[idx + 1 :] if isinstance(e, Table)))
-    table = tuple((tuple(c.children[0].content if c.children else None for c in e.children) for e in markdown_table.children))
+    return tuple((tuple(c.children[0].content if c.children else None for c in e.children) for e in markdown_table.children))
 
+
+def doc_to_sub_tables(doc, section):
     type, result = None, None
-    for e in table:
+    for e in doc_to_table(doc, section):
         if e[0] != type and e[0]:
             if result:
                 yield type, result
@@ -122,6 +128,10 @@ def build_expr_config(doc, section, light, sound):
     for type, e in doc_to_sub_tables(doc, section):
         result[type] = Configs(*itertools.chain(*(_build_config_from_expr(c[1], sound, light) for c in e if c[1])))
     return result
+
+
+def build_highlights(doc, section):
+    return [(name, _str_to_time(start), _str_to_time(end)) for (name, start, end) in doc_to_table(doc, section)]
 
 
 def _build_config(cmd, sound, light, state, mandatory=None):
