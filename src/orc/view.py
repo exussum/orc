@@ -44,9 +44,10 @@ def index():
     return (
         render_template(
             "button.html",
-            other_configs=config.OTHER_CONFIGS,
+            highlight_configs=config.BUTTON_HIGHLIGHT_CONFIGS,
+            super_routines=config.SUPER_ROUTINES,
             room_configs=config.ROOM_CONFIGS,
-            theme_configs=config.THEME_CONFIGS,
+            ad_hoc_routines=config.AD_HOC_ROUTINES,
             schedule_routines=config.SCHEDULE_ROUTINES,
             next_routine=next_schedule,
             version=app.version_manager.version,
@@ -79,7 +80,7 @@ def cfg():
 def remote(id):
     if id in ("TV Lights", "Partial TV Lights"):
         end = api.local_now() + timedelta(hours=3)
-        app.config_manager.replace_config(config.THEME_CONFIGS[id], end)
+        app.config_manager.replace_config(config.AD_HOC_ROUTINES[id], end)
     else:
         app.config_manager.resume(config.ALL_CONFIGS[id])
         app.version_manager.bump_version()
@@ -91,21 +92,19 @@ def console(id):
     if id == "Test":
         end = api.local_now() + timedelta(minutes=10)
         app.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
-        api.test(config.OTHER_CONFIGS[id])
-        app.config_manager.resume(config.DEFAULT_CONFIG)
-    elif id == "Restore Snapshot":
+        api.test(config.SUPER_ROUTINES[id])
         app.config_manager.resume(config.DEFAULT_CONFIG)
     elif id == "Back on Schedule":
         now = api.local_now()
         jobs = sorted(api.get_schedule(app.config_manager), key=lambda x: x[0])
         configs = (config for (when, config) in jobs if when <= now)
         api.execute(m.squish_configs(*configs))
-    elif id in config.OTHER_CONFIGS:
-        api.execute(config.OTHER_CONFIGS[id])
+    elif id in config.SUPER_ROUTINES:
+        api.execute(config.SUPER_ROUTINES[id])
     elif id in config.SCHEDULE_ROUTINES:
         api.execute(config.SCHEDULE_ROUTINES[id])
-    elif id in config.THEME_CONFIGS:
-        api.execute(m.squish_configs(config.RESET_CONFIG, config.THEME_CONFIGS[id]))
+    elif id in config.AD_HOC_ROUTINES:
+        api.execute(m.squish_configs(config.RESET_CONFIG, config.AD_HOC_ROUTINES[id]))
     else:
         raise Exception("Unknown routine")
     return {}, 200
