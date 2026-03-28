@@ -29,13 +29,14 @@ Light = m.build_enum(doc, "Devices", "Light", hubitat_config)
 Sound = m.build_enum(doc, "Devices", "Sound", hubitat_config)
 
 THEMES = m.build_themes(doc, "Routines", "Themes", Light, Sound)
+SCHEDULE_ROUTINES = {r.name: r for e in THEMES for r in e.configs}
 ROOM_CONFIGS = m.build_config(doc, "Room Configs", Light, Sound)
-THEME_CONFIGS = m.build_config(doc, "Ad-Hoc Routines", Light, Sound)
-OTHER_CONFIGS = m.build_expr_config(doc, "Super Routines", Light, Sound)
-ALL_CONFIGS = OTHER_CONFIGS | THEME_CONFIGS | ROOM_CONFIGS
+AD_HOC_ROUTINES = m.build_config(doc, "Ad-Hoc Routines", Light, Sound)
+SUPER_ROUTINES = m.build_expr_config(doc, "Super Routines", Light, Sound)
+ALL_CONFIGS = SUPER_ROUTINES | AD_HOC_ROUTINES | ROOM_CONFIGS
 
 ROOM_CONFIGS_OFF = m.squish_configs(*ROOM_CONFIGS.values(), state_override=OFF)
-SCHEDULE_ROUTINES = {r.name: r for e in THEMES for r in e.configs}
+BUTTON_HIGHLIGHT_CONFIGS = m.build_highlights(doc, "Button Highlights")
 
 DEFAULT_CONFIG = ROOM_CONFIGS["Living Room"]
 RESET_CONFIG = m.squish_configs(m.Configs(*SCHEDULE_ROUTINES["Reset"].items))

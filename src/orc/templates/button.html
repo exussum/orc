@@ -5,13 +5,13 @@
     {% for id in room_configs %}
         <div>{{ id }}</div>
         <div class="orc-button">
-            <button class="btn btn-primary orc-runner" data-state="on" data-type="room" data-id="{{ id }}"><i class="bi bi-lightbulb-fill"></i></button>
+            <button class="orc-runner btn btn-primary" data-state="on" data-type="room" data-id="{{ id }}"><i class="bi bi-lightbulb-fill"></i></button>
         </div>
         <div class="orc-button">
-            <button class="btn btn-primary orc-runner" data-state="off" data-type="room" data-id="{{ id }}"><i class="bi bi-lightbulb-off"></i></button>
+            <button class="orc-runner btn btn-primary" data-state="off" data-type="room" data-id="{{ id }}"><i class="bi bi-lightbulb-off"></i></button>
         </div>
         <div class="orc-button">
-            <button class="btn btn-primary orc-runner" data-state="follow" data-type="room" data-id="{{ id }}"><i class="bi bi-geo"></i></button>
+            <button class="orc-runner btn btn-primary" data-state="follow" data-type="room" data-id="{{ id }}"><i class="bi bi-geo"></i></button>
         </div>
     {% endfor %}
     </div>
@@ -19,10 +19,10 @@
     <div>
         <div><b>Theme</b></div>
         <div class="orc-routine-buttons">
-        {% for id in theme_configs %}
+        {% for id in ad_hoc_routines %}
             <div class="orc-button">
                 <div class="orc-button-label">{{ id }}</div>
-                <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}"><i class="bi bi-clipboard-check"></i></button>
+                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}"><i class="bi bi-clipboard-check"></i></button>
             </div>
         {% endfor %}
         </div>
@@ -31,13 +31,14 @@
     <div>
         <div><b>Super Routine</b></div>
         <div class="orc-routine-buttons">
-        {% for id in other_configs %}
+        {% for id in super_routines %}
             <div class="orc-button">
                 <div class="orc-button-label">{{ id }}</div>
-                <button class="btn btn-primary orc-runner" data-type="console" data-id="{{ id }}"><i class="bi bi-rocket-takeoff"></i></button>
+                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}"><i class="bi bi-rocket-takeoff"></i></button>
             </div>
         {% endfor %}
         </div>
+    </div>
     <hr class="hr orc-hr"/>
     <div class="orc-power-user">
         <div class="orc-routine-buttons orc-overflow">
@@ -90,6 +91,26 @@
                 el.classList.add("orc-input-filtered");
             }
         });
+        let highlight_configs = [
+           {% for (name, start, end) in highlight_configs %}
+                ["{{name}}", new Date("01/01/00 {{start}}"), new Date("01/01/00 {{end}}")],
+           {% endfor %}
+        ];
+        function highlight() {
+            var now = new Date();
+            now.setFullYear(2000,0,1);
+            highlight_configs.forEach( e => {
+                let [id, start, finish] = e;
+                let element = document.querySelector(".orc-runner[data-id='" + id + "']");
+                if(start <= now && now <= finish) 
+                    element.className = "orc-runner btn btn-primary border border-dark";
+                else
+                    element.className = "orc-runner btn btn-primary";
+
+            });
+        }
+        highlight();
+        setInterval(highlight, 60000);
 
     </script>
 {% endblock %}
