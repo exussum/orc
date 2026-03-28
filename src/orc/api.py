@@ -171,9 +171,7 @@ def get_schedule(config_manager):
                 time = sunset
             else:
                 time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
-            if time >= now or x == 1:
-                result.append((time.astimezone(config.TZ), e))
-
+            result.append((time.astimezone(config.TZ), e))
     return result
 
 
@@ -187,14 +185,16 @@ def _make_lambda(f, *args, **kwargs):
 
 def setup_iot_scheduler(scheduler, config_manager):
     def f():
+        now = local_now()
         for time, rule in get_schedule(config_manager):
-            scheduler.add_job(
-                m.IotJob(_make_rule_lambda(config_manager, rule)),
-                DateTrigger(time),
-                name=rule.name,
-                id=f"iot-{rule.name}-{time.date().isoformat()}",
-                replace_existing=True,
-            )
+            if now <= time:
+                scheduler.add_job(
+                    m.IotJob(_make_rule_lambda(config_manager, rule)),
+                    DateTrigger(time),
+                    name=rule.name,
+                    id=f"iot-{rule.name}-{time.date().isoformat()}",
+                    replace_existing=True,
+                )
 
     f()
     scheduler.add_job(f, CronTrigger.from_crontab("10 0 * * *"), replace_existing=True, name="Iot Cron")
