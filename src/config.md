@@ -120,5 +120,5 @@
 | Bed Time             | 21:00 | 23:59 |
 | Video Conference     | 9:00  | 22:00 |
 | Early Morning Lights | 2:00  | 6:00  |
-| TV Lights            | 10:00 | 16:00 |
-| Partial TV Lights    | 10:00 | 16:00 |
+| TV Lights            | 17:00 | 22:30 |
+| Partial TV Lights    | 17:00 | 22:30 |
