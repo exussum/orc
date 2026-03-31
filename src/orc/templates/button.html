@@ -22,7 +22,12 @@
         {% for id in ad_hoc_routines %}
             <div class="orc-button">
                 <div class="orc-button-label">{{ id }}</div>
-                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}"><i class="bi bi-clipboard-check"></i></button>
+                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}">
+                    <svg class="orc-ribbon">
+                        <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
+                    </svg>
+                    <i class="bi bi-clipboard-check"></i>
+                </button>
             </div>
         {% endfor %}
         </div>
@@ -34,7 +39,12 @@
         {% for id in super_routines %}
             <div class="orc-button">
                 <div class="orc-button-label">{{ id }}</div>
-                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}"><i class="bi bi-rocket-takeoff"></i></button>
+                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}">
+                    <svg height="28" width="28" class="orc-ribbon">
+                        <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
+                    </svg>
+                    <i class="bi bi-rocket-takeoff"></i>
+                </button>
             </div>
         {% endfor %}
         </div>
@@ -101,12 +111,8 @@
             now.setFullYear(2000,0,1);
             highlight_configs.forEach( e => {
                 let [id, start, finish] = e;
-                let element = document.querySelector(".orc-runner[data-id='" + id + "']");
-                if(start <= now && now <= finish) 
-                    element.className = "orc-runner btn btn-primary border border-dark";
-                else
-                    element.className = "orc-runner btn btn-primary";
-
+                let element = document.querySelector(".orc-runner[data-id='" + id + "'] .orc-ribbon");
+                element.style.display = (start <= now && now <= finish) ? "block" : "none";
             });
         }
         highlight();

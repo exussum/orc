@@ -62,3 +62,16 @@ div#orc-config th {
     padding-left: 10px;
     padding-right: 10px;
 }
+
+svg.orc-ribbon {
+    height: 28px;
+    width: 28px;
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    display: none;
+}
+
+button.orc-runner {
+    position: relative;
+}
