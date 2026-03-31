@@ -11,7 +11,7 @@ ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN", "example-token")
 MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL", "http://holidays.exmaple.com")
 SSL_KEY = os.getenv("SSL_KEY", "")
 SSL_CERT = os.getenv("SSL_CERT", "")
-ORC_CONFIG = os.getenv("ORC_CONFIG", "config.md")
+ORC_CONFIG = os.getenv("ORC_CONFIG", "src/config.md")
 ENABLED = os.getenv("ENABLED", "")
 ICS_URL = os.getenv("ICS_URL", "")
 

@@ -18,10 +18,10 @@ def web():
     config_manager = api.ConfigManager()
     version_manager = VersionManager()
 
-    sound_file = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
+    sound_path = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
     scheduler = BackgroundScheduler(executors={"default": ThreadPoolExecutor(1)}, job_defaults={"misfire_grace_time": 30})
 
-    api.setup_cal_scheduler(scheduler, config_manager, sound_file)
+    api.setup_cal_scheduler(scheduler, config_manager, sound_path)
     api.setup_iot_scheduler(scheduler, config_manager)
     scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start()

@@ -105,11 +105,8 @@ class ConfigManager:
         self.theme_override = ThemeOverride(name, start, end)
 
     def calculate_theme(self, today):
-        if self.theme_override:
-            if self.theme_override.start <= today <= self.theme_override.end:
-                return self.theme_override.name
-            elif self.theme_override.end < today:
-                self.theme_override = None
+        if self.theme_override and self.theme_override.start <= today <= self.theme_override.end:
+            return self.theme_override.name
 
         if today.weekday() not in (5, 6):
             today_iso = today.strftime("%Y-%m-%d")
