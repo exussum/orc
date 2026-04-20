@@ -31,6 +31,7 @@ def web():
     app.config_manager = config_manager
     app.register_blueprint(bp)
     app.scheduler = scheduler
+    app.sound_path = sound_path
     app.version_manager = VersionManager()
 
     if config.SSL_KEY and config.SSL_CERT:

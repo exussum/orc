@@ -37,6 +37,8 @@
                 el.disabled = false;
             }
         }
+        if (window.matchMedia('(display-mode: standalone)').matches)
+            window.resizeTo(400,670);
     </script>
   </head>
 <body>

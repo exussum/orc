@@ -89,11 +89,14 @@ def remote(id):
 
 @bp.route("/api/console/<id>")
 def console(id):
-    if id == "Test":
+    if id == "Light Test":
         end = api.local_now() + timedelta(minutes=10)
         app.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
         api.test(config.SUPER_ROUTINES[id])
         app.config_manager.resume(config.DEFAULT_CONFIG)
+    elif id == "Sound Test":
+        api.play_alert(app.sound_path)
+        api.play_text("audio test")
     elif id == "Back on Schedule":
         now = api.local_now()
         jobs = sorted(api.get_schedule(app.config_manager), key=lambda x: x[0])
@@ -123,6 +126,7 @@ def room(id):
         raise Exception("Unknown state")
 
     return {}, 200
+
 
 
 @bp.route("/api/schedule/set_theme", methods=["POST"])
