@@ -82,7 +82,7 @@
             await call(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
         }
 
-        const expertRoutines = ["Test", "Restore Snapshot", "Video Conference"];
+        const expertRoutines = ["Light Test", "Sound Test", "Restore Snapshot", "Video Conference"];
         const isPowerUser = localStorage.getItem("isPowerUser");
 
         document.querySelectorAll(".orc-runner").forEach(el => { 
