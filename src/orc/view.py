@@ -128,7 +128,6 @@ def room(id):
     return {}, 200
 
 
-
 @bp.route("/api/schedule/set_theme", methods=["POST"])
 @VersionManager.versioned
 def set_theme():
