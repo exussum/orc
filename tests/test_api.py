@@ -14,6 +14,10 @@ class Light(Enum):
     c = 3
 
 
+class Sound(Enum):
+    x = 1
+
+
 config.Light = Light
 
 
@@ -235,3 +239,25 @@ def test_theme_squish_dim_then_off():
         m.Config(Light.b, config.OFF, mandatory=False),
         m.Config(Light.c, config.OFF, mandatory=False),
     )
+
+
+def test_op_cmp_dim():
+    assert m._op_cmp(m.Config(Light.a, 50)) == ("Light", -1)
+
+
+def test_op_cmp_on():
+    assert m._op_cmp(m.Config(Light.a, config.ON)) == ("Light", 0)
+
+
+def test_op_cmp_off():
+    assert m._op_cmp(m.Config(Light.a, config.OFF)) == ("Light", 1)
+
+
+def test_op_cmp_sorts_dim_before_on_before_off():
+    configs = [m.Config(Light.a, config.OFF), m.Config(Light.b, config.ON), m.Config(Light.c, 50)]
+    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.c, 50), m.Config(Light.b, config.ON), m.Config(Light.a, config.OFF)]
+
+
+def test_op_cmp_sorts_by_class_name():
+    configs = [m.Config(Sound.x, config.ON), m.Config(Light.a, config.ON)]
+    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.a, config.ON), m.Config(Sound.x, config.ON)]
