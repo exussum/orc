@@ -6,6 +6,9 @@ from mistletoe import Document
 from orc import dal
 from orc import model as m
 
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", 5))
+HTTP_ICAL_TIMEOUT = int(os.getenv("HTTP_ICAL_TIMEOUT", 120))
+
 BASE_URL = os.getenv("BASE_URL", "http://base.example.com")
 ACCESS_TOKEN = "?access_token=" + os.getenv("ACCESS_TOKEN", "example-token")
 MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL", "http://holidays.exmaple.com")
