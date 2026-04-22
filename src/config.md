@@ -108,8 +108,10 @@
 | Video Conference | Config(Light.OFFICE_TABLE, 5),                                              |
 |                  | Config(Light.OFFICE_FLOOR, "on"),                                           |
 |                  | Config(Light.OFFICE_DESK, 50),                                              |
-| Test             | (Config(e, s) for (e, s) in tuple(itertools.product(Light, ["on", "off"]))) |
 | Back on Schedule |                                                                             |
+| Light Test       | (Config(e, s) for (e, s) in tuple(itertools.product(Light, ["on", "off"]))) |
+| Sound Test       |                                                                             | 
+| Shutdown         |                                                                             |
 
 ---
 
@@ -118,7 +120,7 @@
 | Name                 | Start | End   |
 |----------------------|-------|-------|
 | Bed Time             | 21:00 | 23:59 |
-| Video Conference     | 9:00  | 19:00 |
+| Video Conference     | 9:00  | 22:00 |
 | Early Morning Lights | 2:00  | 6:00  |
 | TV Lights            | 17:00 | 22:30 |
 | Partial TV Lights    | 17:00 | 22:30 |
