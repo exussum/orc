@@ -3,6 +3,9 @@ from dataclasses import replace
 from datetime import date, timedelta
 from functools import wraps
 
+import os
+import signal
+
 from flask import Blueprint
 from flask import current_app as app
 from flask import render_template, request
@@ -89,7 +92,9 @@ def remote(id):
 
 @bp.route("/api/console/<id>")
 def console(id):
-    if id == "Light Test":
+    if id == "Shutdown":
+        os.kill(os.getpid(), signal.SIGTERM)
+    elif id == "Light Test":
         end = api.local_now() + timedelta(minutes=10)
         app.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
         api.test(config.SUPER_ROUTINES[id])
