@@ -13,8 +13,8 @@ div.orc-room-buttons {
     
 div.orc-routine-buttons {
     display: flex;
-    flex-direction: horizontal;
     overflow: auto;
+    gap: 20px;
     justify-content: space-between;
 }
 
