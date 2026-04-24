@@ -1,10 +1,9 @@
+import os
 import random
+import signal
 from dataclasses import replace
 from datetime import date, timedelta
 from functools import wraps
-
-import os
-import signal
 
 from flask import Blueprint
 from flask import current_app as app
