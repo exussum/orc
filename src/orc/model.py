@@ -64,21 +64,41 @@ class Theme:
 
 
 def _str_to_time(x):
-    hour, minute = tuple(x.split(":"))
-    return time(int(hour), int(minute))
+    parts = x.split(":") if x else []
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        return None
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return time(hour, minute)
 
 
-def doc_to_table(doc, section):
+def doc_to_table(doc, section, columns):
     # Heading store their contents in a subsequent child element
     # https://github.com/miyuchina/mistletoe/issues/99
-    idx = next((i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section))
-    markdown_table = next((e for e in doc.children[idx + 1 :] if isinstance(e, Table)))
-    return tuple((tuple(c.children[0].content if c.children else None for c in e.children) for e in markdown_table.children))
+    idx = next(
+        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),
+        None,
+    )
+    if idx is None:
+        raise ValueError(f"Section '{section}' not found in document")
+
+    markdown_table = next((e for e in doc.children[idx + 1 :] if isinstance(e, Table)), None)
+    if markdown_table is None:
+        raise ValueError(f"No table found under section '{section}'")
+
+    rows = list(markdown_table.children)
+    invalid = [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]
+    if invalid:
+        details = ", ".join(f"row {i} has {count}" for i, count in invalid)
+        raise ValueError(f"Expected {columns} columns in section '{section}', but: {details}")
+
+    return tuple(tuple(c.children[0].content if c.children else None for c in e.children) for e in rows)
 
 
-def doc_to_sub_tables(doc, section):
+def doc_to_sub_tables(doc, section, columns):
     type, result = None, None
-    for e in doc_to_table(doc, section):
+    for e in doc_to_table(doc, section, columns):
         if e[0] != type and e[0]:
             if result:
                 yield type, result
@@ -90,7 +110,15 @@ def doc_to_sub_tables(doc, section):
 
 
 def build_enum(doc, section, sub_section, hubitat_config):
-    sub_table = next((sub_table for (type, sub_table) in doc_to_sub_tables(doc, section) if type == sub_section))
+    if sub_section not in ("Light", "Sound"):
+        raise ValueError(f"sub_section must be 'Light' or 'Sound', got '{sub_section}'")
+
+    sub_table = next((sub_table for (type, sub_table) in doc_to_sub_tables(doc, section, 3) if type == sub_section))
+
+    for label, idx in (("tokens", 1), ("names", 2)):
+        vals = [e[idx] for e in sub_table]
+        if duplicates := {v for v in vals if vals.count(v) > 1}:
+            raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
 
     hub_name_to_token = {e[2]: e[1] for e in sub_table}
     id_lookup = {e["label"]: int(e["id"]) for e in hubitat_config}
@@ -103,35 +131,61 @@ def build_enum(doc, section, sub_section, hubitat_config):
     return result
 
 
-def build_themes(doc, routine_section, theme_section, light, sound):
-    routines = {}
+def _validate_states(sub_tables, col):
+    return [(type, c[col]) for type, e in sub_tables for c in e if c[col] not in ("on", "off") and not c[col].isdigit()]
 
-    for type, e in doc_to_sub_tables(doc, routine_section):
+
+def build_themes(doc, routine_section, theme_section, light, sound):
+    routine_tables = list(doc_to_sub_tables(doc, routine_section, 5))
+
+    if invalid := _validate_states(routine_tables, 3):
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
+        raise ValueError(f"Invalid state values in section '{routine_section}': {details}")
+
+    invalid_mandatory = [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in ("True", "False", None, "")]
+    if invalid_mandatory:
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_mandatory)
+        raise ValueError(f"Invalid mandatory values in section '{routine_section}': {details}")
+
+    theme_tables = list(doc_to_sub_tables(doc, theme_section, 3))
+
+    for theme_type, e in theme_tables:
+        for c in e:
+            if not _str_to_time(c[2]) and c[2] not in ("sunrise", "sunset"):
+                raise ValueError(f"Invalid time '{c[2]}' in theme '{theme_type}': expected HH:MM, 'sunrise', or 'sunset'")
+
+    routines = {}
+    for type, e in routine_tables:
         configs = [_build_config(c[2], sound, light, c[3], c[4]) for c in e]
         routines[type] = Routine(e[0][1], "", configs)
 
-    result = []
-    for type, e in doc_to_sub_tables(doc, theme_section):
-        result.append(Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]))
-    return result
+    return [Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables]
 
 
 def build_config(doc, section, light, sound):
-    result = {}
-    for type, e in doc_to_sub_tables(doc, section):
-        result[type] = Configs(*[_build_config(c[1], sound, light, c[2]) for c in e])
-    return result
+    sub_tables = list(doc_to_sub_tables(doc, section, 3))
+    if invalid := _validate_states(sub_tables, 2):
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
+        raise ValueError(f"Invalid state values in section '{section}': {details}")
+    return {type: Configs(*[_build_config(c[1], sound, light, c[2]) for c in e]) for type, e in sub_tables}
 
 
 def build_expr_config(doc, section, light, sound):
     result = {}
-    for type, e in doc_to_sub_tables(doc, section):
+    for type, e in doc_to_sub_tables(doc, section, 2):
         result[type] = Configs(*itertools.chain(*(_build_config_from_expr(c[1], sound, light) for c in e if c[1])))
     return result
 
 
 def build_highlights(doc, section):
-    return [(name, _str_to_time(start), _str_to_time(end)) for (name, start, end) in doc_to_table(doc, section)]
+    rows = doc_to_table(doc, section, 3)
+
+    invalid = [(name, val) for (name, start, end) in rows for val in (start, end) if _str_to_time(val) is None]
+    if invalid:
+        details = ", ".join(f"'{v}' in '{n}'" for n, v in invalid)
+        raise ValueError(f"Invalid time values in section '{section}': {details}")
+
+    return [(name, _str_to_time(start), _str_to_time(end)) for (name, start, end) in rows]
 
 
 def _build_config(cmd, sound, light, state, mandatory=None):
