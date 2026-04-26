@@ -7,7 +7,6 @@ from orc import dal
 from orc import model as m
 
 ORC_CONFIG = os.getenv("ORC_CONFIG", "src/config.md")
-ORC_DB = os.getenv("ORC_DB", "sqlite:////var/run/orc.sqlite")
 ENABLED = os.getenv("ENABLED", "")
 BASE_URL = os.getenv("BASE_URL")
 SSL_KEY = os.getenv("SSL_KEY")
