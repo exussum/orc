@@ -16,7 +16,8 @@ dependencies = [
     "recurring-ical-events==3.8.1",
     "requests==2.32.3",
     "sounddevice==0.5.5",
-    "piper-tts==1.4.1"
+    "piper-tts==1.4.1",
+    "bitwarden-sdk==2.0.0",
 ]
 name = "orc"
 version = "0.0.1"
