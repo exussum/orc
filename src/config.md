@@ -65,6 +65,10 @@
 |            | ROUTINE_UP_AND_ATOM     | 9:30    |
 |            | ROUTINE_SUNSET_LIGHTS   | sunset  |
 |            | ROUTINE_QUIET_TIME      | 23:00   |
+| saturday   | ROUTINE_NIGHTLIGHT_OFF  | 9:30    |
+|            | ROUTINE_UP_AND_ATOM     | 9:30    |
+|            | ROUTINE_SUNSET_LIGHTS   | sunset  |
+|            | ROUTINE_QUIET_TIME      | 23:00   |
 
 ---
 
