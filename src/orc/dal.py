@@ -1,6 +1,7 @@
 import os
 import time
 from functools import lru_cache
+from urllib.request import urlopen
 
 import icalendar
 import recurring_ical_events
@@ -9,6 +10,11 @@ from bitwarden_sdk import BitwardenClient, DeviceType, client_settings_from_dict
 
 from orc import config
 from orc import model as m
+
+
+def _get_url_value(url):
+    with urlopen(url) as response:
+        return response.readline().decode("utf-8").strip()
 
 
 def get_secrets():
@@ -22,8 +28,8 @@ def get_secrets():
             }
         )
     )
-    c.auth().login_access_token(os.environ["BWS_ACCESS_TOKEN"])
-    secrets = c.secrets().list(os.environ["BWS_ORG_ID"]).data
+    c.auth().login_access_token(_get_url_value(os.environ["BWS_ACCESS_TOKEN"]))
+    secrets = c.secrets().list(_get_url_value(os.environ["BWS_ORG_ID"])).data
 
     def get_secret(secret_name):
         return next(c.secrets().get(e.id).data.value for e in secrets.data if e.key == secret_name)
