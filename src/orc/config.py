@@ -15,6 +15,7 @@ MARKET_HOLIDAYS_URL = os.getenv("MARKET_HOLIDAYS_URL", "http://holidays.exmaple.
 SSL_KEY = os.getenv("SSL_KEY", "")
 SSL_CERT = os.getenv("SSL_CERT", "")
 ORC_CONFIG = os.getenv("ORC_CONFIG", "src/config.md")
+ORC_DB = os.getenv("ORC_DB", "sqlite:////var/run/orc.sqlite")
 ENABLED = os.getenv("ENABLED", "")
 ICS_URL = os.getenv("ICS_URL", "")
 
