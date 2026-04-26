@@ -23,14 +23,15 @@ def get_secrets():
         )
     )
     c.auth().login_access_token(os.environ["BWS_ACCESS_TOKEN"])
+    secrets = c.secrets().list(os.environ["BWS_ORG_ID"]).data
 
-    def get_secret(secret_id):
-        return c.secrets().get(secret_id).data.value
+    def get_secret(secret_name):
+        return next(c.secrets().get(e.id).data.value for e in secrets.data if e.key == secret_name)
 
     return m.Secrets(
-        access_token="?access_token=" + get_secret("BW_SECRET_ID_ACCESS_TOKEN"),
-        market_holidays_url=get_secret("BW_SECRET_ID_MARKET_HOLIDAYS_URL"),
-        ics_url=get_secret("BW_SECRET_ID_ICS_URL"),
+        access_token="?access_token=" + get_secret("ACCESS_TOKEN"),
+        market_holidays_url=get_secret("MARKET_HOLIDAYS_URL"),
+        ics_url=get_secret("ICS_URL"),
     )
 
 

@@ -4,7 +4,6 @@ from pathlib import Path
 
 from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.executors.pool import ThreadPoolExecutor
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
@@ -22,7 +21,6 @@ def web():
     sound_path = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
     scheduler = BackgroundScheduler(
         executors={"default": ThreadPoolExecutor(1)},
-        jobstores={"default": SQLAlchemyJobStore(url=config.ORC_DB)},
         job_defaults={"misfire_grace_time": 30},
     )
 
