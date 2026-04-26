@@ -4,6 +4,7 @@ from pathlib import Path
 
 from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
@@ -19,7 +20,11 @@ def web():
     version_manager = VersionManager()
 
     sound_path = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
-    scheduler = BackgroundScheduler(executors={"default": ThreadPoolExecutor(1)}, job_defaults={"misfire_grace_time": 30})
+    scheduler = BackgroundScheduler(
+        executors={"default": ThreadPoolExecutor(1)},
+        jobstores={"default": SQLAlchemyJobStore(url=config.ORC_DB)},
+        job_defaults={"misfire_grace_time": 30},
+    )
 
     api.setup_cal_scheduler(scheduler, config_manager, sound_path)
     api.setup_iot_scheduler(scheduler, config_manager)
