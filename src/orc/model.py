@@ -63,6 +63,13 @@ class Theme:
         self.configs = tuple(configs)
 
 
+@dataclass
+class Secrets:
+    access_token: str
+    market_holidays_url: str
+    ics_url: str
+
+
 def _str_to_time(x):
     parts = x.split(":") if x else []
     if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
@@ -159,7 +166,12 @@ def build_themes(doc, routine_section, theme_section, light, sound):
         configs = [_build_config(c[2], sound, light, c[3], c[4]) for c in e]
         routines[type] = Routine(e[0][1], "", configs)
 
-    return [Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables]
+    themes = {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
+
+    if missing := {"work day", "day off"} - themes.keys():
+        raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
+
+    return themes
 
 
 def build_config(doc, section, light, sound):
