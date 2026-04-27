@@ -85,7 +85,7 @@ def remote(id):
         app.config_manager.replace_config(config.AD_HOC_ROUTINES[id], end)
     else:
         app.config_manager.resume(config.ALL_CONFIGS[id])
-        app.version_manager.bump_version()
+    app.version_manager.bump_version()
     return {}, 200
 
 
