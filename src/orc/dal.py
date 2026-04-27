@@ -51,7 +51,7 @@ def get_light_state(light):
 
 
 def set_light(light, on=None, brightness=None):
-    if brightness:
+    if brightness is not None:
         requests.get(
             f"{config.BASE_URL}/devices/{light.value}/setLevel/{brightness}{config.SECRETS.access_token}",
             timeout=config.HTTP_TIMEOUT,
