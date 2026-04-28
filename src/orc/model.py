@@ -13,7 +13,7 @@ from mistletoe.block_token import Heading, Table
 class CalendarJob:
     play: Callable[[], None]
 
-    def __call__(self):
+    def __call__(self) -> None:
         self.play()
 
 
@@ -21,7 +21,7 @@ class CalendarJob:
 class IotJob:
     run: Callable[[bool], None]
 
-    def __call__(self, force=False):
+    def __call__(self, force: bool = False) -> None:
         self.run(force)
 
 
@@ -37,7 +37,7 @@ class Config:
 class Configs:
     items: Tuple[Config]
 
-    def __init__(self, *items):
+    def __init__(self, *items: Config) -> None:
         self.items = tuple(items)
 
 
@@ -48,7 +48,7 @@ class Routine:
     items: Tuple[Config]
     _: KW_ONLY
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.when and not isinstance(self.when, time) and ":" in self.when:
             self.when = _str_to_time(self.when)
 
@@ -58,7 +58,7 @@ class Theme:
     name: str
     configs: Tuple[Routine]
 
-    def __init__(self, name, *configs):
+    def __init__(self, name: str, *configs: Routine) -> None:
         self.name = name
         self.configs = tuple(configs)
 

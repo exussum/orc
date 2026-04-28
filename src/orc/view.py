@@ -3,6 +3,7 @@ import random
 import signal
 from dataclasses import replace
 from datetime import date, timedelta
+from collections.abc import Callable
 from functools import wraps
 
 from flask import Blueprint
@@ -18,14 +19,13 @@ bp = Blueprint("button", __name__)
 
 class VersionManager:
     version = str(random.random())
-    snapshot = None
 
     @classmethod
     def bump_version(cls):
         cls.version = str(random.random())
 
     @staticmethod
-    def versioned(func):
+    def versioned(func: Callable[..., None]) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             if not request.headers.get("orc-version") == VersionManager.version:
