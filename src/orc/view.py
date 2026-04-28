@@ -1,9 +1,9 @@
 import os
 import random
 import signal
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
-from collections.abc import Callable
 from functools import wraps
 
 from flask import Blueprint
