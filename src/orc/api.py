@@ -99,7 +99,7 @@ class ConfigManager:
 
         # Explode out the rule w/o creating a sub config explicitly
         items.update({e: replace(rule, what=e) for e in what})
-        self.snapshot.routine.items = tuple(items.values())
+        self.snapshot = self.snapshot._replace(routine=replace(self.snapshot.routine, items=tuple(items.values())))
 
     def set_theme_override(self, name, start, end):
         self.theme_override = ThemeOverride(name, start, end)
