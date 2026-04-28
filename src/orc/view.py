@@ -75,7 +75,8 @@ def schedule():
 
 @bp.route("/config/")
 def cfg():
-    return render_template("config.html", html=HtmlRenderer().render(Document(open(config.ORC_CONFIG))))
+    with open(config.ORC_CONFIG) as f:
+        return render_template("config.html", html=HtmlRenderer().render(Document(f)))
 
 
 @bp.route("/api/remote/<id>")
