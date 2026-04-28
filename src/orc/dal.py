@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 from functools import lru_cache
 from urllib.request import urlopen
 
@@ -88,5 +89,4 @@ def get_holidays(year):
 def read_ical(start, end):
     ical_string = requests.get(config.SECRETS.ics_url, timeout=config.HTTP_ICAL_TIMEOUT).content
     a_calendar = icalendar.Calendar.from_ical(ical_string)
-    # between leaks out events that have already started
-    return (e for e in recurring_ical_events.of(a_calendar).between(start, end) if e.start >= start)
+    return (e for e in recurring_ical_events.of(a_calendar).between(start, end) if type(e.start) is datetime and e.start >= start)
