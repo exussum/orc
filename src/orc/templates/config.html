@@ -1,7 +1,35 @@
 {% extends 'base.html' %}
 
 {% block body %}
-    <div id="orc-config">
-        {{ html|safe }}
+    <div class="accordion" id="config-accordion">
+        <div class="card">
+            <div class="card-header" id="config-heading">
+                <h2 class="mb-0">
+                    <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#config-collapse" aria-expanded="true" aria-controls="config-collapse">
+                        Config.md
+                    </button>
+                </h2>
+            </div>
+            <div id="config-collapse" class="collapse show" aria-labelledby="config-heading" data-parent="#config-accordion">
+                <div class="card-body" id="orc-config">
+                    {{ html|safe }}
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header" id="users-heading">
+                <h2 class="mb-0">
+                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#users-collapse" aria-expanded="false" aria-controls="users-collapse">
+                        Users
+                    </button>
+                </h2>
+            </div>
+            <div id="users-collapse" class="collapse" aria-labelledby="users-heading" data-parent="#config-accordion">
+                <div class="card-body">
+                    <button class="btn btn-primary" onClick='localStorage.setItem("isPowerUser", "true")'>Power User</button>
+                    <button class="btn btn-primary" onClick='localStorage.setItem("isPowerUser", "not true")'>Regular User </button>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
