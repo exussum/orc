@@ -35,7 +35,7 @@ def web():
     app.register_blueprint(bp)
     app.scheduler = scheduler
     app.sound_path = sound_path
-    app.version_manager = VersionManager()
+    app.version_manager = version_manager
 
     if config.SSL_KEY and config.SSL_CERT:
         app.run(host="0.0.0.0", port=443, debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY), use_reloader=False)
@@ -45,7 +45,10 @@ def web():
 
 def worker():
     config_manager = api.ConfigManager()
-    scheduler = api.setup_scheduler(BlockingScheduler(), config_manager)
+    sound_path = (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix()
+    scheduler = BlockingScheduler()
+    api.setup_iot_scheduler(scheduler, config_manager)
+    api.setup_cal_scheduler(scheduler, config_manager, sound_path)
 
     try:
         scheduler.start()
