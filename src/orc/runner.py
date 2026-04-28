@@ -38,9 +38,9 @@ def web():
     app.version_manager = version_manager
 
     if config.SSL_KEY and config.SSL_CERT:
-        app.run(host="0.0.0.0", port=443, debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY), use_reloader=False)
+        app.run(host="0.0.0.0", port=443, debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY), use_reloader=False, threaded=False)
     else:
-        app.run(host="0.0.0.0", debug=True, use_reloader=False)
+        app.run(host="0.0.0.0", debug=True, use_reloader=False, threaded=False)
 
 
 def worker():
