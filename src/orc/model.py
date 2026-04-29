@@ -1,4 +1,5 @@
 import itertools
+import re
 from collections import defaultdict, deque
 from dataclasses import KW_ONLY, dataclass, replace
 from datetime import datetime, time
@@ -7,6 +8,8 @@ from itertools import chain
 from typing import Callable, Tuple
 
 from mistletoe.block_token import Heading, Table
+
+_YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
 
 class LogSource(str, Enum):
@@ -175,8 +178,12 @@ def build_enum(doc, section, sub_section, id_lookup):
     return result
 
 
+def _valid_state(e):
+    return e in ("on", "off", "stop") or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
+
+
 def _validate_states(sub_tables, col):
-    return [(type, c[col]) for type, e in sub_tables for c in e if c[col] not in ("on", "off") and not c[col].isdigit()]
+    return [(type, c[col]) for type, e in sub_tables for c in e if not _valid_state(c[col])]
 
 
 def build_themes(doc, routine_section, theme_section, light, sound):
@@ -238,7 +245,7 @@ def build_highlights(doc, section):
 
 
 def _build_config(cmd, sound, light, state, mandatory=None):
-    if state not in ("on", "off"):
+    if state.isdigit():
         state = int(state)
     mandatory = mandatory == "True"
     return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, mandatory=mandatory)
