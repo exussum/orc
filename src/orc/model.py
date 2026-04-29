@@ -1,12 +1,50 @@
 import itertools
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import KW_ONLY, dataclass, replace
-from datetime import time
+from datetime import datetime, time
 from enum import Enum
 from itertools import chain
 from typing import Callable, Tuple
 
 from mistletoe.block_token import Heading, Table
+
+
+class LogSource(str, Enum):
+    SCHEDULED = "scheduled"
+    REMOTE = "remote"
+    MANUAL = "manual"
+
+
+@dataclass
+class LogEntry:
+    timestamp: datetime
+    source: LogSource
+    action: str
+
+
+class ActivityLog:
+    def __init__(self):
+        self.entries = deque(maxlen=200)
+
+    def add(self, when, source, action):
+        self.entries.appendleft(LogEntry(when, source, action))
+
+
+@dataclass
+class CalendarEvent:
+    uuid: str
+    summary: str
+    datetime: datetime
+    type: str
+
+    @staticmethod
+    def from_cal(cal, type, offset, tz):
+        return CalendarEvent(
+            cal.uid.to_ical().decode() + " " + type,
+            cal.summary.to_ical().decode("utf-8"),
+            cal.start.astimezone(tz) + offset,
+            type,
+        )
 
 
 @dataclass
