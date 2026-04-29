@@ -14,7 +14,7 @@ SSL_CERT = os.getenv("SSL_CERT")
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", 5))
 HTTP_ICAL_TIMEOUT = int(os.getenv("HTTP_ICAL_TIMEOUT", 120))
 
-SECRETS = dal.get_secrets()
+SECRETS = dal.get_secrets() if ENABLED else m.Secrets("", "", "")
 hubitat_config = dal.get_hubitat_config() if ENABLED else {}
 cast_config = dal.get_chromecast_config() if ENABLED else {}
 
