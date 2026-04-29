@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 from functools import lru_cache
 from urllib.request import urlopen
@@ -75,12 +76,14 @@ def set_sound(sound, lvl):
     cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
     cast.wait()
     cast.set_volume(lvl / 100)
+    time.sleep(1)
 
 
 def stop_sound(sound):
     cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
     cast.wait()
     cast.quit_app()
+    time.sleep(1)
 
 
 def play_youtube(sound, id):
@@ -94,6 +97,7 @@ def play_youtube(sound, id):
         title = info.get("title", "Audio Stream")
 
     cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
+    time.sleep(1)
 
 
 def get_hubitat_config():
