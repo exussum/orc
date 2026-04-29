@@ -15,7 +15,8 @@ HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", 5))
 HTTP_ICAL_TIMEOUT = int(os.getenv("HTTP_ICAL_TIMEOUT", 120))
 
 SECRETS = dal.get_secrets()
-hubitat_config = dal.get_config() if ENABLED else {}
+hubitat_config = dal.get_hubitat_config() if ENABLED else {}
+cast_config = dal.get_chromecast_config() if ENABLED else {}
 
 TZ = ZoneInfo("America/New_York")
 LAT_LONG = (40.7143, -74.0060)
@@ -26,7 +27,7 @@ with open(ORC_CONFIG) as fh:
     doc = Document("".join(fh.readlines()))
 
 Light = m.build_enum(doc, "Devices", "Light", hubitat_config)
-Sound = m.build_enum(doc, "Devices", "Sound", hubitat_config)
+Sound = m.build_enum(doc, "Devices", "Sound", cast_config)
 
 THEMES = m.build_themes(doc, "Routines", "Themes", Light, Sound)
 SCHEDULE_ROUTINES = {r.name: r for e in THEMES.values() for r in e.configs}
