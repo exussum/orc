@@ -289,14 +289,14 @@ def squish(items):
     if not items:
         return ()
 
-    result = (items[-1],)
-    if isinstance(result[0].state, int):
-        return result
+    last = items[-1]
+    if isinstance(last.state, int):
+        for e in range(len(items) - 2, -1, -1):
+            if items[e].state == "stop":
+                return (items[e], last)
+        return (last,)
 
-    # Working backwards, use the next number state since
-    # the first was either an ON or OFF.
     for e in range(len(items) - 2, -1, -1):
         if isinstance(items[e].state, int):
-            result = (items[e], result[0])
-            break
-    return result
+            return (items[e], last)
+    return (last,)
