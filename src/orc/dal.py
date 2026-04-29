@@ -7,10 +7,17 @@ import icalendar
 import pychromecast
 import recurring_ical_events
 import requests
+import yt_dlp
 from bitwarden_sdk import BitwardenClient, DeviceType, client_settings_from_dict
 
 from orc import config
 from orc import model as m
+
+_YDL_OPTS = {
+    "format": "bestaudio/best",  # Request the highest quality audio stream
+    "quiet": True,
+    "no_warnings": True,
+}
 
 
 def _get_url_value(url):
@@ -65,10 +72,28 @@ def set_light(light, on=None, brightness=None):
 
 
 def set_sound(sound, lvl):
-    print(sound.value)
     cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
     cast.wait()
     cast.set_volume(lvl / 100)
+
+
+def stop_sound(sound):
+    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
+    cast.wait()
+    cast.quit_app()
+
+
+def play_youtube(sound, id):
+    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
+    cast.wait()
+    cast.quit_app()
+
+    with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
+        info = ydl.extract_info(id, download=False)
+        stream_url = info["url"]
+        title = info.get("title", "Audio Stream")
+
+    cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
 
 
 def get_hubitat_config():

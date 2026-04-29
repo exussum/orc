@@ -34,6 +34,7 @@
 |                         |                 | {Light.OFFICE_TABLE, Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET} | off   |           |
 | ROUTINE_SUNSET_LIGHTS   | Sunset Lights   | {Light.BEDROOM_NIGHTLIGHT, Light.KITCHEN_CABINET}                     | on    | True      |
 | ROUTINE_QUIET_TIME      | Quiet Time      | Sound                                                                 | 10    | True      |
+|                         |                 | Sound                                                                 | stop  | True      |
 | ROUTINE_PARTNER_LEAVING | Partner Leaving | Light.ENTANCE_DESK                                                    | 1     |           |
 | ROUTINE_NIGHTLIGHT_OFF  | Nightlight Off  | Light.BEDROOM_NIGHTLIGHT                                              | off   |           |
 | ROUTINE_NIGHTLIGHT_ON   | Nightlight On   | Light.BEDROOM_NIGHTLIGHT                                              | on    |           |
@@ -88,17 +89,22 @@
 
 ##### Ad-Hoc Routines
 
-| Theme                | Expression                                                                                                                 | State |
-|----------------------|----------------------------------------------------------------------------------------------------------------------------|-------|
-| Bed Time             | Light - {Light.BEDROOM_NIGHTLIGHT}                                                                                         | off   |
-|                      | Light.BEDROOM_NIGHTLIGHT                                                                                                   | on    |
-| Partial TV Lights    | Light - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN_CABINET, Light.LIVING_ROOM_FLOOR, Light.BEDROOM_NIGHTLIGHT} | off   |
-|                      | {Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}                                                                           | on    |
-|                      | {Light.ENTANCE_DESK, Light.OFFICE_TABLE}                                                                                   | 1     |
-| TV Lights            | Light - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN_CABINET, Light.BEDROOM_NIGHTLIGHT}                          | off   |
-|                      | Light.KITCHEN_CABINET                                                                                                      | on    |
-|                      | {Light.ENTANCE_DESK, Light.OFFICE_TABLE}                                                                                   | 1     |
-| Early Morning Lights | {Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}                                                                           | on    |
+| Theme                | Expression                                                                                                                 | State       |
+|----------------------|----------------------------------------------------------------------------------------------------------------------------|-------------|
+| Silence              | Sound                                                                                                                      | stop        |
+| Bed Time             | Light - {Light.BEDROOM_NIGHTLIGHT}                                                                                         | off         |
+|                      | Light.BEDROOM_NIGHTLIGHT                                                                                                   | on          |
+| Partial TV Lights    | Light - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN_CABINET, Light.LIVING_ROOM_FLOOR, Light.BEDROOM_NIGHTLIGHT} | off         |
+|                      | {Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}                                                                           | on          |
+|                      | {Light.ENTANCE_DESK, Light.OFFICE_TABLE}                                                                                   | 1           |
+|                      | Sound                                                                                                                      | stop        |
+| TV Lights            | Light - {Light.ENTANCE_DESK, Light.OFFICE_TABLE, Light.KITCHEN_CABINET, Light.BEDROOM_NIGHTLIGHT}                          | off         |
+|                      | Light.KITCHEN_CABINET                                                                                                      | on          |
+|                      | {Light.ENTANCE_DESK, Light.OFFICE_TABLE}                                                                                   | 1           |
+|                      | Sound                                                                                                                      | stop        |
+| Early Morning Lights | {Light.LIVING_ROOM_FLOOR, Light.KITCHEN_CABINET}                                                                           | on          |
+| Dog                  | Sound                                                                                                                      | 20          |
+|                      | Sound                                                                                                                      | 1IwLUFvv_9k |
 
 ---
 
@@ -128,3 +134,4 @@
 | Early Morning Lights | 2:00  | 6:00  |
 | TV Lights            | 17:00 | 22:30 |
 | Partial TV Lights    | 17:00 | 22:30 |
+| Dog                  | 9:00  | 21:00 |
