@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block body %}
+    <table class="table">
+        <tr>
+            <th>Time</th>
+            <th>Source</th>
+            <th>Action</th>
+        </tr>
+        {% for entry in entries %}
+        <tr>
+            <td class="text-nowrap">{{ entry.timestamp.strftime("%m/%d %I:%M:%S %p") }}</td>
+            <td>
+                {% if entry.source == "scheduled" %}
+                    <span class="badge badge-secondary">scheduled</span>
+                {% elif entry.source == "remote" %}
+                    <span class="badge badge-info">remote</span>
+                {% else %}
+                    <span class="badge badge-primary">manual</span>
+                {% endif %}
+            </td>
+            <td>{{ entry.action }}</td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="3" class="text-muted">No activity yet.</td>
+        </tr>
+        {% endfor %}
+    </table>
+{% endblock %}
