@@ -276,7 +276,9 @@ def squish_configs(*configs, state_override=None):
 def _op_cmp(k):
     class_name = k.what.__class__.__name__
 
-    if isinstance(k.state, int):
+    if k.state == "stop":
+        sub_sort = -2
+    elif isinstance(k.state, int):
         sub_sort = -1
     elif k.state == "on":
         sub_sort = 0
