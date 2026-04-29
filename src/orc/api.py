@@ -128,16 +128,13 @@ def execute(rule):
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
     for w in what:
-        if w.value < 0:
-            print(f"Device {w} not found")
+        if isinstance(w, config.Light):
+            (dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on"))
+        elif isinstance(w, config.Sound):
+            dal.set_sound(w, rule.state)
         else:
-            if isinstance(w, config.Light):
-                (dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on"))
-            elif isinstance(w, config.Sound):
-                dal.set_sound(w, rule.state)
-            else:
-                raise Exception("Unknown type")
-            sleep(0.1)
+            raise Exception("Unknown type")
+        sleep(0.1)
 
 
 def capture_lights():

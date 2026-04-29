@@ -154,7 +154,7 @@ def doc_to_sub_tables(doc, section, columns):
         yield type, result
 
 
-def build_enum(doc, section, sub_section, hubitat_config):
+def build_enum(doc, section, sub_section, id_lookup):
     if sub_section not in ("Light", "Sound"):
         raise ValueError(f"sub_section must be 'Light' or 'Sound', got '{sub_section}'")
 
@@ -165,12 +165,11 @@ def build_enum(doc, section, sub_section, hubitat_config):
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
 
-    hub_name_to_token = {e[2]: e[1] for e in sub_table}
-    id_lookup = {e["label"]: int(e["id"]) for e in hubitat_config}
+    dev_name_to_token = {e[2]: e[1] for e in sub_table}
 
     result = Enum(
         sub_section,
-        {token: id_lookup.get(name, -(default + 1)) for (default, (name, token)) in enumerate(hub_name_to_token.items())},
+        {token: id_lookup.get(name, -(default + 1)) for (default, (name, token)) in enumerate(dev_name_to_token.items())},
     )
     result.__class__.__sub__ = lambda self, e: set(self) - e
     return result

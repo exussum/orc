@@ -65,15 +65,22 @@ def set_light(light, on=None, brightness=None):
 
 
 def set_sound(sound, lvl):
-    chromecasts, browser = pychromecast.get_listed_chromecasts(friendly_names=[sound.value])
-    cast = chromecasts[0]
+    print(sound.value)
+    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
     cast.wait()
     cast.set_volume(lvl / 100)
+
+
+def get_hubitat_config():
+    result = requests.get(f"{config.BASE_URL}/devices{config.SECRETS.access_token}", timeout=config.HTTP_TIMEOUT).json()
+    return {e["label"]: int(e["id"]) for e in result}
+
+
+def get_chromecast_config():
+    chromecasts, browser = pychromecast.get_chromecasts()
+    devices = {e.cast_info.friendly_name: e.cast_info.host for e in chromecasts}
     pychromecast.discovery.stop_discovery(browser)
-
-
-def get_config():
-    return requests.get(f"{config.BASE_URL}/devices{config.SECRETS.access_token}", timeout=config.HTTP_TIMEOUT).json()
+    return devices
 
 
 @lru_cache(maxsize=2)
