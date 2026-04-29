@@ -79,8 +79,18 @@ def cfg():
         return render_template("config.html", html=HtmlRenderer().render(Document(f)))
 
 
+@bp.route("/log/")
+def log():
+    return (
+        render_template("log.html", version=app.version_manager.version, entries=api.log_entries()),
+        200,
+        {"Cache-control": "no-store"},
+    )
+
+
 @bp.route("/api/remote/<id>")
 def remote(id):
+    api.log(api.local_now(), m.LogSource.REMOTE, id)
     if id in ("TV Lights", "Partial TV Lights"):
         end = api.local_now() + timedelta(hours=3)
         app.config_manager.replace_config(config.AD_HOC_ROUTINES[id], end)
@@ -92,6 +102,7 @@ def remote(id):
 
 @bp.route("/api/console/<id>")
 def console(id):
+    api.log(api.local_now(), m.LogSource.MANUAL, id)
     if id == "Shutdown":
         os.kill(os.getpid(), signal.SIGTERM)
     elif id == "Light Test":
@@ -121,6 +132,7 @@ def console(id):
 @bp.route("/api/room/<id>")
 def room(id):
     state = request.args.get("state")
+    api.log(api.local_now(), m.LogSource.MANUAL, f"Room: {id} {state}")
     if state == config.ON:
         api.execute(config.ROOM_CONFIGS[id])
     elif state == config.OFF:
@@ -162,4 +174,5 @@ def pause(id):
 @VersionManager.versioned
 def run(id):
     job = app.scheduler.get_job(id)
+    api.log(api.local_now(), m.LogSource.MANUAL, f"Force run: {job.name}")
     job.func(True)
