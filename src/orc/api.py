@@ -131,7 +131,12 @@ def execute(rule):
         if isinstance(w, config.Light):
             (dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on"))
         elif isinstance(w, config.Sound):
-            dal.set_sound(w, rule.state)
+            if isinstance(rule.state, int):
+                dal.set_sound(w, rule.state)
+            elif rule.state == "stop":
+                dal.stop_sound(w)
+            else:
+                dal.play_youtube(w, rule.state)
         else:
             raise Exception("Unknown type")
         sleep(0.1)
