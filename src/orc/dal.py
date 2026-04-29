@@ -1,5 +1,4 @@
 import os
-import time
 from datetime import datetime
 from functools import lru_cache
 from urllib.request import urlopen
@@ -65,12 +64,18 @@ def set_light(light, on=None, brightness=None):
 
 
 def set_sound(sound, lvl):
-    requests.get(f"{config.BASE_URL}/devices/{sound.value}/speak/%20{config.SECRETS.access_token}", timeout=config.HTTP_TIMEOUT).json()
-    time.sleep(1)
+    requests.get(
+        f"{config.BASE_URL}/devices/{sound.value}/speak/%20{config.SECRETS.access_token}",
+        timeout=config.HTTP_TIMEOUT,
+    )
+    requests.get(
+        f"{config.BASE_URL}/devices/{sound.value}/refresh{config.SECRETS.access_token}",
+        timeout=config.HTTP_TIMEOUT,
+    )
     requests.get(
         f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.SECRETS.access_token}",
         timeout=config.HTTP_TIMEOUT,
-    ).json()
+    )
 
 
 def get_config():
