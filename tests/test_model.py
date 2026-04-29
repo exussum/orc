@@ -92,11 +92,12 @@ def test_theme_squish_dim_then_off():
 def test_squish_configs_stop_then_volume():
     routine = m.Configs(
         m.Config(Sound, "stop"),
-        m.Config(Sound.x, 50),
+        m.Config(Sound, "stop"),
+        m.Config(Sound.x, 10),
     )
     assert m.squish_configs(routine) == m.Configs(
         m.Config(Sound.x, "stop", mandatory=False),
-        m.Config(Sound.x, 50, mandatory=False),
+        m.Config(Sound.x, 10, mandatory=False),
     )
 
 
