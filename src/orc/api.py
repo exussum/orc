@@ -1,7 +1,7 @@
 import itertools
 import time
 from collections import namedtuple as nt
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
 from importlib import resources
@@ -20,26 +20,19 @@ from orc import model as m
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
 
+_ACTIVITY_LOG = m.ActivityLog()
+
 _MODEL_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
 _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH)
 
 
-@dataclass
-class CalendarEvent:
-    uuid: str
-    summary: str
-    datetime: datetime
-    type: str
+def log(when, source, action):
+    _ACTIVITY_LOG.add(when, source, action)
 
-    @staticmethod
-    def from_cal(cal, type, offset):
-        return CalendarEvent(
-            cal.uid.to_ical().decode() + " " + type,
-            cal.summary.to_ical().decode("utf-8"),
-            cal.start.astimezone(config.TZ) + offset,
-            type,
-        )
+
+def log_entries():
+    return _ACTIVITY_LOG.entries
 
 
 def local_now():
@@ -173,7 +166,12 @@ def get_schedule(config_manager):
 
 
 def _make_rule_lambda(config_manager, rule):
-    return lambda force: config_manager.route_rule(rule, force)
+    def f(force):
+        if not force:
+            log(local_now(), m.LogSource.SCHEDULED, rule.name)
+        config_manager.route_rule(rule, force)
+
+    return f
 
 
 def _make_lambda(f, *args, **kwargs):
@@ -211,8 +209,8 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
     now = local_now()
     if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40] or force):
         events = list(itertools.islice(dal.read_ical(now, timedelta(hours=20)), 50))
-        warning_events = (CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2)) for e in events)
-        alarm_events = (CalendarEvent.from_cal(e, "alarm", timedelta()) for e in events)
+        warning_events = (m.CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2), config.TZ) for e in events)
+        alarm_events = (m.CalendarEvent.from_cal(e, "alarm", timedelta(), config.TZ) for e in events)
 
         calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
 
