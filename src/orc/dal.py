@@ -4,6 +4,7 @@ from functools import lru_cache
 from urllib.request import urlopen
 
 import icalendar
+import pychromecast
 import recurring_ical_events
 import requests
 from bitwarden_sdk import BitwardenClient, DeviceType, client_settings_from_dict
@@ -64,18 +65,11 @@ def set_light(light, on=None, brightness=None):
 
 
 def set_sound(sound, lvl):
-    requests.get(
-        f"{config.BASE_URL}/devices/{sound.value}/speak/%20{config.SECRETS.access_token}",
-        timeout=config.HTTP_TIMEOUT,
-    )
-    requests.get(
-        f"{config.BASE_URL}/devices/{sound.value}/refresh{config.SECRETS.access_token}",
-        timeout=config.HTTP_TIMEOUT,
-    )
-    requests.get(
-        f"{config.BASE_URL}/devices/{sound.value}/setVolume/{lvl}{config.SECRETS.access_token}",
-        timeout=config.HTTP_TIMEOUT,
-    )
+    chromecasts, browser = pychromecast.get_listed_chromecasts(friendly_names=[sound.value])
+    cast = chromecasts[0]
+    cast.wait()
+    cast.set_volume(lvl / 100)
+    pychromecast.discovery.stop_discovery(browser)
 
 
 def get_config():
