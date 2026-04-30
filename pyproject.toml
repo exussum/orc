@@ -11,7 +11,7 @@ dependencies = [
     "bitwarden-sdk==2.0.0",
     "icalendar==7.0.3",
     "mistletoe==1.5.1",
-    "numpy==2.3.3",
+    "numpy==2.4.4",
     "piper-tts==1.4.2",
     "pychromecast==14.0.5",
     "pygame==2.6.1",
