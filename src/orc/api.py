@@ -7,6 +7,7 @@ from enum import Enum
 from importlib import resources
 
 import numpy as np
+import onnxruntime
 import pygame
 import sounddevice as sd
 from apscheduler.triggers.cron import CronTrigger
@@ -21,6 +22,8 @@ SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
 
 _ACTIVITY_LOG = m.ActivityLog()
+
+onnxruntime.set_default_logger_severity(3)
 
 _MODEL_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
@@ -199,17 +202,16 @@ def setup_iot_scheduler(scheduler, config_manager):
 
 
 def setup_cal_scheduler(scheduler, config_manager, sound_path):
-    def f(force=False):
-        schedule_cal_tasks(scheduler, config_manager, sound_path, force)
+    def f():
+        schedule_cal_tasks(scheduler, config_manager, sound_path)
 
-    f(True)
     scheduler.add_job(f, CronTrigger.from_crontab("*/5 8-18 * * *"), name="Calendar Cron")
     return scheduler
 
 
-def schedule_cal_tasks(scheduler, config_manager, sound_path, force=False):
+def schedule_cal_tasks(scheduler, config_manager, sound_path):
     now = local_now()
-    if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40] or force):
+    if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40]):
         events = list(itertools.islice(dal.read_ical(now, timedelta(hours=20)), 50))
         warning_events = (m.CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2), config.TZ) for e in events)
         alarm_events = (m.CalendarEvent.from_cal(e, "alarm", timedelta(), config.TZ) for e in events)
