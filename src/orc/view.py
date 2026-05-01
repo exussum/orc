@@ -55,7 +55,7 @@ def index():
             version=app.version_manager.version,
         ),
         200,
-        {"Cache-control": "no-store"},
+        {"Cache-control": "max-age=604800"},
     )
 
 
@@ -69,7 +69,7 @@ def schedule():
     return (
         render_template("schedule.html", version=app.version_manager.version, jobs=jobs, theme=theme),
         200,
-        {"Cache-control": "no-store"},
+        {"Cache-control": "max-age=604800"},
     )
 
 
@@ -86,6 +86,11 @@ def log():
         200,
         {"Cache-control": "no-store"},
     )
+
+
+@bp.route("/api/version")
+def version():
+    return {"version": app.version_manager.version}, 200
 
 
 @bp.route("/api/remote/<id>")
