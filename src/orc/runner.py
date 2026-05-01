@@ -31,6 +31,7 @@ def web():
 
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
     app.config_manager = config_manager
     app.register_blueprint(bp)
     app.scheduler = scheduler
