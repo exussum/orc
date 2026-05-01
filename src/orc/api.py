@@ -7,7 +7,6 @@ from enum import Enum
 from importlib import resources
 
 import numpy as np
-import onnxruntime
 import pygame
 import sounddevice as sd
 from apscheduler.triggers.cron import CronTrigger
@@ -22,8 +21,6 @@ SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
 
 _ACTIVITY_LOG = m.ActivityLog()
-
-onnxruntime.set_default_logger_severity(3)
 
 _MODEL_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
