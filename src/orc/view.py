@@ -17,6 +17,13 @@ from orc import model as m
 bp = Blueprint("button", __name__)
 
 
+@bp.after_request
+def no_cache(response):
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 class VersionManager:
     version = str(random.random())
 
