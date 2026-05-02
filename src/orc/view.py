@@ -108,7 +108,7 @@ def remote(id):
 @bp.route("/api/console/<id>")
 def console(id):
     api.log(api.local_now(), m.LogSource.MANUAL, id)
-    if id == "Shutdown":
+    if id == "Reboot":
         os.kill(os.getpid(), signal.SIGTERM)
     elif id == "Light Test":
         end = api.local_now() + timedelta(minutes=10)
