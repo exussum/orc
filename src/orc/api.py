@@ -11,8 +11,8 @@ import pygame
 import sounddevice as sd
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from astral import Observer, sun
 from piper import PiperVoice
-from suntime import Sun
 
 from orc import config, dal
 from orc import model as m
@@ -24,7 +24,7 @@ _ACTIVITY_LOG = m.ActivityLog()
 
 _MODEL_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
-_VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH)
+_VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
 
 
 def log(when, source, action):
@@ -148,13 +148,14 @@ def capture_lights():
 
 def get_schedule(config_manager):
     result = []
-    sun = Sun(*config.LAT_LONG)
+    observer = Observer(*config.LAT_LONG)
     for x in range(2):
         now = local_now() + timedelta(days=x)
-        sunrise = sun.get_sunrise_time(now) + timedelta(minutes=30)
-        sunset = sun.get_sunset_time(now)
+        today = now.date()
+        sunrise = sun.sunrise(observer, today) + timedelta(minutes=30)
+        sunset = sun.sunset(observer, today) - timedelta(minutes=30)
 
-        cfg = config.THEMES.get(now.date().strftime("%A").lower()) or config.THEMES.get(config_manager.calculate_theme(now.date()))
+        cfg = config.THEMES.get(today.strftime("%A").lower()) or config.THEMES.get(config_manager.calculate_theme(today))
 
         for e in cfg.configs:
             if e.when == "sunrise":
