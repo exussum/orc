@@ -16,6 +16,7 @@ class LogSource(str, Enum):
     SCHEDULED = "scheduled"
     REMOTE = "remote"
     MANUAL = "manual"
+    SYSTEM = "system"
 
 
 @dataclass
@@ -210,6 +211,9 @@ def build_themes(doc, routine_section, theme_section, light, sound):
         configs = [_build_config(c[2], sound, light, c[3], c[4]) for c in e]
         routines[type] = Routine(e[0][1], "", configs)
 
+    if missing := {"Reset"} - {r.name for r in routines.values()}:
+        raise ValueError(f"Missing required routines in section '{routine_section}': {', '.join(sorted(missing))}")
+
     themes = {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
 
     if missing := {"work day", "day off"} - themes.keys():
@@ -218,12 +222,15 @@ def build_themes(doc, routine_section, theme_section, light, sound):
     return themes
 
 
-def build_config(doc, section, light, sound):
+def build_config(doc, section, light, sound, required=()):
     sub_tables = list(doc_to_sub_tables(doc, section, 3))
     if invalid := _validate_states(sub_tables, 2):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{section}': {details}")
-    return {type: Configs(*[_build_config(c[1], sound, light, c[2]) for c in e]) for type, e in sub_tables}
+    result = {type: Configs(*[_build_config(c[1], sound, light, c[2]) for c in e]) for type, e in sub_tables}
+    if missing := set(required) - result.keys():
+        raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
+    return result
 
 
 def build_expr_config(doc, section, light, sound):

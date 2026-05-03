@@ -69,7 +69,7 @@ def set_light(light, on=None, brightness=None):
         requests.get(
             f"{config.BASE_URL}/devices/{light.value}/{'on' if on else 'off'}{config.SECRETS.access_token}",
             timeout=config.HTTP_TIMEOUT,
-        ).content
+        )
 
 
 def set_sound(sound, lvl):
@@ -114,6 +114,8 @@ def get_chromecast_config():
 
 @lru_cache(maxsize=2)
 def get_holidays(year):
+    if not config.ENABLED:
+        return []
     result = requests.get(config.SECRETS.market_holidays_url, timeout=config.HTTP_TIMEOUT).json()
     if "error" in result:
         print(result["error"])
