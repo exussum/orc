@@ -6,6 +6,8 @@ from mistletoe import Document
 from orc import dal
 from orc import model as m
 
+# Core config options
+
 ORC_CONFIG = os.getenv("ORC_CONFIG", "src/config.md")
 ENABLED = os.getenv("ENABLED", "")
 BASE_URL = os.getenv("BASE_URL")
@@ -13,21 +15,22 @@ SSL_KEY = os.getenv("SSL_KEY")
 SSL_CERT = os.getenv("SSL_CERT")
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", 5))
 HTTP_ICAL_TIMEOUT = int(os.getenv("HTTP_ICAL_TIMEOUT", 120))
-
 SECRETS = dal.get_secrets() if ENABLED else m.Secrets("", "", "")
-hubitat_config = dal.get_hubitat_config() if ENABLED else {}
-cast_config = dal.get_chromecast_config() if ENABLED else {}
+TZ = ZoneInfo(os.getenv("TZ", "America/New_York"))
+LAT_LONG = (float(os.getenv("LAT", 40.7143)), float(os.getenv("LONG", -74.0060)))
 
-TZ = ZoneInfo("America/New_York")
-LAT_LONG = (40.7143, -74.0060)
 OFF = "off"
 ON = "on"
+
+# Device wiring
 
 with open(ORC_CONFIG) as fh:
     doc = Document("".join(fh.readlines()))
 
-Light = m.build_enum(doc, "Devices", "Light", hubitat_config)
-Sound = m.build_enum(doc, "Devices", "Sound", cast_config)
+Light = m.build_enum(doc, "Devices", "Light", dal.get_hubitat_config() if ENABLED else {})
+Sound = m.build_enum(doc, "Devices", "Sound", dal.get_chromecast_config() if ENABLED else {})
+
+# Light cand sound control configs
 
 THEMES = m.build_themes(doc, "Routines", "Themes", Light, Sound)
 SCHEDULE_ROUTINES = {r.name: r for e in THEMES.values() for r in e.configs}
