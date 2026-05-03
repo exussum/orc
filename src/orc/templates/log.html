@@ -15,6 +15,8 @@
                     <span class="badge badge-secondary">scheduled</span>
                 {% elif entry.source == "remote" %}
                     <span class="badge badge-info">remote</span>
+                {% elif entry.source == "system" %}
+                    <span class="badge badge-warning">system</span>
                 {% else %}
                     <span class="badge badge-primary">manual</span>
                 {% endif %}
