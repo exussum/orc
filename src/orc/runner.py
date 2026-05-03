@@ -9,6 +9,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
 
 from orc import api, config
+from orc import model as m
 from orc.view import VersionManager, bp
 
 
@@ -28,6 +29,7 @@ def web():
     api.setup_iot_scheduler(scheduler, config_manager)
     scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start()
+    api.log(api.local_now(), m.LogSource.SYSTEM, "Boot")
 
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True

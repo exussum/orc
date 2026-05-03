@@ -31,7 +31,7 @@ Sound = m.build_enum(doc, "Devices", "Sound", cast_config)
 
 THEMES = m.build_themes(doc, "Routines", "Themes", Light, Sound)
 SCHEDULE_ROUTINES = {r.name: r for e in THEMES.values() for r in e.configs}
-ROOM_CONFIGS = m.build_config(doc, "Room Configs", Light, Sound)
+ROOM_CONFIGS = m.build_config(doc, "Room Configs", Light, Sound, required=("Living Room",))
 AD_HOC_ROUTINES = m.build_config(doc, "Ad-Hoc Routines", Light, Sound)
 SUPER_ROUTINES = m.build_expr_config(doc, "Super Routines", Light, Sound)
 ALL_CONFIGS = SUPER_ROUTINES | AD_HOC_ROUTINES | ROOM_CONFIGS
