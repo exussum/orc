@@ -40,23 +40,26 @@
         if (window.matchMedia('(display-mode: standalone)').matches)
             window.resizeTo(400,670);
 
-        if(!performance.getEntriesByType("navigation")[0].transferSize)
-            window.addEventListener("load", async () => {
-                const spinner = document.getElementById("orc-version-spinner");
-                const banner = document.getElementById("orc-version-error");
-                spinner.style.display = "block";
-                banner.style.display = "none";
-                try {
-                    const response = await fetch("/api/version", { signal: AbortSignal.timeout(2000) });
-                    const { version: serverVersion } = await response.json();
-                    if (serverVersion !== version)
-                        location.reload();
-                } catch {
-                    banner.style.display = "block";
-                } finally {
-                    spinner.style.display = "none";
-                }
-            });
+        async function checkVersion() {
+            const spinner = document.getElementById("orc-version-spinner");
+            const banner = document.getElementById("orc-version-error");
+            spinner.style.display = "block";
+            banner.style.display = "none";
+            try {
+                const response = await fetch("/api/version", { signal: AbortSignal.timeout(2000) });
+                const { version: serverVersion } = await response.json();
+                if (serverVersion !== version)
+                    location.reload();
+            } catch {
+                banner.style.display = "block";
+            } finally {
+                spinner.style.display = "none";
+            }
+        }
+
+        if (!performance.getEntriesByType("navigation")[0]?.transferSize)
+            window.addEventListener("load", checkVersion);
+        window.addEventListener("pageshow", (e) => { if (e.persisted) checkVersion(); });
     </script>
   </head>
 <body>
