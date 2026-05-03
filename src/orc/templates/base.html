@@ -42,16 +42,32 @@
 
         if(!performance.getEntriesByType("navigation")[0].transferSize)
             window.addEventListener("load", async () => {
+                const spinner = document.getElementById("orc-version-spinner");
+                const banner = document.getElementById("orc-version-error");
+                spinner.style.display = "block";
+                banner.style.display = "none";
                 try {
                     const response = await fetch("/api/version", { signal: AbortSignal.timeout(2000) });
                     const { version: serverVersion } = await response.json();
                     if (serverVersion !== version)
                         location.reload();
-                } catch {}
+                } catch {
+                    banner.style.display = "block";
+                } finally {
+                    spinner.style.display = "none";
+                }
             });
     </script>
   </head>
 <body>
+    <div id="orc-version-spinner" style="display: none; position: fixed; top: 10px; right: 10px; z-index: 1080;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+    <div id="orc-version-error" class="alert alert-danger m-0 rounded-0 text-center" style="display: none;" role="alert">
+        Connection failed. Please refresh the page when you're connected.
+    </div>
 {% block page_body %}
     <div class="container vh-100">
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-2" role="navigation">
