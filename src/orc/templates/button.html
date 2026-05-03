@@ -79,6 +79,7 @@
 {% block tail %}
     <script>
         async function run(el) {
+            if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${el.dataset.id}?`)) return;
             await call(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
         }
 
@@ -91,7 +92,7 @@
             })
         });
 
-        document.querySelector(".orc-pause").addEventListener("click", e => {
+        document.querySelector(".orc-pause")?.addEventListener("click", e => {
             call(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).then(() => { location.reload() } );
         });
 
