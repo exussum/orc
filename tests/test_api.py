@@ -1,5 +1,4 @@
 from datetime import datetime
-from enum import Enum
 from unittest.mock import call, patch
 
 import pytest
