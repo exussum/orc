@@ -1,7 +1,5 @@
 from enum import Enum
 
-import pytest
-
 
 def pytest_sessionstart(session):
     from orc import config
