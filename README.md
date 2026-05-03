@@ -53,7 +53,18 @@ Two config surfaces:
    without hitting Hubitat, Chromecasts, or Bitwarden.
 
    `BWS_ACCESS_TOKEN` and `BWS_ORG_ID` are URLs (e.g. `data:` or `file://`),
-   not the values themselves — `dal._get_url_value` reads the body.
+   not the values themselves — the body of the URL is read at startup.
+
+### Minimum for local development
+
+Everything else falls back to its default and `ENABLED` stays unset so
+Hubitat/Chromecast/Bitwarden are not contacted:
+
+| Var                | Example value                                                          |
+|--------------------|------------------------------------------------------------------------|
+| `PYTHONPATH`       | `src`                                                                  |
+| `BWS_ACCESS_TOKEN` | `data:text/plain;base64,<base64-encoded BWS access token>`             |
+| `BWS_ORG_ID`       | `data:text/plain;base64,<base64-encoded BWS org id>`                   |
 
 ## Secrets (Bitwarden)
 
@@ -79,8 +90,6 @@ env PYTHONPATH=src \
     BWS_ORG_ID=file:///path/to/bws-org-id \
     python -c 'from orc.runner import web; web()'
 ```
-
-Or use the included `dev.sh` (tcsh, sources a venv at `~/.venv-orc`).
 
 Tests:
 
