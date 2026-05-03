@@ -169,11 +169,9 @@ def build_enum(doc, section, sub_section, id_lookup):
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
 
-    dev_name_to_token = {e[2]: e[1] for e in sub_table}
-
     result = Enum(
         sub_section,
-        {token: id_lookup.get(name, -(default + 1)) for (default, (name, token)) in enumerate(dev_name_to_token.items())},
+        {e[1]: id_lookup.get(e[2], -(i + 1)) for i, e in enumerate(sub_table)},
     )
     result.__class__.__sub__ = lambda self, e: set(self) - e
     return result
