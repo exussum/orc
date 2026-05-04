@@ -1,4 +1,3 @@
-import logging
 import time
 from pathlib import Path
 
@@ -7,6 +6,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from flask import Flask
+from gunicorn.app.base import BaseApplication
 
 from orc import api, config
 from orc import model as m
@@ -14,8 +14,6 @@ from orc.view import VersionManager, bp
 
 
 def web():
-    logging.getLogger("werkzeug").setLevel(logging.ERROR)
-
     config_manager = api.ConfigManager()
     version_manager = VersionManager()
 
@@ -28,8 +26,6 @@ def web():
     api.setup_cal_scheduler(scheduler, config_manager, sound_path)
     api.setup_iot_scheduler(scheduler, config_manager)
     scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
-    scheduler.start()
-    api.log(api.local_now(), m.LogSource.SYSTEM, "Boot")
 
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -40,10 +36,24 @@ def web():
     app.sound_path = sound_path
     app.version_manager = version_manager
 
-    if config.SSL_KEY and config.SSL_CERT:
-        app.run(host="0.0.0.0", port=443, debug=True, ssl_context=(config.SSL_CERT, config.SSL_KEY), use_reloader=False, threaded=False)
-    else:
-        app.run(host="0.0.0.0", debug=True, use_reloader=False, threaded=False)
+    class GunicornApp(BaseApplication):
+        def load_config(self):
+            self.cfg.set("workers", 1)
+            self.cfg.set("threads", 1)
+            self.cfg.set("loglevel", "warning")
+            if config.SSL_KEY and config.SSL_CERT:
+                self.cfg.set("bind", "0.0.0.0:443")
+                self.cfg.set("certfile", config.SSL_CERT)
+                self.cfg.set("keyfile", config.SSL_KEY)
+            else:
+                self.cfg.set("bind", "0.0.0.0:5000")
+
+        def load(self):
+            scheduler.start()
+            api.log(api.local_now(), m.LogSource.SYSTEM, "Boot")
+            return app
+
+    GunicornApp().run()
 
 
 def worker():
