@@ -15,7 +15,7 @@ dependencies = [
     "mistletoe==1.5.1",
     "numpy==2.4.4",
     "piper-tts==1.4.2",
-    "pychromecast==14.0.5",
+    "pychromecast==14.0.10",
     "pygame==2.6.1",
     "recurring-ical-events==3.8.1",
     "requests==2.33.0",
