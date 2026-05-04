@@ -17,6 +17,7 @@
   ],
   "start_url": "https://remote.exussum.org/",
   "display": "standalone",
+  "orientation": "portrait",
   "theme_color": "black",
   "background_color": "black"
 }
