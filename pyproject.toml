@@ -18,7 +18,7 @@ dependencies = [
     "pychromecast==14.0.5",
     "pygame==2.6.1",
     "recurring-ical-events==3.8.1",
-    "requests==2.33.0",
+    "requests==2.33.1",
     "sounddevice==0.5.5",
     "yt-dlp==2026.3.17",
 ]
