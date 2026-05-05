@@ -46,7 +46,7 @@ def web():
                 self.cfg.set("certfile", config.SSL_CERT)
                 self.cfg.set("keyfile", config.SSL_KEY)
             else:
-                self.cfg.set("bind", "0.0.0.0:5000")
+                self.cfg.set("bind", "0.0.0.0:8000")
 
         def load(self):
             scheduler.start()
