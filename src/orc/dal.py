@@ -44,7 +44,7 @@ def get_secrets():
         return next(c.secrets().get(e.id).data.value for e in secrets.data if e.key == secret_name)
 
     return m.Secrets(
-        access_token="?access_token=" + get_secret("ACCESS_TOKEN"),
+        access_token="?access_token=" + get_secret("HUBITAT_ACCESS_TOKEN"),
         market_holidays_url=get_secret("MARKET_HOLIDAYS_URL"),
         ics_url=get_secret("ICS_URL"),
     )
