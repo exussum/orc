@@ -1,14 +1,14 @@
+import io
 import itertools
 import time
+import wave
 from collections import namedtuple as nt
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
 from importlib import resources
 
-import numpy as np
 import pygame
-import sounddevice as sd
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from piper import PiperVoice
@@ -243,10 +243,19 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path):
 
 
 def play_text(text):
-    with sd.OutputStream(samplerate=_VOICE.config.sample_rate, channels=1, dtype="int16") as stream:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as fh:
+        fh.setnchannels(1)
+        fh.setsampwidth(2)
+        fh.setframerate(_VOICE.config.sample_rate)
         for audio_bytes in _VOICE.synthesize(text):
-            stream.write(np.frombuffer(audio_bytes.audio_int16_bytes, dtype=np.int16))
-        stream.write(np.frombuffer(b"\x00" * 10000, dtype=np.int16))
+            fh.writeframes(audio_bytes.audio_int16_bytes)
+    buf.seek(0)
+
+    pygame.mixer.init()
+    playing = pygame.mixer.Sound(buf).play()
+    while playing.get_busy():
+        pygame.time.delay(100)
 
 
 def play_alert(path):
