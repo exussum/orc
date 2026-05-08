@@ -73,7 +73,7 @@ by name:
 
 | Key                  | Used for                                            |
 |----------------------|-----------------------------------------------------|
-| `ACCESS_TOKEN`       | Hubitat Maker API access token (appended as query)  |
+| `HUBITAT_ACCESS_TOKEN`       | Hubitat Maker API access token (appended as query)  |
 | `MARKET_HOLIDAYS_URL`| JSON endpoint returning market holiday dates        |
 | `ICS_URL`            | iCal feed URL for calendar-driven routines          |
 
