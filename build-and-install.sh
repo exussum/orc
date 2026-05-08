@@ -1,1 +1,1 @@
-sh make.sh && ssh root@remote.exussum.example bash -s < install.sh
+sh make.sh && ssh root@deploy.example.local bash -s < install.sh
