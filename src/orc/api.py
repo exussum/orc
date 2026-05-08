@@ -11,8 +11,9 @@ import pygame
 import sounddevice as sd
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from astral import Observer, sun
 from piper import PiperVoice
+from skyfield import almanac
+from skyfield.api import load, load_file, wgs84
 
 from orc import config, dal
 from orc import model as m
@@ -25,6 +26,12 @@ _ACTIVITY_LOG = m.ActivityLog()
 _MODEL_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
 _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
+
+_EPHEMERIS_PATH = resources.files("orc.pkg") / "de421.bsp"
+_TIMESCALE = load.timescale()
+_EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
+_SUN = _EPHEMERIS["sun"]
+_OBSERVER = _EPHEMERIS["earth"] + wgs84.latlon(*config.LAT_LONG)
 
 
 def log(when, source, action):
@@ -148,12 +155,16 @@ def capture_lights():
 
 def get_schedule(config_manager):
     result = []
-    observer = Observer(*config.LAT_LONG)
     for x in range(2):
         now = local_now() + timedelta(days=x)
         today = now.date()
-        sunrise = sun.sunrise(observer, today) + timedelta(minutes=30)
-        sunset = sun.sunset(observer, today) - timedelta(minutes=30)
+        local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.TZ)
+        day_start = _TIMESCALE.from_datetime(local_midnight)
+        day_end = _TIMESCALE.from_datetime(local_midnight + timedelta(days=1))
+        risings, _ = almanac.find_risings(_OBSERVER, _SUN, day_start, day_end)
+        settings, _ = almanac.find_settings(_OBSERVER, _SUN, day_start, day_end)
+        sunrise = risings[0].utc_datetime() + timedelta(minutes=30)
+        sunset = settings[0].utc_datetime() - timedelta(minutes=30)
 
         cfg = config.THEMES.get(today.strftime("%A").lower()) or config.THEMES.get(config_manager.calculate_theme(today))
 
