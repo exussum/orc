@@ -47,6 +47,10 @@
             banner.style.display = "none";
             try {
                 const response = await fetch("/api/version", { signal: AbortSignal.timeout(2000) });
+                if (response.status >= 400 && response.status < 500) {
+                    window.location.href = window.location.pathname + "?_=" + Date.now();
+                    return;
+                }
                 const { version: serverVersion } = await response.json();
                 if (serverVersion !== version)
                     location.reload();
