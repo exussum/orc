@@ -8,8 +8,10 @@
         <th>Job</th>
         <th>When</th>
         </tr>
+    {% set ns = namespace(prev_day=None) %}
     {% for job in jobs %}
-        <tr>
+        {% set day = job.trigger.run_date.date() %}
+        <tr {% if ns.prev_day is not none and day != ns.prev_day %}class="orc-day-break"{% endif %}>
         <td class="col-1">
             <button class="btn btn-primary orc-runner" data-id="{{ job.id }}">&nbsp;</button>
         </td>
@@ -22,8 +24,9 @@
              </div>
         </td>
         <td>{{ job.name }}</td>
-        <td>{{ job.trigger.run_date.date().strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
+        <td>{{ day.strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
         </tr>
+        {% set ns.prev_day = day %}
     {% endfor %}
     </table>
 
