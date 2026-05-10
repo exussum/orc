@@ -104,9 +104,14 @@ class ConfigManager:
     def set_theme_override(self, name, start, end):
         self.theme_override = ThemeOverride(name, start, end)
 
-    def calculate_theme(self, today):
+    def active_override(self, today):
         if self.theme_override and self.theme_override.start <= today <= self.theme_override.end:
-            return self.theme_override.name
+            return self.theme_override
+        return None
+
+    def calculate_theme(self, today):
+        if override := self.active_override(today):
+            return override.name
 
         if today.weekday() not in (5, 6):
             today_iso = today.strftime("%Y-%m-%d")
@@ -166,7 +171,10 @@ def get_schedule(config_manager):
         sunrise = risings[0].utc_datetime() + timedelta(minutes=30)
         sunset = settings[0].utc_datetime() - timedelta(minutes=30)
 
-        cfg = config.THEMES.get(today.strftime("%A").lower()) or config.THEMES.get(config_manager.calculate_theme(today))
+        if override := config_manager.active_override(today):
+            cfg = config.THEMES.get(override.name)
+        else:
+            cfg = config.THEMES.get(today.strftime("%A").lower()) or config.THEMES.get(config_manager.calculate_theme(today))
 
         for e in cfg.configs:
             if e.when == "sunrise":
