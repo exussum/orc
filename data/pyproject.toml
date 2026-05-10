@@ -1,0 +1,12 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [
+    "hatchling >= 1.26",
+]
+
+[project]
+name = "orc_data"
+version = "0.0.1"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orc_data"]
