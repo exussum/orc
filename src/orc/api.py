@@ -30,8 +30,7 @@ _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
 _EPHEMERIS_PATH = resources.files("orc.pkg") / "de421.bsp"
 _TIMESCALE = load.timescale()
 _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
-_SUN = _EPHEMERIS["sun"]
-_OBSERVER = _EPHEMERIS["earth"] + wgs84.latlon(*config.LAT_LONG)
+_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.LAT_LONG))
 
 
 def log(when, source, action):
@@ -166,10 +165,16 @@ def get_schedule(config_manager):
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.TZ)
         day_start = _TIMESCALE.from_datetime(local_midnight)
         day_end = _TIMESCALE.from_datetime(local_midnight + timedelta(days=1))
-        risings, _ = almanac.find_risings(_OBSERVER, _SUN, day_start, day_end)
-        settings, _ = almanac.find_settings(_OBSERVER, _SUN, day_start, day_end)
-        sunrise = risings[0].utc_datetime() + timedelta(minutes=30)
-        sunset = settings[0].utc_datetime() - timedelta(minutes=30)
+        times, twilight = almanac.find_discrete(day_start, day_end, _TWILIGHT_FN)
+        sunrise = sunset = None
+        prev = int(_TWILIGHT_FN(day_start).item())
+        for t, curr in zip(times, twilight):
+            curr = int(curr)
+            if (prev, curr) == (2, 3):
+                sunrise = t.utc_datetime()
+            elif (prev, curr) == (3, 2):
+                sunset = t.utc_datetime()
+            prev = curr
 
         if override := config_manager.active_override(today):
             cfg = config.THEMES.get(override.name)
