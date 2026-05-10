@@ -172,8 +172,8 @@ def get_schedule(config_manager):
             curr = int(curr)
             if (prev, curr) == (2, 3):
                 sunrise = t.utc_datetime()
-            elif (prev, curr) == (3, 2):
-                sunset = t.utc_datetime()
+            elif (prev, curr) == (4, 3):
+                sunset = t.utc_datetime() - timedelta(hours=1)
             prev = curr
 
         if override := config_manager.active_override(today):
