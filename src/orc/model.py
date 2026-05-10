@@ -5,9 +5,14 @@ from dataclasses import KW_ONLY, dataclass, replace
 from datetime import datetime, time
 from enum import Enum
 from itertools import chain
-from typing import Callable, Tuple
+from typing import TYPE_CHECKING, Callable, Tuple
 
+from apscheduler.schedulers.base import BaseScheduler
 from mistletoe.block_token import Heading, Table
+
+if TYPE_CHECKING:
+    from orc.api import ConfigManager
+    from orc.view import VersionManager
 
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
@@ -110,6 +115,14 @@ class Secrets:
     access_token: str
     market_holidays_url: str
     ics_url: str
+
+
+@dataclass
+class AppContext:
+    config_manager: "ConfigManager"
+    scheduler: BaseScheduler
+    sound_path: str
+    version_manager: "VersionManager"
 
 
 def _str_to_time(x):
