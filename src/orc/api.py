@@ -23,11 +23,11 @@ ThemeOverride = nt("ThemeOverride", "name start end")
 
 _ACTIVITY_LOG = m.ActivityLog()
 
-_MODEL_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx"
-_CONFIG_PATH = resources.files("orc.pkg") / "en_GB-alba-medium.onnx.json"
+_MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
+_CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
 _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
 
-_EPHEMERIS_PATH = resources.files("orc.pkg") / "de421.bsp"
+_EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
 _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
 _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.LAT_LONG))
