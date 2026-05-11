@@ -24,13 +24,12 @@
             void bar.offsetWidth;
             bar.style.transition = `width ${seconds}s linear`;
             bar.style.width = "100%";
-            clearTimeout(window._orcProgressTimer);
-            window._orcProgressTimer = setTimeout(() => { container.style.display = "none"; }, seconds * 1000 + 200);
+            return container;
         }
 
         async function call(url, el, onFailure = () => {}) {
             el.disabled = true;
-            startProgress(parseFloat(el.dataset.duration || "0"));
+            const container = startProgress(parseFloat(el.dataset.duration || "0"));
             let response = null;
 
             try {
@@ -42,13 +41,14 @@
                 return true;
             } catch (error) {
                 console.error(error.message);
-                if (response && response.status === 412) {
+                if (response && response.status >= 400 && response.status < 500) {
                     location.reload();
                 }
                 onFailure();
                 return false;
             } finally {
                 el.disabled = false;
+                container.style.display = "none";
             }
         }
 
