@@ -59,6 +59,7 @@ def index():
             ad_hoc_routines=config.AD_HOC_ROUTINES,
             schedule_routines=config.SCHEDULE_ROUTINES,
             next_routine=next_schedule,
+            durations=config.DURATIONS,
             version=app.orc.version_manager.version,
         ),
         200,
@@ -74,7 +75,13 @@ def schedule():
     theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
 
     return (
-        render_template("schedule.html", version=app.orc.version_manager.version, jobs=jobs, theme=theme),
+        render_template(
+            "schedule.html",
+            version=app.orc.version_manager.version,
+            jobs=jobs,
+            theme=theme,
+            durations=config.DURATIONS,
+        ),
         200,
         {"Cache-control": "max-age=604800"},
     )

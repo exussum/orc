@@ -5,13 +5,13 @@
     {% for id in room_configs %}
         <div>{{ id }}</div>
         <div class="orc-button">
-            <button class="orc-runner btn btn-primary" data-state="on" data-type="room" data-id="{{ id }}"><i class="bi bi-lightbulb-fill"></i></button>
+            <button class="orc-runner btn btn-primary" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}"><i class="bi bi-lightbulb-fill"></i></button>
         </div>
         <div class="orc-button">
-            <button class="orc-runner btn btn-primary" data-state="off" data-type="room" data-id="{{ id }}"><i class="bi bi-lightbulb-off"></i></button>
+            <button class="orc-runner btn btn-primary" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}"><i class="bi bi-lightbulb-off"></i></button>
         </div>
         <div class="orc-button">
-            <button class="orc-runner btn btn-primary" data-state="follow" data-type="room" data-id="{{ id }}"><i class="bi bi-geo"></i></button>
+            <button class="orc-runner btn btn-primary" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}"><i class="bi bi-geo"></i></button>
         </div>
     {% endfor %}
     </div>
@@ -22,7 +22,7 @@
         {% for id in ad_hoc_routines %}
             <div class="orc-button">
                 <div class="orc-button-label">{{ id }}</div>
-                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}">
+                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
                     <svg class="orc-ribbon">
                         <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                     </svg>
@@ -39,7 +39,7 @@
         {% for id in super_routines %}
             <div class="orc-button">
                 <div class="orc-button-label">{{ id }}</div>
-                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}">
+                <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
                     <svg height="28" width="28" class="orc-ribbon">
                         <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                     </svg>
@@ -58,7 +58,7 @@
 
                     <div class="dropdown-menu">
                     {% for id in schedule_routines|sort %}
-                        <a class="dropdown-item orc-runner" href="#" data-type="console" data-id="{{id}}">{{id}}</a>
+                        <a class="dropdown-item orc-runner" href="#" data-type="console" data-id="{{id}}" data-duration="{{ durations[id] }}">{{id}}</a>
                     {% endfor %}
                     </div>
                 </div>

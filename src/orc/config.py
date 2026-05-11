@@ -41,6 +41,7 @@ ALL_CONFIGS = SUPER_ROUTINES | AD_HOC_ROUTINES | ROOM_CONFIGS
 
 ROOM_CONFIGS_OFF = m.squish_configs(*ROOM_CONFIGS.values(), state_override=OFF)
 BUTTON_HIGHLIGHT_CONFIGS = m.build_highlights(doc, "Button Highlights")
+DURATIONS = m.build_durations(doc, "Durations")
 
 DEFAULT_CONFIG = ROOM_CONFIGS["Living Room"]
 RESET_CONFIG = m.squish_configs(m.Configs(*SCHEDULE_ROUTINES["Reset"].items))
