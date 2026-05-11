@@ -13,7 +13,7 @@
         {% set day = job.trigger.run_date.date() %}
         <tr {% if ns.prev_day is not none and day != ns.prev_day %}class="orc-day-break"{% endif %}>
         <td class="col-1">
-            <button class="btn btn-primary orc-runner" data-id="{{ job.id }}">&nbsp;</button>
+            <button class="btn btn-primary orc-runner" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;</button>
         </td>
         <td class="col-1">
             <div class="form-group">

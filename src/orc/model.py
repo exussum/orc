@@ -251,6 +251,22 @@ def build_expr_config(doc, section, light, sound):
     return result
 
 
+def build_durations(doc, section):
+    rows = doc_to_table(doc, section, 2)
+
+    def _valid(s):
+        try:
+            return s is not None and float(s) >= 0
+        except ValueError:
+            return False
+
+    invalid = [(name, s) for (name, s) in rows if not _valid(s)]
+    if invalid:
+        details = ", ".join(f"'{s}' in '{n}'" for n, s in invalid)
+        raise ValueError(f"Invalid duration values in section '{section}': {details}")
+    return {name: float(s) for name, s in rows}
+
+
 def build_highlights(doc, section):
     rows = doc_to_table(doc, section, 3)
 
