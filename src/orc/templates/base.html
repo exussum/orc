@@ -14,8 +14,23 @@
 
     <script>
         let version = "{{ version }}";
+        function startProgress(seconds) {
+            if (!seconds || seconds <= 2) return;
+            const container = document.getElementById("orc-progress");
+            const bar = document.getElementById("orc-progress-bar");
+            container.style.display = "flex";
+            bar.style.transition = "none";
+            bar.style.width = "0%";
+            void bar.offsetWidth;
+            bar.style.transition = `width ${seconds}s linear`;
+            bar.style.width = "100%";
+            clearTimeout(window._orcProgressTimer);
+            window._orcProgressTimer = setTimeout(() => { container.style.display = "none"; }, seconds * 1000 + 200);
+        }
+
         async function call(url, el, onFailure = () => {}) {
             el.disabled = true;
+            startProgress(parseFloat(el.dataset.duration || "0"));
             let response = null;
 
             try {
@@ -74,6 +89,9 @@
     </div>
     <div id="orc-version-error" class="alert alert-danger m-0 rounded-0 text-center" style="display: none;" role="alert">
         Cannot reach server. Check you are on the local network.
+    </div>
+    <div id="orc-progress" class="progress orc-progress" style="display: none;" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+        <div id="orc-progress-bar" class="progress-bar" style="width: 0%;"></div>
     </div>
 {% block page_body %}
     <div class="container vh-100">

@@ -138,6 +138,7 @@ class ConfigManager:
 def execute(rule):
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
+    stream = None
     for w in what:
         if isinstance(w, config.Light):
             (dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on"))
@@ -147,7 +148,9 @@ def execute(rule):
             elif rule.state == "stop":
                 dal.stop_sound(w)
             else:
-                dal.play_youtube(w, rule.state)
+                if stream is None:
+                    stream = dal.resolve_youtube(rule.state)
+                dal.play_stream(w, *stream)
         else:
             raise Exception("Unknown type")
         sleep(0.1)
@@ -170,7 +173,7 @@ def get_schedule(config_manager):
         prev = int(_TWILIGHT_FN(day_start).item())
         for t, curr in zip(times, twilight):
             curr = int(curr)
-            if (prev, curr) == (2, 3):
+            if (prev, curr) == (3, 4):
                 sunrise = t.utc_datetime()
             elif (prev, curr) == (4, 3):
                 sunset = t.utc_datetime() - timedelta(hours=1)

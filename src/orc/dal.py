@@ -86,16 +86,16 @@ def stop_sound(sound):
     time.sleep(1)
 
 
-def play_youtube(sound, id):
+def resolve_youtube(id):
+    with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
+        info = ydl.extract_info(id, download=False)
+        return info["url"], info.get("title", "Audio Stream")
+
+
+def play_stream(sound, stream_url, title):
     cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
     cast.wait()
     cast.quit_app()
-
-    with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
-        info = ydl.extract_info(id, download=False)
-        stream_url = info["url"]
-        title = info.get("title", "Audio Stream")
-
     cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
     time.sleep(1)
 
