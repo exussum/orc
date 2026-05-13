@@ -1,6 +1,6 @@
-import os
 import random
 import signal
+import sys
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
@@ -123,7 +123,7 @@ def remote(id):
 def console(id):
     api.log(api.local_now(), m.LogSource.MANUAL, id)
     if id == "Reboot":
-        os.kill(os.getpid(), signal.SIGTERM)
+        sys.exit(0)
     elif id == "Light Test":
         end = api.local_now() + timedelta(minutes=10)
         app.orc.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
