@@ -81,7 +81,8 @@ class ConfigManager:
 
         if not self.snapshot:
             self.snapshot = SnapShot(capture_lights(), end)
-            log(local_now(), m.LogSource.SYSTEM, f"Snapshot until {end:%H:%M}")
+            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshot.routine.items)
+            log(local_now(), m.LogSource.SYSTEM, f"Snapshot until {end:%H:%M}: {items}")
 
         execute(target_config)
 
