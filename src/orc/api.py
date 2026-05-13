@@ -81,12 +81,14 @@ class ConfigManager:
 
         if not self.snapshot:
             self.snapshot = SnapShot(capture_lights(), end)
+            log(local_now(), m.LogSource.SYSTEM, f"Snapshot until {end:%H:%M}")
 
         execute(target_config)
 
     def resume(self, target_config):
         if self.snapshot and local_now() <= self.snapshot.end:
             routine = self.snapshot.routine
+            log(local_now(), m.LogSource.SYSTEM, "Snapshot restored")
         else:
             routine = target_config
         self.snapshot = None

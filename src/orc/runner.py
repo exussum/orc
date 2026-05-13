@@ -37,6 +37,7 @@ def web():
         def load_config(self):
             self.cfg.set("workers", 1)
             self.cfg.set("threads", 1)
+            self.cfg.set("timeout", 120)
             self.cfg.set("loglevel", "warning")
             if config.SSL_KEY and config.SSL_CERT:
                 self.cfg.set("bind", "0.0.0.0:443")
