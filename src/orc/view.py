@@ -176,7 +176,7 @@ def set_theme():
             date.fromisoformat(request.form["end"]),
         )
     app.orc.scheduler.remove_all_jobs()
-    api.setup_iot_scheduler(app.orc.scheduler, app.orc.config_manager)
+    api.setup_iot_scheduler(app.orc)
 
 
 @bp.route("/api/schedule/<id>/pause")
@@ -194,4 +194,4 @@ def pause(id):
 def run(id):
     job = app.orc.scheduler.get_job(id)
     api.log(api.local_now(), m.LogSource.MANUAL, f"Force run: {job.name}")
-    job.func(True)
+    job.func(*job.args, ctx=app.orc, force=True)

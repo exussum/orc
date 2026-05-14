@@ -9,10 +9,9 @@ from orc import model as m
 # Core config options
 
 ORC_CONFIG = os.getenv("ORC_CONFIG", "src/config.md")
+JOBS_DB = os.getenv("JOBS_DB", "sqlite:///jobs.sqlite")
 ENABLED = os.getenv("ENABLED", "")
 BASE_URL = os.getenv("BASE_URL")
-SSL_KEY = os.getenv("SSL_KEY")
-SSL_CERT = os.getenv("SSL_CERT")
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", 5))
 HTTP_ICAL_TIMEOUT = int(os.getenv("HTTP_ICAL_TIMEOUT", 120))
 SECRETS = dal.get_secrets() if ENABLED else m.Secrets("", "", "")
