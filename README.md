@@ -42,8 +42,6 @@ Two config surfaces:
    | `TZ`                | IANA timezone                                  | `America/New_York`    |
    | `LAT`               | Latitude for sunrise/sunset                    | `40.7143`             |
    | `LONG`              | Longitude for sunrise/sunset                   | `-74.0060`            |
-   | `SSL_KEY`           | Path to TLS key (enables HTTPS on :443)        | unset                 |
-   | `SSL_CERT`          | Path to TLS cert                               | unset                 |
    | `HTTP_TIMEOUT`      | Default outbound HTTP timeout (s)              | `5`                   |
    | `HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                 | `120`                 |
    | `BWS_ACCESS_TOKEN`  | URL whose body is the Bitwarden access token   | required if `ENABLED` |
