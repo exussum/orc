@@ -47,7 +47,7 @@ def local_now():
 
 def jobs_by_type(scheduler, type):
     now = local_now()
-    return [e for e in scheduler.get_jobs() if isinstance(e.func, type) and e.trigger.run_date > now]
+    return [e for e in scheduler.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
 
 
 def unwrap_rule_container(f):
@@ -198,46 +198,65 @@ def get_schedule(config_manager):
     return result
 
 
-def _make_rule_lambda(config_manager, rule):
-    def f(force):
-        if not force:
-            log(local_now(), m.LogSource.SCHEDULED, rule.name)
-        config_manager.route_rule(rule, force)
-
-    return f
-
-
-def _make_lambda(f, *args, **kwargs):
-    return lambda: f(*args, **kwargs)
+def run_iot_job(job, ctx=None, force=False):
+    if ctx is None:
+        raise ValueError("ctx must be injected by the executor")
+    if not force:
+        log(local_now(), m.LogSource.SCHEDULED, job.rule.name)
+    ctx.config_manager.route_rule(job.rule, force)
 
 
-def setup_iot_scheduler(scheduler, config_manager):
-    def f():
-        now = local_now()
-        for time, rule in get_schedule(config_manager):
-            if now <= time:
-                scheduler.add_job(
-                    m.IotJob(_make_rule_lambda(config_manager, rule)),
-                    DateTrigger(time),
-                    name=rule.name,
-                    id=f"iot-{rule.name}-{time.date().isoformat()}",
-                    replace_existing=True,
-                )
-
-    f()
-    scheduler.add_job(f, CronTrigger.from_crontab("10 0 * * *"), replace_existing=True, name="Iot Cron")
-    return scheduler
+def run_cal_job(job, ctx=None):
+    if ctx is None:
+        raise ValueError("ctx must be injected by the executor")
+    if job.event_type == "warning":
+        play_alert(ctx.sound_path)
+    else:
+        play_text(job.summary)
 
 
-def setup_cal_scheduler(scheduler, config_manager, sound_path):
-    def f():
-        schedule_cal_tasks(scheduler, config_manager, sound_path)
+def rebuild_iot_schedule(ctx=None):
+    if ctx is None:
+        raise ValueError("ctx must be injected by the executor")
+    now = local_now()
+    for time, rule in get_schedule(ctx.config_manager):
+        if now <= time:
+            ctx.scheduler.add_job(
+                run_iot_job,
+                DateTrigger(time),
+                args=[m.IotJob(rule)],
+                name=rule.name,
+                id=f"iot-{rule.name}-{time.date().isoformat()}",
+                replace_existing=True,
+            )
 
-    scheduler.add_job(f, CronTrigger.from_crontab("*/5 8-18 * * *"), name="Calendar Cron")
-    return scheduler
+
+def rebuild_cal_schedule(ctx=None):
+    if ctx is None:
+        raise ValueError("ctx must be injected by the executor")
+    schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
 
 
-def schedule_cal_tasks(scheduler, config_manager, sound_path):
+def setup_iot_scheduler(ctx):
+    if not jobs_by_type(ctx.scheduler, m.IotJob):
+        rebuild_iot_schedule(ctx)
+    ctx.scheduler.add_job(
+        rebuild_iot_schedule,
+        CronTrigger.from_crontab("10 0 * * *"),
+        replace_existing=True,
+        name="Iot Cron",
+    )
+
+
+def setup_cal_scheduler(ctx):
+    ctx.scheduler.add_job(
+        rebuild_cal_schedule,
+        CronTrigger.from_crontab("*/5 8-18 * * *"),
+        name="Calendar Cron",
+    )
+
+
+def schedule_cal_tasks(scheduler, config_manager):
     now = local_now()
     if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40]):
         events = list(itertools.islice(dal.read_ical(now, timedelta(hours=20)), 50))
@@ -251,10 +270,10 @@ def schedule_cal_tasks(scheduler, config_manager, sound_path):
                 scheduler.remove_job(e.id)
 
         for id, event in calendar_by_id.items():
-            play_sound = _make_lambda(play_alert, sound_path) if event.type == "warning" else _make_lambda(play_text, event.summary)
             scheduler.add_job(
-                m.CalendarJob(play_sound),
+                run_cal_job,
                 DateTrigger(event.datetime),
+                args=[m.CalendarJob(event.type, event.summary)],
                 replace_existing=True,
                 id=id,
                 name=event.summary,
