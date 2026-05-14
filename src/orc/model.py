@@ -5,7 +5,7 @@ from dataclasses import KW_ONLY, dataclass, replace
 from datetime import datetime, time
 from enum import Enum
 from itertools import chain
-from typing import TYPE_CHECKING, Callable, Tuple
+from typing import TYPE_CHECKING, Tuple
 
 from apscheduler.schedulers.base import BaseScheduler
 from mistletoe.block_token import Heading, Table
@@ -58,18 +58,13 @@ class CalendarEvent:
 
 @dataclass
 class CalendarJob:
-    play: Callable[[], None]
-
-    def __call__(self) -> None:
-        self.play()
+    event_type: str
+    summary: str
 
 
 @dataclass
 class IotJob:
-    run: Callable[[bool], None]
-
-    def __call__(self, force: bool = False) -> None:
-        self.run(force)
+    rule: "Routine"
 
 
 @dataclass
@@ -185,6 +180,7 @@ def build_enum(doc, section, sub_section, id_lookup):
     result = Enum(
         sub_section,
         {e[1]: id_lookup.get(e[2], -(i + 1)) for i, e in enumerate(sub_table)},
+        module="orc.config",
     )
     result.__class__.__sub__ = lambda self, e: set(self) - e
     return result
