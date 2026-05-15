@@ -41,7 +41,7 @@
                 return true;
             } catch (error) {
                 console.error(error.message);
-                if (response && response.status >= 400 && response.status < 500) {
+                if (!response || (response.status >= 400 && response.status < 500)) {
                     location.reload();
                 }
                 onFailure();

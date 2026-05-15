@@ -93,7 +93,7 @@
         });
 
         document.querySelector(".orc-pause")?.addEventListener("click", e => {
-            call(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).then(() => { location.reload() } );
+            call(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).finally(() => { location.reload() } );
         });
 
         document.querySelectorAll(".orc-button").forEach(el => {
