@@ -1,6 +1,6 @@
+import os
 import random
 import signal
-import sys
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
@@ -11,6 +11,7 @@ from flask import current_app as app
 from flask import render_template, request
 from mistletoe import Document, HtmlRenderer
 
+import orc
 from orc import api, config
 from orc import model as m
 
@@ -53,13 +54,13 @@ def index():
     return (
         render_template(
             "button.html",
-            highlight_configs=config.BUTTON_HIGHLIGHT_CONFIGS,
-            super_routines=config.SUPER_ROUTINES,
-            room_configs=config.ROOM_CONFIGS,
-            ad_hoc_routines=config.AD_HOC_ROUTINES,
-            schedule_routines=config.SCHEDULE_ROUTINES,
+            highlight_configs=config.button_highlight_configs,
+            super_routines=config.super_routines,
+            room_configs=config.room_configs,
+            ad_hoc_routines=config.ad_hoc_routines,
+            schedule_routines=config.schedule_routines,
             next_routine=next_schedule,
-            durations=config.DURATIONS,
+            durations=config.durations,
             version=app.orc.version_manager.version,
         ),
         200,
@@ -80,7 +81,7 @@ def schedule():
             version=app.orc.version_manager.version,
             jobs=jobs,
             theme=theme,
-            durations=config.DURATIONS,
+            durations=config.durations,
         ),
         200,
         {"Cache-control": "max-age=604800"},
@@ -89,7 +90,7 @@ def schedule():
 
 @bp.route("/config/")
 def cfg():
-    with open(config.ORC_CONFIG) as f:
+    with open(config.orc_config) as f:
         return render_template("config.html", html=HtmlRenderer().render(Document(f)))
 
 
@@ -112,9 +113,9 @@ def remote(id):
     api.log(api.local_now(), m.LogSource.REMOTE, id)
     if id in ("TV Lights", "Partial TV Lights"):
         end = api.local_now() + timedelta(hours=3)
-        app.orc.config_manager.replace_config(config.AD_HOC_ROUTINES[id], end)
+        app.orc.config_manager.replace_config(config.ad_hoc_routines[id], end)
     else:
-        app.orc.config_manager.resume(config.ALL_CONFIGS[id])
+        app.orc.config_manager.resume(config.all_configs[id])
     app.orc.version_manager.bump_version()
     return {}, 200
 
@@ -123,12 +124,12 @@ def remote(id):
 def console(id):
     api.log(api.local_now(), m.LogSource.MANUAL, id)
     if id == "Reboot":
-        sys.exit(0)
+        os.kill(os.getppid(), signal.SIGTERM)
     elif id == "Light Test":
         end = api.local_now() + timedelta(minutes=10)
-        app.orc.config_manager.replace_config(m.Config(config.Light, config.OFF), end)
-        api.test(config.SUPER_ROUTINES[id])
-        app.orc.config_manager.resume(config.DEFAULT_CONFIG)
+        app.orc.config_manager.replace_config(m.Config(orc.Light, config.OFF), end)
+        api.test(config.super_routines[id])
+        app.orc.config_manager.resume(config.default_config)
     elif id == "Sound Test":
         api.play_alert(app.orc.sound_path)
         api.play_text("audio test")
@@ -137,12 +138,12 @@ def console(id):
         jobs = sorted(api.get_schedule(app.orc.config_manager), key=lambda x: x[0])
         configs = (config for (when, config) in jobs if when <= now)
         api.execute(m.squish_configs(*configs))
-    elif id in config.SUPER_ROUTINES:
-        api.execute(config.SUPER_ROUTINES[id])
-    elif id in config.SCHEDULE_ROUTINES:
-        api.execute(config.SCHEDULE_ROUTINES[id])
-    elif id in config.AD_HOC_ROUTINES:
-        api.execute(m.squish_configs(config.RESET_CONFIG, config.AD_HOC_ROUTINES[id]))
+    elif id in config.super_routines:
+        api.execute(config.super_routines[id])
+    elif id in config.schedule_routines:
+        api.execute(config.schedule_routines[id])
+    elif id in config.ad_hoc_routines:
+        api.execute(m.squish_configs(config.reset_config, config.ad_hoc_routines[id]))
     else:
         raise Exception("Unknown routine")
     return {}, 200
@@ -153,11 +154,11 @@ def room(id):
     state = request.args.get("state")
     api.log(api.local_now(), m.LogSource.MANUAL, f"Room: {id} {state}")
     if state == config.ON:
-        api.execute(config.ROOM_CONFIGS[id])
+        api.execute(config.room_configs[id])
     elif state == config.OFF:
-        api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.ROOM_CONFIGS[id].items)))
+        api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.room_configs[id].items)))
     elif state == "follow":
-        api.execute(m.squish_configs(config.ROOM_CONFIGS_OFF, config.ROOM_CONFIGS[id]))
+        api.execute(m.squish_configs(config.room_configs_off, config.room_configs[id]))
     else:
         raise Exception("Unknown state")
 
@@ -176,7 +177,7 @@ def set_theme():
             date.fromisoformat(request.form["end"]),
         )
     app.orc.scheduler.remove_all_jobs()
-    api.setup_iot_scheduler(app.orc)
+    api.setup_scheduler(app.orc)
 
 
 @bp.route("/api/schedule/<id>/pause")
