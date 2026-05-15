@@ -166,6 +166,15 @@ def doc_to_sub_tables(doc, section, columns):
         yield type, result
 
 
+class DeviceEnum(type(Enum)):
+    def __sub__(cls, e):
+        return set(cls) - e
+
+
+class _DeviceEnum(Enum, metaclass=DeviceEnum):
+    pass
+
+
 def build_enum(doc, section, sub_section, id_lookup):
     if sub_section not in ("Light", "Sound"):
         raise ValueError(f"sub_section must be 'Light' or 'Sound', got '{sub_section}'")
@@ -177,13 +186,11 @@ def build_enum(doc, section, sub_section, id_lookup):
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
 
-    result = Enum(
+    return _DeviceEnum(
         sub_section,
         {e[1]: id_lookup.get(e[2], -(i + 1)) for i, e in enumerate(sub_table)},
-        module="orc.config",
+        module="orc",
     )
-    result.__class__.__sub__ = lambda self, e: set(self) - e
-    return result
 
 
 def _valid_state(e):
