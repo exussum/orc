@@ -4,13 +4,14 @@ from unittest.mock import call, patch
 import pytest
 from freezegun import freeze_time
 
+import orc
 from orc import api, config
 from orc import model as m
 
 
 @pytest.fixture
 def snapshot_config():
-    return m.Configs(m.Config(config.Light.a, config.ON), m.Config(config.Light.b, config.OFF))
+    return m.Configs(m.Config(orc.Light.a, config.ON), m.Config(orc.Light.b, config.OFF))
 
 
 @patch("orc.api.execute")
@@ -19,7 +20,7 @@ class TestManagingConfig:
         self.target = api.ConfigManager()
 
     def test_resume_with_snapshot(self, execute, snapshot_config):
-        snapshot = self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.TZ))
+        snapshot = self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
         self.target.resume(None)
         assert execute.call_args_list == [call(snapshot.routine)]
 
@@ -30,7 +31,7 @@ class TestManagingConfig:
 
     def test_resume_with_old_snapshot(self, execute, snapshot_config):
         routine = object()
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.TZ))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.tz))
         self.target.resume(routine)
         assert execute.call_args_list == [call(routine)]
         assert not self.target.snapshot
@@ -42,75 +43,75 @@ class TestRouteRule:
         self.target = api.ConfigManager()
 
     def test_snapshot_update_overwrite_set(self, set_light, snapshot_config):
-        rule = m.Config(set((config.Light.b,)), config.ON, mandatory=True)
+        rule = m.Config(set((orc.Light.b,)), config.ON, mandatory=True)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
         self.target.route_rule(rule, False)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(config.Light.a, config.ON),
-            m.Config(config.Light.b, config.ON, mandatory=True),
+            m.Config(orc.Light.a, config.ON),
+            m.Config(orc.Light.b, config.ON, mandatory=True),
         )
-        assert set_light.call_args_list == [call(config.Light.b, on=True), call(config.Light.b, on=True)]
+        assert set_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
 
     def test_snapshot_update_add(self, set_light, snapshot_config):
-        rule = m.Config(config.Light.c, config.ON, mandatory=True)
+        rule = m.Config(orc.Light.c, config.ON, mandatory=True)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=None)
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(config.Light.a, config.ON),
-            m.Config(config.Light.b, config.OFF),
+            m.Config(orc.Light.a, config.ON),
+            m.Config(orc.Light.b, config.OFF),
             rule,
         )
-        assert set_light.call_args_list == [call(config.Light.c, on=True)]
+        assert set_light.call_args_list == [call(orc.Light.c, on=True)]
 
     def test_rule_ignored(self, set_light, snapshot_config):
-        rule = m.Config(config.Light.c, config.ON)
+        rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.TZ))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(config.Light.a, config.ON),
-            m.Config(config.Light.b, config.OFF),
+            m.Config(orc.Light.a, config.ON),
+            m.Config(orc.Light.b, config.OFF),
         )
         assert set_light.call_args_list == []
 
     def test_rule_old_snapshot(self, set_light, snapshot_config):
-        rule = m.Config(config.Light.c, config.ON)
+        rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.TZ))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.tz))
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot == None
-        assert set_light.call_args_list == [call(config.Light.c, on=True)]
+        assert set_light.call_args_list == [call(orc.Light.c, on=True)]
 
     def test_snapshot_bypassed(self, set_light, snapshot_config):
-        rule = m.Config(config.Light.c, config.ON)
+        rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.TZ))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
 
         self.target.route_rule(rule, True)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(config.Light.a, config.ON),
-            m.Config(config.Light.b, config.OFF),
+            m.Config(orc.Light.a, config.ON),
+            m.Config(orc.Light.b, config.OFF),
         )
-        assert set_light.call_args_list == [call(config.Light.c, on=True)]
+        assert set_light.call_args_list == [call(orc.Light.c, on=True)]
 
 
 def test_unwrapper_function_single_rule():
     calls = []
-    rule = m.Config(config.Light.a, config.ON)
+    rule = m.Config(orc.Light.a, config.ON)
 
     @api.unwrap_rule_container
     def target(e):
         calls.append(e)
 
-    target(m.Config(config.Light.a, config.ON))
+    target(m.Config(orc.Light.a, config.ON))
 
     assert calls == [rule]
 
@@ -129,14 +130,14 @@ def test_unwrapper_function_routine(snapshot_config):
 
 def test_unwrapper_class_single_rule():
     calls = []
-    rule = m.Config(config.Light.a, config.ON)
+    rule = m.Config(orc.Light.a, config.ON)
 
     class Foo:
         @api.unwrap_rule_container
         def target(self, e):
             calls.append(e)
 
-    Foo().target(m.Config(config.Light.a, config.ON))
+    Foo().target(m.Config(orc.Light.a, config.ON))
 
     assert calls == [rule]
 
@@ -154,10 +155,12 @@ def test_unwrapper_class_routine(snapshot_config):
     assert calls == list(snapshot_config.items)
 
 
+@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
 class TestActiveOverride:
     OVERRIDE = api.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))
 
-    def setup_method(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         self.target = api.ConfigManager()
         self.target.set_theme_override(*self.OVERRIDE)
 
@@ -182,7 +185,7 @@ class TestActiveOverride:
 
 
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
-@freeze_time(datetime(2026, 1, 3, 12, tzinfo=config.TZ))
+@freeze_time(datetime(2026, 1, 3, 12, tzinfo=config.tz))
 class TestGetSchedule:
     @staticmethod
     def _theme(name, *routine_names):
@@ -197,7 +200,7 @@ class TestGetSchedule:
             "work day": self._theme("work day", "work-r"),
             "day off": self._theme("day off", "off-r"),
         }
-        with patch.object(config, "THEMES", self.themes):
+        with patch.object(config, "themes", self.themes):
             yield
 
     @staticmethod

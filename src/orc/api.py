@@ -1,3 +1,4 @@
+import copy
 import io
 import itertools
 import time
@@ -9,14 +10,31 @@ from enum import Enum
 from importlib import resources
 
 import pygame
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from piper import PiperVoice
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
+import orc
 from orc import config, dal
 from orc import model as m
+from orc.dal import get_chromecast_config, get_hubitat_config, get_secrets, init_db  # noqa: F401
+
+
+class ContextThreadPoolExecutor(ThreadPoolExecutor):
+    def __init__(self, ctx: m.AppContext, max_workers=1):
+        super().__init__(max_workers=max_workers)
+        self.ctx = ctx
+
+    def _do_submit_job(self, job, run_times):
+        dispatch_job = copy.copy(job)
+        dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
+        return super()._do_submit_job(dispatch_job, run_times)
+
+    def run_now(self, job, **extra_kwargs):
+        return job.func(*job.args, ctx=self.ctx, **{**job.kwargs, **extra_kwargs})
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
@@ -30,7 +48,7 @@ _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
 _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
 _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
-_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.LAT_LONG))
+_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
 
 
 def log(when, source, action):
@@ -42,7 +60,7 @@ def log_entries():
 
 
 def local_now():
-    return datetime.now(tz=config.TZ)
+    return datetime.now(tz=config.tz)
 
 
 def jobs_by_type(scheduler, type):
@@ -75,7 +93,19 @@ def unwrap_rule_container(f):
 class ConfigManager:
     def __init__(self):
         self.snapshot = None
-        self.theme_override = None
+        row = dal.load_theme_override()
+        self._theme_override = ThemeOverride(*row) if row else None
+
+    @property
+    def theme_override(self):
+        if self._theme_override and self._theme_override.end < local_now().date():
+            return None
+        return self._theme_override
+
+    @theme_override.setter
+    def theme_override(self, value):
+        self._theme_override = value
+        dal.save_theme_override(value)
 
     def replace_config(self, target_config, end):
 
@@ -143,9 +173,9 @@ def execute(rule):
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
     stream = None
     for w in what:
-        if isinstance(w, config.Light):
+        if isinstance(w, orc.Light):
             (dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on"))
-        elif isinstance(w, config.Sound):
+        elif isinstance(w, orc.Sound):
             if isinstance(rule.state, int):
                 dal.set_sound(w, rule.state)
             elif rule.state == "stop":
@@ -160,7 +190,7 @@ def execute(rule):
 
 
 def capture_lights():
-    return m.Configs(*(dal.get_light_state(e) for e in config.Light))
+    return m.Configs(*(dal.get_light_state(e) for e in orc.Light))
 
 
 def get_schedule(config_manager):
@@ -168,7 +198,7 @@ def get_schedule(config_manager):
     for x in range(2):
         now = local_now() + timedelta(days=x)
         today = now.date()
-        local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.TZ)
+        local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.tz)
         day_start = _TIMESCALE.from_datetime(local_midnight)
         day_end = _TIMESCALE.from_datetime(local_midnight + timedelta(days=1))
         times, twilight = almanac.find_discrete(day_start, day_end, _TWILIGHT_FN)
@@ -183,9 +213,9 @@ def get_schedule(config_manager):
             prev = curr
 
         if override := config_manager.active_override(today):
-            cfg = config.THEMES.get(override.name)
+            cfg = config.themes.get(override.name)
         else:
-            cfg = config.THEMES.get(today.strftime("%A").lower()) or config.THEMES.get(config_manager.calculate_theme(today))
+            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(config_manager.calculate_theme(today))
 
         for e in cfg.configs:
             if e.when == "sunrise":
@@ -194,7 +224,7 @@ def get_schedule(config_manager):
                 time = sunset
             else:
                 time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
-            result.append((time.astimezone(config.TZ), e))
+            result.append((time.astimezone(config.tz), e))
     return result
 
 
@@ -237,22 +267,24 @@ def rebuild_cal_schedule(ctx=None):
     schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
 
 
-def setup_iot_scheduler(ctx):
+def setup_scheduler(ctx):
     if not jobs_by_type(ctx.scheduler, m.IotJob):
         rebuild_iot_schedule(ctx)
     ctx.scheduler.add_job(
         rebuild_iot_schedule,
         CronTrigger.from_crontab("10 0 * * *"),
         replace_existing=True,
+        id="iot-cron",
         name="Iot Cron",
+        jobstore="memory",
     )
-
-
-def setup_cal_scheduler(ctx):
     ctx.scheduler.add_job(
         rebuild_cal_schedule,
         CronTrigger.from_crontab("*/5 8-18 * * *"),
+        replace_existing=True,
+        id="cal-cron",
         name="Calendar Cron",
+        jobstore="memory",
     )
 
 
@@ -260,8 +292,8 @@ def schedule_cal_tasks(scheduler, config_manager):
     now = local_now()
     if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40]):
         events = list(itertools.islice(dal.read_ical(now, timedelta(hours=20)), 50))
-        warning_events = (m.CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2), config.TZ) for e in events)
-        alarm_events = (m.CalendarEvent.from_cal(e, "alarm", timedelta(), config.TZ) for e in events)
+        warning_events = (m.CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2), config.tz) for e in events)
+        alarm_events = (m.CalendarEvent.from_cal(e, "alarm", timedelta(), config.tz) for e in events)
 
         calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
 
@@ -277,6 +309,7 @@ def schedule_cal_tasks(scheduler, config_manager):
                 replace_existing=True,
                 id=id,
                 name=event.summary,
+                jobstore="memory",
             )
 
 
