@@ -17,9 +17,6 @@ class Sound(Enum):
     x = 1
 
 
-config.Light = Light
-
-
 def _routines_md(rows):
     header = "| ID | Name | Expression | State | Mandatory |\n|----|------|------------|-------|-----------|\n"
     return "##### Routines\n\n" + header + "".join(rows) + "\n---\n"
