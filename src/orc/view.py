@@ -91,7 +91,13 @@ def schedule():
 @bp.route("/config/")
 def cfg():
     with open(config.orc_config) as f:
-        return render_template("config.html", html=HtmlRenderer().render(Document(f)))
+        return render_template(
+            "config.html",
+            html=HtmlRenderer().render(Document(f)),
+            ctx=app.orc,
+            today=date.today(),
+            tomorrow=date.today() + timedelta(days=1),
+        )
 
 
 @bp.route("/log/")
@@ -128,9 +134,10 @@ def console(id):
     elif id == "Light Test":
         end = api.local_now() + timedelta(minutes=10)
         app.orc.config_manager.replace_config(m.Config(orc.Light, config.OFF), end)
-        api.test(config.super_routines[id])
+        api.light_test(config.super_routines[id])
         app.orc.config_manager.resume(config.default_config)
     elif id == "Sound Test":
+        api.sound_test(config.super_routines[id])
         api.play_alert(app.orc.sound_path)
         api.play_text("audio test")
     elif id == "Back on Schedule":
@@ -169,8 +176,14 @@ def room(id):
 @VersionManager.versioned
 def set_theme():
     if not request.form["theme"]:
+        api.log(api.local_now(), m.LogSource.MANUAL, "Theme override cleared")
         app.orc.config_manager.theme_override = None
     else:
+        api.log(
+            api.local_now(),
+            m.LogSource.MANUAL,
+            f"Theme override set: {request.form['theme']} {request.form['start']}..{request.form['end']}",
+        )
         app.orc.config_manager.set_theme_override(
             request.form["theme"],
             date.fromisoformat(request.form["start"]),
