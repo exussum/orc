@@ -5,6 +5,7 @@ from mistletoe import Document
 
 from orc import model as m
 
+
 class Config:
     OFF = "off"
     ON = "on"
@@ -22,6 +23,7 @@ class Config:
     def load(self, secrets, hubitat_config, chromecast_config, enabled=False):
         self.enabled = enabled
         self.secrets = secrets
+
         with open(self.orc_config) as fh:
             doc = Document("".join(fh.readlines()))
 
@@ -29,6 +31,7 @@ class Config:
         Sound = m.build_enum(doc, "Devices", "Sound", chromecast_config)
         globals()["Light"] = Light
         globals()["Sound"] = Sound
+        self.virtual_devices = {e for cls in (Light, Sound) for e in cls if isinstance(e.value, int) and e.value < 0}
         self.themes = m.build_themes(doc, "Routines", "Themes", Light, Sound)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
         self.room_configs = m.build_config(doc, "Room Configs", Light, Sound, required=("Living Room",))
@@ -40,5 +43,6 @@ class Config:
         self.durations = m.build_durations(doc, "Durations")
         self.default_config = self.room_configs["Living Room"]
         self.reset_config = m.squish_configs(m.Configs(*self.schedule_routines["Reset"].items))
+
 
 config = Config()
