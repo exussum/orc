@@ -18,6 +18,26 @@
             </div>
         </div>
         <div class="card">
+            <div class="card-header" id="internals-heading">
+                <h2 class="mb-0">
+                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#internals-collapse" aria-expanded="false" aria-controls="internals-collapse">
+                        Internals
+                    </button>
+                </h2>
+            </div>
+            <div id="internals-collapse" class="collapse" aria-labelledby="internals-heading" data-parent="#config-accordion">
+                <div class="card-body">
+                    <ul>
+                        <li>Snapshot State: {{ctx.config_manager.snapshot}}</li>
+                        <li>Today's theme: {{ctx.config_manager.calculate_theme(today)}}</li>
+                        <li>Tomorrow's theme: {{ctx.config_manager.calculate_theme(tomorrow)}}</li>
+                        <li>Theme Override: {{ctx.config_manager.theme_override}}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-header" id="config-heading">
                 <h2 class="mb-0">
                     <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#config-collapse" aria-expanded="false" aria-controls="config-collapse">
