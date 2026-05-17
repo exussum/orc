@@ -166,12 +166,12 @@ def doc_to_sub_tables(doc, section, columns):
         yield type, result
 
 
-class DeviceEnum(type(Enum)):
+class DeviceEnumMeta(type(Enum)):
     def __sub__(cls, e):
         return set(cls) - e
 
 
-class _DeviceEnum(Enum, metaclass=DeviceEnum):
+class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
     pass
 
 
@@ -186,7 +186,7 @@ def build_enum(doc, section, sub_section, id_lookup):
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
 
-    return _DeviceEnum(
+    return DeviceEnum(
         sub_section,
         {e[1]: id_lookup.get(e[2], -(i + 1)) for i, e in enumerate(sub_table)},
         module="orc",

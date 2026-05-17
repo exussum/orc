@@ -20,7 +20,12 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config, dal
 from orc import model as m
-from orc.dal import get_chromecast_config, get_hubitat_config, get_secrets, init_db  # noqa: F401
+from orc.dal import (  # noqa: F401
+    get_chromecast_config,
+    get_hubitat_config,
+    get_secrets,
+    init_db,
+)
 
 
 class ContextThreadPoolExecutor(ThreadPoolExecutor):
@@ -30,11 +35,13 @@ class ContextThreadPoolExecutor(ThreadPoolExecutor):
 
     def _do_submit_job(self, job, run_times):
         dispatch_job = copy.copy(job)
+        dispatch_job._jobstore_alias = job._jobstore_alias
         dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
         return super()._do_submit_job(dispatch_job, run_times)
 
     def run_now(self, job, **extra_kwargs):
         return job.func(*job.args, ctx=self.ctx, **{**job.kwargs, **extra_kwargs})
+
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
@@ -171,19 +178,29 @@ class ConfigManager:
 def execute(rule):
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
-    stream = None
+    stream = {}
     for w in what:
+        if w in config.virtual_devices:
+            print("Skipping virtual device:" + w)
+            continue
+
         if isinstance(w, orc.Light):
-            (dal.set_light(w, brightness=rule.state) if isinstance(rule.state, int) else dal.set_light(w, on=rule.state == "on"))
+            if isinstance(rule.state, int):
+                dal.set_light(w, brightness=rule.state)
+            else:
+                dal.set_light(w, on=rule.state == "on")
         elif isinstance(w, orc.Sound):
             if isinstance(rule.state, int):
                 dal.set_sound(w, rule.state)
             elif rule.state == "stop":
                 dal.stop_sound(w)
             else:
-                if stream is None:
-                    stream = dal.resolve_youtube(rule.state)
-                dal.play_stream(w, *stream)
+                if rule.state not in stream:
+                    if "http" in rule.state:
+                        stream[rule.state] = (rule.state, rule.state)
+                    else:
+                        stream[rule.state] = dal.resolve_youtube(rule.state)
+                dal.play_stream(w, *stream[rule.state])
         else:
             raise Exception("Unknown type")
         sleep(0.1)
@@ -337,7 +354,14 @@ def play_alert(path):
         pygame.time.delay(100)
 
 
-def test(theme):
+def sound_test(theme):
+    time.sleep(1)
+    for e in theme.items:
+        execute(e)
+        time.sleep(5)
+
+
+def light_test(theme):
     time.sleep(1)
     for e in theme.items:
         execute(e)
