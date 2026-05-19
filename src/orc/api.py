@@ -253,7 +253,7 @@ def run_iot_job(job, ctx=None, force=False):
     if ctx is None:
         raise ValueError("ctx must be injected by the executor")
     if not force:
-        log(local_now(), m.LogSource.SCHEDULED, job.rule.name)
+        log(local_now(), m.LogSource.IOT, job.rule.name)
     ctx.config_manager.route_rule(job.rule, force)
 
 
@@ -263,7 +263,7 @@ def run_cal_job(job, ctx=None):
     if job.event_type == "warning":
         play_alert(ctx.sound_path)
     else:
-        log(local_now(), m.LogSource.SCHEDULED, job.summary)
+        log(local_now(), m.LogSource.CALENDAR, job.summary)
         play_text(job.summary)
 
 
