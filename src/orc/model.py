@@ -76,6 +76,13 @@ class Config:
 
 
 @dataclass
+class SoundState:
+    what: object
+    content: str | None
+    volume: int
+
+
+@dataclass
 class Configs:
     items: Tuple[Config]
 
@@ -181,7 +188,7 @@ def build_enum(doc, section, sub_section, id_lookup):
 
     sub_table = next((sub_table for (type, sub_table) in doc_to_sub_tables(doc, section, 3) if type == sub_section))
 
-    for label, idx in (("tokens", 1), ("names", 2)):
+    for label, idx in (("device id", 1), ("names", 2)):
         vals = [e[idx] for e in sub_table]
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
