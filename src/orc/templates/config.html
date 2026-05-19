@@ -38,6 +38,32 @@
         </div>
 
         <div class="card">
+            <div class="card-header" id="devices-heading">
+                <h2 class="mb-0">
+                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#devices-collapse" aria-expanded="false" aria-controls="devices-collapse">
+                        Devices
+                    </button>
+                </h2>
+            </div>
+            <div id="devices-collapse" class="collapse" aria-labelledby="devices-heading" data-parent="#config-accordion">
+                <div class="card-body">
+                    <h5>Lights</h5>
+                    <ul>
+                        {% for c in lights.items %}
+                            <li>{{ c.what.name }}: {{ c.state }}</li>
+                        {% endfor %}
+                    </ul>
+                    <h5>Sounds</h5>
+                    <ul>
+                        {% for c in sounds.items %}
+                            <li>{{ c.what.name }}: {{ c.content or '—' }} @ {{ c.volume }}%</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-header" id="config-heading">
                 <h2 class="mb-0">
                     <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#config-collapse" aria-expanded="false" aria-controls="config-collapse">
