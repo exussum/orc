@@ -67,8 +67,11 @@
             spinner.style.display = "block";
             banner.style.display = "none";
             try {
-                const response = await fetch("/api/version", { signal: AbortSignal.timeout(2000) });
-                if (isInvalidResponse(response)) {
+                const response = await fetch("/api/version", {
+                    signal: AbortSignal.timeout(2000),
+                    redirect: "manual",
+                });
+                if (isInvalidResponse(response) || response.type === "opaqueredirect") {
                     hardRefresh();
                     return;
                 }

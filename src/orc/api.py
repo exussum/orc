@@ -210,6 +210,10 @@ def capture_lights():
     return m.Configs(*(dal.get_light_state(e) for e in orc.Light))
 
 
+def capture_sounds():
+    return m.Configs(*dal.get_sound(orc.Sound))
+
+
 def get_schedule(config_manager):
     result = []
     for x in range(2):
@@ -259,6 +263,7 @@ def run_cal_job(job, ctx=None):
     if job.event_type == "warning":
         play_alert(ctx.sound_path)
     else:
+        log(local_now(), m.LogSource.SCHEDULED, job.summary)
         play_text(job.summary)
 
 
@@ -361,8 +366,6 @@ def sound_test(theme):
         time.sleep(5)
 
 
-def light_test(theme):
-    time.sleep(1)
-    for e in theme.items:
-        execute(e)
-        time.sleep(2)
+def light_test():
+    execute(m.Config(orc.Light, config.ON))
+    time.sleep(10)
