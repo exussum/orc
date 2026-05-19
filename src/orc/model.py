@@ -18,7 +18,8 @@ _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
 
 class LogSource(str, Enum):
-    SCHEDULED = "scheduled"
+    CALENDAR = "calendar"
+    IOT = "iot"
     REMOTE = "remote"
     MANUAL = "manual"
     SYSTEM = "system"
