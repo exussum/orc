@@ -12,7 +12,7 @@ class Config:
 
     def __init__(self):
         self.orc_config = os.getenv("ORC_CONFIG", "src/config.md")
-        self.jobs_db = os.getenv("JOBS_DB", "sqlite:///jobs.sqlite")
+        self.jobs_db = os.getenv("ORC_DB", "sqlite:///jobs.sqlite")
         self.base_url = os.getenv("BASE_URL")
         self.http_timeout = int(os.getenv("HTTP_TIMEOUT", 5))
         self.http_ical_timeout = int(os.getenv("HTTP_ICAL_TIMEOUT", 120))
