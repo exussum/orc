@@ -97,6 +97,8 @@ def cfg():
             ctx=app.orc,
             today=date.today(),
             tomorrow=date.today() + timedelta(days=1),
+            lights=api.capture_lights(),
+            sounds=api.capture_sounds(),
         )
 
 
@@ -134,7 +136,7 @@ def console(id):
     elif id == "Light Test":
         end = api.local_now() + timedelta(minutes=10)
         app.orc.config_manager.replace_config(m.Config(orc.Light, config.OFF), end)
-        api.light_test(config.super_routines[id])
+        api.light_test()
         app.orc.config_manager.resume(config.default_config)
     elif id == "Sound Test":
         api.sound_test(config.super_routines[id])

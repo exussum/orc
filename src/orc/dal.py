@@ -1,8 +1,10 @@
 import os
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from functools import lru_cache
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from urllib.request import urlopen
 
 import icalendar
@@ -92,6 +94,34 @@ def get_light_state(light):
         return m.Config(what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"])
     else:
         return m.Config(what=light, state="off")
+
+
+def _strip_googlevideo_params(url):
+    parsed = urlparse(url)
+    if not parsed.hostname or not parsed.hostname.endswith("googlevideo.com"):
+        return url
+    vid_id = parse_qs(parsed.query).get("id", [None])[0]
+    query = urlencode({"id": vid_id}) if vid_id is not None else ""
+    return urlunparse(parsed._replace(query=query))
+
+
+def _fetch_sound(sound):
+    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None), timeout=5, tries=1)
+    cast.wait(timeout=5)
+    rh = pychromecast.response_handler.WaitResponse(5.0, "media status")
+    cast.media_controller.update_status(callback_function=rh.callback)
+    rh.wait_response()
+    content = cast.media_controller.status.content_id
+    return m.SoundState(
+        what=sound,
+        content=_strip_googlevideo_params(content) if content else None,
+        volume=int(cast.status.volume_level * 100),
+    )
+
+
+def get_sound(Sound):
+    with ThreadPoolExecutor(max_workers=len(Sound)) as ex:
+        return tuple(ex.map(_fetch_sound, Sound))
 
 
 def set_light(light, on=None, brightness=None):
