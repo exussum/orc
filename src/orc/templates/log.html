@@ -11,8 +11,10 @@
         <tr>
             <td class="text-nowrap">{{ entry.timestamp.strftime("%m/%d %I:%M:%S %p") }}</td>
             <td>
-                {% if entry.source == "scheduled" %}
-                    <span class="badge badge-secondary">scheduled</span>
+                {% if entry.source == "calendar" %}
+                    <span class="badge badge-secondary">calendar</span>
+                {% elif entry.source == "iot" %}
+                    <span class="badge badge-dark">iot</span>
                 {% elif entry.source == "remote" %}
                     <span class="badge badge-info">remote</span>
                 {% elif entry.source == "system" %}
