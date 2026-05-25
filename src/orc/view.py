@@ -139,14 +139,9 @@ def console(id):
         api.light_test()
         app.orc.config_manager.resume(config.default_config)
     elif id == "Sound Test":
-        api.sound_test(config.super_routines[id])
-        api.play_alert(app.orc.sound_path)
-        api.play_text("audio test")
+        api.sound_test(config.super_routines[id], app.orc.sound_path)
     elif id == "Back on Schedule":
-        now = api.local_now()
-        jobs = sorted(api.get_schedule(app.orc.config_manager), key=lambda x: x[0])
-        configs = (config for (when, config) in jobs if when <= now)
-        api.execute(m.squish_configs(*configs))
+        api.replay_day(app.orc.config_manager, api.local_now())
     elif id in config.super_routines:
         api.execute(config.super_routines[id])
     elif id in config.schedule_routines:
@@ -177,22 +172,24 @@ def room(id):
 @bp.route("/api/schedule/set_theme", methods=["POST"])
 @VersionManager.versioned
 def set_theme():
+    now = api.local_now()
+    today = now.date()
+
+    before = app.orc.config_manager.calculate_theme(today)
     if not request.form["theme"]:
-        api.log(api.local_now(), m.LogSource.MANUAL, "Theme override cleared")
+        api.log(now, m.LogSource.MANUAL, "Theme override cleared")
         app.orc.config_manager.theme_override = None
     else:
-        api.log(
-            api.local_now(),
-            m.LogSource.MANUAL,
-            f"Theme override set: {request.form['theme']} {request.form['start']}..{request.form['end']}",
-        )
-        app.orc.config_manager.set_theme_override(
-            request.form["theme"],
-            date.fromisoformat(request.form["start"]),
-            date.fromisoformat(request.form["end"]),
-        )
+        app.orc.config_manager.set_theme_override(request.form["theme"], start, end)
+        start = date.fromisoformat(request.form["start"])
+        end = date.fromisoformat(request.form["end"])
+        api.log(now, m.LogSource.MANUAL, f"Theme override set: {request.form['theme']} {start}..{end}")
+    after = app.orc.config_manager.calculate_theme(today)
+
     app.orc.scheduler.remove_all_jobs()
     api.setup_scheduler(app.orc)
+    if before != after:
+        api.replay_day(app.orc.config_manager, now)
 
 
 @bp.route("/api/schedule/<id>/pause")
