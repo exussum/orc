@@ -180,9 +180,9 @@ def set_theme():
         api.log(now, m.LogSource.MANUAL, "Theme override cleared")
         app.orc.config_manager.theme_override = None
     else:
-        app.orc.config_manager.set_theme_override(request.form["theme"], start, end)
         start = date.fromisoformat(request.form["start"])
         end = date.fromisoformat(request.form["end"])
+        app.orc.config_manager.set_theme_override(request.form["theme"], start, end)
         api.log(now, m.LogSource.MANUAL, f"Theme override set: {request.form['theme']} {start}..{end}")
     after = app.orc.config_manager.calculate_theme(today)
 
