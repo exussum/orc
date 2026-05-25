@@ -359,13 +359,22 @@ def play_alert(path):
         pygame.time.delay(100)
 
 
-def sound_test(theme):
+def sound_test(theme, sound_path):
     time.sleep(1)
     for e in theme.items:
         execute(e)
         time.sleep(5)
+    execute(m.Config(orc.Sound, "stop"))
+    play_alert(sound_path)
+    play_text("audio test")
 
 
 def light_test():
     execute(m.Config(orc.Light, config.ON))
     time.sleep(10)
+
+
+def replay_day(config_manager, now):
+    jobs = sorted(get_schedule(config_manager), key=lambda x: x[0])
+    configs = (cfg for (when, cfg) in jobs if when <= now)
+    execute(m.squish_configs(*configs))
