@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from urllib.request import urlopen
 
 import icalendar
+import icmplib
 import pychromecast
 import recurring_ical_events
 import requests
@@ -29,6 +30,9 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS orc_theme_override "
             "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)"
+        )
 
 
 def load_theme_override():
@@ -49,6 +53,30 @@ def save_theme_override(override):
                 "ON CONFLICT(id) DO UPDATE SET name=excluded.name, start=excluded.start, end=excluded.end",
                 (override[0], override[1].isoformat(), override[2].isoformat()),
             )
+
+
+def load_presence():
+    with _theme_override_conn() as conn:
+        rows = conn.execute("SELECT name, last_seen FROM orc_presence").fetchall()
+    return {name: datetime.fromisoformat(last_seen) for name, last_seen in rows}
+
+
+def save_presence(name, when):
+    with _theme_override_conn() as conn:
+        conn.execute(
+            "INSERT INTO orc_presence (name, last_seen) VALUES (?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET last_seen=excluded.last_seen",
+            (name, when.isoformat()),
+        )
+
+
+def delete_presence(name):
+    with _theme_override_conn() as conn:
+        conn.execute("DELETE FROM orc_presence WHERE name = ?", (name,))
+
+
+def ping_host(hostname, timeout=2):
+    return icmplib.ping(hostname, count=3, timeout=timeout, privileged=True).is_alive
 
 
 _YDL_OPTS = {

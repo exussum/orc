@@ -82,6 +82,7 @@ def schedule():
             jobs=jobs,
             theme=theme,
             durations=config.durations,
+            present_names=app.orc.config_manager.present_names,
         ),
         200,
         {"Cache-control": "max-age=604800"},
@@ -106,6 +107,27 @@ def cfg():
 def log():
     return (
         render_template("log.html", version=app.orc.version_manager.version, entries=api.log_entries()),
+        200,
+        {"Cache-control": "no-store"},
+    )
+
+
+@bp.route("/presence/")
+def presence():
+    cm = app.orc.config_manager
+    last_seen = cm.presence()
+    present = cm.present_names
+    rows = [
+        {
+            "name": name,
+            "hostnames": sorted(hostnames),
+            "last_seen": last_seen[name].isoformat() if name in last_seen else None,
+            "present": name in present,
+        }
+        for name, hostnames in config.people.items()
+    ]
+    return (
+        render_template("presence.html", version=app.orc.version_manager.version, rows=rows),
         200,
         {"Cache-control": "no-store"},
     )
@@ -190,6 +212,13 @@ def set_theme():
     api.setup_scheduler(app.orc)
     if before != after:
         api.replay_day(app.orc.config_manager, now)
+
+
+@bp.route("/api/presence/<name>/expire", methods=["POST"])
+@VersionManager.versioned
+def expire_presence(name):
+    app.orc.config_manager.expire_presence(name)
+    api.log(api.local_now(), m.LogSource.MANUAL, f"Presence expired: {name}")
 
 
 @bp.route("/api/schedule/<id>/pause")
