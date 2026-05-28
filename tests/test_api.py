@@ -229,3 +229,78 @@ class TestGetSchedule:
         self.themes["vacation"] = self._theme("vacation", "vac-r")
         self.target.set_theme_override("vacation", date(2025, 12, 1), date(2025, 12, 31))
         assert self._names(api.get_schedule(self.target)) == ["sat-r", "sun-r"]
+
+
+@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
+class TestPresence:
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.target = api.ConfigManager()
+
+    def test_mark_and_query(self):
+        assert self.target.present_names == set()
+        self.target.mark_present("Alice")
+        assert self.target.present_names == {"Alice"}
+
+    def test_expire(self):
+        self.target.mark_present("Alice")
+        self.target.expire_presence("Alice")
+        assert self.target.present_names == set()
+
+    def test_stale_entry_outside_12h_window(self):
+        from orc import dal
+
+        dal.save_presence("Alice", datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
+        assert self.target.present_names == set()
+
+    def test_run_iot_job_skips_when_presence_absent(self):
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        rule = m.Routine("partner-r", time(8, 0), (), presence="Alice")
+        with patch.object(self.target, "route_rule") as route:
+            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+        route.assert_not_called()
+
+    def test_run_iot_job_runs_when_presence_present(self):
+        self.target.mark_present("Alice")
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        rule = m.Routine("partner-r", time(8, 0), (), presence="Alice")
+        with patch.object(self.target, "route_rule") as route:
+            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+        route.assert_called_once_with(rule, False)
+
+    def test_run_iot_job_runs_when_no_presence_required(self):
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        rule = m.Routine("r", time(8, 0), ())
+        with patch.object(self.target, "route_rule") as route:
+            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+        route.assert_called_once_with(rule, False)
+
+    def test_run_iot_job_force_bypasses_presence(self):
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        rule = m.Routine("partner-r", time(8, 0), (), presence="Alice")
+        with patch.object(self.target, "route_rule") as route:
+            api.run_iot_job(m.IotJob(rule), ctx=ctx, force=True)
+        route.assert_called_once_with(rule, True)
+
+    def test_run_iot_job_mandatory_bypasses_presence(self):
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        rule = m.Routine(
+            "reset-r",
+            time(8, 0),
+            (m.Config(orc.Light.a, "off", mandatory=True),),
+            presence="Alice",
+        )
+        with patch.object(self.target, "route_rule") as route:
+            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+        route.assert_called_once_with(rule, False)
+
+    def test_check_presence_continues_when_one_ping_raises(self):
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        with patch.object(config, "people", {"Alice": "alice.local", "Bob": "bob.local"}):
+            def ping(host):
+                if host == "alice.local":
+                    raise RuntimeError("dns boom")
+                return True
+            with patch.object(api.dal, "ping_host", side_effect=ping):
+                api.check_presence(ctx=ctx)
+        assert self.target.present_names == {"Bob"}

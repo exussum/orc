@@ -19,14 +19,21 @@
 
 ---
 
+##### People
+
+| Name | Hostname |
+|------|----------|
+
+---
+
 ##### Themes
 
-| Name     | ID                 | Time    |
-|----------|--------------------|---------|
-| work day | ROUTINE_RESET      | 1:00    |
-|          | ROUTINE_LIGHTS_ON  | sunset  |
-|          | ROUTINE_LIGHTS_OFF | sunrise |
-| day off  | ROUTINE_QUIET      | 23:00   |
+| Name     | ID                 | Time    | Presence |
+|----------|--------------------|---------|----------|
+| work day | ROUTINE_RESET      | 1:00    |          |
+|          | ROUTINE_LIGHTS_ON  | sunset  |          |
+|          | ROUTINE_LIGHTS_OFF | sunrise |          |
+| day off  | ROUTINE_QUIET      | 23:00   |          |
 
 ---
 

@@ -23,8 +23,13 @@ def _routines_md(rows):
 
 
 def _themes_md(rows):
-    header = "| Name | ID | Time |\n|------|----|------|\n"
+    header = "| Name | ID | Time | Presence |\n|------|----|------|----------|\n"
     return "##### Themes\n\n" + header + "".join(rows) + "\n---\n"
+
+
+def _people_md(rows):
+    header = "| Name | Hostname |\n|------|----------|\n"
+    return "##### People\n\n" + header + "".join(rows) + "\n---\n"
 
 
 def _rooms_md(rows):
@@ -141,16 +146,18 @@ def test_op_cmp_sorts_by_class_name():
 def test_build_themes_succeeds_with_required():
     doc = Document(
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | True |\n"])
-        + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
+        + _themes_md(["| work day | ROUTINE_RESET | 1:00 | Alice |\n", "| day off | ROUTINE_RESET | 23:00 |  |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Sound)
+    themes = m.build_themes(doc, "Routines", "Themes", Light, Sound, {"Alice": "alice.local"})
     assert set(themes) == {"work day", "day off"}
+    assert themes["work day"].configs[0].presence == "Alice"
+    assert themes["day off"].configs[0].presence is None
 
 
 def test_build_themes_missing_reset_routine():
     doc = Document(
         _routines_md(["| ROUTINE_OFF | Lights Off | Light | off | True |\n"])
-        + _themes_md(["| work day | ROUTINE_OFF | 1:00 |\n", "| day off | ROUTINE_OFF | 23:00 |\n"])
+        + _themes_md(["| work day | ROUTINE_OFF | 1:00 |  |\n", "| day off | ROUTINE_OFF | 23:00 |  |\n"])
     )
     with pytest.raises(ValueError, match="Missing required routines.*Reset"):
         m.build_themes(doc, "Routines", "Themes", Light, Sound)
@@ -158,10 +165,30 @@ def test_build_themes_missing_reset_routine():
 
 def test_build_themes_missing_required_theme():
     doc = Document(
-        _routines_md(["| ROUTINE_RESET | Reset | Light | off | True |\n"]) + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
+        _routines_md(["| ROUTINE_RESET | Reset | Light | off | True |\n"])
+        + _themes_md(["| work day | ROUTINE_RESET | 1:00 |  |\n"])
     )
     with pytest.raises(ValueError, match="Missing required themes.*day off"):
         m.build_themes(doc, "Routines", "Themes", Light, Sound)
+
+
+def test_build_themes_unknown_presence_name():
+    doc = Document(
+        _routines_md(["| ROUTINE_RESET | Reset | Light | off | True |\n"])
+        + _themes_md(["| work day | ROUTINE_RESET | 1:00 | Ghost |\n", "| day off | ROUTINE_RESET | 23:00 |  |\n"])
+    )
+    with pytest.raises(ValueError, match="Unknown presence names.*Ghost"):
+        m.build_themes(doc, "Routines", "Themes", Light, Sound, {"Alice": "alice.local"})
+
+
+def test_build_people():
+    doc = Document(_people_md(["| Alice | alice.local |\n", "| Bob | bob.local |\n"]))
+    assert m.build_people(doc, "People") == {"Alice": {"alice.local"}, "Bob": {"bob.local"}}
+
+
+def test_build_people_multiple_hosts():
+    doc = Document(_people_md(["| Alice | phone.local |\n", "| Alice | laptop.local |\n"]))
+    assert m.build_people(doc, "People") == {"Alice": {"phone.local", "laptop.local"}}
 
 
 def test_build_config_succeeds_with_required():
