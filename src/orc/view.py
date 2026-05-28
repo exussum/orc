@@ -47,7 +47,7 @@ class VersionManager:
 
 @bp.route("/")
 def index():
-    eligible = {r.name for (_, r) in api.get_schedule(app.orc.config_manager) if not any(cfg.mandatory for cfg in r.items)}
+    eligible = {r.name for (_, r) in api.get_schedule(app.orc.config_manager) if not any(cfg.trigger == "System" for cfg in r.items)}
     jobs = sorted(api.jobs_by_type(app.orc.scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
     next_schedule = next((e for e in jobs if e.name in eligible and e.next_run_time), None)
 
@@ -75,6 +75,9 @@ def schedule():
 
     theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
 
+    present_names = app.orc.config_manager.present_names
+    absent_by_job = {j.id: api._should_skip_for_presence(j.args[0].rule, False, present_names) for j in jobs}
+
     return (
         render_template(
             "schedule.html",
@@ -82,7 +85,7 @@ def schedule():
             jobs=jobs,
             theme=theme,
             durations=config.durations,
-            present_names=app.orc.config_manager.present_names,
+            absent_by_job=absent_by_job,
         ),
         200,
         {"Cache-control": "max-age=604800"},
@@ -121,13 +124,13 @@ def presence():
         {
             "name": name,
             "hostnames": sorted(hostnames),
-            "last_seen": last_seen[name].isoformat() if name in last_seen else None,
+            "last_seen": last_seen.get(name),
             "present": name in present,
         }
         for name, hostnames in config.people.items()
     ]
     return (
-        render_template("presence.html", version=app.orc.version_manager.version, rows=rows),
+        render_template("presence.html", version=app.orc.version_manager.version, rows=rows, strip_suffix=("." + config.root_domain) if config.root_domain else ""),
         200,
         {"Cache-control": "no-store"},
     )

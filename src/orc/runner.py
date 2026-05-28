@@ -15,7 +15,7 @@ from orc.view import VersionManager, bp
 
 
 def _build_app():
-    if os.getenv("ENABLED"):
+    if os.getenv("ORC_ENABLED"):
         secrets = api.get_secrets()
         config.config.load(secrets, api.get_hubitat_config(secrets), api.get_chromecast_config(), enabled=True)
 
