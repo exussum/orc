@@ -153,8 +153,10 @@ class ConfigManager:
         cutoff = local_now() - PRESENCE_WINDOW
         return {name for name, ts in self.presence().items() if ts >= cutoff}
 
-    def mark_present(self, name):
-        dal.save_presence(name, local_now())
+    def mark_present(self, names):
+        now = local_now()
+        for name in names:
+            dal.save_presence(name, now)
 
     def expire_presence(self, name):
         dal.delete_presence(name)
@@ -180,7 +182,7 @@ class ConfigManager:
 
     @unwrap_rule_container
     def route_rule(self, rule, force):
-        if rule.mandatory and self.snapshot:
+        if rule.trigger == "System" and self.snapshot:
             self.update_snapshot(rule)
             execute(rule)
         elif self.snapshot and local_now() > self.snapshot.end:
@@ -268,10 +270,9 @@ def get_schedule(config_manager):
 def _should_skip_for_presence(rule, force, present_names):
     if force:
         return False
-    if not rule.presence or rule.presence in present_names:
-        return False
-    if any(c.mandatory for c in rule.items):
-        return False
+    for c in rule.items:
+        if not c.trigger or c.trigger == "System" or c.trigger in present_names:
+            return False
     return True
 
 
@@ -280,7 +281,8 @@ def run_iot_job(job, ctx=None, force=False):
         raise ValueError("ctx must be injected by the executor")
     rule = job.rule
     if _should_skip_for_presence(rule, force, ctx.config_manager.present_names):
-        log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} (presence '{rule.presence}' absent)")
+        absent = sorted({c.trigger for c in rule.items if c.trigger and c.trigger != "System"})
+        log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} (presence '{', '.join(absent)}' absent)")
         return
     if not force:
         log(local_now(), m.LogSource.IOT, rule.name)
@@ -311,11 +313,15 @@ def check_presence(ctx=None):
     if not config.people:
         return
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
+    before = ctx.config_manager.present_names
     with Pool(max_workers=len(pairs)) as ex:
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
-    for name in present:
-        ctx.config_manager.mark_present(name)
+    ctx.config_manager.mark_present(present)
+    after = ctx.config_manager.present_names
+    for name in sorted(after - before):
         log(local_now(), m.LogSource.SYSTEM, f"Presence detected: {name}")
+    for name in sorted(before - after):
+        log(local_now(), m.LogSource.SYSTEM, f"Presence lost: {name}")
 
 
 def rebuild_iot_schedule(ctx=None):

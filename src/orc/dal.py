@@ -2,6 +2,7 @@ import os
 import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import date, datetime
 from functools import lru_cache
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -133,18 +134,29 @@ def _strip_googlevideo_params(url):
     return urlunparse(parsed._replace(query=query))
 
 
+@contextmanager
+def _cast(sound, **kwargs):
+    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None), **kwargs)
+    try:
+        cast.wait(timeout=kwargs.get("timeout"))
+        yield cast
+    finally:
+        cast.disconnect(timeout=2)
+
+
 def _fetch_sound(sound):
-    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None), timeout=5, tries=1)
-    cast.wait(timeout=5)
-    rh = pychromecast.response_handler.WaitResponse(5.0, "media status")
-    cast.media_controller.update_status(callback_function=rh.callback)
-    rh.wait_response()
-    content = cast.media_controller.status.content_id
-    return m.SoundState(
-        what=sound,
-        content=_strip_googlevideo_params(content) if content else None,
-        volume=int(cast.status.volume_level * 100),
-    )
+    with _cast(sound, timeout=5, tries=1) as cast:
+        rh = pychromecast.response_handler.WaitResponse(5.0, "media status")
+        cast.media_controller.update_status(callback_function=rh.callback)
+        rh.wait_response()
+        content = cast.media_controller.status.content_id
+        if not content:
+            cast.quit_app()
+        return m.SoundState(
+            what=sound,
+            content=_strip_googlevideo_params(content) if content else None,
+            volume=int(cast.status.volume_level * 100),
+        )
 
 
 def get_sound(Sound):
@@ -166,17 +178,15 @@ def set_light(light, on=None, brightness=None):
 
 
 def set_sound(sound, lvl):
-    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
-    cast.wait()
-    cast.set_volume(lvl / 100)
-    time.sleep(1)
+    with _cast(sound) as cast:
+        cast.set_volume(lvl / 100)
+        time.sleep(1)
 
 
 def stop_sound(sound):
-    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
-    cast.wait()
-    cast.quit_app()
-    time.sleep(1)
+    with _cast(sound) as cast:
+        cast.quit_app()
+        time.sleep(1)
 
 
 def resolve_youtube(id):
@@ -186,11 +196,10 @@ def resolve_youtube(id):
 
 
 def play_stream(sound, stream_url, title):
-    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None))
-    cast.wait()
-    cast.quit_app()
-    cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
-    time.sleep(1)
+    with _cast(sound) as cast:
+        cast.quit_app()
+        cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
+        time.sleep(1)
 
 
 def get_hubitat_config(secrets):

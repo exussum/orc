@@ -13,11 +13,12 @@ class Config:
     def __init__(self):
         self.orc_config = os.getenv("ORC_CONFIG", "src/config.md")
         self.jobs_db = os.getenv("ORC_DB", "sqlite:///jobs.sqlite")
-        self.base_url = os.getenv("BASE_URL")
-        self.http_timeout = int(os.getenv("HTTP_TIMEOUT", 5))
-        self.http_ical_timeout = int(os.getenv("HTTP_ICAL_TIMEOUT", 120))
-        self.tz = ZoneInfo(os.getenv("TZ", "America/New_York"))
-        self.lat_long = (float(os.getenv("LAT", 40.7143)), float(os.getenv("LONG", -74.0060)))
+        self.base_url = os.getenv("ORC_BASE_URL")
+        self.http_timeout = int(os.getenv("ORC_HTTP_TIMEOUT", 5))
+        self.http_ical_timeout = int(os.getenv("ORC_HTTP_ICAL_TIMEOUT", 120))
+        self.tz = ZoneInfo(os.getenv("ORC_TZ", "America/New_York"))
+        self.lat_long = (float(os.getenv("ORC_LAT", 40.7143)), float(os.getenv("ORC_LONG", -74.0060)))
+        self.root_domain = os.getenv("ORC_ROOT_DOMAIN", "")
         self.load(m.Secrets("", "", ""), {}, {})
 
     def load(self, secrets, hubitat_config, chromecast_config, enabled=False):
