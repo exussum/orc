@@ -32,7 +32,8 @@ class Config:
         globals()["Light"] = Light
         globals()["Sound"] = Sound
         self.virtual_devices = {e for cls in (Light, Sound) for e in cls if isinstance(e.value, int) and e.value < 0}
-        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Sound)
+        self.people = m.build_people(doc, "People")
+        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Sound, self.people)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
         self.room_configs = m.build_config(doc, "Room Configs", Light, Sound, required=("Living Room",))
         self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Sound)

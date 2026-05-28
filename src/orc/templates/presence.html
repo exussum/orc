@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block body %}
+    <table class="table">
+        <tr>
+            <th>Name</th>
+            <th>Hostname</th>
+            <th>Status</th>
+            <th>Last Seen</th>
+            <th></th>
+        </tr>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.name }}</td>
+            <td>
+                {% for hostname in row.hostnames %}
+                    {{ hostname }}<br>
+                {% endfor %}
+            </td>
+            <td>{{ 'present' if row.present else 'absent' }}</td>
+            <td>{{ row.last_seen or '' }}</td>
+            <td>
+                {% if row.present %}
+                    <button class="btn btn-primary orc-expire" data-name="{{ row.name }}">Expire</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+{% endblock %}
+
+{% block tail %}
+    <script>
+        async function expire(el) {
+            el.disabled = true;
+            fetch(`/api/presence/${encodeURIComponent(el.dataset.name)}/expire`, {
+                method: 'POST',
+                headers: { "orc-version": version }
+            }).then(() => { location.reload(); });
+        }
+        document.querySelectorAll(".orc-expire").forEach(el => {
+            el.addEventListener("click", e => expire(e.currentTarget));
+        });
+    </script>
+{% endblock %}

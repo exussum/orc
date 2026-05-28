@@ -97,6 +97,7 @@ class Routine:
     when: str
     items: Tuple[Config]
     _: KW_ONLY
+    presence: str | None = None
 
     def __post_init__(self) -> None:
         if self.when and not isinstance(self.when, time) and ":" in self.when:
@@ -209,7 +210,15 @@ def _validate_states(sub_tables, col):
     return [(type, c[col]) for type, e in sub_tables for c in e if not _valid_state(c[col])]
 
 
-def build_themes(doc, routine_section, theme_section, light, sound):
+def build_people(doc, section):
+    rows = doc_to_table(doc, section, 2)
+    people = defaultdict(set)
+    for name, host in rows:
+        people[name].add(host)
+    return people
+
+
+def build_themes(doc, routine_section, theme_section, light, sound, people=None):
     routine_tables = list(doc_to_sub_tables(doc, routine_section, 5))
 
     if invalid := _validate_states(routine_tables, 3):
@@ -221,12 +230,18 @@ def build_themes(doc, routine_section, theme_section, light, sound):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_mandatory)
         raise ValueError(f"Invalid mandatory values in section '{routine_section}': {details}")
 
-    theme_tables = list(doc_to_sub_tables(doc, theme_section, 3))
+    theme_tables = list(doc_to_sub_tables(doc, theme_section, 4))
 
     for theme_type, e in theme_tables:
         for c in e:
             if not _str_to_time(c[2]) and c[2] not in ("sunrise", "sunset"):
                 raise ValueError(f"Invalid time '{c[2]}' in theme '{theme_type}': expected HH:MM, 'sunrise', or 'sunset'")
+
+    known_people = set(people or {})
+    invalid_presence = [(t, c[3]) for t, e in theme_tables for c in e if c[3] not in (None, "") and c[3] not in known_people]
+    if invalid_presence:
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_presence)
+        raise ValueError(f"Unknown presence names in section '{theme_section}': {details}")
 
     routines = {}
     for type, e in routine_tables:
@@ -236,7 +251,9 @@ def build_themes(doc, routine_section, theme_section, light, sound):
     if missing := {"Reset"} - {r.name for r in routines.values()}:
         raise ValueError(f"Missing required routines in section '{routine_section}': {', '.join(sorted(missing))}")
 
-    themes = {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
+    themes = {
+        type: Theme(type, *[replace(routines[c[1]], when=c[2], presence=c[3] or None) for c in e]) for type, e in theme_tables
+    }
 
     if missing := {"work day", "day off"} - themes.keys():
         raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
