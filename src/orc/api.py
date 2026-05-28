@@ -4,6 +4,7 @@ import itertools
 import time
 import wave
 from collections import namedtuple as nt
+from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
@@ -45,6 +46,7 @@ class ContextThreadPoolExecutor(ThreadPoolExecutor):
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
+PRESENCE_WINDOW = timedelta(hours=12)
 
 _ACTIVITY_LOG = m.ActivityLog()
 
@@ -142,6 +144,20 @@ class ConfigManager:
 
     def set_theme_override(self, name, start, end):
         self.theme_override = ThemeOverride(name, start, end)
+
+    def presence(self):
+        return dal.load_presence()
+
+    @property
+    def present_names(self):
+        cutoff = local_now() - PRESENCE_WINDOW
+        return {name for name, ts in self.presence().items() if ts >= cutoff}
+
+    def mark_present(self, name):
+        dal.save_presence(name, local_now())
+
+    def expire_presence(self, name):
+        dal.delete_presence(name)
 
     def active_override(self, today):
         if self.theme_override and self.theme_override.start <= today <= self.theme_override.end:
@@ -249,12 +265,26 @@ def get_schedule(config_manager):
     return result
 
 
+def _should_skip_for_presence(rule, force, present_names):
+    if force:
+        return False
+    if not rule.presence or rule.presence in present_names:
+        return False
+    if any(c.mandatory for c in rule.items):
+        return False
+    return True
+
+
 def run_iot_job(job, ctx=None, force=False):
     if ctx is None:
         raise ValueError("ctx must be injected by the executor")
+    rule = job.rule
+    if _should_skip_for_presence(rule, force, ctx.config_manager.present_names):
+        log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} (presence '{rule.presence}' absent)")
+        return
     if not force:
-        log(local_now(), m.LogSource.IOT, job.rule.name)
-    ctx.config_manager.route_rule(job.rule, force)
+        log(local_now(), m.LogSource.IOT, rule.name)
+    ctx.config_manager.route_rule(rule, force)
 
 
 def run_cal_job(job, ctx=None):
@@ -265,6 +295,27 @@ def run_cal_job(job, ctx=None):
     else:
         log(local_now(), m.LogSource.CALENDAR, job.summary)
         play_text(job.summary)
+
+
+def _safe_ping(name, host):
+    try:
+        return name, dal.ping_host(host)
+    except Exception as exc:
+        log(local_now(), m.LogSource.SYSTEM, f"Presence ping failed for {name}: {exc}")
+        return name, False
+
+
+def check_presence(ctx=None):
+    if ctx is None:
+        raise ValueError("ctx must be injected by the executor")
+    if not config.people:
+        return
+    pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
+    with Pool(max_workers=len(pairs)) as ex:
+        present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
+    for name in present:
+        ctx.config_manager.mark_present(name)
+        log(local_now(), m.LogSource.SYSTEM, f"Presence detected: {name}")
 
 
 def rebuild_iot_schedule(ctx=None):
@@ -306,6 +357,14 @@ def setup_scheduler(ctx):
         replace_existing=True,
         id="cal-cron",
         name="Calendar Cron",
+        jobstore="memory",
+    )
+    ctx.scheduler.add_job(
+        check_presence,
+        CronTrigger.from_crontab("0 * * * *"),
+        replace_existing=True,
+        id="presence-cron",
+        name="Presence Cron",
         jobstore="memory",
     )
 
