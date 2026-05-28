@@ -10,12 +10,12 @@
 
 ##### Routines
 
-| ID                 | Name       | Expression | State | Mandatory |
-|--------------------|------------|------------|-------|-----------|
-| ROUTINE_RESET      | Reset      | Light      | off   | True      |
-| ROUTINE_LIGHTS_ON  | Lights On  | Light      | on    | True      |
-| ROUTINE_LIGHTS_OFF | Lights Off | Light      | off   | True      |
-| ROUTINE_QUIET      | Quiet      | Sound      | stop  | True      |
+| ID                 | Name       | Expression | State | Trigger |
+|--------------------|------------|------------|-------|---------|
+| ROUTINE_RESET      | Reset      | Light      | off   | System  |
+| ROUTINE_LIGHTS_ON  | Lights On  | Light      | on    | System  |
+| ROUTINE_LIGHTS_OFF | Lights Off | Light      | off   | System  |
+| ROUTINE_QUIET      | Quiet      | Sound      | stop  | System  |
 
 ---
 
@@ -28,12 +28,12 @@
 
 ##### Themes
 
-| Name     | ID                 | Time    | Presence |
-|----------|--------------------|---------|----------|
-| work day | ROUTINE_RESET      | 1:00    |          |
-|          | ROUTINE_LIGHTS_ON  | sunset  |          |
-|          | ROUTINE_LIGHTS_OFF | sunrise |          |
-| day off  | ROUTINE_QUIET      | 23:00   |          |
+| Name     | ID                 | Time    |
+|----------|--------------------|---------|
+| work day | ROUTINE_RESET      | 1:00    |
+|          | ROUTINE_LIGHTS_ON  | sunset  |
+|          | ROUTINE_LIGHTS_OFF | sunrise |
+| day off  | ROUTINE_QUIET      | 23:00   |
 
 ---
 

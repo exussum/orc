@@ -73,7 +73,7 @@ class Config:
     what: object
     state: object
     _: KW_ONLY
-    mandatory: bool = False
+    trigger: str | None = None
 
 
 @dataclass
@@ -96,8 +96,6 @@ class Routine:
     name: str
     when: str
     items: Tuple[Config]
-    _: KW_ONLY
-    presence: str | None = None
 
     def __post_init__(self) -> None:
         if self.when and not isinstance(self.when, time) and ":" in self.when:
@@ -225,23 +223,18 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{routine_section}': {details}")
 
-    invalid_mandatory = [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in ("True", "False", None, "")]
-    if invalid_mandatory:
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_mandatory)
-        raise ValueError(f"Invalid mandatory values in section '{routine_section}': {details}")
+    known_triggers = set(people or {}) | {"System"}
+    invalid_trigger = [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in (None, "") and c[4] not in known_triggers]
+    if invalid_trigger:
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_trigger)
+        raise ValueError(f"Unknown trigger names in section '{routine_section}': {details}")
 
-    theme_tables = list(doc_to_sub_tables(doc, theme_section, 4))
+    theme_tables = list(doc_to_sub_tables(doc, theme_section, 3))
 
     for theme_type, e in theme_tables:
         for c in e:
             if not _str_to_time(c[2]) and c[2] not in ("sunrise", "sunset"):
                 raise ValueError(f"Invalid time '{c[2]}' in theme '{theme_type}': expected HH:MM, 'sunrise', or 'sunset'")
-
-    known_people = set(people or {})
-    invalid_presence = [(t, c[3]) for t, e in theme_tables for c in e if c[3] not in (None, "") and c[3] not in known_people]
-    if invalid_presence:
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_presence)
-        raise ValueError(f"Unknown presence names in section '{theme_section}': {details}")
 
     routines = {}
     for type, e in routine_tables:
@@ -252,7 +245,7 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
         raise ValueError(f"Missing required routines in section '{routine_section}': {', '.join(sorted(missing))}")
 
     themes = {
-        type: Theme(type, *[replace(routines[c[1]], when=c[2], presence=c[3] or None) for c in e]) for type, e in theme_tables
+        type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables
     }
 
     if missing := {"work day", "day off"} - themes.keys():
@@ -306,11 +299,10 @@ def build_highlights(doc, section):
     return [(name, _str_to_time(start), _str_to_time(end)) for (name, start, end) in rows]
 
 
-def _build_config(cmd, sound, light, state, mandatory=None):
+def _build_config(cmd, sound, light, state, trigger=None):
     if state.isdigit():
         state = int(state)
-    mandatory = mandatory == "True"
-    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, mandatory=mandatory)
+    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, trigger=trigger or None)
 
 
 def _build_config_from_expr(cmd, sound, light):
