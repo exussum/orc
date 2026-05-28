@@ -14,11 +14,11 @@
             <td>{{ row.name }}</td>
             <td>
                 {% for hostname in row.hostnames %}
-                    {{ hostname }}<br>
+                    {{ hostname[:-(strip_suffix|length)] if strip_suffix and hostname.endswith(strip_suffix) else hostname }}<br>
                 {% endfor %}
             </td>
             <td>{{ 'present' if row.present else 'absent' }}</td>
-            <td>{{ row.last_seen or '' }}</td>
+            <td>{% if row.last_seen %}{{ row.last_seen.strftime("%m/%d") }} {{ row.last_seen.time().strftime("%I:%M %p") }}{% endif %}</td>
             <td>
                 {% if row.present %}
                     <button class="btn btn-primary orc-expire" data-name="{{ row.name }}">Expire</button>
