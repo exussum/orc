@@ -22,11 +22,23 @@ import orc
 from orc import config, dal
 from orc import model as m
 from orc.dal import (  # noqa: F401
-    get_chromecast_config,
-    get_hubitat_config,
-    get_secrets,
+    fetch_chromecast_config,
+    fetch_hubitat_config,
+    fetch_secrets,
     init_db,
 )
+
+_PRESENCE_WINDOW = timedelta(hours=12)
+_ACTIVITY_LOG = m.ActivityLog()
+
+_MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
+_CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
+_VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
+
+_EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
+_TIMESCALE = load.timescale()
+_EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
+_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
 
 
 class ContextThreadPoolExecutor(ThreadPoolExecutor):
@@ -46,18 +58,8 @@ class ContextThreadPoolExecutor(ThreadPoolExecutor):
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
-PRESENCE_WINDOW = timedelta(hours=12)
 
-_ACTIVITY_LOG = m.ActivityLog()
-
-_MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
-_CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
-_VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
-
-_EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
-_TIMESCALE = load.timescale()
-_EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
-_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
+# --- Utilities ---
 
 
 def log(when, source, action):
@@ -99,11 +101,81 @@ def unwrap_rule_container(f):
     return wrapper
 
 
+# --- Device control & audio ---
+
+
+@unwrap_rule_container
+def execute(rule):
+    what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+    sleep = time.sleep if len(what) > 1 else (lambda _: 1)
+    stream = {}
+    for w in what:
+        if w in config.virtual_devices:
+            print("Skipping virtual device:" + w)
+            continue
+
+        if isinstance(w, orc.Light):
+            if isinstance(rule.state, int):
+                dal.update_light(w, brightness=rule.state)
+            else:
+                dal.update_light(w, on=rule.state == "on")
+        elif isinstance(w, orc.Sound):
+            if isinstance(rule.state, int):
+                dal.update_sound(w, rule.state)
+            elif rule.state == "stop":
+                dal.stop_sound(w)
+            else:
+                if rule.state not in stream:
+                    if "http" in rule.state:
+                        stream[rule.state] = (rule.state, rule.state)
+                    else:
+                        stream[rule.state] = dal.fetch_youtube(rule.state)
+                dal.play_stream(w, *stream[rule.state])
+        else:
+            raise Exception("Unknown type")
+        sleep(0.1)
+
+
+def capture_lights():
+    return m.Configs(*(dal.fetch_light_state(e) for e in orc.Light))
+
+
+def capture_sounds():
+    return m.Configs(*dal.fetch_sounds(orc.Sound))
+
+
+def _play_text(text):
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as fh:
+        fh.setnchannels(1)
+        fh.setsampwidth(2)
+        fh.setframerate(_VOICE.config.sample_rate)
+        for audio_bytes in _VOICE.synthesize(text):
+            fh.writeframes(audio_bytes.audio_int16_bytes)
+    buf.seek(0)
+
+    pygame.mixer.init()
+    playing = pygame.mixer.Sound(buf).play()
+    while playing.get_busy():
+        pygame.time.delay(100)
+
+
+def _play_alert(path):
+    pygame.mixer.init()
+    sound = pygame.mixer.Sound(path)
+    playing = sound.play()
+    while playing.get_busy():
+        pygame.time.delay(100)
+
+
+# --- State manager ---
+
+
 class ConfigManager:
-    def __init__(self):
+    def __init__(self, theme_override=None, presence=None):
         self.snapshot = None
-        row = dal.load_theme_override()
-        self._theme_override = ThemeOverride(*row) if row else None
+        self._theme_override = theme_override
+        self._presence = dict(presence) if presence else {}
 
     @property
     def theme_override(self):
@@ -114,7 +186,6 @@ class ConfigManager:
     @theme_override.setter
     def theme_override(self, value):
         self._theme_override = value
-        dal.save_theme_override(value)
 
     def replace_config(self, target_config, end):
 
@@ -146,35 +217,34 @@ class ConfigManager:
         self.theme_override = ThemeOverride(name, start, end)
 
     def presence(self):
-        return dal.load_presence()
+        return dict(self._presence)
 
     @property
     def present_names(self):
-        cutoff = local_now() - PRESENCE_WINDOW
-        return {name for name, ts in self.presence().items() if ts >= cutoff}
+        cutoff = local_now() - _PRESENCE_WINDOW
+        return {name for name, ts in self._presence.items() if ts >= cutoff}
 
-    def mark_present(self, names):
-        now = local_now()
+    def mark_present(self, names, when=None):
+        when = when or local_now()
         for name in names:
-            dal.save_presence(name, now)
+            self._presence[name] = when
 
     def expire_presence(self, name):
-        dal.delete_presence(name)
+        self._presence.pop(name, None)
 
     def active_override(self, today):
         if self.theme_override and self.theme_override.start <= today <= self.theme_override.end:
             return self.theme_override
         return None
 
-    def calculate_theme(self, today):
+    def calculate_theme(self, today, holidays=()):
         if override := self.active_override(today):
             return override.name
 
         if today.weekday() not in (5, 6):
             today_iso = today.strftime("%Y-%m-%d")
-            market_schedule = dal.get_holidays(today.year)
             theme_name = (
-                "day off" if next((e for e in market_schedule if e["date"] == today_iso and e["exchange"] == "NYSE"), None) else "work day"
+                "day off" if next((e for e in holidays if e["date"] == today_iso and e["exchange"] == "NYSE"), None) else "work day"
             )
         else:
             theme_name = "day off"
@@ -192,44 +262,40 @@ class ConfigManager:
             execute(rule)
 
 
-@unwrap_rule_container
-def execute(rule):
-    what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-    sleep = time.sleep if len(what) > 1 else (lambda _: 1)
-    stream = {}
-    for w in what:
-        if w in config.virtual_devices:
-            print("Skipping virtual device:" + w)
-            continue
-
-        if isinstance(w, orc.Light):
-            if isinstance(rule.state, int):
-                dal.set_light(w, brightness=rule.state)
-            else:
-                dal.set_light(w, on=rule.state == "on")
-        elif isinstance(w, orc.Sound):
-            if isinstance(rule.state, int):
-                dal.set_sound(w, rule.state)
-            elif rule.state == "stop":
-                dal.stop_sound(w)
-            else:
-                if rule.state not in stream:
-                    if "http" in rule.state:
-                        stream[rule.state] = (rule.state, rule.state)
-                    else:
-                        stream[rule.state] = dal.resolve_youtube(rule.state)
-                dal.play_stream(w, *stream[rule.state])
-        else:
-            raise Exception("Unknown type")
-        sleep(0.1)
+def make_config_manager():
+    row = dal.fetch_theme_override()
+    theme_override = ThemeOverride(*row) if row else None
+    return ConfigManager(theme_override=theme_override, presence=dal.fetch_presence())
 
 
-def capture_lights():
-    return m.Configs(*(dal.get_light_state(e) for e in orc.Light))
+def set_theme_override(config_manager, name, start, end):
+    override = ThemeOverride(name, start, end)
+    config_manager.theme_override = override
+    dal.insert_theme_override(override)
 
 
-def capture_sounds():
-    return m.Configs(*dal.get_sound(orc.Sound))
+def clear_theme_override(config_manager):
+    config_manager.theme_override = None
+    dal.delete_theme_override()
+
+
+def _mark_present(config_manager, names):
+    now = local_now()
+    config_manager.mark_present(names, when=now)
+    for name in names:
+        dal.insert_presence(name, now)
+
+
+def expire_presence(config_manager, name):
+    config_manager.expire_presence(name)
+    dal.delete_presence(name)
+
+
+def calculate_theme(config_manager, today):
+    return config_manager.calculate_theme(today, dal.fetch_holidays(today.year))
+
+
+# --- Scheduling & job handlers ---
 
 
 def get_schedule(config_manager):
@@ -237,12 +303,15 @@ def get_schedule(config_manager):
     for x in range(2):
         now = local_now() + timedelta(days=x)
         today = now.date()
+
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.tz)
         day_start = _TIMESCALE.from_datetime(local_midnight)
         day_end = _TIMESCALE.from_datetime(local_midnight + timedelta(days=1))
+
+        prev = int(_TWILIGHT_FN(day_start).item())
         times, twilight = almanac.find_discrete(day_start, day_end, _TWILIGHT_FN)
         sunrise = sunset = None
-        prev = int(_TWILIGHT_FN(day_start).item())
+
         for t, curr in zip(times, twilight):
             curr = int(curr)
             if (prev, curr) == (3, 4):
@@ -254,7 +323,7 @@ def get_schedule(config_manager):
         if override := config_manager.active_override(today):
             cfg = config.themes.get(override.name)
         else:
-            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(config_manager.calculate_theme(today))
+            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(calculate_theme(config_manager, today))
 
         for e in cfg.configs:
             if e.when == "sunrise":
@@ -283,10 +352,7 @@ def run_iot_job(job, ctx=None, force=False):
         raise ValueError("ctx must be injected by the executor")
     rule = job.rule
     if should_skip_for_presence(rule, force, ctx.config_manager.present_names):
-        absent = sorted({
-            c.trigger for c in rule.items
-            if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)
-        })
+        absent = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
         detail = f"absent: {', '.join(absent)}" if absent else "no one present"
         log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} ({detail})")
         return
@@ -295,14 +361,14 @@ def run_iot_job(job, ctx=None, force=False):
     ctx.config_manager.route_rule(rule, force)
 
 
-def run_cal_job(job, ctx=None):
+def _run_cal_job(job, ctx=None):
     if ctx is None:
         raise ValueError("ctx must be injected by the executor")
     if job.event_type == "warning":
-        play_alert(ctx.sound_path)
+        _play_alert(ctx.sound_path)
     else:
         log(local_now(), m.LogSource.CALENDAR, job.summary)
-        play_text(job.summary)
+        _play_text(job.summary)
 
 
 def _safe_ping(name, host):
@@ -322,7 +388,7 @@ def check_presence(ctx=None):
     before = ctx.config_manager.present_names
     with Pool(max_workers=len(pairs)) as ex:
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
-    ctx.config_manager.mark_present(present)
+    _mark_present(ctx.config_manager, present)
     after = ctx.config_manager.present_names
     for name in sorted(after - before):
         log(local_now(), m.LogSource.SYSTEM, f"Presence detected: {name}")
@@ -330,7 +396,32 @@ def check_presence(ctx=None):
         log(local_now(), m.LogSource.SYSTEM, f"Presence lost: {name}")
 
 
-def rebuild_iot_schedule(ctx=None):
+def _schedule_cal_tasks(scheduler, config_manager):
+    now = local_now()
+    if calculate_theme(config_manager, now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40]):
+        events = list(itertools.islice(dal.fetch_ical(now, timedelta(hours=20)), 50))
+        warning_events = (m.CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2), config.tz) for e in events)
+        alarm_events = (m.CalendarEvent.from_cal(e, "alarm", timedelta(), config.tz) for e in events)
+
+        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
+
+        for e in jobs_by_type(scheduler, m.CalendarJob):
+            if e.id not in calendar_by_id:
+                scheduler.remove_job(e.id)
+
+        for id, event in calendar_by_id.items():
+            scheduler.add_job(
+                _run_cal_job,
+                DateTrigger(event.datetime),
+                args=[m.CalendarJob(event.type, event.summary)],
+                replace_existing=True,
+                id=id,
+                name=event.summary,
+                jobstore="memory",
+            )
+
+
+def _rebuild_iot_schedule(ctx=None):
     if ctx is None:
         raise ValueError("ctx must be injected by the executor")
     now = local_now()
@@ -346,17 +437,17 @@ def rebuild_iot_schedule(ctx=None):
             )
 
 
-def rebuild_cal_schedule(ctx=None):
+def _rebuild_cal_schedule(ctx=None):
     if ctx is None:
         raise ValueError("ctx must be injected by the executor")
-    schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
+    _schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
 
 
 def setup_scheduler(ctx):
     if not jobs_by_type(ctx.scheduler, m.IotJob):
-        rebuild_iot_schedule(ctx)
+        _rebuild_iot_schedule(ctx)
     ctx.scheduler.add_job(
-        rebuild_iot_schedule,
+        _rebuild_iot_schedule,
         CronTrigger.from_crontab("10 0 * * *"),
         replace_existing=True,
         id="iot-cron",
@@ -364,7 +455,7 @@ def setup_scheduler(ctx):
         jobstore="memory",
     )
     ctx.scheduler.add_job(
-        rebuild_cal_schedule,
+        _rebuild_cal_schedule,
         CronTrigger.from_crontab("*/5 8-18 * * *"),
         replace_existing=True,
         id="cal-cron",
@@ -381,53 +472,7 @@ def setup_scheduler(ctx):
     )
 
 
-def schedule_cal_tasks(scheduler, config_manager):
-    now = local_now()
-    if config_manager.calculate_theme(now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40]):
-        events = list(itertools.islice(dal.read_ical(now, timedelta(hours=20)), 50))
-        warning_events = (m.CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2), config.tz) for e in events)
-        alarm_events = (m.CalendarEvent.from_cal(e, "alarm", timedelta(), config.tz) for e in events)
-
-        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
-
-        for e in jobs_by_type(scheduler, m.CalendarJob):
-            if e.id not in calendar_by_id:
-                scheduler.remove_job(e.id)
-
-        for id, event in calendar_by_id.items():
-            scheduler.add_job(
-                run_cal_job,
-                DateTrigger(event.datetime),
-                args=[m.CalendarJob(event.type, event.summary)],
-                replace_existing=True,
-                id=id,
-                name=event.summary,
-                jobstore="memory",
-            )
-
-
-def play_text(text):
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as fh:
-        fh.setnchannels(1)
-        fh.setsampwidth(2)
-        fh.setframerate(_VOICE.config.sample_rate)
-        for audio_bytes in _VOICE.synthesize(text):
-            fh.writeframes(audio_bytes.audio_int16_bytes)
-    buf.seek(0)
-
-    pygame.mixer.init()
-    playing = pygame.mixer.Sound(buf).play()
-    while playing.get_busy():
-        pygame.time.delay(100)
-
-
-def play_alert(path):
-    pygame.mixer.init()
-    sound = pygame.mixer.Sound(path)
-    playing = sound.play()
-    while playing.get_busy():
-        pygame.time.delay(100)
+# --- Manual triggers / replay ---
 
 
 def sound_test(theme, sound_path):
@@ -436,8 +481,8 @@ def sound_test(theme, sound_path):
         execute(e)
         time.sleep(5)
     execute(m.Config(orc.Sound, "stop"))
-    play_alert(sound_path)
-    play_text("audio test")
+    _play_alert(sound_path)
+    _play_text("audio test")
 
 
 def light_test():
