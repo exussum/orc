@@ -182,7 +182,7 @@ class ConfigManager:
 
     @unwrap_rule_container
     def route_rule(self, rule, force):
-        if rule.trigger == "System" and self.snapshot:
+        if rule.trigger == m.Trigger.SYSTEM and self.snapshot:
             self.update_snapshot(rule)
             execute(rule)
         elif self.snapshot and local_now() > self.snapshot.end:
@@ -267,7 +267,7 @@ def get_schedule(config_manager):
     return result
 
 
-def _should_skip_for_presence(rule, force, present_names):
+def should_skip_for_presence(rule, force, present_names):
     if force or not rule.items:
         return False
     for c in rule.items:
@@ -282,9 +282,13 @@ def run_iot_job(job, ctx=None, force=False):
     if ctx is None:
         raise ValueError("ctx must be injected by the executor")
     rule = job.rule
-    if _should_skip_for_presence(rule, force, ctx.config_manager.present_names):
-        absent = sorted({c.trigger for c in rule.items if c.trigger and c.trigger != m.Trigger.SYSTEM})
-        log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} (presence '{', '.join(absent)}' absent)")
+    if should_skip_for_presence(rule, force, ctx.config_manager.present_names):
+        absent = sorted({
+            c.trigger for c in rule.items
+            if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)
+        })
+        detail = f"absent: {', '.join(absent)}" if absent else "no one present"
+        log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} ({detail})")
         return
     if not force:
         log(local_now(), m.LogSource.IOT, rule.name)
@@ -312,9 +316,9 @@ def _safe_ping(name, host):
 def check_presence(ctx=None):
     if ctx is None:
         raise ValueError("ctx must be injected by the executor")
-    if not config.people:
-        return
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
+    if not pairs:
+        return
     before = ctx.config_manager.present_names
     with Pool(max_workers=len(pairs)) as ex:
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}

@@ -325,7 +325,11 @@ def squish_configs(*configs, state_override=None):
 
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             for e in what:
-                rules[e].append(Config(what=e, state=rule.state if state_override is None else state_override))
+                rules[e].append(Config(
+                    what=e,
+                    state=rule.state if state_override is None else state_override,
+                    trigger=rule.trigger,
+                ))
 
     rules = list(chain.from_iterable(squish(e) for e in rules.values()))
     rules.sort(key=_op_cmp)
