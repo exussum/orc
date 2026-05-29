@@ -373,7 +373,7 @@ def setup_scheduler(ctx):
     )
     ctx.scheduler.add_job(
         check_presence,
-        CronTrigger.from_crontab("0 * * * *"),
+        CronTrigger.from_crontab("5 * * * *"),
         replace_existing=True,
         id="presence-cron",
         name="Presence Cron",
