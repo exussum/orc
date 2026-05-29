@@ -183,8 +183,7 @@ def test_build_themes_missing_reset_routine():
 
 def test_build_themes_missing_required_theme():
     doc = Document(
-        _routines_md(["| ROUTINE_RESET | Reset | Light | off | System |\n"])
-        + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
+        _routines_md(["| ROUTINE_RESET | Reset | Light | off | System |\n"]) + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required themes.*day off"):
         m.build_themes(doc, "Routines", "Themes", Light, Sound)

@@ -51,7 +51,8 @@ def index():
     jobs = sorted(api.jobs_by_type(app.orc.scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
     next_schedule = next(
         (
-            j for j in jobs
+            j
+            for j in jobs
             if j.next_run_time
             and not any(cfg.trigger == m.Trigger.SYSTEM for cfg in j.args[0].rule.items)
             and not api.should_skip_for_presence(j.args[0].rule, False, present_names)
@@ -102,13 +103,15 @@ def schedule():
 
 @bp.route("/config/")
 def cfg():
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
     with open(config.orc_config) as f:
         return render_template(
             "config.html",
             html=HtmlRenderer().render(Document(f)),
             ctx=app.orc,
-            today=date.today(),
-            tomorrow=date.today() + timedelta(days=1),
+            today_theme=api.calculate_theme(app.orc.config_manager, today),
+            tomorrow_theme=api.calculate_theme(app.orc.config_manager, tomorrow),
             lights=api.capture_lights(),
             sounds=api.capture_sounds(),
         )
@@ -138,7 +141,12 @@ def presence():
         for name, hostnames in config.people.items()
     ]
     return (
-        render_template("presence.html", version=app.orc.version_manager.version, rows=rows, strip_suffix=("." + config.root_domain) if config.root_domain else ""),
+        render_template(
+            "presence.html",
+            version=app.orc.version_manager.version,
+            rows=rows,
+            strip_suffix=("." + config.root_domain) if config.root_domain else "",
+        ),
         200,
         {"Cache-control": "no-store"},
     )
@@ -208,16 +216,16 @@ def set_theme():
     now = api.local_now()
     today = now.date()
 
-    before = app.orc.config_manager.calculate_theme(today)
+    before = api.calculate_theme(app.orc.config_manager, today)
     if not request.form["theme"]:
         api.log(now, m.LogSource.MANUAL, "Theme override cleared")
-        app.orc.config_manager.theme_override = None
+        api.clear_theme_override(app.orc.config_manager)
     else:
         start = date.fromisoformat(request.form["start"])
         end = date.fromisoformat(request.form["end"])
-        app.orc.config_manager.set_theme_override(request.form["theme"], start, end)
+        api.set_theme_override(app.orc.config_manager, request.form["theme"], start, end)
         api.log(now, m.LogSource.MANUAL, f"Theme override set: {request.form['theme']} {start}..{end}")
-    after = app.orc.config_manager.calculate_theme(today)
+    after = api.calculate_theme(app.orc.config_manager, today)
 
     app.orc.scheduler.remove_all_jobs()
     api.setup_scheduler(app.orc)
@@ -228,7 +236,7 @@ def set_theme():
 @bp.route("/api/presence/<name>/expire", methods=["POST"])
 @VersionManager.versioned
 def expire_presence(name):
-    app.orc.config_manager.expire_presence(name)
+    api.expire_presence(app.orc.config_manager, name)
     api.log(api.local_now(), m.LogSource.MANUAL, f"Presence expired: {name}")
 
 
