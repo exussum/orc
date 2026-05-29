@@ -8,6 +8,9 @@ import orc
 from orc import api, config
 from orc import model as m
 
+FUTURE = datetime(2100, 1, 1, tzinfo=config.tz)
+PAST = datetime(2000, 1, 1, tzinfo=config.tz)
+
 
 @pytest.fixture
 def snapshot_config():
@@ -20,18 +23,18 @@ class TestManagingConfig:
         self.target = api.ConfigManager()
 
     def test_resume_with_snapshot(self, execute, snapshot_config):
-        snapshot = self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.resume(None)
-        assert execute.call_args_list == [call(snapshot.routine)]
+        assert execute.call_args_list == [call(snapshot_config)]
 
-    def test_resume_with_without_snapshot(self, execute):
+    def test_resume_without_snapshot(self, execute):
         routine = object()
         self.target.resume(routine)
         assert execute.call_args_list == [call(routine)]
 
     def test_resume_with_old_snapshot(self, execute, snapshot_config):
         routine = object()
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.tz))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=PAST)
         self.target.resume(routine)
         assert execute.call_args_list == [call(routine)]
         assert not self.target.snapshot
@@ -43,22 +46,22 @@ class TestRouteRule:
         self.target = api.ConfigManager()
 
     def test_snapshot_update_overwrite_set(self, set_light, snapshot_config):
-        rule = m.Config(set((orc.Light.b,)), config.ON, trigger="System")
+        rule = m.Config(set((orc.Light.b,)), config.ON, trigger=m.Trigger.SYSTEM)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
             m.Config(orc.Light.a, config.ON),
-            m.Config(orc.Light.b, config.ON, trigger="System"),
+            m.Config(orc.Light.b, config.ON, trigger=m.Trigger.SYSTEM),
         )
         assert set_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
 
     def test_snapshot_update_add(self, set_light, snapshot_config):
-        rule = m.Config(orc.Light.c, config.ON, trigger="System")
+        rule = m.Config(orc.Light.c, config.ON, trigger=m.Trigger.SYSTEM)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
@@ -71,7 +74,7 @@ class TestRouteRule:
     def test_rule_ignored(self, set_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
@@ -83,16 +86,16 @@ class TestRouteRule:
     def test_rule_old_snapshot(self, set_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2000, 1, 1, tzinfo=config.tz))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=PAST)
         self.target.route_rule(rule, False)
 
-        assert self.target.snapshot == None
+        assert self.target.snapshot is None
         assert set_light.call_args_list == [call(orc.Light.c, on=True)]
 
     def test_snapshot_bypassed(self, set_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=datetime(2100, 1, 1, tzinfo=config.tz))
+        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
 
         self.target.route_rule(rule, True)
 
@@ -236,6 +239,11 @@ class TestPresence:
     @pytest.fixture(autouse=True)
     def _setup(self):
         self.target = api.ConfigManager()
+        self.ctx = type("Ctx", (), {"config_manager": self.target})()
+
+    @staticmethod
+    def _routine(name, trigger):
+        return m.Routine(name, time(8, 0), (m.Config(orc.Light.a, config.OFF, trigger=trigger),))
 
     def test_mark_and_query(self):
         assert self.target.present_names == set()
@@ -254,75 +262,55 @@ class TestPresence:
         assert self.target.present_names == set()
 
     def test_run_iot_job_skips_when_presence_absent(self):
-        ctx = type("Ctx", (), {"config_manager": self.target})()
-        rule = m.Routine("partner-r", time(8, 0), (m.Config(orc.Light.a, "off", trigger="Alice"),))
+        rule = self._routine("partner-r", "Alice")
         with patch.object(self.target, "route_rule") as route:
-            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self):
         self.target.mark_present(["Alice"])
-        ctx = type("Ctx", (), {"config_manager": self.target})()
-        rule = m.Routine("partner-r", time(8, 0), (m.Config(orc.Light.a, "off", trigger="Alice"),))
+        rule = self._routine("partner-r", "Alice")
         with patch.object(self.target, "route_rule") as route:
-            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_runs_when_no_presence_required(self):
-        ctx = type("Ctx", (), {"config_manager": self.target})()
         rule = m.Routine("r", time(8, 0), ())
         with patch.object(self.target, "route_rule") as route:
-            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_force_bypasses_presence(self):
-        ctx = type("Ctx", (), {"config_manager": self.target})()
-        rule = m.Routine("partner-r", time(8, 0), (m.Config(orc.Light.a, "off", trigger="Alice"),))
+        rule = self._routine("partner-r", "Alice")
         with patch.object(self.target, "route_rule") as route:
-            api.run_iot_job(m.IotJob(rule), ctx=ctx, force=True)
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx, force=True)
         route.assert_called_once_with(rule, True)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self):
-        ctx = type("Ctx", (), {"config_manager": self.target})()
-        rule = m.Routine(
-            "reset-r",
-            time(8, 0),
-            (m.Config(orc.Light.a, "off", trigger="System"),),
-        )
+        rule = self._routine("reset-r", m.Trigger.SYSTEM)
         with patch.object(self.target, "route_rule") as route:
-            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
         self.target.mark_present(["Bob"])
-        ctx = type("Ctx", (), {"config_manager": self.target})()
-        rule = m.Routine(
-            "anyone-r",
-            time(8, 0),
-            (m.Config(orc.Light.a, "off", trigger="Anyone"),),
-        )
+        rule = self._routine("anyone-r", m.Trigger.ANYONE)
         with patch.object(self.target, "route_rule") as route:
-            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self):
-        ctx = type("Ctx", (), {"config_manager": self.target})()
-        rule = m.Routine(
-            "anyone-r",
-            time(8, 0),
-            (m.Config(orc.Light.a, "off", trigger="Anyone"),),
-        )
+        rule = self._routine("anyone-r", m.Trigger.ANYONE)
         with patch.object(self.target, "route_rule") as route:
-            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_not_called()
 
     def test_check_presence_continues_when_one_ping_raises(self):
-        ctx = type("Ctx", (), {"config_manager": self.target})()
         with patch.object(config, "people", {"Alice": {"alice.local"}, "Bob": {"bob.local"}}):
             def ping(host):
                 if host == "alice.local":
                     raise RuntimeError("dns boom")
                 return True
             with patch.object(api.dal, "ping_host", side_effect=ping):
-                api.check_presence(ctx=ctx)
+                api.check_presence(ctx=self.ctx)
         assert self.target.present_names == {"Bob"}
