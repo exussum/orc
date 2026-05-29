@@ -27,6 +27,9 @@
         </tr>
         {% endfor %}
     </table>
+    <div class="mt-2">
+        <button id="orc-presence-run" class="btn btn-primary">Run Check Now</button>
+    </div>
 {% endblock %}
 
 {% block tail %}
@@ -38,8 +41,16 @@
                 headers: { "orc-version": version }
             }).then(() => { location.reload(); });
         }
+        async function runCheck(el) {
+            el.disabled = true;
+            fetch(`/api/presence/run`, {
+                method: 'POST',
+                headers: { "orc-version": version }
+            }).then(() => { location.reload(); });
+        }
         document.querySelectorAll(".orc-expire").forEach(el => {
             el.addEventListener("click", e => expire(e.currentTarget));
         });
+        document.querySelector("#orc-presence-run").addEventListener("click", e => runCheck(e.currentTarget));
     </script>
 {% endblock %}

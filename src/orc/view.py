@@ -232,6 +232,14 @@ def expire_presence(name):
     api.log(api.local_now(), m.LogSource.MANUAL, f"Presence expired: {name}")
 
 
+@bp.route("/api/presence/run", methods=["POST"])
+@VersionManager.versioned
+def run_presence_check():
+    job = app.orc.scheduler.get_job("presence-cron")
+    api.log(api.local_now(), m.LogSource.MANUAL, f"Force run: {job.name}")
+    job.func(ctx=app.orc)
+
+
 @bp.route("/api/schedule/<id>/pause")
 @VersionManager.versioned
 def pause(id):
