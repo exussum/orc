@@ -40,12 +40,12 @@ class TestManagingConfig:
         assert not self.target.snapshot
 
 
-@patch("orc.api.dal.set_light")
+@patch("orc.api.dal.update_light")
 class TestRouteRule:
     def setup_method(self):
         self.target = api.ConfigManager()
 
-    def test_snapshot_update_overwrite_set(self, set_light, snapshot_config):
+    def test_snapshot_update_overwrite_set(self, update_light, snapshot_config):
         rule = m.Config(set((orc.Light.b,)), config.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
@@ -56,9 +56,9 @@ class TestRouteRule:
             m.Config(orc.Light.a, config.ON),
             m.Config(orc.Light.b, config.ON, trigger=m.Trigger.SYSTEM),
         )
-        assert set_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
 
-    def test_snapshot_update_add(self, set_light, snapshot_config):
+    def test_snapshot_update_add(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
@@ -69,9 +69,9 @@ class TestRouteRule:
             m.Config(orc.Light.b, config.OFF),
             rule,
         )
-        assert set_light.call_args_list == [call(orc.Light.c, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
-    def test_rule_ignored(self, set_light, snapshot_config):
+    def test_rule_ignored(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
         self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
@@ -81,18 +81,18 @@ class TestRouteRule:
             m.Config(orc.Light.a, config.ON),
             m.Config(orc.Light.b, config.OFF),
         )
-        assert set_light.call_args_list == []
+        assert update_light.call_args_list == []
 
-    def test_rule_old_snapshot(self, set_light, snapshot_config):
+    def test_rule_old_snapshot(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
         self.target.snapshot = api.SnapShot(routine=snapshot_config, end=PAST)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot is None
-        assert set_light.call_args_list == [call(orc.Light.c, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
-    def test_snapshot_bypassed(self, set_light, snapshot_config):
+    def test_snapshot_bypassed(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
         self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
@@ -103,7 +103,7 @@ class TestRouteRule:
             m.Config(orc.Light.a, config.ON),
             m.Config(orc.Light.b, config.OFF),
         )
-        assert set_light.call_args_list == [call(orc.Light.c, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
 
 def test_unwrapper_function_single_rule():
@@ -256,9 +256,7 @@ class TestPresence:
         assert self.target.present_names == set()
 
     def test_stale_entry_outside_12h_window(self):
-        from orc import dal
-
-        dal.save_presence("Alice", datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
+        self.target.mark_present(["Alice"], when=datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
         assert self.target.present_names == set()
 
     def test_run_iot_job_skips_when_presence_absent(self):
@@ -307,10 +305,12 @@ class TestPresence:
 
     def test_check_presence_continues_when_one_ping_raises(self):
         with patch.object(config, "people", {"Alice": {"alice.local"}, "Bob": {"bob.local"}}):
+
             def ping(host):
                 if host == "alice.local":
                     raise RuntimeError("dns boom")
                 return True
+
             with patch.object(api.dal, "ping_host", side_effect=ping):
                 api.check_presence(ctx=self.ctx)
         assert self.target.present_names == {"Bob"}

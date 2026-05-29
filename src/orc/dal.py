@@ -31,12 +31,10 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS orc_theme_override "
             "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
         )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)"
-        )
+        conn.execute("CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)")
 
 
-def load_theme_override():
+def fetch_theme_override():
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT name, start, end FROM orc_theme_override WHERE id = 0").fetchone()
     if not row:
@@ -44,29 +42,30 @@ def load_theme_override():
     return (row[0], date.fromisoformat(row[1]), date.fromisoformat(row[2]))
 
 
-def save_theme_override(override):
+def insert_theme_override(override):
     with _theme_override_conn() as conn:
-        if override is None:
-            conn.execute("DELETE FROM orc_theme_override WHERE id = 0")
-        else:
-            conn.execute(
-                "INSERT INTO orc_theme_override (id, name, start, end) VALUES (0, ?, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET name=excluded.name, start=excluded.start, end=excluded.end",
-                (override[0], override[1].isoformat(), override[2].isoformat()),
-            )
+        conn.execute(
+            "INSERT INTO orc_theme_override (id, name, start, end) VALUES (0, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET name=excluded.name, start=excluded.start, end=excluded.end",
+            (override[0], override[1].isoformat(), override[2].isoformat()),
+        )
 
 
-def load_presence():
+def delete_theme_override():
+    with _theme_override_conn() as conn:
+        conn.execute("DELETE FROM orc_theme_override WHERE id = 0")
+
+
+def fetch_presence():
     with _theme_override_conn() as conn:
         rows = conn.execute("SELECT name, last_seen FROM orc_presence").fetchall()
     return {name: datetime.fromisoformat(last_seen) for name, last_seen in rows}
 
 
-def save_presence(name, when):
+def insert_presence(name, when):
     with _theme_override_conn() as conn:
         conn.execute(
-            "INSERT INTO orc_presence (name, last_seen) VALUES (?, ?) "
-            "ON CONFLICT(name) DO UPDATE SET last_seen=excluded.last_seen",
+            "INSERT INTO orc_presence (name, last_seen) VALUES (?, ?) " "ON CONFLICT(name) DO UPDATE SET last_seen=excluded.last_seen",
             (name, when.isoformat()),
         )
 
@@ -92,7 +91,7 @@ def _get_url_value(url):
         return response.readline().decode("utf-8").strip()
 
 
-def get_secrets():
+def fetch_secrets():
     c = BitwardenClient(
         client_settings_from_dict(
             {
@@ -116,7 +115,7 @@ def get_secrets():
     )
 
 
-def get_light_state(light):
+def fetch_light_state(light):
     resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
     if resp.status_code == 200:
         attrs = {e["name"]: e["currentValue"] for e in resp.json()["attributes"]}
@@ -159,12 +158,12 @@ def _fetch_sound(sound):
         )
 
 
-def get_sound(Sound):
+def fetch_sounds(Sound):
     with ThreadPoolExecutor(max_workers=len(Sound)) as ex:
         return tuple(ex.map(_fetch_sound, Sound))
 
 
-def set_light(light, on=None, brightness=None):
+def update_light(light, on=None, brightness=None):
     if brightness is not None:
         requests.get(
             f"{config.base_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}",
@@ -177,7 +176,7 @@ def set_light(light, on=None, brightness=None):
         )
 
 
-def set_sound(sound, lvl):
+def update_sound(sound, lvl):
     with _cast(sound) as cast:
         cast.set_volume(lvl / 100)
         time.sleep(1)
@@ -189,7 +188,7 @@ def stop_sound(sound):
         time.sleep(1)
 
 
-def resolve_youtube(id):
+def fetch_youtube(id):
     with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
         info = ydl.extract_info(id, download=False)
         return info["url"], info.get("title", "Audio Stream")
@@ -202,12 +201,12 @@ def play_stream(sound, stream_url, title):
         time.sleep(1)
 
 
-def get_hubitat_config(secrets):
+def fetch_hubitat_config(secrets):
     result = requests.get(f"{config.base_url}/devices{secrets.access_token}", timeout=config.http_timeout).json()
     return {e["label"]: int(e["id"]) for e in result}
 
 
-def get_chromecast_config():
+def fetch_chromecast_config():
     chromecasts, browser = pychromecast.get_chromecasts()
     devices = {e.cast_info.friendly_name: e.cast_info.host for e in chromecasts}
     pychromecast.discovery.stop_discovery(browser)
@@ -215,7 +214,7 @@ def get_chromecast_config():
 
 
 @lru_cache(maxsize=2)
-def get_holidays(year):
+def fetch_holidays(year):
     if not config.enabled:
         return []
     result = requests.get(config.secrets.market_holidays_url, timeout=config.http_timeout).json()
@@ -225,7 +224,7 @@ def get_holidays(year):
     return result
 
 
-def read_ical(start, end):
+def fetch_ical(start, end):
     ical_string = requests.get(config.secrets.ics_url, timeout=config.http_ical_timeout).content
     a_calendar = icalendar.Calendar.from_ical(ical_string)
     return (e for e in recurring_ical_events.of(a_calendar).between(start, end) if type(e.start) is datetime and e.start >= start)
