@@ -268,10 +268,12 @@ def get_schedule(config_manager):
 
 
 def _should_skip_for_presence(rule, force, present_names):
-    if force:
+    if force or not rule.items:
         return False
     for c in rule.items:
-        if not c.trigger or c.trigger == "System" or c.trigger in present_names:
+        if not c.trigger or c.trigger == m.Trigger.SYSTEM or c.trigger in present_names:
+            return False
+        if c.trigger == m.Trigger.ANYONE and present_names:
             return False
     return True
 
@@ -281,7 +283,7 @@ def run_iot_job(job, ctx=None, force=False):
         raise ValueError("ctx must be injected by the executor")
     rule = job.rule
     if _should_skip_for_presence(rule, force, ctx.config_manager.present_names):
-        absent = sorted({c.trigger for c in rule.items if c.trigger and c.trigger != "System"})
+        absent = sorted({c.trigger for c in rule.items if c.trigger and c.trigger != m.Trigger.SYSTEM})
         log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} (presence '{', '.join(absent)}' absent)")
         return
     if not force:
