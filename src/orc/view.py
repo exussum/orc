@@ -47,9 +47,17 @@ class VersionManager:
 
 @bp.route("/")
 def index():
-    eligible = {r.name for (_, r) in api.get_schedule(app.orc.config_manager) if not any(cfg.trigger == "System" for cfg in r.items)}
+    present_names = app.orc.config_manager.present_names
     jobs = sorted(api.jobs_by_type(app.orc.scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
-    next_schedule = next((e for e in jobs if e.name in eligible and e.next_run_time), None)
+    next_schedule = next(
+        (
+            j for j in jobs
+            if j.next_run_time
+            and not any(cfg.trigger == m.Trigger.SYSTEM for cfg in j.args[0].rule.items)
+            and not api.should_skip_for_presence(j.args[0].rule, False, present_names)
+        ),
+        None,
+    )
 
     return (
         render_template(
@@ -76,7 +84,7 @@ def schedule():
     theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
 
     present_names = app.orc.config_manager.present_names
-    absent_by_job = {j.id: api._should_skip_for_presence(j.args[0].rule, False, present_names) for j in jobs}
+    absent_by_job = {j.id: api.should_skip_for_presence(j.args[0].rule, False, present_names) for j in jobs}
 
     return (
         render_template(
