@@ -25,6 +25,11 @@ class LogSource(str, Enum):
     SYSTEM = "system"
 
 
+class Trigger(str, Enum):
+    SYSTEM = "System"
+    ANYONE = "Anyone"
+
+
 @dataclass
 class LogEntry:
     timestamp: datetime
@@ -223,7 +228,7 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{routine_section}': {details}")
 
-    known_triggers = set(people or {}) | {"System"}
+    known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value}
     invalid_trigger = [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in (None, "") and c[4] not in known_triggers]
     if invalid_trigger:
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_trigger)
