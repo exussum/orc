@@ -16,12 +16,12 @@ from orc.view import VersionManager, bp
 
 def _build_app():
     if os.getenv("ORC_ENABLED"):
-        secrets = api.get_secrets()
-        config.config.load(secrets, api.get_hubitat_config(secrets), api.get_chromecast_config(), enabled=True)
+        secrets = api.fetch_secrets()
+        config.config.load(secrets, api.fetch_hubitat_config(secrets), api.fetch_chromecast_config(), enabled=True)
 
     api.init_db()
 
-    config_manager = api.ConfigManager()
+    config_manager = api.make_config_manager()
     version_manager = VersionManager()
 
     scheduler = BackgroundScheduler(

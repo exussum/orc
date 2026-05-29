@@ -249,9 +249,7 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
     if missing := {"Reset"} - {r.name for r in routines.values()}:
         raise ValueError(f"Missing required routines in section '{routine_section}': {', '.join(sorted(missing))}")
 
-    themes = {
-        type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables
-    }
+    themes = {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
 
     if missing := {"work day", "day off"} - themes.keys():
         raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
@@ -325,11 +323,13 @@ def squish_configs(*configs, state_override=None):
 
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             for e in what:
-                rules[e].append(Config(
-                    what=e,
-                    state=rule.state if state_override is None else state_override,
-                    trigger=rule.trigger,
-                ))
+                rules[e].append(
+                    Config(
+                        what=e,
+                        state=rule.state if state_override is None else state_override,
+                        trigger=rule.trigger,
+                    )
+                )
 
     rules = list(chain.from_iterable(squish(e) for e in rules.values()))
     rules.sort(key=_op_cmp)
