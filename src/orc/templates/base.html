@@ -54,7 +54,7 @@
                 return false;
             } finally {
                 el.disabled = false;
-                container.style.display = "none";
+                if (container) container.style.display = "none";
             }
         }
 
