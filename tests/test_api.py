@@ -293,9 +293,32 @@ class TestPresence:
             api.run_iot_job(m.IotJob(rule), ctx=ctx)
         route.assert_called_once_with(rule, False)
 
+    def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
+        self.target.mark_present(["Bob"])
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        rule = m.Routine(
+            "anyone-r",
+            time(8, 0),
+            (m.Config(orc.Light.a, "off", trigger="Anyone"),),
+        )
+        with patch.object(self.target, "route_rule") as route:
+            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+        route.assert_called_once_with(rule, False)
+
+    def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self):
+        ctx = type("Ctx", (), {"config_manager": self.target})()
+        rule = m.Routine(
+            "anyone-r",
+            time(8, 0),
+            (m.Config(orc.Light.a, "off", trigger="Anyone"),),
+        )
+        with patch.object(self.target, "route_rule") as route:
+            api.run_iot_job(m.IotJob(rule), ctx=ctx)
+        route.assert_not_called()
+
     def test_check_presence_continues_when_one_ping_raises(self):
         ctx = type("Ctx", (), {"config_manager": self.target})()
-        with patch.object(config, "people", {"Alice": "alice.local", "Bob": "bob.local"}):
+        with patch.object(config, "people", {"Alice": {"alice.local"}, "Bob": {"bob.local"}}):
             def ping(host):
                 if host == "alice.local":
                     raise RuntimeError("dns boom")

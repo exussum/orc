@@ -163,6 +163,15 @@ def test_build_themes_succeeds_with_system_trigger():
     assert themes["work day"].configs[0].items[0].trigger == "System"
 
 
+def test_build_themes_succeeds_with_anyone_trigger():
+    doc = Document(
+        _routines_md(["| ROUTINE_RESET | Reset | Light | off | Anyone |\n"])
+        + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
+    )
+    themes = m.build_themes(doc, "Routines", "Themes", Light, Sound)
+    assert themes["work day"].configs[0].items[0].trigger == "Anyone"
+
+
 def test_build_themes_missing_reset_routine():
     doc = Document(
         _routines_md(["| ROUTINE_OFF | Lights Off | Light | off | System |\n"])
