@@ -47,6 +47,7 @@ src_paths = ["src/orc"]
 minversion = "9.0"
 pythonpath = [ "src", "data/src" ]
 testpaths = [ "tests" ]
+filterwarnings = "ignore::UserWarning:pygame"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/orc"]
