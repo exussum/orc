@@ -56,10 +56,10 @@
 
 ##### Super Routines
 
-| Name           | Expression            |
-|----------------|-----------------------|
-| All Lights On  | Config(Light, "on"),  |
-| All Lights Off | Config(Light, "off"), |
+| Name           | Expression     |
+|----------------|----------------|
+| All Lights On  | all_lights_on  |
+| All Lights Off | all_lights_off |
 
 ---
 
