@@ -110,8 +110,8 @@ def execute(rule):
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
     stream = {}
     for w in what:
-        if w in config.virtual_devices:
-            print("Skipping virtual device:" + w)
+        if config.enabled and w in config.virtual_devices:
+            print("Skipping virtual device:" + w.name)
             continue
 
         if isinstance(w, orc.Light):

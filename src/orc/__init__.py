@@ -38,8 +38,8 @@ class Config:
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
         self.room_configs = m.build_config(doc, "Room Configs", Light, Sound, required=("Living Room",))
         self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Sound)
-        self.super_routines = m.build_expr_config(doc, "Super Routines", Light, Sound)
-        self.all_configs = self.super_routines | self.ad_hoc_routines | self.room_configs
+        self.plugins = m.build_plugins(doc, "Super Routines")
+        self.all_configs = self.ad_hoc_routines | self.room_configs
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=self.OFF)
         self.button_highlight_configs = m.build_highlights(doc, "Button Highlights")
         self.durations = m.build_durations(doc, "Durations")
