@@ -45,7 +45,7 @@ src_paths = ["src/orc"]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
-pythonpath = [ "src" ]
+pythonpath = [ "src", "data/src" ]
 testpaths = [ "tests" ]
 
 [tool.hatch.build.targets.wheel]
