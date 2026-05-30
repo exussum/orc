@@ -20,6 +20,15 @@ from sqlalchemy.engine.url import make_url
 from orc import config
 from orc import model as m
 
+_YDL_OPTS = {
+    "format": "bestaudio/best",  # Request the highest quality audio stream
+    "quiet": True,
+    "no_warnings": True,
+}
+
+
+# --- Database ---
+
 
 def _theme_override_conn():
     return sqlite3.connect(make_url(config.jobs_db).database)
@@ -75,15 +84,7 @@ def delete_presence(name):
         conn.execute("DELETE FROM orc_presence WHERE name = ?", (name,))
 
 
-def ping_host(hostname, timeout=2):
-    return icmplib.ping(hostname, count=3, timeout=timeout, privileged=True).is_alive
-
-
-_YDL_OPTS = {
-    "format": "bestaudio/best",  # Request the highest quality audio stream
-    "quiet": True,
-    "no_warnings": True,
-}
+# --- Secrets ---
 
 
 def _get_url_value(url):
@@ -115,6 +116,9 @@ def fetch_secrets():
     )
 
 
+# --- Lights ---
+
+
 def fetch_light_state(light):
     resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
     if resp.status_code == 200:
@@ -122,6 +126,22 @@ def fetch_light_state(light):
         return m.Config(what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"])
     else:
         return m.Config(what=light, state="off")
+
+
+def update_light(light, on=None, brightness=None):
+    if brightness is not None:
+        requests.get(
+            f"{config.base_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}",
+            timeout=config.http_timeout,
+        )
+    else:
+        requests.get(
+            f"{config.base_url}/devices/{light.value}/{'on' if on else 'off'}{config.secrets.access_token}",
+            timeout=config.http_timeout,
+        )
+
+
+# --- Sound ---
 
 
 def _strip_googlevideo_params(url):
@@ -163,19 +183,6 @@ def fetch_sounds(Sound):
         return tuple(ex.map(_fetch_sound, Sound))
 
 
-def update_light(light, on=None, brightness=None):
-    if brightness is not None:
-        requests.get(
-            f"{config.base_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}",
-            timeout=config.http_timeout,
-        )
-    else:
-        requests.get(
-            f"{config.base_url}/devices/{light.value}/{'on' if on else 'off'}{config.secrets.access_token}",
-            timeout=config.http_timeout,
-        )
-
-
 def update_sound(sound, lvl):
     with _cast(sound) as cast:
         cast.set_volume(lvl / 100)
@@ -201,6 +208,13 @@ def play_stream(sound, stream_url, title):
         time.sleep(1)
 
 
+# --- Discovery ---
+
+
+def ping_host(hostname, timeout=2):
+    return icmplib.ping(hostname, count=3, timeout=timeout, privileged=True).is_alive
+
+
 def fetch_hubitat_config(secrets):
     result = requests.get(f"{config.base_url}/devices{secrets.access_token}", timeout=config.http_timeout).json()
     return {e["label"]: int(e["id"]) for e in result}
@@ -211,6 +225,9 @@ def fetch_chromecast_config():
     devices = {e.cast_info.friendly_name: e.cast_info.host for e in chromecasts}
     pychromecast.discovery.stop_discovery(browser)
     return devices
+
+
+# --- External feeds ---
 
 
 @lru_cache(maxsize=2)
