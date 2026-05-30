@@ -268,10 +268,16 @@ def build_config(doc, section, light, sound, required=()):
     return result
 
 
-def build_expr_config(doc, section, light, sound):
+def build_plugins(doc, section):
+    from orc import plugins
+
     result = {}
     for type, e in doc_to_sub_tables(doc, section, 2):
-        result[type] = Configs(*itertools.chain(*(_build_config_from_expr(c[1], sound, light) for c in e if c[1])))
+        result[type] = e[0][1]
+
+    if missing := [k for k, v in result.items() if not hasattr(plugins, v)]:
+        raise ValueError(f"Unrecognised plugins in section '{section}': {', '.join(sorted(missing))}")
+
     return result
 
 
@@ -306,10 +312,6 @@ def _build_config(cmd, sound, light, state, trigger=None):
     if state.isdigit():
         state = int(state)
     return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, trigger=trigger or None)
-
-
-def _build_config_from_expr(cmd, sound, light):
-    return eval(cmd, {"__builtins__": {"Config": Config, "tuple": tuple, "itertools": itertools}}, {"Light": light, "Sound": sound})
 
 
 def squish_configs(*configs, state_override=None):

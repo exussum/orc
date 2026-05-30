@@ -1,6 +1,4 @@
-import os
 import random
-import signal
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
@@ -11,9 +9,9 @@ from flask import current_app as app
 from flask import render_template, request
 from mistletoe import Document, HtmlRenderer
 
-import orc
 from orc import api, config
 from orc import model as m
+from orc import plugins
 
 bp = Blueprint("button", __name__)
 
@@ -64,7 +62,7 @@ def index():
         render_template(
             "button.html",
             highlight_configs=config.button_highlight_configs,
-            super_routines=config.super_routines,
+            super_routines=config.plugins,
             room_configs=config.room_configs,
             ad_hoc_routines=config.ad_hoc_routines,
             schedule_routines=config.schedule_routines,
@@ -172,19 +170,9 @@ def remote(id):
 @bp.route("/api/console/<id>")
 def console(id):
     api.log(api.local_now(), m.LogSource.MANUAL, id)
-    if id == "Reboot":
-        os.kill(os.getppid(), signal.SIGTERM)
-    elif id == "Light Test":
-        end = api.local_now() + timedelta(minutes=10)
-        app.orc.config_manager.replace_config(m.Config(orc.Light, config.OFF), end)
-        api.light_test()
-        app.orc.config_manager.resume(config.default_config)
-    elif id == "Sound Test":
-        api.sound_test(config.super_routines[id], app.orc.sound_path)
-    elif id == "Back on Schedule":
-        api.replay_day(app.orc.config_manager, api.local_now())
-    elif id in config.super_routines:
-        api.execute(config.super_routines[id])
+
+    if id in config.plugins:
+        plugins.execute_plugin(app.orc, id)
     elif id in config.schedule_routines:
         api.execute(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
