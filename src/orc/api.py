@@ -28,7 +28,7 @@ from orc.dal import (  # noqa: F401
     init_db,
 )
 
-_PRESENCE_WINDOW = timedelta(hours=12)
+_PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
 
 _MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
