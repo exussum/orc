@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date, datetime
-from functools import lru_cache
+from functools import lru_cache, wraps
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from urllib.request import urlopen
 
@@ -25,6 +25,20 @@ _YDL_OPTS = {
     "quiet": True,
     "no_warnings": True,
 }
+
+
+def requires_enabled(stub):
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            if not config.enabled:
+                print(f"[disabled] {fn.__name__} args={args} kwargs={kwargs}")
+                return stub(*args, **kwargs) if callable(stub) else stub
+            return fn(*args, **kwargs)
+
+        return wrapper
+
+    return deco
 
 
 # --- Database ---
@@ -119,6 +133,7 @@ def fetch_secrets():
 # --- Lights ---
 
 
+@requires_enabled(lambda light: m.Config(what=light, state="off"))
 def fetch_light_state(light):
     resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
     if resp.status_code == 200:
@@ -128,6 +143,7 @@ def fetch_light_state(light):
         return m.Config(what=light, state="off")
 
 
+@requires_enabled(None)
 def update_light(light, on=None, brightness=None):
     if brightness is not None:
         requests.get(
@@ -163,6 +179,7 @@ def _cast(sound, **kwargs):
         cast.disconnect(timeout=2)
 
 
+@requires_enabled(lambda sound: m.SoundState(what=sound, content=None, volume=0))
 def _fetch_sound(sound):
     with _cast(sound, timeout=5, tries=1) as cast:
         rh = pychromecast.response_handler.WaitResponse(5.0, "media status")
@@ -178,29 +195,34 @@ def _fetch_sound(sound):
         )
 
 
+@requires_enabled(lambda Sound: tuple(m.SoundState(what=s, content=None, volume=0) for s in Sound))
 def fetch_sounds(Sound):
     with ThreadPoolExecutor(max_workers=len(Sound)) as ex:
         return tuple(ex.map(_fetch_sound, Sound))
 
 
+@requires_enabled(None)
 def update_sound(sound, lvl):
     with _cast(sound) as cast:
         cast.set_volume(lvl / 100)
         time.sleep(1)
 
 
+@requires_enabled(None)
 def stop_sound(sound):
     with _cast(sound) as cast:
         cast.quit_app()
         time.sleep(1)
 
 
+@requires_enabled(lambda *_: ("", "Audio Stream"))
 def fetch_youtube(id):
     with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
         info = ydl.extract_info(id, download=False)
         return info["url"], info.get("title", "Audio Stream")
 
 
+@requires_enabled(None)
 def play_stream(sound, stream_url, title):
     with _cast(sound) as cast:
         cast.quit_app()
@@ -211,15 +233,18 @@ def play_stream(sound, stream_url, title):
 # --- Discovery ---
 
 
+@requires_enabled(False)
 def ping_host(hostname, timeout=2):
     return icmplib.ping(hostname, count=3, timeout=timeout, privileged=True).is_alive
 
 
+@requires_enabled({})
 def fetch_hubitat_config(secrets):
     result = requests.get(f"{config.base_url}/devices{secrets.access_token}", timeout=config.http_timeout).json()
     return {e["label"]: int(e["id"]) for e in result}
 
 
+@requires_enabled({})
 def fetch_chromecast_config():
     chromecasts, browser = pychromecast.get_chromecasts()
     devices = {e.cast_info.friendly_name: e.cast_info.host for e in chromecasts}
@@ -230,10 +255,9 @@ def fetch_chromecast_config():
 # --- External feeds ---
 
 
+@requires_enabled([])
 @lru_cache(maxsize=2)
 def fetch_holidays(year):
-    if not config.enabled:
-        return []
     result = requests.get(config.secrets.market_holidays_url, timeout=config.http_timeout).json()
     if "error" in result:
         print(result["error"])
@@ -241,6 +265,7 @@ def fetch_holidays(year):
     return result
 
 
+@requires_enabled(lambda *_: iter(()))
 def fetch_ical(start, end):
     ical_string = requests.get(config.secrets.ics_url, timeout=config.http_ical_timeout).content
     a_calendar = icalendar.Calendar.from_ical(ical_string)
