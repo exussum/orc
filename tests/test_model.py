@@ -154,22 +154,14 @@ def test_build_themes_succeeds_with_required():
     assert themes["day off"].configs[0].items[0].trigger == "Alice"
 
 
-def test_build_themes_succeeds_with_system_trigger():
+@pytest.mark.parametrize("label,expected", [("System", m.Trigger.SYSTEM), ("Anyone", m.Trigger.ANYONE)])
+def test_build_themes_succeeds_with_builtin_trigger(label, expected):
     doc = Document(
-        _routines_md(["| ROUTINE_RESET | Reset | Light | off | System |\n"])
+        _routines_md([f"| ROUTINE_RESET | Reset | Light | off | {label} |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
     themes = m.build_themes(doc, "Routines", "Themes", Light, Sound)
-    assert themes["work day"].configs[0].items[0].trigger == m.Trigger.SYSTEM
-
-
-def test_build_themes_succeeds_with_anyone_trigger():
-    doc = Document(
-        _routines_md(["| ROUTINE_RESET | Reset | Light | off | Anyone |\n"])
-        + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
-    )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Sound)
-    assert themes["work day"].configs[0].items[0].trigger == m.Trigger.ANYONE
+    assert themes["work day"].configs[0].items[0].trigger == expected
 
 
 def test_build_themes_missing_reset_routine():
