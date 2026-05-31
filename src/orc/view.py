@@ -172,7 +172,7 @@ def console(id):
     api.log(api.local_now(), m.LogSource.MANUAL, id)
 
     if id in config.plugins:
-        plugins.execute_plugin(app.orc, id)
+        plugins.execute_plugin(app.orc.config_manager, id)
     elif id in config.schedule_routines:
         api.execute(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
@@ -195,6 +195,12 @@ def room(id):
     else:
         raise Exception("Unknown state")
 
+    return {}, 200
+
+
+@bp.route("/api/hubitat/callback", methods=["POST"])
+def hubitat_callback():
+    plugins.trigger_sensor(app.orc.scheduler)
     return {}, 200
 
 
