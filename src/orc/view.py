@@ -46,17 +46,7 @@ class VersionManager:
 @bp.route("/")
 def index():
     present_names = app.orc.config_manager.present_names
-    jobs = sorted(api.jobs_by_type(app.orc.scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
-    next_schedule = next(
-        (
-            j
-            for j in jobs
-            if j.next_run_time
-            and not any(cfg.trigger == m.Trigger.SYSTEM for cfg in j.args[0].rule.items)
-            and not api.should_skip_for_presence(j.args[0].rule, False, present_names)
-        ),
-        None,
-    )
+    next_schedule = api.next_iot_job(app.orc.scheduler, present_names)
 
     return (
         render_template(
@@ -159,8 +149,7 @@ def version():
 def remote(id):
     api.log(api.local_now(), m.LogSource.REMOTE, id)
     if id in ("TV Lights", "Partial TV Lights"):
-        end = api.local_now() + timedelta(hours=3)
-        app.orc.config_manager.replace_config(config.ad_hoc_routines[id], end)
+        api.replace_config_for(app.orc.config_manager, id, timedelta(hours=3))
     else:
         app.orc.config_manager.resume(config.all_configs[id])
     app.orc.version_manager.bump_version()
@@ -207,24 +196,10 @@ def hubitat_callback():
 @bp.route("/api/schedule/set_theme", methods=["POST"])
 @VersionManager.versioned
 def set_theme():
-    now = api.local_now()
-    today = now.date()
-
-    before = api.calculate_theme(app.orc.config_manager, today)
-    if not request.form["theme"]:
-        api.log(now, m.LogSource.MANUAL, "Theme override cleared")
-        api.clear_theme_override(app.orc.config_manager)
-    else:
-        start = date.fromisoformat(request.form["start"])
-        end = date.fromisoformat(request.form["end"])
-        api.set_theme_override(app.orc.config_manager, request.form["theme"], start, end)
-        api.log(now, m.LogSource.MANUAL, f"Theme override set: {request.form['theme']} {start}..{end}")
-    after = api.calculate_theme(app.orc.config_manager, today)
-
-    app.orc.scheduler.remove_all_jobs()
-    api.setup_scheduler(app.orc)
-    if before != after:
-        api.replay_day(app.orc.config_manager, now)
+    name = request.form["theme"]
+    start = date.fromisoformat(request.form["start"]) if name else None
+    end = date.fromisoformat(request.form["end"]) if name else None
+    api.apply_theme_change(app.orc, name, start, end)
 
 
 @bp.route("/api/presence/<name>/expire", methods=["POST"])

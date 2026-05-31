@@ -165,7 +165,7 @@ class TestActiveOverride:
     @pytest.fixture(autouse=True)
     def _setup(self):
         self.target = api.ConfigManager()
-        self.target.set_theme_override(*self.OVERRIDE)
+        self.target.theme_override = self.OVERRIDE
 
     def test_no_override(self):
         self.target.theme_override = None
@@ -212,12 +212,12 @@ class TestGetSchedule:
 
     def test_override_wins_over_weekday_named_theme(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
-        self.target.set_theme_override("vacation", date(2026, 1, 3), date(2026, 1, 4))
+        self.target.theme_override = api.ThemeOverride("vacation", date(2026, 1, 3), date(2026, 1, 4))
         assert self._names(api.get_schedule(self.target)) == ["vac-r", "vac-r"]
 
     def test_empty_override_clears_weekday_named_theme(self):
         self.themes["empty"] = self._theme("empty")
-        self.target.set_theme_override("empty", date(2026, 1, 3), date(2026, 1, 4))
+        self.target.theme_override = api.ThemeOverride("empty", date(2026, 1, 3), date(2026, 1, 4))
         assert self._names(api.get_schedule(self.target)) == []
 
     def test_weekday_named_theme_used_when_no_override(self):
@@ -230,7 +230,7 @@ class TestGetSchedule:
 
     def test_override_outside_window_does_not_apply(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
-        self.target.set_theme_override("vacation", date(2025, 12, 1), date(2025, 12, 31))
+        self.target.theme_override = api.ThemeOverride("vacation", date(2025, 12, 1), date(2025, 12, 31))
         assert self._names(api.get_schedule(self.target)) == ["sat-r", "sun-r"]
 
 
@@ -247,11 +247,11 @@ class TestPresence:
 
     def test_mark_and_query(self):
         assert self.target.present_names == set()
-        self.target.mark_present(["Alice"])
+        self.target.mark_present(["Alice"], when=api.local_now())
         assert self.target.present_names == {"Alice"}
 
     def test_expire(self):
-        self.target.mark_present(["Alice"])
+        self.target.mark_present(["Alice"], when=api.local_now())
         self.target.expire_presence("Alice")
         assert self.target.present_names == set()
 
@@ -266,7 +266,7 @@ class TestPresence:
         route.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self):
-        self.target.mark_present(["Alice"])
+        self.target.mark_present(["Alice"], when=api.local_now())
         rule = self._routine("partner-r", "Alice")
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
@@ -291,7 +291,7 @@ class TestPresence:
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
-        self.target.mark_present(["Bob"])
+        self.target.mark_present(["Bob"], when=api.local_now())
         rule = self._routine("anyone-r", m.Trigger.ANYONE)
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
