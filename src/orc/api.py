@@ -224,9 +224,6 @@ class ConfigManager:
         items.update({e: replace(rule, what=e) for e in what})
         self.snapshot = self.snapshot._replace(routine=m.Configs(*items.values()))
 
-    def set_theme_override(self, name, start, end):
-        self.theme_override = ThemeOverride(name, start, end)
-
     def presence(self):
         return dict(self._presence)
 
@@ -235,8 +232,7 @@ class ConfigManager:
         cutoff = local_now() - _PRESENCE_WINDOW
         return {name for name, ts in self._presence.items() if ts >= cutoff}
 
-    def mark_present(self, names, when=None):
-        when = when or local_now()
+    def mark_present(self, names, when):
         for name in names:
             self._presence[name] = when
 
@@ -288,6 +284,27 @@ def set_theme_override(config_manager, name, start, end):
 def clear_theme_override(config_manager):
     config_manager.theme_override = None
     dal.delete_theme_override()
+
+
+def apply_theme_change(ctx, name, start, end):
+    now = local_now()
+    today = now.date()
+    before = calculate_theme(ctx.config_manager, today)
+    if not name:
+        log(now, m.LogSource.MANUAL, "Theme override cleared")
+        clear_theme_override(ctx.config_manager)
+    else:
+        set_theme_override(ctx.config_manager, name, start, end)
+        log(now, m.LogSource.MANUAL, f"Theme override set: {name} {start}..{end}")
+    after = calculate_theme(ctx.config_manager, today)
+    ctx.scheduler.remove_all_jobs()
+    setup_scheduler(ctx)
+    if before != after:
+        replay_day(ctx.config_manager, now)
+
+
+def replace_config_for(config_manager, id, duration):
+    config_manager.replace_config(config.ad_hoc_routines[id], local_now() + duration)
 
 
 def _mark_present(config_manager, names):
@@ -356,6 +373,20 @@ def should_skip_for_presence(rule, force, present_names):
         if c.trigger == m.Trigger.ANYONE and present_names:
             return False
     return True
+
+
+def next_iot_job(scheduler, present_names):
+    jobs = sorted(jobs_by_type(scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
+    return next(
+        (
+            j
+            for j in jobs
+            if j.next_run_time
+            and not any(cfg.trigger == m.Trigger.SYSTEM for cfg in j.args[0].rule.items)
+            and not should_skip_for_presence(j.args[0].rule, False, present_names)
+        ),
+        None,
+    )
 
 
 @requires_ctx
@@ -488,16 +519,6 @@ def setup_scheduler(ctx):
 
 
 # --- Manual triggers / replay ---
-
-
-def sound_test(theme, sound_path):
-    time.sleep(1)
-    for e in theme.items:
-        execute(e)
-        time.sleep(5)
-    execute(m.Config(orc.Sound, "stop"))
-    _play_alert(sound_path)
-    _play_text("audio test")
 
 
 def light_test():
