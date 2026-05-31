@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
+from functools import wraps
 from importlib import resources
 
 import pygame
@@ -77,6 +78,16 @@ def local_now():
 def jobs_by_type(scheduler, type):
     now = local_now()
     return [e for e in scheduler.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
+
+
+def requires_ctx(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if kwargs.get("ctx") is None:
+            raise ValueError("ctx must be injected by the executor")
+        return f(*args, **kwargs)
+
+    return wrapper
 
 
 def unwrap_rule_container(f):
@@ -347,9 +358,8 @@ def should_skip_for_presence(rule, force, present_names):
     return True
 
 
-def run_iot_job(job, ctx=None, force=False):
-    if ctx is None:
-        raise ValueError("ctx must be injected by the executor")
+@requires_ctx
+def run_iot_job(job, ctx, force=False):
     rule = job.rule
     if should_skip_for_presence(rule, force, ctx.config_manager.present_names):
         absent = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
@@ -361,9 +371,8 @@ def run_iot_job(job, ctx=None, force=False):
     ctx.config_manager.route_rule(rule, force)
 
 
-def _run_cal_job(job, ctx=None):
-    if ctx is None:
-        raise ValueError("ctx must be injected by the executor")
+@requires_ctx
+def _run_cal_job(job, ctx):
     if job.event_type == "warning":
         _play_alert(ctx.sound_path)
     else:
@@ -379,9 +388,8 @@ def _safe_ping(name, host):
         return name, False
 
 
-def check_presence(ctx=None):
-    if ctx is None:
-        raise ValueError("ctx must be injected by the executor")
+@requires_ctx
+def check_presence(ctx):
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
     if not pairs:
         return
@@ -394,6 +402,15 @@ def check_presence(ctx=None):
         log(local_now(), m.LogSource.SYSTEM, f"Presence detected: {name}")
     for name in sorted(before - after):
         log(local_now(), m.LogSource.SYSTEM, f"Presence lost: {name}")
+
+
+@requires_ctx
+def run_trigger_sensor(ctx):
+    for name in list(ctx.config_manager.presence()):
+        expire_presence(ctx.config_manager, name)
+    check_presence(ctx=ctx)
+    if ctx.config_manager.present_names:
+        execute(config.default_config)
 
 
 def _schedule_cal_tasks(scheduler, config_manager):
@@ -421,9 +438,8 @@ def _schedule_cal_tasks(scheduler, config_manager):
             )
 
 
-def _rebuild_iot_schedule(ctx=None):
-    if ctx is None:
-        raise ValueError("ctx must be injected by the executor")
+@requires_ctx
+def _rebuild_iot_schedule(ctx):
     now = local_now()
     for time, rule in get_schedule(ctx.config_manager):
         if now <= time:
@@ -437,15 +453,14 @@ def _rebuild_iot_schedule(ctx=None):
             )
 
 
-def _rebuild_cal_schedule(ctx=None):
-    if ctx is None:
-        raise ValueError("ctx must be injected by the executor")
+@requires_ctx
+def _rebuild_cal_schedule(ctx):
     _schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
 
 
 def setup_scheduler(ctx):
     if not jobs_by_type(ctx.scheduler, m.IotJob):
-        _rebuild_iot_schedule(ctx)
+        _rebuild_iot_schedule(ctx=ctx)
     ctx.scheduler.add_job(
         _rebuild_iot_schedule,
         CronTrigger.from_crontab("10 0 * * *"),
