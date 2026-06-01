@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -31,8 +32,8 @@ def requires_enabled(stub):
     def deco(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            if not config.enabled:
-                print(f"[disabled] {fn.__name__} args={args} kwargs={kwargs}")
+            if not os.getenv("ORC_ENABLED"):
+                print(f"[disabled] {fn.__name__} args={args} kwargs={kwargs}", file=sys.stderr)
                 return stub(*args, **kwargs) if callable(stub) else stub
             return fn(*args, **kwargs)
 
@@ -182,12 +183,8 @@ def _cast(sound, **kwargs):
 @requires_enabled(lambda sound: m.SoundState(what=sound, content=None, volume=0))
 def _fetch_sound(sound):
     with _cast(sound, timeout=5, tries=1) as cast:
-        rh = pychromecast.response_handler.WaitResponse(5.0, "media status")
-        cast.media_controller.update_status(callback_function=rh.callback)
-        rh.wait_response()
+        time.sleep(3)
         content = cast.media_controller.status.content_id
-        if not content:
-            cast.quit_app()
         return m.SoundState(
             what=sound,
             content=_strip_googlevideo_params(content) if content else None,
@@ -260,7 +257,7 @@ def fetch_chromecast_config():
 def fetch_holidays(year):
     result = requests.get(config.secrets.market_holidays_url, timeout=config.http_timeout).json()
     if "error" in result:
-        print(result["error"])
+        print(result["error"], file=sys.stderr)
         return []
     return result
 
