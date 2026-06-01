@@ -1,6 +1,8 @@
 import copy
 import io
 import itertools
+import os
+import sys
 import time
 import wave
 from collections import namedtuple as nt
@@ -121,8 +123,8 @@ def execute(rule):
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
     stream = {}
     for w in what:
-        if config.enabled and w in config.virtual_devices:
-            print("Skipping virtual device:" + w.name)
+        if os.getenv("ORC_ENABLED") and w in config.virtual_devices:
+            print("Skipping virtual device:" + w.name, file=sys.stderr)
             continue
 
         if isinstance(w, orc.Light):
@@ -433,15 +435,6 @@ def check_presence(ctx):
         log(local_now(), m.LogSource.SYSTEM, f"Presence detected: {name}")
     for name in sorted(before - after):
         log(local_now(), m.LogSource.SYSTEM, f"Presence lost: {name}")
-
-
-@requires_ctx
-def run_trigger_sensor(ctx):
-    for name in list(ctx.config_manager.presence()):
-        expire_presence(ctx.config_manager, name)
-    check_presence(ctx=ctx)
-    if ctx.config_manager.present_names:
-        execute(config.default_config)
 
 
 def _schedule_cal_tasks(scheduler, config_manager):
