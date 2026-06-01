@@ -64,10 +64,11 @@ class TestRequiresEnabled:
 
 @pytest.mark.usefixtures("enabled")
 class TestFetchLightState:
-    def _resp(self, status, attrs=None):
+    def _resp(self, status, attrs=None, type="Hue Bulb"):
         resp = MagicMock()
         resp.status_code = status
-        resp.json.return_value = {"attributes": [{"name": k, "currentValue": v} for k, v in (attrs or {}).items()]}
+        body = {"attributes": [{"name": k, "currentValue": v} for k, v in (attrs or {}).items()], "type": type}
+        resp.json.return_value = body
         return resp
 
     @patch("orc.dal.requests.get")
@@ -89,3 +90,60 @@ class TestFetchLightState:
     def test_non_200_returns_off(self, get):
         get.return_value = self._resp(500)
         assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
+
+    @patch("orc.dal.requests.get")
+    def test_caches_device_type_on_first_call(self, get):
+        get.return_value = self._resp(200, {"switch": "on"}, type="Hue Bulb")
+        dal.fetch_light_state(orc.Light.a)
+        assert dal._read_light(orc.Light.a)[0] == "Hue Bulb"
+
+    @patch("orc.dal.requests.get")
+    def test_db_truth_type_returns_off_without_trusting_hubitat(self, get):
+        get.return_value = self._resp(200, {"switch": "on", "power": 0}, type="Generic Zigbee Outlet")
+        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
+
+
+@pytest.mark.usefixtures("enabled")
+class TestDbTruthLight:
+    @patch("orc.dal.requests.get")
+    def test_cached_truth_type_returns_stored_state(self, get):
+        get.return_value = MagicMock(
+            status_code=200, json=lambda: {"attributes": [{"name": "switch", "currentValue": "off"}], "type": "Generic Zigbee Outlet"}
+        )
+        dal._write_light(orc.Light.a, type="Generic Zigbee Outlet", state="on")
+        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="on")
+
+    @patch("orc.dal.requests.get")
+    def test_cached_truth_type_no_row_returns_off(self, get):
+        get.return_value = MagicMock(
+            status_code=200, json=lambda: {"attributes": [{"name": "switch", "currentValue": "on"}], "type": "Generic Zigbee Outlet"}
+        )
+        dal._write_light(orc.Light.a, type="Generic Zigbee Outlet")
+        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
+
+    @patch("orc.dal.requests.get")
+    def test_update_light_writes_state_for_truth_type(self, get):
+        dal._write_light(orc.Light.a, type="Generic Zigbee Outlet")
+        dal.update_light(orc.Light.a, on=True)
+        assert dal._read_light(orc.Light.a)[1] == "on"
+
+    @patch("orc.dal.requests.get")
+    def test_update_light_does_not_write_for_reliable_type(self, get):
+        dal._write_light(orc.Light.a, type="Hue Bulb")
+        dal.update_light(orc.Light.a, on=True)
+        assert dal._read_light(orc.Light.a)[1] is None
+
+    @patch("orc.dal.requests.get")
+    def test_update_light_looks_up_type_when_uncached(self, get):
+        get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"attributes": [], "type": "Generic Zigbee Outlet"},
+        )
+        dal.update_light(orc.Light.a, on=True)
+        assert dal._read_light(orc.Light.a) == ("Generic Zigbee Outlet", "on")
+
+    @patch("orc.dal.requests.get")
+    def test_update_light_brightness_writes_level_for_truth_type(self, get):
+        dal._write_light(orc.Light.a, type="Generic Zigbee Outlet")
+        dal.update_light(orc.Light.a, brightness=42)
+        assert dal._read_light(orc.Light.a)[1] == "42"
