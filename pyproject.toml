@@ -51,6 +51,7 @@ line-length = 140
 [tool.isort]
 profile = "black"
 src_paths = ["src/orc"]
+known_third_party = ["apscheduler"]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
