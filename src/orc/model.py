@@ -275,7 +275,7 @@ def build_plugins(doc, section):
     for type, e in doc_to_sub_tables(doc, section, 2):
         result[type] = e[0][1]
 
-    if missing := [k for k, v in result.items() if not hasattr(plugins, v)]:
+    if missing := [k for k, v in result.items() if not (isinstance(v, str) and hasattr(plugins, v))]:
         raise ValueError(f"Unrecognised plugins in section '{section}': {', '.join(sorted(missing))}")
 
     return result

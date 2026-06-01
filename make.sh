@@ -1,6 +1,6 @@
 #!/bin/sh
 
-pip install twine==6.2.0 build==1.5.0
+pip install twine==6.2.0 build==1.4.4
 rm -rf dist
 python3 -m build --wheel
 twine upload -u a -p a --repository-url http://registry.int.exussum.org:8080 dist/orc-*.whl

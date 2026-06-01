@@ -3,13 +3,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import orc
-from orc import config, dal
+from orc import dal
 from orc import model as m
 
 
 @pytest.fixture
 def enabled(monkeypatch):
-    monkeypatch.setattr(config, "enabled", True)
+    monkeypatch.setenv("ORC_ENABLED", "1")
 
 
 class TestStripGoogleVideoParams:
@@ -35,7 +35,7 @@ class TestStripGoogleVideoParams:
 
 class TestRequiresEnabled:
     def test_disabled_returns_static_stub(self, monkeypatch):
-        monkeypatch.setattr(config, "enabled", False)
+        monkeypatch.delenv("ORC_ENABLED", raising=False)
 
         @dal.requires_enabled("STUB")
         def fn(x):
@@ -44,7 +44,7 @@ class TestRequiresEnabled:
         assert fn(1) == "STUB"
 
     def test_disabled_calls_callable_stub_with_args(self, monkeypatch):
-        monkeypatch.setattr(config, "enabled", False)
+        monkeypatch.delenv("ORC_ENABLED", raising=False)
 
         @dal.requires_enabled(lambda x, y: ("stub", x, y))
         def fn(x, y):
@@ -53,7 +53,7 @@ class TestRequiresEnabled:
         assert fn(1, 2) == ("stub", 1, 2)
 
     def test_enabled_calls_through(self, monkeypatch):
-        monkeypatch.setattr(config, "enabled", True)
+        monkeypatch.setenv("ORC_ENABLED", "1")
 
         @dal.requires_enabled("STUB")
         def fn(x):
