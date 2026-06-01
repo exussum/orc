@@ -1,4 +1,5 @@
 import os
+import sys
 from zoneinfo import ZoneInfo
 
 from mistletoe import Document
@@ -21,8 +22,7 @@ class Config:
         self.root_domain = os.getenv("ORC_ROOT_DOMAIN", "")
         self.load(m.Secrets("", "", ""), {}, {})
 
-    def load(self, secrets, hubitat_config, chromecast_config, enabled=False):
-        self.enabled = enabled
+    def load(self, secrets, hubitat_config, chromecast_config):
         self.secrets = secrets
 
         with open(self.orc_config) as fh:
