@@ -189,7 +189,10 @@ def room(id):
 
 @bp.route("/api/hubitat/callback", methods=["POST"])
 def hubitat_callback():
-    plugins.trigger_sensor(app.orc.scheduler)
+    ctx = plugins.build_ctx(app.orc.config_manager, app.orc.scheduler)
+    device_id = request.json["content"]["deviceId"]
+    value = request.json["content"]["value"]
+    plugins.trigger_sensor(ctx, device_id, value)
     return {}, 200
 
 

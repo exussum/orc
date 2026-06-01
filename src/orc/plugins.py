@@ -8,6 +8,7 @@ from datetime import timedelta
 from types import ModuleType
 from typing import TYPE_CHECKING
 
+from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 from flask import request
 
@@ -25,20 +26,26 @@ class PluginCtx:
     config: OrcConfig
     api: ModuleType
     model: ModuleType
+    scheduler: BaseScheduler | None = None
 
 
-def execute_plugin(config_manager, id):
+def build_ctx(config_manager, scheduler=None):
     from orc import Light, Sound, api, config, model
 
-    ctx = PluginCtx(
+    return PluginCtx(
         config_manager=config_manager,
         Light=Light,
         Sound=Sound,
         config=config,
         api=api,
         model=model,
+        scheduler=scheduler,
     )
-    getattr(sys.modules[__name__], config.plugins[id])(ctx)
+
+
+def execute_plugin(config_manager, id):
+    ctx = build_ctx(config_manager)
+    getattr(sys.modules[__name__], ctx.config.plugins[id])(ctx)
 
 
 def reboot(ctx):
@@ -90,14 +97,43 @@ def sound_test(ctx):
     ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Sound, f"{request.host_url}static/alert.mp3")))
 
 
-def trigger_sensor(scheduler):
-    from orc import api
+def trigger_sensor(ctx, device_id, event):
+    if int(device_id) != 16:
+        return
 
-    scheduler.add_job(
-        api.run_trigger_sensor,
-        DateTrigger(api.local_now() + timedelta(minutes=1)),
-        name="Trigger Sensor",
-        id="trigger-sensor",
-        replace_existing=True,
-        jobstore="memory",
-    )
+    now = ctx.api.local_now()
+    entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
+    daytime = 10 <= now.hour < 22
+
+    if event == "active":
+        ctx.api.execute(ctx.model.Config(entrance, 20))
+        if daytime:
+            ctx.api.execute(ctx.config.default_config)
+    else:
+        ctx.api.execute(ctx.model.Config(entrance, ctx.config.OFF))
+        if daytime:
+            ctx.scheduler.add_job(
+                _run_trigger_sensor_off,
+                DateTrigger(now + timedelta(minutes=5)),
+                name="Trigger Sensor",
+                id="trigger-sensor",
+                replace_existing=True,
+                jobstore="memory",
+            )
+
+
+def _run_trigger_sensor_off(ctx):
+    plugin_ctx = build_ctx(ctx.config_manager, ctx.scheduler)
+    existing = list(plugin_ctx.config_manager.presence())
+
+    for name in existing:
+        plugin_ctx.api.expire_presence(plugin_ctx.config_manager, name)
+    plugin_ctx.api.check_presence(ctx=ctx)
+
+    present = plugin_ctx.config_manager.present_names
+    speakers_playing = sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2
+
+    if present or speakers_playing:
+        return
+
+    plugin_ctx.api.execute(plugin_ctx.model.Config(plugin_ctx.Light, plugin_ctx.config.OFF))
