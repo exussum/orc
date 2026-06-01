@@ -49,6 +49,9 @@ def _theme_override_conn():
     return sqlite3.connect(make_url(config.jobs_db).database)
 
 
+_DB_TRUTH_DEVICE_TYPES = {"Generic Zigbee Outlet"}
+
+
 def init_db():
     with _theme_override_conn() as conn:
         conn.execute(
@@ -56,6 +59,7 @@ def init_db():
             "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
         )
         conn.execute("CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS orc_light (device_id INTEGER PRIMARY KEY, type TEXT, state TEXT)")
 
 
 def fetch_theme_override():
@@ -99,6 +103,28 @@ def delete_presence(name):
         conn.execute("DELETE FROM orc_presence WHERE name = ?", (name,))
 
 
+def _read_light(light):
+    with _theme_override_conn() as conn:
+        row = conn.execute("SELECT type, state FROM orc_light WHERE device_id = ?", (light.value,)).fetchone()
+    return row if row else (None, None)
+
+
+def _write_light(light, *, type=None, state=None):
+    with _theme_override_conn() as conn:
+        conn.execute(
+            "INSERT INTO orc_light (device_id, type, state) VALUES (?, ?, ?) "
+            "ON CONFLICT(device_id) DO UPDATE SET "
+            "type = COALESCE(excluded.type, orc_light.type), "
+            "state = COALESCE(excluded.state, orc_light.state)",
+            (light.value, type, str(state) if state is not None else None),
+        )
+
+
+def _fetch_hubitat_device(light):
+    resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
+    return resp.json() if resp.status_code == 200 else None
+
+
 # --- Secrets ---
 
 
@@ -136,12 +162,23 @@ def fetch_secrets():
 
 @requires_enabled(lambda light: m.Config(what=light, state="off"))
 def fetch_light_state(light):
-    resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
-    if resp.status_code == 200:
-        attrs = {e["name"]: e["currentValue"] for e in resp.json()["attributes"]}
-        return m.Config(what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"])
-    else:
+    device_type, stored = _read_light(light)
+    body = _fetch_hubitat_device(light)
+
+    if device_type in _DB_TRUTH_DEVICE_TYPES:
+        return m.Config(what=light, state=stored or "off")
+
+    if body is None:
         return m.Config(what=light, state="off")
+
+    if device_type is None:
+        device_type = body.get("type", "")
+        _write_light(light, type=device_type)
+        if device_type in _DB_TRUTH_DEVICE_TYPES:
+            return m.Config(what=light, state=stored or "off")
+
+    attrs = {e["name"]: e["currentValue"] for e in body["attributes"]}
+    return m.Config(what=light, state=attrs["level"] if ("level" in attrs and attrs["switch"] == "on") else attrs["switch"])
 
 
 @requires_enabled(None)
@@ -151,11 +188,24 @@ def update_light(light, on=None, brightness=None):
             f"{config.base_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}",
             timeout=config.http_timeout,
         )
+        new_state = brightness
     else:
         requests.get(
             f"{config.base_url}/devices/{light.value}/{'on' if on else 'off'}{config.secrets.access_token}",
             timeout=config.http_timeout,
         )
+        new_state = "on" if on else "off"
+    device_type, _ = _read_light(light)
+    type_to_store = None
+    if device_type is None:
+        body = _fetch_hubitat_device(light)
+        if body is not None:
+            device_type = body.get("type", "")
+            type_to_store = device_type
+
+    state_to_store = new_state if device_type in _DB_TRUTH_DEVICE_TYPES else None
+    if type_to_store is not None or state_to_store is not None:
+        _write_light(light, type=type_to_store, state=state_to_store)
 
 
 # --- Sound ---
@@ -231,8 +281,8 @@ def play_stream(sound, stream_url, title):
 
 
 @requires_enabled(False)
-def ping_host(hostname, timeout=2):
-    return icmplib.ping(hostname, count=3, timeout=timeout, privileged=True).is_alive
+def ping_host(hostname):
+    return icmplib.ping(hostname, count=2, timeout=1, privileged=True).is_alive
 
 
 @requires_enabled({})
