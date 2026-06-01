@@ -12,6 +12,8 @@ from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 from flask import request
 
+from orc.apscheduler import requires_ctx
+
 if TYPE_CHECKING:
     from orc import Config as OrcConfig
     from orc.api import ConfigManager
@@ -97,43 +99,46 @@ def sound_test(ctx):
     ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Sound, f"{request.host_url}static/alert.mp3")))
 
 
+def _daytime(ctx):
+    return 10 <= ctx.api.local_now().hour < 22
+
+
 def trigger_sensor(ctx, device_id, event):
     if int(device_id) != 16:
         return
 
-    now = ctx.api.local_now()
+    ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.SYSTEM, f"Entrance sensor: {event}")
+
     entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
-    daytime = 10 <= now.hour < 22
 
     if event == "active":
         ctx.api.execute(ctx.model.Config(entrance, 20))
-        if daytime:
+        if _daytime(ctx):
             ctx.api.execute(ctx.config.default_config)
     else:
         ctx.api.execute(ctx.model.Config(entrance, ctx.config.OFF))
-        if daytime:
-            ctx.scheduler.add_job(
-                _run_trigger_sensor_off,
-                DateTrigger(now + timedelta(minutes=5)),
-                name="Trigger Sensor",
-                id="trigger-sensor",
-                replace_existing=True,
-                jobstore="memory",
-            )
+
+    ctx.scheduler.add_job(
+        _run_trigger_sensor_off,
+        DateTrigger(ctx.api.local_now() + timedelta(minutes=5)),
+        name="Trigger Sensor",
+        id="trigger-sensor",
+        replace_existing=True,
+        jobstore="memory",
+    )
 
 
+@requires_ctx
 def _run_trigger_sensor_off(ctx):
     plugin_ctx = build_ctx(ctx.config_manager, ctx.scheduler)
-    existing = list(plugin_ctx.config_manager.presence())
 
-    for name in existing:
+    for name in list(plugin_ctx.config_manager.presence()):
         plugin_ctx.api.expire_presence(plugin_ctx.config_manager, name)
     plugin_ctx.api.check_presence(ctx=ctx)
 
-    present = plugin_ctx.config_manager.present_names
-    speakers_playing = sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2
-
-    if present or speakers_playing:
+    if not _daytime(plugin_ctx) or plugin_ctx.config_manager.present_names:
+        return
+    if sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2:
         return
 
-    plugin_ctx.api.execute(plugin_ctx.model.Config(plugin_ctx.Light, plugin_ctx.config.OFF))
+    plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
