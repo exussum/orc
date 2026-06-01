@@ -1,4 +1,3 @@
-import copy
 import io
 import itertools
 import os
@@ -10,11 +9,9 @@ from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
-from functools import wraps
 from importlib import resources
 
 import pygame
-from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from piper import PiperVoice
@@ -24,6 +21,7 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config, dal
 from orc import model as m
+from orc.apscheduler import requires_ctx
 from orc.dal import (  # noqa: F401
     fetch_chromecast_config,
     fetch_hubitat_config,
@@ -42,21 +40,6 @@ _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
 _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
 _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
-
-
-class ContextThreadPoolExecutor(ThreadPoolExecutor):
-    def __init__(self, ctx: m.AppContext, max_workers=1):
-        super().__init__(max_workers=max_workers)
-        self.ctx = ctx
-
-    def _do_submit_job(self, job, run_times):
-        dispatch_job = copy.copy(job)
-        dispatch_job._jobstore_alias = job._jobstore_alias
-        dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
-        return super()._do_submit_job(dispatch_job, run_times)
-
-    def run_now(self, job, **extra_kwargs):
-        return job.func(*job.args, ctx=self.ctx, **{**job.kwargs, **extra_kwargs})
 
 
 SnapShot = nt("SnapShot", "routine end")
@@ -80,16 +63,6 @@ def local_now():
 def jobs_by_type(scheduler, type):
     now = local_now()
     return [e for e in scheduler.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
-
-
-def requires_ctx(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if kwargs.get("ctx") is None:
-            raise ValueError("ctx must be injected by the executor")
-        return f(*args, **kwargs)
-
-    return wrapper
 
 
 def unwrap_rule_container(f):
