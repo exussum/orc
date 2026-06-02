@@ -6,7 +6,19 @@
       "src": "/static/icons/android-launchericon-192-192.png",
       "sizes": "192x192",
       "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/android-launchericon-192-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/android-launchericon-512-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/static/icons/android-launchericon-512-512.png",
@@ -15,7 +27,8 @@
       "purpose": "maskable"
     }
   ],
-  "start_url": "https://remote.exussum.org/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "black",
