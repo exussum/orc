@@ -16,6 +16,14 @@ if TYPE_CHECKING:
 
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
+SUNRISE = "sunrise"
+SUNSET = "sunset"
+
+_STATE_SORT_STOP = -2
+_STATE_SORT_INT = -1
+_STATE_SORT_ON = 0
+_STATE_SORT_OTHER = 1
+
 
 class LogSource(str, Enum):
     CALENDAR = "calendar"
@@ -47,6 +55,9 @@ class ActivityLog:
 
 @dataclass
 class CalendarEvent:
+    WARNING = "warning"
+    ALARM = "alarm"
+
     uuid: str
     summary: str
     datetime: datetime
@@ -208,7 +219,7 @@ def build_enum(doc, section, sub_section, id_lookup):
 def _valid_state(e):
     from orc import Config
 
-    return e in (Config.ON, Config.OFF, "stop") or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
+    return e in (Config.ON, Config.OFF, Config.STOP) or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
 
 
 def _validate_states(sub_tables, col):
@@ -240,8 +251,8 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
 
     for theme_type, e in theme_tables:
         for c in e:
-            if not _str_to_time(c[2]) and c[2] not in ("sunrise", "sunset"):
-                raise ValueError(f"Invalid time '{c[2]}' in theme '{theme_type}': expected HH:MM, 'sunrise', or 'sunset'")
+            if not _str_to_time(c[2]) and c[2] not in (SUNRISE, SUNSET):
+                raise ValueError(f"Invalid time '{c[2]}' in theme '{theme_type}': expected HH:MM, '{SUNRISE}', or '{SUNSET}'")
 
     routines = {}
     for type, e in routine_tables:
@@ -253,7 +264,9 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
 
     themes = {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
 
-    if missing := {"work day", "day off"} - themes.keys():
+    from orc import Config
+
+    if missing := {Config.THEME_WORK_DAY, Config.THEME_DAY_OFF} - themes.keys():
         raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
 
     return themes
@@ -345,25 +358,27 @@ def _op_cmp(k):
 
     class_name = k.what.__class__.__name__
 
-    if k.state == "stop":
-        sub_sort = -2
+    if k.state == Config.STOP:
+        sub_sort = _STATE_SORT_STOP
     elif isinstance(k.state, int):
-        sub_sort = -1
+        sub_sort = _STATE_SORT_INT
     elif k.state == Config.ON:
-        sub_sort = 0
+        sub_sort = _STATE_SORT_ON
     else:
-        sub_sort = 1
+        sub_sort = _STATE_SORT_OTHER
     return (class_name, sub_sort)
 
 
 def squish(items):
+    from orc import Config
+
     if not items:
         return ()
 
     last = items[-1]
     if isinstance(last.state, int):
         for e in range(len(items) - 2, -1, -1):
-            if items[e].state == "stop":
+            if items[e].state == Config.STOP:
                 return (items[e], last)
         return (last,)
 
