@@ -28,6 +28,7 @@ from orc.dal import (  # noqa: F401
     fetch_secrets,
     init_db,
 )
+from orc.locale import Log
 
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
@@ -104,7 +105,7 @@ def execute(rule):
             if isinstance(rule.state, int):
                 dal.update_light(w, brightness=rule.state)
             else:
-                dal.update_light(w, on=rule.state == "on")
+                dal.update_light(w, on=rule.state == config.ON)
         elif isinstance(w, orc.Sound):
             if isinstance(rule.state, int):
                 dal.update_sound(w, rule.state)
@@ -178,14 +179,14 @@ class ConfigManager:
         if not self.snapshot:
             self.snapshot = SnapShot(capture_lights(), end)
             items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshot.routine.items)
-            log(local_now(), m.LogSource.SYSTEM, f"Snapshot until {end:%H:%M}: {items}")
+            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(end=end, items=items))
 
         execute(target_config)
 
     def resume(self, target_config):
         if self.snapshot and local_now() <= self.snapshot.end:
             routine = self.snapshot.routine
-            log(local_now(), m.LogSource.SYSTEM, "Snapshot restored")
+            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED)
         else:
             routine = target_config
         self.snapshot = None
@@ -266,11 +267,11 @@ def apply_theme_change(ctx, name, start, end):
     today = now.date()
     before = calculate_theme(ctx.config_manager, today)
     if not name:
-        log(now, m.LogSource.MANUAL, "Theme override cleared")
+        log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
         clear_theme_override(ctx.config_manager)
     else:
         set_theme_override(ctx.config_manager, name, start, end)
-        log(now, m.LogSource.MANUAL, f"Theme override set: {name} {start}..{end}")
+        log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
     after = calculate_theme(ctx.config_manager, today)
     ctx.scheduler.remove_all_jobs()
     setup_scheduler(ctx)
@@ -370,7 +371,7 @@ def run_iot_job(job, ctx, force=False):
     if should_skip_for_presence(rule, force, ctx.config_manager.present_names):
         absent = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
         detail = f"absent: {', '.join(absent)}" if absent else "no one present"
-        log(local_now(), m.LogSource.IOT, f"Skipped {rule.name} ({detail})")
+        log(local_now(), m.LogSource.IOT, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     if not force:
         log(local_now(), m.LogSource.IOT, rule.name)
@@ -390,7 +391,7 @@ def _safe_ping(name, host):
     try:
         return name, dal.ping_host(host)
     except Exception as exc:
-        log(local_now(), m.LogSource.SYSTEM, f"Presence ping failed for {name}: {exc}")
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
         return name, False
 
 
@@ -405,9 +406,9 @@ def check_presence(ctx):
     _mark_present(ctx.config_manager, present)
     after = ctx.config_manager.present_names
     for name in sorted(after - before):
-        log(local_now(), m.LogSource.SYSTEM, f"Presence detected: {name}")
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=name))
     for name in sorted(before - after):
-        log(local_now(), m.LogSource.SYSTEM, f"Presence lost: {name}")
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=name))
 
 
 def _schedule_cal_tasks(scheduler, config_manager):
