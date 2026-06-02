@@ -12,6 +12,7 @@ from mistletoe import Document, HtmlRenderer
 from orc import api, config
 from orc import model as m
 from orc import plugins
+from orc.locale import Log
 
 bp = Blueprint("button", __name__)
 
@@ -174,7 +175,7 @@ def console(id):
 @bp.route("/api/room/<id>")
 def room(id):
     state = request.args.get("state")
-    api.log(api.local_now(), m.LogSource.MANUAL, f"Room: {id} {state}")
+    api.log(api.local_now(), m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
     if state == config.ON:
         api.execute(config.room_configs[id])
     elif state == config.OFF:
@@ -209,14 +210,14 @@ def set_theme():
 @VersionManager.versioned
 def expire_presence(name):
     api.expire_presence(app.orc.config_manager, name)
-    api.log(api.local_now(), m.LogSource.MANUAL, f"Presence expired: {name}")
+    api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
 
 
 @bp.route("/api/presence/run", methods=["POST"])
 @VersionManager.versioned
 def run_presence_check():
     job = app.orc.scheduler.get_job("presence-cron")
-    api.log(api.local_now(), m.LogSource.MANUAL, f"Force run: {job.name}")
+    api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
     job.func(ctx=app.orc)
 
 
@@ -234,5 +235,5 @@ def pause(id):
 @VersionManager.versioned
 def run(id):
     job = app.orc.scheduler.get_job(id)
-    api.log(api.local_now(), m.LogSource.MANUAL, f"Force run: {job.name}")
+    api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
     job.func(*job.args, ctx=app.orc, force=True)

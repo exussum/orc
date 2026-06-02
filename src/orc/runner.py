@@ -12,6 +12,7 @@ import orc as config
 from orc import api
 from orc import model as m
 from orc.apscheduler import ContextThreadPoolExecutor
+from orc.locale import Log
 from orc.view import VersionManager, bp
 
 
@@ -63,7 +64,7 @@ def web():
         def load(self):
             app, scheduler = _build_app()
             scheduler.resume()
-            api.log(api.local_now(), m.LogSource.SYSTEM, "Boot")
+            api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
             return app
 
     GunicornApp().run()
@@ -72,5 +73,5 @@ def web():
 def flask():
     app, scheduler = _build_app()
     scheduler.resume()
-    api.log(api.local_now(), m.LogSource.SYSTEM, "Boot")
+    api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
     app.run(host="0.0.0.0", port=8000, use_reloader=False)

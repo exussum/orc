@@ -13,6 +13,7 @@ from apscheduler.triggers.date import DateTrigger
 from flask import request
 
 from orc.apscheduler import requires_ctx
+from orc.locale import Log
 
 if TYPE_CHECKING:
     from orc import Config as OrcConfig
@@ -66,13 +67,13 @@ def back_on_schedule(ctx):
 
 
 def all_lights_on(ctx):
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Light, "on"), ctx.model.Config(ctx.Light, 100)))
+    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Light, ctx.config.ON), ctx.model.Config(ctx.Light, 100)))
 
 
 def all_lights_off(ctx):
     ctx.api.execute(
         ctx.model.Configs(
-            ctx.model.Config(ctx.Light, "off"),
+            ctx.model.Config(ctx.Light, ctx.config.OFF),
         )
     )
 
@@ -81,7 +82,7 @@ def video_conference(ctx):
     ctx.api.execute(
         ctx.model.Configs(
             ctx.model.Config(ctx.Light.OFFICE_TABLE, 5),
-            ctx.model.Config(ctx.Light.OFFICE_FLOOR, "on"),
+            ctx.model.Config(ctx.Light.OFFICE_FLOOR, ctx.config.ON),
             ctx.model.Config(ctx.Light.OFFICE_DESK, 50),
         )
     )
@@ -107,11 +108,10 @@ def trigger_sensor(ctx, device_id, event):
     if int(device_id) != 16:
         return
 
-    ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.SYSTEM, f"Entrance sensor: {event}")
-
     entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
 
     if event == "active":
+        ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.SYSTEM, Log.ENTRANCE_SENSOR_TRIGGERED)
         ctx.api.execute(ctx.model.Config(entrance, 20))
         if _daytime(ctx):
             ctx.api.execute(ctx.config.default_config)
@@ -131,21 +131,23 @@ def trigger_sensor(ctx, device_id, event):
 @requires_ctx
 def _run_trigger_sensor_off(ctx):
     plugin_ctx = build_ctx(ctx.config_manager, ctx.scheduler)
-    log = lambda msg: plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, f"Trigger sensor off: {msg}")
+    log = lambda msg: plugin_ctx.api.log(
+        plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, Log.TRIGGER_SENSOR_OFF_PREFIX.format(msg=msg)
+    )
 
     for name in list(plugin_ctx.config_manager.presence()):
         plugin_ctx.api.expire_presence(plugin_ctx.config_manager, name)
     plugin_ctx.api.check_presence(ctx=ctx)
 
     if not _daytime(plugin_ctx):
-        log("skip (nighttime)")
+        log(Log.TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME)
         return
     if plugin_ctx.config_manager.present_names:
-        log(f"skip (present: {sorted(plugin_ctx.config_manager.present_names)})")
+        log(Log.TRIGGER_SENSOR_OFF_SKIPPED_PRESENT.format(names=", ".join(sorted(plugin_ctx.config_manager.present_names))))
         return
     if sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2:
-        log("skip (sounds playing)")
+        log(Log.TRIGGER_SENSOR_OFF_SKIPPED_SOUNDS)
         return
 
-    log("applying OFF")
+    log(Log.TRIGGER_SENSOR_OFF_APPLIED)
     plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
