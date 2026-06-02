@@ -131,14 +131,21 @@ def trigger_sensor(ctx, device_id, event):
 @requires_ctx
 def _run_trigger_sensor_off(ctx):
     plugin_ctx = build_ctx(ctx.config_manager, ctx.scheduler)
+    log = lambda msg: plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, f"Trigger sensor off: {msg}")
 
     for name in list(plugin_ctx.config_manager.presence()):
         plugin_ctx.api.expire_presence(plugin_ctx.config_manager, name)
     plugin_ctx.api.check_presence(ctx=ctx)
 
-    if not _daytime(plugin_ctx) or plugin_ctx.config_manager.present_names:
+    if not _daytime(plugin_ctx):
+        log("skip (nighttime)")
+        return
+    if plugin_ctx.config_manager.present_names:
+        log(f"skip (present: {sorted(plugin_ctx.config_manager.present_names)})")
         return
     if sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2:
+        log("skip (sounds playing)")
         return
 
+    log("applying OFF")
     plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
