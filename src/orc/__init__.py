@@ -1,5 +1,4 @@
 import os
-import sys
 from zoneinfo import ZoneInfo
 
 from mistletoe import Document

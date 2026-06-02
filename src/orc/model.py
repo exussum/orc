@@ -1,4 +1,3 @@
-import itertools
 import re
 from collections import defaultdict, deque
 from dataclasses import KW_ONLY, dataclass, replace
