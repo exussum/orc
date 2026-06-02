@@ -180,7 +180,7 @@ def room(id):
         api.execute(config.room_configs[id])
     elif state == config.OFF:
         api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.room_configs[id].items)))
-    elif state == "follow":
+    elif state == config.FOLLOW:
         api.execute(m.squish_configs(config.room_configs_off, config.room_configs[id]))
     else:
         raise Exception("Unknown state")
