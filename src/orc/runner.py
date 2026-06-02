@@ -11,7 +11,7 @@ from gunicorn.app.base import BaseApplication
 import orc as config
 from orc import api
 from orc import model as m
-from orc.apscheduler import ContextThreadPoolExecutor
+from orc.apscheduler import JOBSTORE_DEFAULT, JOBSTORE_MEMORY, ContextThreadPoolExecutor
 from orc.locale import Log
 from orc.view import VersionManager, bp
 
@@ -28,8 +28,8 @@ def _build_app():
 
     scheduler = BackgroundScheduler(
         jobstores={
-            "default": SQLAlchemyJobStore(url=config.config.jobs_db),
-            "memory": MemoryJobStore(),
+            JOBSTORE_DEFAULT: SQLAlchemyJobStore(url=config.config.jobs_db),
+            JOBSTORE_MEMORY: MemoryJobStore(),
         },
         job_defaults={"misfire_grace_time": 30},
     )
@@ -37,7 +37,7 @@ def _build_app():
     ctx = m.AppContext(
         config_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix(), version_manager
     )
-    scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), "default")
+    scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), JOBSTORE_DEFAULT)
     scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start(paused=True)
 

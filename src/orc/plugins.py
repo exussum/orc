@@ -12,8 +12,11 @@ from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 from flask import request
 
-from orc.apscheduler import requires_ctx
+from orc.apscheduler import JOBSTORE_MEMORY, requires_ctx
 from orc.locale import Log
+
+_SENSOR_ID_ENTRANCE = 16
+_SENSOR_EVENT_ACTIVE = "active"
 
 if TYPE_CHECKING:
     from orc import Config as OrcConfig
@@ -91,7 +94,7 @@ def video_conference(ctx):
 def silence(ctx):
     ctx.api.execute(
         ctx.model.Configs(
-            ctx.model.Config(ctx.Sound, "stop"),
+            ctx.model.Config(ctx.Sound, ctx.config.STOP),
         )
     )
 
@@ -105,12 +108,12 @@ def _daytime(ctx):
 
 
 def trigger_sensor(ctx, device_id, event):
-    if int(device_id) != 16:
+    if int(device_id) != _SENSOR_ID_ENTRANCE:
         return
 
     entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
 
-    if event == "active":
+    if event == _SENSOR_EVENT_ACTIVE:
         ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.SYSTEM, Log.ENTRANCE_SENSOR_TRIGGERED)
         ctx.api.execute(ctx.model.Config(entrance, 20))
         if _daytime(ctx):
@@ -124,7 +127,7 @@ def trigger_sensor(ctx, device_id, event):
         name="Trigger Sensor",
         id="trigger-sensor",
         replace_existing=True,
-        jobstore="memory",
+        jobstore=JOBSTORE_MEMORY,
     )
 
 

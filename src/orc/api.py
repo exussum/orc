@@ -21,7 +21,7 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config, dal
 from orc import model as m
-from orc.apscheduler import requires_ctx
+from orc.apscheduler import JOBSTORE_MEMORY, requires_ctx
 from orc.dal import (  # noqa: F401
     fetch_chromecast_config,
     fetch_hubitat_config,
@@ -32,6 +32,7 @@ from orc.locale import Log
 
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
+_CALENDAR_CHECK_MINUTES = (55, 10, 25, 40)
 
 _MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
@@ -109,7 +110,7 @@ def execute(rule):
         elif isinstance(w, orc.Sound):
             if isinstance(rule.state, int):
                 dal.update_sound(w, rule.state)
-            elif rule.state == "stop":
+            elif rule.state == config.STOP:
                 dal.stop_sound(w)
             else:
                 if rule.state not in stream:
@@ -227,10 +228,12 @@ class ConfigManager:
         if today.weekday() not in (5, 6):
             today_iso = today.strftime("%Y-%m-%d")
             theme_name = (
-                "day off" if next((e for e in holidays if e["date"] == today_iso and e["exchange"] == "NYSE"), None) else "work day"
+                config.THEME_DAY_OFF
+                if next((e for e in holidays if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
+                else config.THEME_WORK_DAY
             )
         else:
-            theme_name = "day off"
+            theme_name = config.THEME_DAY_OFF
         return theme_name
 
     @unwrap_rule_container
@@ -330,9 +333,9 @@ def get_schedule(config_manager):
             cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(calculate_theme(config_manager, today))
 
         for e in cfg.configs:
-            if e.when == "sunrise":
+            if e.when == m.SUNRISE:
                 time = sunrise
-            elif e.when == "sunset":
+            elif e.when == m.SUNSET:
                 time = sunset
             else:
                 time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
@@ -380,7 +383,7 @@ def run_iot_job(job, ctx, force=False):
 
 @requires_ctx
 def _run_cal_job(job, ctx):
-    if job.event_type == "warning":
+    if job.event_type == m.CalendarEvent.WARNING:
         _play_alert(ctx.sound_path)
     else:
         log(local_now(), m.LogSource.CALENDAR, job.summary)
@@ -413,10 +416,10 @@ def check_presence(ctx):
 
 def _schedule_cal_tasks(scheduler, config_manager):
     now = local_now()
-    if calculate_theme(config_manager, now.date()) == "work day" and (now.time().minute in [55, 10, 25, 40]):
+    if calculate_theme(config_manager, now.date()) == config.THEME_WORK_DAY and (now.time().minute in _CALENDAR_CHECK_MINUTES):
         events = list(itertools.islice(dal.fetch_ical(now, timedelta(hours=20)), 50))
-        warning_events = (m.CalendarEvent.from_cal(e, "warning", timedelta(minutes=-2), config.tz) for e in events)
-        alarm_events = (m.CalendarEvent.from_cal(e, "alarm", timedelta(), config.tz) for e in events)
+        warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
+        alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
 
         calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
 
@@ -432,7 +435,7 @@ def _schedule_cal_tasks(scheduler, config_manager):
                 replace_existing=True,
                 id=id,
                 name=event.summary,
-                jobstore="memory",
+                jobstore=JOBSTORE_MEMORY,
             )
 
 
@@ -465,7 +468,7 @@ def setup_scheduler(ctx):
         replace_existing=True,
         id="iot-cron",
         name="Iot Cron",
-        jobstore="memory",
+        jobstore=JOBSTORE_MEMORY,
     )
     ctx.scheduler.add_job(
         _rebuild_cal_schedule,
@@ -473,7 +476,7 @@ def setup_scheduler(ctx):
         replace_existing=True,
         id="cal-cron",
         name="Calendar Cron",
-        jobstore="memory",
+        jobstore=JOBSTORE_MEMORY,
     )
     ctx.scheduler.add_job(
         check_presence,
@@ -481,7 +484,7 @@ def setup_scheduler(ctx):
         replace_existing=True,
         id="presence-cron",
         name="Presence Cron",
-        jobstore="memory",
+        jobstore=JOBSTORE_MEMORY,
     )
 
 
