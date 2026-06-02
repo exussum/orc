@@ -15,7 +15,6 @@ def pytest_sessionstart(session):
         x = 1
 
     orc.Light, orc.Sound = Light, Sound
-    return Light, Sound
 
 
 @pytest.fixture(autouse=True)
