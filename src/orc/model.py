@@ -206,7 +206,9 @@ def build_enum(doc, section, sub_section, id_lookup):
 
 
 def _valid_state(e):
-    return e in ("on", "off", "stop") or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
+    from orc import Config
+
+    return e in (Config.ON, Config.OFF, "stop") or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
 
 
 def _validate_states(sub_tables, col):
@@ -339,13 +341,15 @@ def squish_configs(*configs, state_override=None):
 
 
 def _op_cmp(k):
+    from orc import Config
+
     class_name = k.what.__class__.__name__
 
     if k.state == "stop":
         sub_sort = -2
     elif isinstance(k.state, int):
         sub_sort = -1
-    elif k.state == "on":
+    elif k.state == Config.ON:
         sub_sort = 0
     else:
         sub_sort = 1

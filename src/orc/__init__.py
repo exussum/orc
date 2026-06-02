@@ -10,6 +10,10 @@ from orc import model as m
 class Config:
     OFF = "off"
     ON = "on"
+    STOP = "stop"
+    FOLLOW = "follow"
+    THEME_WORK_DAY = "work day"
+    THEME_DAY_OFF = "day off"
 
     def __init__(self):
         self.orc_config = os.getenv("ORC_CONFIG", "src/config.md")
