@@ -8,6 +8,10 @@ if TYPE_CHECKING:
     from orc import model as m
 
 
+JOBSTORE_DEFAULT = "default"
+JOBSTORE_MEMORY = "memory"
+
+
 class ContextThreadPoolExecutor(ThreadPoolExecutor):
     def __init__(self, ctx: "m.AppContext", max_workers=1):
         super().__init__(max_workers=max_workers)
