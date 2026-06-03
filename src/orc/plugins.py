@@ -114,7 +114,6 @@ def trigger_sensor(ctx, device_id, event):
     entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
 
     if event == _SENSOR_EVENT_ACTIVE:
-        ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.SYSTEM, Log.ENTRANCE_SENSOR_TRIGGERED)
         ctx.api.execute(ctx.model.Config(entrance, 20))
         if _daytime(ctx):
             ctx.api.execute(ctx.config.default_config)
