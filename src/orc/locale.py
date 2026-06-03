@@ -17,8 +17,6 @@ class Log:
     JOB_FORCED = "Force run: {job_name}"
     ROOM_SET = "Room: {id} {state}"
 
-    ENTRANCE_SENSOR_TRIGGERED = "Entrance sensor"
-
     TRIGGER_SENSOR_OFF_PREFIX = "Trigger sensor off: {msg}"
     TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME = "skip (nighttime)"
     TRIGGER_SENSOR_OFF_SKIPPED_PRESENT = "skip (present: {names})"
