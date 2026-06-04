@@ -5,6 +5,7 @@ import signal
 import sys
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
 
@@ -100,7 +101,11 @@ def silence(ctx):
 
 
 def sound_test(ctx):
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Sound, f"{request.host_url}static/alert.mp3")))
+    base = ctx.config.internal_url.rstrip("/") + "/" if ctx.config.internal_url else request.host_url
+    url = f"{base}static/alert.mp3"
+    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Sound, url)))
+    ctx.api.play_text("audio test")
+    ctx.api.play_alert(str(Path(__file__).parent / "static" / "alert.mp3"))
 
 
 def _daytime(ctx):
