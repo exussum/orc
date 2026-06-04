@@ -272,9 +272,8 @@ def fetch_youtube(id):
 @requires_enabled(None)
 def play_stream(sound, stream_url, title):
     with _cast(sound) as cast:
-        cast.quit_app()
         cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
-        time.sleep(1)
+        cast.media_controller.block_until_active(timeout=10)
 
 
 # --- Discovery ---
