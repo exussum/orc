@@ -18,6 +18,7 @@ class Config:
         self.orc_config = os.getenv("ORC_CONFIG", "src/config.md")
         self.jobs_db = os.getenv("ORC_DB", "sqlite:////tmp/jobs.sqlite")
         self.base_url = os.getenv("ORC_BASE_URL")
+        self.internal_url = os.getenv("ORC_INTERNAL_URL", "")
         self.http_timeout = int(os.getenv("ORC_HTTP_TIMEOUT", 5))
         self.http_ical_timeout = int(os.getenv("ORC_HTTP_ICAL_TIMEOUT", 120))
         self.tz = ZoneInfo(os.getenv("ORC_TZ", "America/New_York"))
