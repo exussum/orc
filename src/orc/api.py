@@ -124,7 +124,7 @@ def capture_sounds():
     return m.Configs(*dal.fetch_sounds(orc.Sound))
 
 
-def _play_text(text):
+def play_text(text):
     buf = io.BytesIO()
     with wave.open(buf, "wb") as fh:
         fh.setnchannels(1)
@@ -140,7 +140,7 @@ def _play_text(text):
         pygame.time.delay(100)
 
 
-def _play_alert(path):
+def play_alert(path):
     pygame.mixer.init()
     sound = pygame.mixer.Sound(path)
     playing = sound.play()
@@ -376,10 +376,10 @@ def run_iot_job(job, ctx, force=False):
 @requires_ctx
 def _run_cal_job(job, ctx):
     if job.event_type == m.CalendarEvent.WARNING:
-        _play_alert(ctx.sound_path)
+        play_alert(ctx.sound_path)
     else:
         log(local_now(), m.LogSource.CALENDAR, job.summary)
-        _play_text(job.summary)
+        play_text(job.summary)
 
 
 def _safe_ping(name, host):
