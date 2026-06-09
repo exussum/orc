@@ -303,6 +303,23 @@ class TestPresence:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_not_called()
 
+    def test_replay_day_skips_routines_for_absent_people(self):
+        past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
+        partner = self._routine("partner-r", "Alice")
+        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "execute") as execute:
+            api.replay_day(self.target, api.local_now())
+        squished = execute.call_args.args[0]
+        assert squished.items == ()
+
+    def test_replay_day_runs_routines_for_present_people(self):
+        self.target.mark_present(["Alice"], when=api.local_now())
+        past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
+        partner = self._routine("partner-r", "Alice")
+        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "execute") as execute:
+            api.replay_day(self.target, api.local_now())
+        squished = execute.call_args.args[0]
+        assert [c.trigger for c in squished.items] == ["Alice"]
+
     def test_check_presence_continues_when_one_ping_raises(self):
         with patch.object(config, "people", {"Alice": {"alice.local"}, "Bob": {"bob.local"}}):
 
