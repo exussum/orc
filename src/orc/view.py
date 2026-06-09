@@ -218,6 +218,7 @@ def expire_presence(name):
 def run_presence_check():
     job = app.orc.scheduler.get_job("presence-cron")
     api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
+    api.purge_presence(app.orc.config_manager)
     job.func(ctx=app.orc)
 
 
