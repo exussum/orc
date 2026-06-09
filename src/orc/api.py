@@ -208,6 +208,9 @@ class ConfigManager:
     def expire_presence(self, name):
         self._presence.pop(name, None)
 
+    def purge_presence(self):
+        self._presence.clear()
+
     def active_override(self, today):
         if self.theme_override and self.theme_override.start <= today <= self.theme_override.end:
             return self.theme_override
@@ -288,6 +291,11 @@ def _mark_present(config_manager, names):
 def expire_presence(config_manager, name):
     config_manager.expire_presence(name)
     dal.delete_presence(name)
+
+
+def purge_presence(config_manager):
+    config_manager.purge_presence()
+    dal.purge_presence()
 
 
 def calculate_theme(config_manager, today):
@@ -490,5 +498,6 @@ def light_test():
 
 def replay_day(config_manager, now):
     jobs = sorted(get_schedule(config_manager), key=lambda x: x[0])
-    configs = (cfg for (when, cfg) in jobs if when <= now)
+    present_names = config_manager.present_names
+    configs = (cfg for (when, cfg) in jobs if when <= now and not should_skip_for_presence(cfg, False, present_names))
     execute(m.squish_configs(*configs))
