@@ -103,6 +103,11 @@ def delete_presence(name):
         conn.execute("DELETE FROM orc_presence WHERE name = ?", (name,))
 
 
+def purge_presence():
+    with _theme_override_conn() as conn:
+        conn.execute("DELETE FROM orc_presence")
+
+
 def _read_light(light):
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT type, state FROM orc_light WHERE device_id = ?", (light.value,)).fetchone()
