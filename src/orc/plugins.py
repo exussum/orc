@@ -124,10 +124,10 @@ def trigger_sensor(ctx, device_id, event):
     entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
 
     if event == _SENSOR_EVENT_ACTIVE:
-        _each_sound(ctx, ctx.api.pause_sound)
         ctx.api.execute(ctx.model.Config(entrance, 20))
         if _daytime(ctx):
             ctx.api.execute(ctx.config.default_config)
+        _each_sound(ctx, ctx.api.pause_sound)
     else:
         ctx.api.execute(ctx.model.Config(entrance, ctx.config.OFF))
 
@@ -153,15 +153,19 @@ def _run_trigger_sensor_off(ctx):
     plugin_ctx.api.check_presence(ctx=ctx)
 
     if not _daytime(plugin_ctx):
-        _each_sound(ctx, ctx.api.stop_sound)
+        # If it's night, the lights were unaffected, just stop the sound.
+        _each_sound(plugin_ctx, plugin_ctx.api.stop_sound)
         log(Log.TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME)
     elif plugin_ctx.config_manager.present_names:
-        _each_sound(ctx, ctx.api.stop_sound)
+        # If people are around, they're in control of the lights, stop the sound.
+        _each_sound(plugin_ctx, plugin_ctx.api.stop_sound)
         log(Log.TRIGGER_SENSOR_OFF_SKIPPED_PRESENT.format(names=", ".join(sorted(plugin_ctx.config_manager.present_names))))
-    elif sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2:
-        _each_sound(ctx, ctx.api.stop_sound)
+    elif any(1 for s in plugin_ctx.api.capture_sounds().items if s.content):
+        # Stuff is playing for a reason, resume it.
         log(Log.TRIGGER_SENSOR_OFF_SKIPPED_SOUNDS)
+        _each_sound(plugin_ctx, plugin_ctx.api.resume_sound)
     else:
-        _each_sound(ctx, ctx.api.resume_sound)
-        log(Log.TRIGGER_SENSOR_OFF_APPLIED)
+        # If it's daytime, no one is home, and it's quiet, turn off the lights, resume the sound (in case it gets falsely paused)
         plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
+        log(Log.TRIGGER_SENSOR_OFF_APPLIED)
+        _each_sound(plugin_ctx, plugin_ctx.api.resume_sound)
