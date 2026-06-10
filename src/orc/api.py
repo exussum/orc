@@ -27,6 +27,9 @@ from orc.dal import (  # noqa: F401
     fetch_hubitat_config,
     fetch_secrets,
     init_db,
+    pause_sound,
+    resume_sound,
+    stop_sound,
 )
 from orc.locale import Log
 
@@ -121,7 +124,8 @@ def capture_lights():
 
 
 def capture_sounds():
-    return m.Configs(*dal.fetch_sounds(orc.Sound))
+    with Pool(max_workers=len(orc.Sound)) as ex:
+        return m.Configs(*ex.map(dal.fetch_sound, orc.Sound))
 
 
 def play_text(text):
