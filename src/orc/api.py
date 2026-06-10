@@ -53,21 +53,21 @@ ThemeOverride = nt("ThemeOverride", "name start end")
 # --- Utilities ---
 
 
-def log(when, source, action):
-    _ACTIVITY_LOG.add(when, source, action)
-
-
-def log_entries():
-    return _ACTIVITY_LOG.entries
+def jobs_by_type(scheduler, type):
+    now = local_now()
+    return [e for e in scheduler.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
 
 
 def local_now():
     return datetime.now(tz=config.tz)
 
 
-def jobs_by_type(scheduler, type):
-    now = local_now()
-    return [e for e in scheduler.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
+def log(when, source, action):
+    _ACTIVITY_LOG.add(when, source, action)
+
+
+def log_entries():
+    return _ACTIVITY_LOG.entries
 
 
 def unwrap_rule_container(f):
@@ -85,6 +85,15 @@ def unwrap_rule_container(f):
 
 
 # --- Device control & audio ---
+
+
+def capture_lights():
+    return m.Configs(*(dal.fetch_light_state(e) for e in orc.Light))
+
+
+def capture_sounds():
+    with Pool(max_workers=len(orc.Sound)) as ex:
+        return m.Configs(*ex.map(dal.fetch_sound, orc.Sound))
 
 
 @unwrap_rule_container
@@ -119,13 +128,12 @@ def execute(rule):
         sleep(0.1)
 
 
-def capture_lights():
-    return m.Configs(*(dal.fetch_light_state(e) for e in orc.Light))
-
-
-def capture_sounds():
-    with Pool(max_workers=len(orc.Sound)) as ex:
-        return m.Configs(*ex.map(dal.fetch_sound, orc.Sound))
+def play_alert(path):
+    pygame.mixer.init()
+    sound = pygame.mixer.Sound(path)
+    playing = sound.play()
+    while playing.get_busy():
+        pygame.time.delay(100)
 
 
 def play_text(text):
@@ -140,14 +148,6 @@ def play_text(text):
 
     pygame.mixer.init()
     playing = pygame.mixer.Sound(buf).play()
-    while playing.get_busy():
-        pygame.time.delay(100)
-
-
-def play_alert(path):
-    pygame.mixer.init()
-    sound = pygame.mixer.Sound(path)
-    playing = sound.play()
     while playing.get_busy():
         pygame.time.delay(100)
 
@@ -247,23 +247,6 @@ class ConfigManager:
             execute(rule)
 
 
-def make_config_manager():
-    row = dal.fetch_theme_override()
-    theme_override = ThemeOverride(*row) if row else None
-    return ConfigManager(theme_override=theme_override, presence=dal.fetch_presence())
-
-
-def set_theme_override(config_manager, name, start, end):
-    override = ThemeOverride(name, start, end)
-    config_manager.theme_override = override
-    dal.insert_theme_override(override)
-
-
-def clear_theme_override(config_manager):
-    config_manager.theme_override = None
-    dal.delete_theme_override()
-
-
 def apply_theme_change(ctx, name, start, end):
     now = local_now()
     today = now.date()
@@ -281,8 +264,39 @@ def apply_theme_change(ctx, name, start, end):
         replay_day(ctx.config_manager, now)
 
 
+def calculate_theme(config_manager, today):
+    return config_manager.calculate_theme(today, dal.fetch_holidays(today.year))
+
+
+def clear_theme_override(config_manager):
+    config_manager.theme_override = None
+    dal.delete_theme_override()
+
+
+def expire_presence(config_manager, name):
+    config_manager.expire_presence(name)
+    dal.delete_presence(name)
+
+
+def make_config_manager():
+    row = dal.fetch_theme_override()
+    theme_override = ThemeOverride(*row) if row else None
+    return ConfigManager(theme_override=theme_override, presence=dal.fetch_presence())
+
+
+def purge_presence(config_manager):
+    config_manager.purge_presence()
+    dal.purge_presence()
+
+
 def replace_config_for(config_manager, id, duration):
     config_manager.replace_config(config.ad_hoc_routines[id], local_now() + duration)
+
+
+def set_theme_override(config_manager, name, start, end):
+    override = ThemeOverride(name, start, end)
+    config_manager.theme_override = override
+    dal.insert_theme_override(override)
 
 
 def _mark_present(config_manager, names):
@@ -292,21 +306,23 @@ def _mark_present(config_manager, names):
         dal.insert_presence(name, now)
 
 
-def expire_presence(config_manager, name):
-    config_manager.expire_presence(name)
-    dal.delete_presence(name)
-
-
-def purge_presence(config_manager):
-    config_manager.purge_presence()
-    dal.purge_presence()
-
-
-def calculate_theme(config_manager, today):
-    return config_manager.calculate_theme(today, dal.fetch_holidays(today.year))
-
-
 # --- Scheduling & job handlers ---
+
+
+@requires_ctx
+def check_presence(ctx):
+    pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
+    if not pairs:
+        return
+    before = ctx.config_manager.present_names
+    with Pool(max_workers=len(pairs)) as ex:
+        present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
+    _mark_present(ctx.config_manager, present)
+    after = ctx.config_manager.present_names
+    for name in sorted(after - before):
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=name))
+    for name in sorted(before - after):
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=name))
 
 
 def get_schedule(config_manager):
@@ -347,17 +363,6 @@ def get_schedule(config_manager):
     return result
 
 
-def should_skip_for_presence(rule, force, present_names):
-    if force or not rule.items:
-        return False
-    for c in rule.items:
-        if not c.trigger or c.trigger == m.Trigger.SYSTEM or c.trigger in present_names:
-            return False
-        if c.trigger == m.Trigger.ANYONE and present_names:
-            return False
-    return True
-
-
 def next_iot_job(scheduler, present_names):
     jobs = sorted(jobs_by_type(scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
     return next(
@@ -383,84 +388,6 @@ def run_iot_job(job, ctx, force=False):
     if not force:
         log(local_now(), m.LogSource.IOT, rule.name)
     ctx.config_manager.route_rule(rule, force)
-
-
-@requires_ctx
-def _run_cal_job(job, ctx):
-    if job.event_type == m.CalendarEvent.WARNING:
-        play_alert(ctx.sound_path)
-    else:
-        log(local_now(), m.LogSource.CALENDAR, job.summary)
-        play_text(job.summary)
-
-
-def _safe_ping(name, host):
-    try:
-        return name, dal.ping_host(host)
-    except Exception as exc:
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
-        return name, False
-
-
-@requires_ctx
-def check_presence(ctx):
-    pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
-    if not pairs:
-        return
-    before = ctx.config_manager.present_names
-    with Pool(max_workers=len(pairs)) as ex:
-        present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
-    _mark_present(ctx.config_manager, present)
-    after = ctx.config_manager.present_names
-    for name in sorted(after - before):
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=name))
-    for name in sorted(before - after):
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=name))
-
-
-def _schedule_cal_tasks(scheduler, config_manager):
-    now = local_now()
-    if calculate_theme(config_manager, now.date()) == config.THEME_WORK_DAY and (now.time().minute in _CALENDAR_CHECK_MINUTES):
-        events = list(itertools.islice(dal.fetch_ical(now, timedelta(hours=20)), 50))
-        warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
-        alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
-
-        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
-
-        for e in jobs_by_type(scheduler, m.CalendarJob):
-            if e.id not in calendar_by_id:
-                scheduler.remove_job(e.id)
-
-        for id, event in calendar_by_id.items():
-            scheduler.add_job(
-                _run_cal_job,
-                DateTrigger(event.datetime),
-                args=[m.CalendarJob(event.type, event.summary)],
-                replace_existing=True,
-                id=id,
-                name=event.summary,
-                jobstore=JOBSTORE_MEMORY,
-            )
-
-
-@requires_ctx
-def _rebuild_iot_schedule(ctx):
-    now = local_now()
-    for time, rule in get_schedule(ctx.config_manager):
-        if now <= time:
-            ctx.scheduler.add_job(
-                run_iot_job,
-                DateTrigger(time),
-                args=[m.IotJob(rule)],
-                name=rule.name,
-                id=f"iot-{rule.name}-{time.date().isoformat()}",
-                replace_existing=True,
-            )
-
-
-@requires_ctx
-def _rebuild_cal_schedule(ctx):
-    _schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
 
 
 def setup_scheduler(ctx):
@@ -490,6 +417,79 @@ def setup_scheduler(ctx):
         name="Presence Cron",
         jobstore=JOBSTORE_MEMORY,
     )
+
+
+def should_skip_for_presence(rule, force, present_names):
+    if force or not rule.items:
+        return False
+    for c in rule.items:
+        if not c.trigger or c.trigger == m.Trigger.SYSTEM or c.trigger in present_names:
+            return False
+        if c.trigger == m.Trigger.ANYONE and present_names:
+            return False
+    return True
+
+
+@requires_ctx
+def _rebuild_cal_schedule(ctx):
+    _schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
+
+
+@requires_ctx
+def _rebuild_iot_schedule(ctx):
+    now = local_now()
+    for time, rule in get_schedule(ctx.config_manager):
+        if now <= time:
+            ctx.scheduler.add_job(
+                run_iot_job,
+                DateTrigger(time),
+                args=[m.IotJob(rule)],
+                name=rule.name,
+                id=f"iot-{rule.name}-{time.date().isoformat()}",
+                replace_existing=True,
+            )
+
+
+@requires_ctx
+def _run_cal_job(job, ctx):
+    if job.event_type == m.CalendarEvent.WARNING:
+        play_alert(ctx.sound_path)
+    else:
+        log(local_now(), m.LogSource.CALENDAR, job.summary)
+        play_text(job.summary)
+
+
+def _safe_ping(name, host):
+    try:
+        return name, dal.ping_host(host)
+    except Exception as exc:
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
+        return name, False
+
+
+def _schedule_cal_tasks(scheduler, config_manager):
+    now = local_now()
+    if calculate_theme(config_manager, now.date()) == config.THEME_WORK_DAY and (now.time().minute in _CALENDAR_CHECK_MINUTES):
+        events = list(itertools.islice(dal.fetch_ical(now, timedelta(hours=20)), 50))
+        warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
+        alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
+
+        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
+
+        for e in jobs_by_type(scheduler, m.CalendarJob):
+            if e.id not in calendar_by_id:
+                scheduler.remove_job(e.id)
+
+        for id, event in calendar_by_id.items():
+            scheduler.add_job(
+                _run_cal_job,
+                DateTrigger(event.datetime),
+                args=[m.CalendarJob(event.type, event.summary)],
+                replace_existing=True,
+                id=id,
+                name=event.summary,
+                jobstore=JOBSTORE_MEMORY,
+            )
 
 
 # --- Manual triggers / replay ---

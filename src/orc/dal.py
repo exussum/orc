@@ -26,6 +26,8 @@ _YDL_OPTS = {
     "no_warnings": True,
 }
 
+_DB_TRUTH_DEVICE_TYPES = {"Generic Zigbee Outlet"}
+
 
 def requires_enabled(stub):
     def deco(fn):
@@ -44,38 +46,9 @@ def requires_enabled(stub):
 # --- Database ---
 
 
-def _theme_override_conn():
-    return sqlite3.connect(make_url(config.jobs_db).database)
-
-
-_DB_TRUTH_DEVICE_TYPES = {"Generic Zigbee Outlet"}
-
-
-def init_db():
+def delete_presence(name):
     with _theme_override_conn() as conn:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS orc_theme_override "
-            "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
-        )
-        conn.execute("CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)")
-        conn.execute("CREATE TABLE IF NOT EXISTS orc_light (device_id INTEGER PRIMARY KEY, type TEXT, state TEXT)")
-
-
-def fetch_theme_override():
-    with _theme_override_conn() as conn:
-        row = conn.execute("SELECT name, start, end FROM orc_theme_override WHERE id = 0").fetchone()
-    if not row:
-        return None
-    return (row[0], date.fromisoformat(row[1]), date.fromisoformat(row[2]))
-
-
-def insert_theme_override(override):
-    with _theme_override_conn() as conn:
-        conn.execute(
-            "INSERT INTO orc_theme_override (id, name, start, end) VALUES (0, ?, ?, ?) "
-            "ON CONFLICT(id) DO UPDATE SET name=excluded.name, start=excluded.start, end=excluded.end",
-            (override[0], override[1].isoformat(), override[2].isoformat()),
-        )
+        conn.execute("DELETE FROM orc_presence WHERE name = ?", (name,))
 
 
 def delete_theme_override():
@@ -89,6 +62,24 @@ def fetch_presence():
     return {name: datetime.fromisoformat(last_seen) for name, last_seen in rows}
 
 
+def fetch_theme_override():
+    with _theme_override_conn() as conn:
+        row = conn.execute("SELECT name, start, end FROM orc_theme_override WHERE id = 0").fetchone()
+    if not row:
+        return None
+    return (row[0], date.fromisoformat(row[1]), date.fromisoformat(row[2]))
+
+
+def init_db():
+    with _theme_override_conn() as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS orc_theme_override "
+            "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
+        )
+        conn.execute("CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS orc_light (device_id INTEGER PRIMARY KEY, type TEXT, state TEXT)")
+
+
 def insert_presence(name, when):
     with _theme_override_conn() as conn:
         conn.execute(
@@ -97,9 +88,13 @@ def insert_presence(name, when):
         )
 
 
-def delete_presence(name):
+def insert_theme_override(override):
     with _theme_override_conn() as conn:
-        conn.execute("DELETE FROM orc_presence WHERE name = ?", (name,))
+        conn.execute(
+            "INSERT INTO orc_theme_override (id, name, start, end) VALUES (0, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET name=excluded.name, start=excluded.start, end=excluded.end",
+            (override[0], override[1].isoformat(), override[2].isoformat()),
+        )
 
 
 def purge_presence():
@@ -107,10 +102,19 @@ def purge_presence():
         conn.execute("DELETE FROM orc_presence")
 
 
+def _fetch_hubitat_device(light):
+    resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
+    return resp.json() if resp.status_code == 200 else None
+
+
 def _read_light(light):
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT type, state FROM orc_light WHERE device_id = ?", (light.value,)).fetchone()
     return row if row else (None, None)
+
+
+def _theme_override_conn():
+    return sqlite3.connect(make_url(config.jobs_db).database)
 
 
 def _write_light(light, *, type=None, state=None):
@@ -124,17 +128,7 @@ def _write_light(light, *, type=None, state=None):
         )
 
 
-def _fetch_hubitat_device(light):
-    resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
-    return resp.json() if resp.status_code == 200 else None
-
-
 # --- Secrets ---
-
-
-def _get_url_value(url):
-    with urlopen(url) as response:
-        return response.readline().decode("utf-8").strip()
 
 
 def fetch_secrets():
@@ -159,6 +153,11 @@ def fetch_secrets():
         market_holidays_url=get_secret("MARKET_HOLIDAYS_URL"),
         ics_url=get_secret("ICS_URL"),
     )
+
+
+def _get_url_value(url):
+    with urlopen(url) as response:
+        return response.readline().decode("utf-8").strip()
 
 
 # --- Lights ---
@@ -215,25 +214,6 @@ def update_light(light, on=None, brightness=None):
 # --- Sound ---
 
 
-def _strip_googlevideo_params(url):
-    parsed = urlparse(url)
-    if not parsed.hostname or not parsed.hostname.endswith("googlevideo.com"):
-        return url
-    vid_id = parse_qs(parsed.query).get("id", [None])[0]
-    query = urlencode({"id": vid_id}) if vid_id is not None else ""
-    return urlunparse(parsed._replace(query=query))
-
-
-@contextmanager
-def _cast(sound, **kwargs):
-    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None), **kwargs)
-    try:
-        cast.wait(timeout=kwargs.get("timeout"))
-        yield cast
-    finally:
-        cast.disconnect(timeout=2)
-
-
 @requires_enabled(lambda sound: m.SoundState(what=sound, content=None, volume=0))
 def fetch_sound(sound):
     with _cast(sound, timeout=5, tries=1) as cast:
@@ -246,18 +226,11 @@ def fetch_sound(sound):
         )
 
 
-@requires_enabled(None)
-def update_sound(sound, lvl):
-    with _cast(sound) as cast:
-        cast.set_volume(lvl / 100)
-        time.sleep(1)
-
-
-@requires_enabled(None)
-def stop_sound(sound):
-    with _cast(sound) as cast:
-        cast.quit_app()
-        time.sleep(1)
+@requires_enabled(lambda *_: ("", "Audio Stream"))
+def fetch_youtube(id):
+    with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
+        info = ydl.extract_info(id, download=False)
+        return info["url"], info.get("title", "Audio Stream")
 
 
 @requires_enabled(None)
@@ -271,6 +244,13 @@ def pause_sound(sound):
 
 
 @requires_enabled(None)
+def play_stream(sound, stream_url, title):
+    with _cast(sound) as cast:
+        cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
+        cast.media_controller.block_until_active(timeout=10)
+
+
+@requires_enabled(None)
 def resume_sound(sound):
     with _cast(sound) as cast:
         cast.media_controller.update_status()
@@ -280,32 +260,40 @@ def resume_sound(sound):
             time.sleep(1)
 
 
-@requires_enabled(lambda *_: ("", "Audio Stream"))
-def fetch_youtube(id):
-    with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
-        info = ydl.extract_info(id, download=False)
-        return info["url"], info.get("title", "Audio Stream")
+@requires_enabled(None)
+def stop_sound(sound):
+    with _cast(sound) as cast:
+        cast.quit_app()
+        time.sleep(1)
 
 
 @requires_enabled(None)
-def play_stream(sound, stream_url, title):
+def update_sound(sound, lvl):
     with _cast(sound) as cast:
-        cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
-        cast.media_controller.block_until_active(timeout=10)
+        cast.set_volume(lvl / 100)
+        time.sleep(1)
+
+
+@contextmanager
+def _cast(sound, **kwargs):
+    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None), **kwargs)
+    try:
+        cast.wait(timeout=kwargs.get("timeout"))
+        yield cast
+    finally:
+        cast.disconnect(timeout=2)
+
+
+def _strip_googlevideo_params(url):
+    parsed = urlparse(url)
+    if not parsed.hostname or not parsed.hostname.endswith("googlevideo.com"):
+        return url
+    vid_id = parse_qs(parsed.query).get("id", [None])[0]
+    query = urlencode({"id": vid_id}) if vid_id is not None else ""
+    return urlunparse(parsed._replace(query=query))
 
 
 # --- Discovery ---
-
-
-@requires_enabled(False)
-def ping_host(hostname):
-    return icmplib.ping(hostname, count=2, timeout=1, privileged=True).is_alive
-
-
-@requires_enabled({})
-def fetch_hubitat_config(secrets):
-    result = requests.get(f"{config.base_url}/devices{secrets.access_token}", timeout=config.http_timeout).json()
-    return {e["label"]: int(e["id"]) for e in result}
 
 
 @requires_enabled({})
@@ -314,6 +302,17 @@ def fetch_chromecast_config():
     devices = {e.cast_info.friendly_name: e.cast_info.host for e in chromecasts}
     pychromecast.discovery.stop_discovery(browser)
     return devices
+
+
+@requires_enabled({})
+def fetch_hubitat_config(secrets):
+    result = requests.get(f"{config.base_url}/devices{secrets.access_token}", timeout=config.http_timeout).json()
+    return {e["label"]: int(e["id"]) for e in result}
+
+
+@requires_enabled(False)
+def ping_host(hostname):
+    return icmplib.ping(hostname, count=2, timeout=1, privileged=True).is_alive
 
 
 # --- External feeds ---
