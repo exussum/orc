@@ -36,6 +36,22 @@ class PluginCtx:
     scheduler: BaseScheduler | None = None
 
 
+def all_lights_off(ctx):
+    ctx.api.execute(
+        ctx.model.Configs(
+            ctx.model.Config(ctx.Light, ctx.config.OFF),
+        )
+    )
+
+
+def all_lights_on(ctx):
+    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Light, ctx.config.ON), ctx.model.Config(ctx.Light, 100)))
+
+
+def back_on_schedule(ctx):
+    ctx.api.replay_day(ctx.config_manager, ctx.api.local_now())
+
+
 def build_ctx(config_manager, scheduler=None):
     from orc import Light, Sound, api, config, model
 
@@ -55,10 +71,6 @@ def execute_plugin(config_manager, id):
     getattr(sys.modules[__name__], ctx.config.plugins[id])(ctx)
 
 
-def reboot(ctx):
-    os.kill(os.getppid(), signal.SIGTERM)
-
-
 def light_test(ctx):
     end = ctx.api.local_now() + timedelta(minutes=10)
     ctx.config_manager.replace_config(ctx.model.Config(ctx.Light, ctx.config.OFF), end)
@@ -66,30 +78,8 @@ def light_test(ctx):
     ctx.config_manager.resume(ctx.config.default_config)
 
 
-def back_on_schedule(ctx):
-    ctx.api.replay_day(ctx.config_manager, ctx.api.local_now())
-
-
-def all_lights_on(ctx):
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Light, ctx.config.ON), ctx.model.Config(ctx.Light, 100)))
-
-
-def all_lights_off(ctx):
-    ctx.api.execute(
-        ctx.model.Configs(
-            ctx.model.Config(ctx.Light, ctx.config.OFF),
-        )
-    )
-
-
-def video_conference(ctx):
-    ctx.api.execute(
-        ctx.model.Configs(
-            ctx.model.Config(ctx.Light.OFFICE_TABLE, 5),
-            ctx.model.Config(ctx.Light.OFFICE_FLOOR, ctx.config.ON),
-            ctx.model.Config(ctx.Light.OFFICE_DESK, 50),
-        )
-    )
+def reboot(ctx):
+    os.kill(os.getppid(), signal.SIGTERM)
 
 
 def silence(ctx):
@@ -106,15 +96,6 @@ def sound_test(ctx):
     ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Sound, url)))
     ctx.api.play_text("audio test")
     ctx.api.play_alert(str(Path(__file__).parent / "static" / "alert.mp3"))
-
-
-def _daytime(ctx):
-    return 10 <= ctx.api.local_now().hour < 22
-
-
-def _each_sound(ctx, action):
-    for e in ctx.Sound:
-        action(e)
 
 
 def trigger_sensor(ctx, device_id, event):
@@ -139,6 +120,25 @@ def trigger_sensor(ctx, device_id, event):
         replace_existing=True,
         jobstore=JOBSTORE_MEMORY,
     )
+
+
+def video_conference(ctx):
+    ctx.api.execute(
+        ctx.model.Configs(
+            ctx.model.Config(ctx.Light.OFFICE_TABLE, 5),
+            ctx.model.Config(ctx.Light.OFFICE_FLOOR, ctx.config.ON),
+            ctx.model.Config(ctx.Light.OFFICE_DESK, 50),
+        )
+    )
+
+
+def _daytime(ctx):
+    return 10 <= ctx.api.local_now().hour < 22
+
+
+def _each_sound(ctx, action):
+    for e in ctx.Sound:
+        action(e)
 
 
 @requires_ctx

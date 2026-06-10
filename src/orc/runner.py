@@ -16,6 +16,31 @@ from orc.locale import Log
 from orc.view import VersionManager, bp
 
 
+def flask():
+    app, scheduler = _build_app()
+    scheduler.resume()
+    api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
+    app.run(host="0.0.0.0", port=8000, use_reloader=False)
+
+
+def web():
+    class GunicornApp(BaseApplication):
+        def load_config(self):
+            self.cfg.set("workers", 1)
+            self.cfg.set("threads", 1)
+            self.cfg.set("timeout", 120)
+            self.cfg.set("loglevel", "warning")
+            self.cfg.set("bind", "0.0.0.0:8000")
+
+        def load(self):
+            app, scheduler = _build_app()
+            scheduler.resume()
+            api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
+            return app
+
+    GunicornApp().run()
+
+
 def _build_app():
     if os.getenv("ORC_ENABLED"):
         secrets = api.fetch_secrets()
@@ -50,28 +75,3 @@ def _build_app():
     app.register_blueprint(bp)
 
     return app, scheduler
-
-
-def web():
-    class GunicornApp(BaseApplication):
-        def load_config(self):
-            self.cfg.set("workers", 1)
-            self.cfg.set("threads", 1)
-            self.cfg.set("timeout", 120)
-            self.cfg.set("loglevel", "warning")
-            self.cfg.set("bind", "0.0.0.0:8000")
-
-        def load(self):
-            app, scheduler = _build_app()
-            scheduler.resume()
-            api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
-            return app
-
-    GunicornApp().run()
-
-
-def flask():
-    app, scheduler = _build_app()
-    scheduler.resume()
-    api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
-    app.run(host="0.0.0.0", port=8000, use_reloader=False)
