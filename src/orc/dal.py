@@ -263,15 +263,21 @@ def stop_sound(sound):
 @requires_enabled(None)
 def pause_sound(sound):
     with _cast(sound) as cast:
-        cast.media_controller.pause()
+        cast.media_controller.update_status()
         time.sleep(1)
+        if cast.media_controller.status.player_state in ("PLAYING", "BUFFERING"):
+            cast.media_controller.pause()
+            time.sleep(1)
 
 
 @requires_enabled(None)
 def resume_sound(sound):
     with _cast(sound) as cast:
-        cast.media_controller.play()
+        cast.media_controller.update_status()
         time.sleep(1)
+        if cast.media_controller.status.player_state == "PAUSED":
+            cast.media_controller.play()
+            time.sleep(1)
 
 
 @requires_enabled(lambda *_: ("", "Audio Stream"))
