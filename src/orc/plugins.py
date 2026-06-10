@@ -112,6 +112,11 @@ def _daytime(ctx):
     return 10 <= ctx.api.local_now().hour < 22
 
 
+def _each_sound(ctx, action):
+    for e in ctx.Sound:
+        action(e)
+
+
 def trigger_sensor(ctx, device_id, event):
     if int(device_id) != _SENSOR_ID_ENTRANCE:
         return
@@ -119,6 +124,7 @@ def trigger_sensor(ctx, device_id, event):
     entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
 
     if event == _SENSOR_EVENT_ACTIVE:
+        _each_sound(ctx, ctx.api.pause_sound)
         ctx.api.execute(ctx.model.Config(entrance, 20))
         if _daytime(ctx):
             ctx.api.execute(ctx.config.default_config)
@@ -147,14 +153,15 @@ def _run_trigger_sensor_off(ctx):
     plugin_ctx.api.check_presence(ctx=ctx)
 
     if not _daytime(plugin_ctx):
+        _each_sound(ctx, ctx.api.stop_sound)
         log(Log.TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME)
-        return
-    if plugin_ctx.config_manager.present_names:
+    elif plugin_ctx.config_manager.present_names:
+        _each_sound(ctx, ctx.api.stop_sound)
         log(Log.TRIGGER_SENSOR_OFF_SKIPPED_PRESENT.format(names=", ".join(sorted(plugin_ctx.config_manager.present_names))))
-        return
-    if sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2:
+    elif sum(1 for s in plugin_ctx.api.capture_sounds().items if s.content) >= 2:
+        _each_sound(ctx, ctx.api.stop_sound)
         log(Log.TRIGGER_SENSOR_OFF_SKIPPED_SOUNDS)
-        return
-
-    log(Log.TRIGGER_SENSOR_OFF_APPLIED)
-    plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
+    else:
+        _each_sound(ctx, ctx.api.resume_sound)
+        log(Log.TRIGGER_SENSOR_OFF_APPLIED)
+        plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
