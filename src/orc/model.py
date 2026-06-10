@@ -142,52 +142,6 @@ class AppContext:
     version_manager: "VersionManager"
 
 
-def _str_to_time(x):
-    parts = x.split(":") if x else []
-    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
-        return None
-    hour, minute = int(parts[0]), int(parts[1])
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return None
-    return time(hour, minute)
-
-
-def doc_to_table(doc, section, columns):
-    # Heading store their contents in a subsequent child element
-    # https://github.com/miyuchina/mistletoe/issues/99
-    idx = next(
-        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),
-        None,
-    )
-    if idx is None:
-        raise ValueError(f"Section '{section}' not found in document")
-
-    markdown_table = next((e for e in doc.children[idx + 1 :] if isinstance(e, Table)), None)
-    if markdown_table is None:
-        raise ValueError(f"No table found under section '{section}'")
-
-    rows = list(markdown_table.children)
-    invalid = [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]
-    if invalid:
-        details = ", ".join(f"row {i} has {count}" for i, count in invalid)
-        raise ValueError(f"Expected {columns} columns in section '{section}', but: {details}")
-
-    return tuple(tuple(c.children[0].content if c.children else None for c in e.children) for e in rows)
-
-
-def doc_to_sub_tables(doc, section, columns):
-    type, result = None, None
-    for e in doc_to_table(doc, section, columns):
-        if e[0] != type and e[0]:
-            if result:
-                yield type, result
-            type, result = e[0], []
-        result.append(e)
-
-    if result:
-        yield type, result
-
-
 class DeviceEnumMeta(type(Enum)):
     def __sub__(cls, e):
         return set(cls) - e
@@ -195,6 +149,33 @@ class DeviceEnumMeta(type(Enum)):
 
 class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
     pass
+
+
+def build_config(doc, section, light, sound, required=()):
+    sub_tables = list(doc_to_sub_tables(doc, section, 3))
+    if invalid := _validate_states(sub_tables, 2):
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
+        raise ValueError(f"Invalid state values in section '{section}': {details}")
+    result = {type: Configs(*[_build_config(c[1], sound, light, c[2]) for c in e]) for type, e in sub_tables}
+    if missing := set(required) - result.keys():
+        raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
+    return result
+
+
+def build_durations(doc, section):
+    rows = doc_to_table(doc, section, 2)
+
+    def _valid(s):
+        try:
+            return s is not None and float(s) >= 0
+        except ValueError:
+            return False
+
+    invalid = [(name, s) for (name, s) in rows if not _valid(s)]
+    if invalid:
+        details = ", ".join(f"'{s}' in '{n}'" for n, s in invalid)
+        raise ValueError(f"Invalid duration values in section '{section}': {details}")
+    return {name: float(s) for name, s in rows}
 
 
 def build_enum(doc, section, sub_section, id_lookup):
@@ -215,14 +196,15 @@ def build_enum(doc, section, sub_section, id_lookup):
     )
 
 
-def _valid_state(e):
-    from orc import Config
+def build_highlights(doc, section):
+    rows = doc_to_table(doc, section, 3)
 
-    return e in (Config.ON, Config.OFF, Config.STOP) or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
+    invalid = [(name, val) for (name, start, end) in rows for val in (start, end) if _str_to_time(val) is None]
+    if invalid:
+        details = ", ".join(f"'{v}' in '{n}'" for n, v in invalid)
+        raise ValueError(f"Invalid time values in section '{section}': {details}")
 
-
-def _validate_states(sub_tables, col):
-    return [(type, c[col]) for type, e in sub_tables for c in e if not _valid_state(c[col])]
+    return [(name, _str_to_time(start), _str_to_time(end)) for (name, start, end) in rows]
 
 
 def build_people(doc, section):
@@ -231,6 +213,19 @@ def build_people(doc, section):
     for name, host in rows:
         people[name].add(host)
     return people
+
+
+def build_plugins(doc, section):
+    from orc import plugins
+
+    result = {}
+    for type, e in doc_to_sub_tables(doc, section, 2):
+        result[type] = e[0][1]
+
+    if missing := [k for k, v in result.items() if not (isinstance(v, str) and hasattr(plugins, v))]:
+        raise ValueError(f"Unrecognised plugins in section '{section}': {', '.join(sorted(missing))}")
+
+    return result
 
 
 def build_themes(doc, routine_section, theme_section, light, sound, people=None):
@@ -271,61 +266,59 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
     return themes
 
 
-def build_config(doc, section, light, sound, required=()):
-    sub_tables = list(doc_to_sub_tables(doc, section, 3))
-    if invalid := _validate_states(sub_tables, 2):
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
-        raise ValueError(f"Invalid state values in section '{section}': {details}")
-    result = {type: Configs(*[_build_config(c[1], sound, light, c[2]) for c in e]) for type, e in sub_tables}
-    if missing := set(required) - result.keys():
-        raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
-    return result
+def doc_to_sub_tables(doc, section, columns):
+    type, result = None, None
+    for e in doc_to_table(doc, section, columns):
+        if e[0] != type and e[0]:
+            if result:
+                yield type, result
+            type, result = e[0], []
+        result.append(e)
+
+    if result:
+        yield type, result
 
 
-def build_plugins(doc, section):
-    from orc import plugins
+def doc_to_table(doc, section, columns):
+    # Heading store their contents in a subsequent child element
+    # https://github.com/miyuchina/mistletoe/issues/99
+    idx = next(
+        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),
+        None,
+    )
+    if idx is None:
+        raise ValueError(f"Section '{section}' not found in document")
 
-    result = {}
-    for type, e in doc_to_sub_tables(doc, section, 2):
-        result[type] = e[0][1]
+    markdown_table = next((e for e in doc.children[idx + 1 :] if isinstance(e, Table)), None)
+    if markdown_table is None:
+        raise ValueError(f"No table found under section '{section}'")
 
-    if missing := [k for k, v in result.items() if not (isinstance(v, str) and hasattr(plugins, v))]:
-        raise ValueError(f"Unrecognised plugins in section '{section}': {', '.join(sorted(missing))}")
-
-    return result
-
-
-def build_durations(doc, section):
-    rows = doc_to_table(doc, section, 2)
-
-    def _valid(s):
-        try:
-            return s is not None and float(s) >= 0
-        except ValueError:
-            return False
-
-    invalid = [(name, s) for (name, s) in rows if not _valid(s)]
+    rows = list(markdown_table.children)
+    invalid = [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]
     if invalid:
-        details = ", ".join(f"'{s}' in '{n}'" for n, s in invalid)
-        raise ValueError(f"Invalid duration values in section '{section}': {details}")
-    return {name: float(s) for name, s in rows}
+        details = ", ".join(f"row {i} has {count}" for i, count in invalid)
+        raise ValueError(f"Expected {columns} columns in section '{section}', but: {details}")
+
+    return tuple(tuple(c.children[0].content if c.children else None for c in e.children) for e in rows)
 
 
-def build_highlights(doc, section):
-    rows = doc_to_table(doc, section, 3)
+def squish(items):
+    from orc import Config
 
-    invalid = [(name, val) for (name, start, end) in rows for val in (start, end) if _str_to_time(val) is None]
-    if invalid:
-        details = ", ".join(f"'{v}' in '{n}'" for n, v in invalid)
-        raise ValueError(f"Invalid time values in section '{section}': {details}")
+    if not items:
+        return ()
 
-    return [(name, _str_to_time(start), _str_to_time(end)) for (name, start, end) in rows]
+    last = items[-1]
+    if isinstance(last.state, int):
+        for e in range(len(items) - 2, -1, -1):
+            if items[e].state == Config.STOP:
+                return (items[e], last)
+        return (last,)
 
-
-def _build_config(cmd, sound, light, state, trigger=None):
-    if state.isdigit():
-        state = int(state)
-    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, trigger=trigger or None)
+    for e in range(len(items) - 2, -1, -1):
+        if isinstance(items[e].state, int):
+            return (items[e], last)
+    return (last,)
 
 
 def squish_configs(*configs, state_override=None):
@@ -352,6 +345,12 @@ def squish_configs(*configs, state_override=None):
     return Configs(*rules)
 
 
+def _build_config(cmd, sound, light, state, trigger=None):
+    if state.isdigit():
+        state = int(state)
+    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, trigger=trigger or None)
+
+
 def _op_cmp(k):
     from orc import Config
 
@@ -368,20 +367,21 @@ def _op_cmp(k):
     return (class_name, sub_sort)
 
 
-def squish(items):
+def _str_to_time(x):
+    parts = x.split(":") if x else []
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        return None
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return time(hour, minute)
+
+
+def _valid_state(e):
     from orc import Config
 
-    if not items:
-        return ()
+    return e in (Config.ON, Config.OFF, Config.STOP) or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
 
-    last = items[-1]
-    if isinstance(last.state, int):
-        for e in range(len(items) - 2, -1, -1):
-            if items[e].state == Config.STOP:
-                return (items[e], last)
-        return (last,)
 
-    for e in range(len(items) - 2, -1, -1):
-        if isinstance(items[e].state, int):
-            return (items[e], last)
-    return (last,)
+def _validate_states(sub_tables, col):
+    return [(type, c[col]) for type, e in sub_tables for c in e if not _valid_state(c[col])]
