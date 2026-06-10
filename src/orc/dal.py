@@ -2,7 +2,6 @@ import os
 import sqlite3
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date, datetime
 from functools import lru_cache, wraps
@@ -236,7 +235,7 @@ def _cast(sound, **kwargs):
 
 
 @requires_enabled(lambda sound: m.SoundState(what=sound, content=None, volume=0))
-def _fetch_sound(sound):
+def fetch_sound(sound):
     with _cast(sound, timeout=5, tries=1) as cast:
         time.sleep(3)
         content = cast.media_controller.status.content_id
@@ -245,12 +244,6 @@ def _fetch_sound(sound):
             content=_strip_googlevideo_params(content) if content else None,
             volume=int(cast.status.volume_level * 100),
         )
-
-
-@requires_enabled(lambda Sound: tuple(m.SoundState(what=s, content=None, volume=0) for s in Sound))
-def fetch_sounds(Sound):
-    with ThreadPoolExecutor(max_workers=len(Sound)) as ex:
-        return tuple(ex.map(_fetch_sound, Sound))
 
 
 @requires_enabled(None)
@@ -264,6 +257,20 @@ def update_sound(sound, lvl):
 def stop_sound(sound):
     with _cast(sound) as cast:
         cast.quit_app()
+        time.sleep(1)
+
+
+@requires_enabled(None)
+def pause_sound(sound):
+    with _cast(sound) as cast:
+        cast.media_controller.pause()
+        time.sleep(1)
+
+
+@requires_enabled(None)
+def resume_sound(sound):
+    with _cast(sound) as cast:
+        cast.media_controller.play()
         time.sleep(1)
 
 
