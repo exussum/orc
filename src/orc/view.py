@@ -75,6 +75,13 @@ def console(id):
     return {}, 200
 
 
+@bp.route("/api/presence/<name>/checkin", methods=["POST"])
+@VersionManager.versioned
+def checkin_presence(name):
+    api.mark_present(app.orc.config_manager, [name])
+    api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
+
+
 @bp.route("/api/presence/<name>/expire", methods=["POST"])
 @VersionManager.versioned
 def expire_presence(name):
