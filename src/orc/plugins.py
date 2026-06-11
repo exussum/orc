@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -137,8 +138,8 @@ def _daytime(ctx):
 
 
 def _each_sound(ctx, action):
-    for e in ctx.Sound:
-        action(e)
+    with Pool(max_workers=len(ctx.Sound)) as ex:
+        list(ex.map(action, ctx.Sound))
 
 
 @requires_ctx

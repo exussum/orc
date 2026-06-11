@@ -1,4 +1,6 @@
 import os
+import sys
+import traceback
 from pathlib import Path
 
 from apscheduler.events import EVENT_JOB_EXECUTED
@@ -33,7 +35,11 @@ def web():
             self.cfg.set("bind", "0.0.0.0:8000")
 
         def load(self):
-            app, scheduler = _build_app()
+            try:
+                app, scheduler = _build_app()
+            except Exception:
+                traceback.print_exc()
+                sys.exit(4)
             scheduler.resume()
             api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
             return app
