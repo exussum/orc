@@ -13,6 +13,7 @@ class Log:
     PRESENCE_DETECTED = "Presence detected: {name}"
     PRESENCE_LOST = "Presence lost: {name}"
     PRESENCE_EXPIRED = "Presence expired: {name}"
+    PRESENCE_CHECKED_IN = "Presence checked in: {name}"
 
     JOB_FORCED = "Force run: {job_name}"
     ROOM_SET = "Room: {id} {state}"
