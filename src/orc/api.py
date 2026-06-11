@@ -284,6 +284,13 @@ def make_config_manager():
     return ConfigManager(theme_override=theme_override, presence=dal.fetch_presence())
 
 
+def mark_present(config_manager, names):
+    now = local_now()
+    config_manager.mark_present(names, when=now)
+    for name in names:
+        dal.insert_presence(name, now)
+
+
 def purge_presence(config_manager):
     config_manager.purge_presence()
     dal.purge_presence()
@@ -299,13 +306,6 @@ def set_theme_override(config_manager, name, start, end):
     dal.insert_theme_override(override)
 
 
-def _mark_present(config_manager, names):
-    now = local_now()
-    config_manager.mark_present(names, when=now)
-    for name in names:
-        dal.insert_presence(name, now)
-
-
 # --- Scheduling & job handlers ---
 
 
@@ -317,7 +317,7 @@ def check_presence(ctx):
     before = ctx.config_manager.present_names
     with Pool(max_workers=len(pairs)) as ex:
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
-    _mark_present(ctx.config_manager, present)
+    mark_present(ctx.config_manager, present)
     after = ctx.config_manager.present_names
     for name in sorted(after - before):
         log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=name))
