@@ -3,8 +3,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import orc
-from orc import dal
 from orc import model as m
+from orc.dal import lights
+from orc.dal._decorators import requires_enabled
 from orc.dal.chromecast import _strip_googlevideo_params
 from orc.dal.sqlite import _read_light, _write_light
 
@@ -39,7 +40,7 @@ class TestRequiresEnabled:
     def test_disabled_returns_static_stub(self, monkeypatch):
         monkeypatch.delenv("ORC_ENABLED", raising=False)
 
-        @dal.requires_enabled("STUB")
+        @requires_enabled("STUB")
         def fn(x):
             raise AssertionError("should not be called")
 
@@ -48,7 +49,7 @@ class TestRequiresEnabled:
     def test_disabled_calls_callable_stub_with_args(self, monkeypatch):
         monkeypatch.delenv("ORC_ENABLED", raising=False)
 
-        @dal.requires_enabled(lambda x, y: ("stub", x, y))
+        @requires_enabled(lambda x, y: ("stub", x, y))
         def fn(x, y):
             raise AssertionError("should not be called")
 
@@ -57,7 +58,7 @@ class TestRequiresEnabled:
     def test_enabled_calls_through(self, monkeypatch):
         monkeypatch.setenv("ORC_ENABLED", "1")
 
-        @dal.requires_enabled("STUB")
+        @requires_enabled("STUB")
         def fn(x):
             return ("real", x)
 
@@ -76,33 +77,33 @@ class TestFetchLightState:
     @patch("requests.get")
     def test_on_with_level_returns_level(self, get):
         get.return_value = self._resp(200, {"switch": "on", "level": 50})
-        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state=50)
+        assert lights.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state=50)
 
     @patch("requests.get")
     def test_on_without_level_returns_on(self, get):
         get.return_value = self._resp(200, {"switch": "on"})
-        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="on")
+        assert lights.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="on")
 
     @patch("requests.get")
     def test_off_returns_off_even_with_level(self, get):
         get.return_value = self._resp(200, {"switch": "off", "level": 50})
-        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
+        assert lights.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
 
     @patch("requests.get")
     def test_non_200_returns_off(self, get):
         get.return_value = self._resp(500)
-        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
+        assert lights.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
 
     @patch("requests.get")
     def test_caches_device_type_on_first_call(self, get):
         get.return_value = self._resp(200, {"switch": "on"}, type="Hue Bulb")
-        dal.fetch_light_state(orc.Light.a)
+        lights.fetch_light_state(orc.Light.a)
         assert _read_light(orc.Light.a)[0] == "Hue Bulb"
 
     @patch("requests.get")
     def test_db_truth_type_returns_off_without_trusting_hubitat(self, get):
         get.return_value = self._resp(200, {"switch": "on", "power": 0}, type="Generic Zigbee Outlet")
-        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
+        assert lights.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
 
 
 @pytest.mark.usefixtures("enabled")
@@ -113,7 +114,7 @@ class TestDbTruthLight:
             status_code=200, json=lambda: {"attributes": [{"name": "switch", "currentValue": "off"}], "type": "Generic Zigbee Outlet"}
         )
         _write_light(orc.Light.a, type="Generic Zigbee Outlet", state="on")
-        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="on")
+        assert lights.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="on")
 
     @patch("requests.get")
     def test_cached_truth_type_no_row_returns_off(self, get):
@@ -121,18 +122,18 @@ class TestDbTruthLight:
             status_code=200, json=lambda: {"attributes": [{"name": "switch", "currentValue": "on"}], "type": "Generic Zigbee Outlet"}
         )
         _write_light(orc.Light.a, type="Generic Zigbee Outlet")
-        assert dal.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
+        assert lights.fetch_light_state(orc.Light.a) == m.Config(what=orc.Light.a, state="off")
 
     @patch("requests.get")
     def test_update_light_writes_state_for_truth_type(self, get):
         _write_light(orc.Light.a, type="Generic Zigbee Outlet")
-        dal.update_light(orc.Light.a, on=True)
+        lights.update_light(orc.Light.a, on=True)
         assert _read_light(orc.Light.a)[1] == "on"
 
     @patch("requests.get")
     def test_update_light_does_not_write_for_reliable_type(self, get):
         _write_light(orc.Light.a, type="Hue Bulb")
-        dal.update_light(orc.Light.a, on=True)
+        lights.update_light(orc.Light.a, on=True)
         assert _read_light(orc.Light.a)[1] is None
 
     @patch("requests.get")
@@ -141,11 +142,11 @@ class TestDbTruthLight:
             status_code=200,
             json=lambda: {"attributes": [], "type": "Generic Zigbee Outlet"},
         )
-        dal.update_light(orc.Light.a, on=True)
+        lights.update_light(orc.Light.a, on=True)
         assert _read_light(orc.Light.a) == ("Generic Zigbee Outlet", "on")
 
     @patch("requests.get")
     def test_update_light_brightness_writes_level_for_truth_type(self, get):
         _write_light(orc.Light.a, type="Generic Zigbee Outlet")
-        dal.update_light(orc.Light.a, brightness=42)
+        lights.update_light(orc.Light.a, brightness=42)
         assert _read_light(orc.Light.a)[1] == "42"

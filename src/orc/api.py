@@ -19,18 +19,14 @@ from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
 import orc
-from orc import config, dal
+from orc import config
 from orc import model as m
 from orc.apscheduler import JOBSTORE_MEMORY, requires_ctx
-from orc.dal import (  # noqa: F401
-    fetch_config,
-    fetch_hubitat_config,
-    fetch_secrets,
-    init_db,
-    pause,
-    resume,
-    stop,
-)
+from orc.dal import chromecast, discovery, feeds, lights, sqlite
+from orc.dal.bws import fetch_secrets  # noqa: F401
+from orc.dal.chromecast import fetch_config, pause, resume, stop  # noqa: F401
+from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
+from orc.dal.sqlite import init_db  # noqa: F401
 from orc.locale import Log
 
 _PRESENCE_WINDOW = timedelta(hours=9)
@@ -88,12 +84,12 @@ def unwrap_rule_container(f):
 
 
 def capture_lights():
-    return m.Configs(*(dal.fetch_light_state(e) for e in orc.Light))
+    return m.Configs(*(lights.fetch_light_state(e) for e in orc.Light))
 
 
 def capture_sounds():
     with Pool(max_workers=len(orc.Chromecast)) as ex:
-        return m.Configs(*ex.map(dal.fetch_state, orc.Chromecast))
+        return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
 
 
 @unwrap_rule_container
@@ -108,21 +104,21 @@ def execute(rule):
 
         if isinstance(w, orc.Light):
             if isinstance(rule.state, int):
-                dal.update_light(w, brightness=rule.state)
+                lights.update_light(w, brightness=rule.state)
             else:
-                dal.update_light(w, on=rule.state == config.ON)
+                lights.update_light(w, on=rule.state == config.ON)
         elif isinstance(w, orc.Chromecast):
             if isinstance(rule.state, int):
-                dal.set_volume(w, rule.state)
+                chromecast.set_volume(w, rule.state)
             elif rule.state == config.STOP:
-                dal.stop(w)
+                chromecast.stop(w)
             else:
                 if rule.state not in stream:
                     if "http" in rule.state:
                         stream[rule.state] = (rule.state, rule.state)
                     else:
-                        stream[rule.state] = dal.fetch_youtube_stream_metadata(rule.state)
-                dal.play(w, *stream[rule.state])
+                        stream[rule.state] = chromecast.fetch_youtube_stream_metadata(rule.state)
+                chromecast.play(w, *stream[rule.state])
         else:
             raise Exception("Unknown type")
         sleep(0.1)
@@ -265,35 +261,35 @@ def apply_theme_change(ctx, name, start, end):
 
 
 def calculate_theme(config_manager, today):
-    return config_manager.calculate_theme(today, dal.fetch_holidays(today.year))
+    return config_manager.calculate_theme(today, feeds.fetch_holidays(today.year))
 
 
 def clear_theme_override(config_manager):
     config_manager.theme_override = None
-    dal.delete_theme_override()
+    sqlite.delete_theme_override()
 
 
 def expire_presence(config_manager, name):
     config_manager.expire_presence(name)
-    dal.delete_presence(name)
+    sqlite.delete_presence(name)
 
 
 def make_config_manager():
-    row = dal.fetch_theme_override()
+    row = sqlite.fetch_theme_override()
     theme_override = ThemeOverride(*row) if row else None
-    return ConfigManager(theme_override=theme_override, presence=dal.fetch_presence())
+    return ConfigManager(theme_override=theme_override, presence=sqlite.fetch_presence())
 
 
 def mark_present(config_manager, names):
     now = local_now()
     config_manager.mark_present(names, when=now)
     for name in names:
-        dal.insert_presence(name, now)
+        sqlite.insert_presence(name, now)
 
 
 def delete_all_presence(config_manager):
     config_manager.delete_all_presence()
-    dal.delete_all_presence()
+    sqlite.delete_all_presence()
 
 
 def replace_config_for(config_manager, id, duration):
@@ -303,7 +299,7 @@ def replace_config_for(config_manager, id, duration):
 def set_theme_override(config_manager, name, start, end):
     override = ThemeOverride(name, start, end)
     config_manager.theme_override = override
-    dal.insert_theme_override(override)
+    sqlite.insert_theme_override(override)
 
 
 # --- Scheduling & job handlers ---
@@ -461,7 +457,7 @@ def _run_cal_job(job, ctx):
 
 def _safe_ping(name, host):
     try:
-        return name, dal.ping_host(host)
+        return name, discovery.ping_host(host)
     except Exception as exc:
         log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
         return name, False
@@ -470,7 +466,7 @@ def _safe_ping(name, host):
 def _schedule_cal_tasks(scheduler, config_manager):
     now = local_now()
     if calculate_theme(config_manager, now.date()) == config.THEME_WORK_DAY and (now.time().minute in _CALENDAR_CHECK_MINUTES):
-        events = list(itertools.islice(dal.fetch_ical(now, timedelta(hours=20)), 50))
+        events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))
         warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
         alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
 
