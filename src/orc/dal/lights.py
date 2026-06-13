@@ -2,7 +2,7 @@ import requests
 
 from orc import config
 from orc import model as m
-from orc.dal import requires_enabled
+from orc.dal._decorators import requires_enabled
 from orc.dal.sqlite import _fetch_hubitat_device, _read_light, _write_light
 
 _DB_TRUTH_DEVICE_TYPES = {"Generic Zigbee Outlet"}

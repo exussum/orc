@@ -7,7 +7,7 @@ import recurring_ical_events
 import requests
 
 from orc import config
-from orc.dal import requires_enabled
+from orc.dal._decorators import requires_enabled
 
 
 @requires_enabled([])

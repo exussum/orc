@@ -19,8 +19,9 @@ def pytest_sessionstart(session):
 
 @pytest.fixture(autouse=True)
 def _orc_state_db(tmp_path, monkeypatch):
-    from orc import config, dal
+    from orc import config
+    from orc.dal import sqlite
 
     monkeypatch.setattr(config, "jobs_db", f"sqlite:///{tmp_path / 'state.sqlite'}")
-    dal.init_db()
+    sqlite.init_db()
     yield
