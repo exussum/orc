@@ -23,13 +23,13 @@ from orc import config, dal
 from orc import model as m
 from orc.apscheduler import JOBSTORE_MEMORY, requires_ctx
 from orc.dal import (  # noqa: F401
-    fetch_chromecast_config,
+    fetch_config,
     fetch_hubitat_config,
     fetch_secrets,
     init_db,
-    pause_sound,
-    resume_sound,
-    stop_sound,
+    pause,
+    resume,
+    stop,
 )
 from orc.locale import Log
 
@@ -93,7 +93,7 @@ def capture_lights():
 
 def capture_sounds():
     with Pool(max_workers=len(orc.Chromecast)) as ex:
-        return m.Configs(*ex.map(dal.fetch_sound, orc.Chromecast))
+        return m.Configs(*ex.map(dal.fetch_state, orc.Chromecast))
 
 
 @unwrap_rule_container
@@ -113,16 +113,16 @@ def execute(rule):
                 dal.update_light(w, on=rule.state == config.ON)
         elif isinstance(w, orc.Chromecast):
             if isinstance(rule.state, int):
-                dal.update_sound(w, rule.state)
+                dal.set_volume(w, rule.state)
             elif rule.state == config.STOP:
-                dal.stop_sound(w)
+                dal.stop(w)
             else:
                 if rule.state not in stream:
                     if "http" in rule.state:
                         stream[rule.state] = (rule.state, rule.state)
                     else:
-                        stream[rule.state] = dal.fetch_youtube(rule.state)
-                dal.play_stream(w, *stream[rule.state])
+                        stream[rule.state] = dal.fetch_youtube_stream_metadata(rule.state)
+                dal.play(w, *stream[rule.state])
         else:
             raise Exception("Unknown type")
         sleep(0.1)
@@ -212,7 +212,7 @@ class ConfigManager:
     def expire_presence(self, name):
         self._presence.pop(name, None)
 
-    def purge_presence(self):
+    def delete_all_presence(self):
         self._presence.clear()
 
     def active_override(self, today):
@@ -291,9 +291,9 @@ def mark_present(config_manager, names):
         dal.insert_presence(name, now)
 
 
-def purge_presence(config_manager):
-    config_manager.purge_presence()
-    dal.purge_presence()
+def delete_all_presence(config_manager):
+    config_manager.delete_all_presence()
+    dal.delete_all_presence()
 
 
 def replace_config_for(config_manager, id, duration):
