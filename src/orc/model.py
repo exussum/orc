@@ -23,6 +23,8 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
+_CLASS_SORT = {"Light": 0, "Chromecast": 1}
+
 
 class LogSource(str, Enum):
     CALENDAR = "calendar"
@@ -151,12 +153,12 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
     pass
 
 
-def build_config(doc, section, light, sound, required=()):
+def build_config(doc, section, light, chromecast, required=()):
     sub_tables = list(doc_to_sub_tables(doc, section, 3))
     if invalid := _validate_states(sub_tables, 2):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{section}': {details}")
-    result = {type: Configs(*[_build_config(c[1], sound, light, c[2]) for c in e]) for type, e in sub_tables}
+    result = {type: Configs(*[_build_config(c[1], chromecast, light, c[2]) for c in e]) for type, e in sub_tables}
     if missing := set(required) - result.keys():
         raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
     return result
@@ -179,8 +181,8 @@ def build_durations(doc, section):
 
 
 def build_enum(doc, section, sub_section, id_lookup):
-    if sub_section not in ("Light", "Sound"):
-        raise ValueError(f"sub_section must be 'Light' or 'Sound', got '{sub_section}'")
+    if sub_section not in ("Light", "Chromecast"):
+        raise ValueError(f"sub_section must be 'Light' or 'Chromecast', got '{sub_section}'")
 
     sub_table = next((sub_table for (type, sub_table) in doc_to_sub_tables(doc, section, 3) if type == sub_section))
 
@@ -228,7 +230,7 @@ def build_plugins(doc, section):
     return result
 
 
-def build_themes(doc, routine_section, theme_section, light, sound, people=None):
+def build_themes(doc, routine_section, theme_section, light, chromecast, people=None):
     routine_tables = list(doc_to_sub_tables(doc, routine_section, 5))
 
     if invalid := _validate_states(routine_tables, 3):
@@ -250,7 +252,7 @@ def build_themes(doc, routine_section, theme_section, light, sound, people=None)
 
     routines = {}
     for type, e in routine_tables:
-        configs = [_build_config(c[2], sound, light, c[3], c[4]) for c in e]
+        configs = [_build_config(c[2], chromecast, light, c[3], c[4]) for c in e]
         routines[type] = Routine(e[0][1], "", configs)
 
     if missing := {"Reset"} - {r.name for r in routines.values()}:
@@ -345,16 +347,16 @@ def squish_configs(*configs, state_override=None):
     return Configs(*rules)
 
 
-def _build_config(cmd, sound, light, state, trigger=None):
+def _build_config(cmd, chromecast, light, state, trigger=None):
     if state.isdigit():
         state = int(state)
-    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Sound": sound}), state, trigger=trigger or None)
+    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Chromecast": chromecast}), state, trigger=trigger or None)
 
 
 def _op_cmp(k):
     from orc import Config
 
-    class_name = k.what.__class__.__name__
+    class_sort = _CLASS_SORT[k.what.__class__.__name__]
 
     if k.state == Config.STOP:
         sub_sort = _STATE_SORT_STOP
@@ -364,7 +366,7 @@ def _op_cmp(k):
         sub_sort = _STATE_SORT_ON
     else:
         sub_sort = _STATE_SORT_OTHER
-    return (class_name, sub_sort)
+    return (class_sort, sub_sort)
 
 
 def _str_to_time(x):

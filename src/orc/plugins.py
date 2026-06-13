@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 class PluginCtx:
     config_manager: ConfigManager
     Light: type[DeviceEnum]
-    Sound: type[DeviceEnum]
+    Chromecast: type[DeviceEnum]
     config: OrcConfig
     api: ModuleType
     model: ModuleType
@@ -54,12 +54,12 @@ def back_on_schedule(ctx):
 
 
 def build_ctx(config_manager, scheduler=None):
-    from orc import Light, Sound, api, config, model
+    from orc import Chromecast, Light, api, config, model
 
     return PluginCtx(
         config_manager=config_manager,
         Light=Light,
-        Sound=Sound,
+        Chromecast=Chromecast,
         config=config,
         api=api,
         model=model,
@@ -86,7 +86,7 @@ def reboot(ctx):
 def silence(ctx):
     ctx.api.execute(
         ctx.model.Configs(
-            ctx.model.Config(ctx.Sound, ctx.config.STOP),
+            ctx.model.Config(ctx.Chromecast, ctx.config.STOP),
         )
     )
 
@@ -94,7 +94,7 @@ def silence(ctx):
 def sound_test(ctx):
     base = ctx.config.internal_url.rstrip("/") + "/" if ctx.config.internal_url else request.host_url
     url = f"{base}static/alert.mp3"
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Sound, url)))
+    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Chromecast, url)))
     ctx.api.play_text("audio test")
     ctx.api.play_alert(str(Path(__file__).parent / "static" / "alert.mp3"))
 
@@ -138,8 +138,8 @@ def _daytime(ctx):
 
 
 def _each_sound(ctx, action):
-    with Pool(max_workers=len(ctx.Sound)) as ex:
-        list(ex.map(action, ctx.Sound))
+    with Pool(max_workers=len(ctx.Chromecast)) as ex:
+        list(ex.map(action, ctx.Chromecast))
 
 
 @requires_ctx

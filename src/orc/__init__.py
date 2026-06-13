@@ -33,15 +33,15 @@ class Config:
             doc = Document("".join(fh.readlines()))
 
         Light = m.build_enum(doc, "Devices", "Light", hubitat_config)
-        Sound = m.build_enum(doc, "Devices", "Sound", chromecast_config)
+        Chromecast = m.build_enum(doc, "Devices", "Chromecast", chromecast_config)
         globals()["Light"] = Light
-        globals()["Sound"] = Sound
-        self.virtual_devices = {e for cls in (Light, Sound) for e in cls if isinstance(e.value, int) and e.value < 0}
+        globals()["Chromecast"] = Chromecast
+        self.virtual_devices = {e for cls in (Light, Chromecast) for e in cls if isinstance(e.value, int) and e.value < 0}
         self.people = m.build_people(doc, "People")
-        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Sound, self.people)
+        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, self.people)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
-        self.room_configs = m.build_config(doc, "Room Configs", Light, Sound, required=("Living Room",))
-        self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Sound)
+        self.room_configs = m.build_config(doc, "Room Configs", Light, Chromecast, required=("Living Room",))
+        self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Chromecast)
         self.plugins = m.build_plugins(doc, "Super Routines")
         self.all_configs = self.ad_hoc_routines | self.room_configs
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=self.OFF)
