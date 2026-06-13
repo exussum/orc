@@ -211,16 +211,16 @@ def update_light(light, on=None, brightness=None):
         _write_light(light, type=type_to_store, state=state_to_store)
 
 
-# --- Sound ---
+# --- Chromecast ---
 
 
-@requires_enabled(lambda sound: m.SoundState(what=sound, content=None, volume=0))
-def fetch_sound(sound):
-    with _cast(sound, timeout=5, tries=1) as cast:
+@requires_enabled(lambda device: m.SoundState(what=device, content=None, volume=0))
+def fetch_sound(device):
+    with _cast(device, timeout=5, tries=1) as cast:
         time.sleep(3)
         content = cast.media_controller.status.content_id
         return m.SoundState(
-            what=sound,
+            what=device,
             content=_strip_googlevideo_params(content) if content else None,
             volume=int(cast.status.volume_level * 100),
         )
@@ -234,8 +234,8 @@ def fetch_youtube(id):
 
 
 @requires_enabled(None)
-def pause_sound(sound):
-    with _cast(sound) as cast:
+def pause_sound(device):
+    with _cast(device) as cast:
         cast.media_controller.update_status()
         time.sleep(1)
         if cast.media_controller.status.player_state in ("PLAYING", "BUFFERING"):
@@ -244,15 +244,15 @@ def pause_sound(sound):
 
 
 @requires_enabled(None)
-def play_stream(sound, stream_url, title):
-    with _cast(sound) as cast:
+def play_stream(device, stream_url, title):
+    with _cast(device) as cast:
         cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
         cast.media_controller.block_until_active(timeout=10)
 
 
 @requires_enabled(None)
-def resume_sound(sound):
-    with _cast(sound) as cast:
+def resume_sound(device):
+    with _cast(device) as cast:
         cast.media_controller.update_status()
         time.sleep(1)
         if cast.media_controller.status.player_state == "PAUSED":
@@ -261,22 +261,22 @@ def resume_sound(sound):
 
 
 @requires_enabled(None)
-def stop_sound(sound):
-    with _cast(sound) as cast:
+def stop_sound(device):
+    with _cast(device) as cast:
         cast.quit_app()
         time.sleep(1)
 
 
 @requires_enabled(None)
-def update_sound(sound, lvl):
-    with _cast(sound) as cast:
+def update_sound(device, lvl):
+    with _cast(device) as cast:
         cast.set_volume(lvl / 100)
         time.sleep(1)
 
 
 @contextmanager
-def _cast(sound, **kwargs):
-    cast = pychromecast.get_chromecast_from_host((sound.value, 8009, None, None, None), **kwargs)
+def _cast(device, **kwargs):
+    cast = pychromecast.get_chromecast_from_host((device.value, 8009, None, None, None), **kwargs)
     try:
         cast.wait(timeout=kwargs.get("timeout"))
         yield cast
