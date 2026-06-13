@@ -50,7 +50,7 @@ def web():
 def _build_app():
     if os.getenv("ORC_ENABLED"):
         secrets = api.fetch_secrets()
-        config.config.load(secrets, api.fetch_hubitat_config(secrets), api.fetch_chromecast_config())
+        config.config.load(secrets, api.fetch_hubitat_config(secrets), api.fetch_config())
 
     api.init_db()
 
