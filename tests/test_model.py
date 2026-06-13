@@ -13,7 +13,7 @@ class Light(Enum):
     c = 3
 
 
-class Sound(Enum):
+class Chromecast(Enum):
     x = 1
 
 
@@ -111,26 +111,26 @@ def test_theme_squish_dim_then_off():
 
 def test_squish_configs_stop_then_volume():
     routine = m.Configs(
-        m.Config(Sound, "stop"),
-        m.Config(Sound, "stop"),
-        m.Config(Sound.x, 10),
+        m.Config(Chromecast, "stop"),
+        m.Config(Chromecast, "stop"),
+        m.Config(Chromecast.x, 10),
     )
     assert m.squish_configs(routine) == m.Configs(
-        m.Config(Sound.x, "stop", trigger=None),
-        m.Config(Sound.x, 10, trigger=None),
+        m.Config(Chromecast.x, "stop", trigger=None),
+        m.Config(Chromecast.x, 10, trigger=None),
     )
 
 
 def test_op_cmp_dim():
-    assert m._op_cmp(m.Config(Light.a, 50)) == ("Light", -1)
+    assert m._op_cmp(m.Config(Light.a, 50)) == (0, -1)
 
 
 def test_op_cmp_on():
-    assert m._op_cmp(m.Config(Light.a, config.ON)) == ("Light", 0)
+    assert m._op_cmp(m.Config(Light.a, config.ON)) == (0, 0)
 
 
 def test_op_cmp_off():
-    assert m._op_cmp(m.Config(Light.a, config.OFF)) == ("Light", 1)
+    assert m._op_cmp(m.Config(Light.a, config.OFF)) == (0, 1)
 
 
 def test_op_cmp_sorts_dim_before_on_before_off():
@@ -139,8 +139,8 @@ def test_op_cmp_sorts_dim_before_on_before_off():
 
 
 def test_op_cmp_sorts_by_class_name():
-    configs = [m.Config(Sound.x, config.ON), m.Config(Light.a, config.ON)]
-    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.a, config.ON), m.Config(Sound.x, config.ON)]
+    configs = [m.Config(Chromecast.x, config.ON), m.Config(Light.a, config.ON)]
+    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.a, config.ON), m.Config(Chromecast.x, config.ON)]
 
 
 def test_build_themes_succeeds_with_required():
@@ -148,7 +148,7 @@ def test_build_themes_succeeds_with_required():
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | Alice |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Sound, {"Alice": "alice.local"})
+    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, {"Alice": "alice.local"})
     assert set(themes) == {"work day", "day off"}
     assert themes["work day"].configs[0].items[0].trigger == "Alice"
     assert themes["day off"].configs[0].items[0].trigger == "Alice"
@@ -160,7 +160,7 @@ def test_build_themes_succeeds_with_builtin_trigger(label, expected):
         _routines_md([f"| ROUTINE_RESET | Reset | Light | off | {label} |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Sound)
+    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast)
     assert themes["work day"].configs[0].items[0].trigger == expected
 
 
@@ -170,7 +170,7 @@ def test_build_themes_missing_reset_routine():
         + _themes_md(["| work day | ROUTINE_OFF | 1:00 |\n", "| day off | ROUTINE_OFF | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required routines.*Reset"):
-        m.build_themes(doc, "Routines", "Themes", Light, Sound)
+        m.build_themes(doc, "Routines", "Themes", Light, Chromecast)
 
 
 def test_build_themes_missing_required_theme():
@@ -178,7 +178,7 @@ def test_build_themes_missing_required_theme():
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | System |\n"]) + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required themes.*day off"):
-        m.build_themes(doc, "Routines", "Themes", Light, Sound)
+        m.build_themes(doc, "Routines", "Themes", Light, Chromecast)
 
 
 def test_build_themes_unknown_trigger_name():
@@ -187,7 +187,7 @@ def test_build_themes_unknown_trigger_name():
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Unknown trigger names.*Ghost"):
-        m.build_themes(doc, "Routines", "Themes", Light, Sound, {"Alice": "alice.local"})
+        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, {"Alice": "alice.local"})
 
 
 def test_build_people():
@@ -202,11 +202,11 @@ def test_build_people_multiple_hosts():
 
 def test_build_config_succeeds_with_required():
     doc = Document(_rooms_md(["| Living Room | Light.a | on |\n", "| Bedroom | Light.b | on |\n"]))
-    rooms = m.build_config(doc, "Room Configs", Light, Sound, required=("Living Room",))
+    rooms = m.build_config(doc, "Room Configs", Light, Chromecast, required=("Living Room",))
     assert set(rooms) == {"Living Room", "Bedroom"}
 
 
 def test_build_config_missing_required_room():
     doc = Document(_rooms_md(["| Bedroom | Light.b | on |\n"]))
     with pytest.raises(ValueError, match="Missing required entries.*Living Room"):
-        m.build_config(doc, "Room Configs", Light, Sound, required=("Living Room",))
+        m.build_config(doc, "Room Configs", Light, Chromecast, required=("Living Room",))

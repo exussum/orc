@@ -92,8 +92,8 @@ def capture_lights():
 
 
 def capture_sounds():
-    with Pool(max_workers=len(orc.Sound)) as ex:
-        return m.Configs(*ex.map(dal.fetch_sound, orc.Sound))
+    with Pool(max_workers=len(orc.Chromecast)) as ex:
+        return m.Configs(*ex.map(dal.fetch_sound, orc.Chromecast))
 
 
 @unwrap_rule_container
@@ -111,7 +111,7 @@ def execute(rule):
                 dal.update_light(w, brightness=rule.state)
             else:
                 dal.update_light(w, on=rule.state == config.ON)
-        elif isinstance(w, orc.Sound):
+        elif isinstance(w, orc.Chromecast):
             if isinstance(rule.state, int):
                 dal.update_sound(w, rule.state)
             elif rule.state == config.STOP:
