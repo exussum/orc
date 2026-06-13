@@ -40,7 +40,7 @@ class TestManagingConfig:
         assert not self.target.snapshot
 
 
-@patch("orc.api.dal.update_light")
+@patch("orc.api.lights.update_light")
 class TestRouteRule:
     def setup_method(self):
         self.target = api.ConfigManager()
@@ -328,6 +328,6 @@ class TestPresence:
                     raise RuntimeError("dns boom")
                 return True
 
-            with patch.object(api.dal, "ping_host", side_effect=ping):
+            with patch.object(api.discovery, "ping_host", side_effect=ping):
                 api.check_presence(ctx=self.ctx)
         assert self.target.present_names == {"Bob"}
