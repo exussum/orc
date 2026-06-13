@@ -11,10 +11,10 @@ def pytest_sessionstart(session):
         b = 2
         c = 3
 
-    class Sound(Enum):
+    class Chromecast(Enum):
         x = 1
 
-    orc.Light, orc.Sound = Light, Sound
+    orc.Light, orc.Chromecast = Light, Chromecast
 
 
 @pytest.fixture(autouse=True)
