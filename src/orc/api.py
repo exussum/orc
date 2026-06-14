@@ -22,11 +22,12 @@ import orc
 from orc import config
 from orc import model as m
 from orc.apscheduler import JOBSTORE_MEMORY, requires_ctx
-from orc.dal import chromecast, discovery, feeds, lights, sqlite
+from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv
 from orc.dal.bws import fetch_secrets  # noqa: F401
-from orc.dal.chromecast import fetch_config, pause, resume, stop  # noqa: F401
+from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
+from orc.dal.tv import fetch_macs  # noqa: F401
 from orc.locale import Log
 
 _PRESENCE_WINDOW = timedelta(hours=9)
@@ -119,6 +120,13 @@ def execute(rule):
                     else:
                         stream[rule.state] = chromecast.fetch_youtube_stream_metadata(rule.state)
                 chromecast.play(w, *stream[rule.state])
+        elif isinstance(w, orc.TV):
+            if rule.state == config.ON:
+                tv.on(w)
+            elif rule.state == config.OFF:
+                tv.off(w)
+            else:
+                raise Exception(f"Unsupported TV state: {rule.state!r}")
         else:
             raise Exception("Unknown type")
         sleep(0.1)
