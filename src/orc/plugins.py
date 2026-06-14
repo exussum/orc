@@ -81,6 +81,11 @@ def light_test(ctx):
     ctx.config_manager.resume(ctx.config.default_config)
 
 
+def pair_lg_tv(ctx):
+    for tv in ctx.TV:
+        ctx.api.pair_lg_tv(tv.value)
+
+
 def reboot(ctx):
     os.kill(os.getppid(), signal.SIGTERM)
 
