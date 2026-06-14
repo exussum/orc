@@ -126,15 +126,15 @@ def test_squish_configs_stop_then_volume():
 
 
 def test_op_cmp_dim():
-    assert m._op_cmp(m.Config(Light.a, 50)) == (0, -1)
+    assert m._op_cmp(m.Config(Light.a, 50)) == (1, -1)
 
 
 def test_op_cmp_on():
-    assert m._op_cmp(m.Config(Light.a, config.ON)) == (0, 0)
+    assert m._op_cmp(m.Config(Light.a, config.ON)) == (1, 0)
 
 
 def test_op_cmp_off():
-    assert m._op_cmp(m.Config(Light.a, config.OFF)) == (0, 1)
+    assert m._op_cmp(m.Config(Light.a, config.OFF)) == (1, 1)
 
 
 def test_op_cmp_sorts_dim_before_on_before_off():
