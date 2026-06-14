@@ -6,8 +6,8 @@ from aiowebostv import WebOsClient
 from getmac import get_mac_address
 from wakeonlan import send_magic_packet
 
-from orc import config
 from orc.dal._decorators import requires_enabled
+from orc.dal.sqlite import fetch_lg_tv_client_key
 
 _macs: dict = {}
 
@@ -33,9 +33,9 @@ def on(tv):
 
 @requires_enabled(None)
 def off(tv):
-    client_key = config.secrets.lg_tv_client_keys.get(tv.name)
+    client_key = fetch_lg_tv_client_key(tv.value)
     if not client_key:
-        raise RuntimeError(f"No LG client_key for {tv.name} in secrets (lg_tv_client_keys)")
+        raise RuntimeError(f"No client_key for {tv.value} in orc_lg_tv; run the Pair LG TV plugin first")
     asyncio.run(_power_off(tv.value, client_key))
 
 
