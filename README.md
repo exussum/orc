@@ -1,8 +1,8 @@
 # orc
 
-Personal home automation orchestrator. Drives lights and Chromecast speakers
-on a schedule built from sunrise/sunset, calendar events, and a markdown
-config file.
+Personal home automation orchestrator. Drives lights, Chromecast speakers,
+and an LG TV on a schedule built from sunrise/sunset, calendar events, and
+a markdown config file.
 
 ## What it does
 
@@ -11,8 +11,8 @@ config file.
 - Pulls calendar events from an iCal feed and schedules audio alerts /
   routines around them.
 - Skips market-holiday rules via a configurable holidays endpoint.
-- Controls Hubitat lights (REST) and Chromecast speakers (pychromecast +
-  yt-dlp for YouTube audio).
+- Controls Hubitat lights (REST), Chromecast speakers (pychromecast + yt-dlp
+  for YouTube audio), and an LG webOS TV (aiowebostv + Wake-on-LAN).
 - Serves a small Flask UI for manual control, schedule inspection, theme
   override, and an activity log.
 
@@ -44,6 +44,7 @@ Two config surfaces:
    | `ORC_HTTP_TIMEOUT`    | Default outbound HTTP timeout (s)                                  | `5`                              |
    | `ORC_HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                                   | `120`                            |
    | `ORC_ROOT_DOMAIN`     | Trailing domain stripped from hostnames in the presence view       | `""`                             |
+   | `ORC_INTERNAL_URL`    | LAN-reachable base URL Chromecasts use to fetch static audio       | `""` (falls back to request host) |
    | `BWS_ACCESS_TOKEN`    | URL whose body is the Bitwarden access token                       | required if `ORC_ENABLED`        |
    | `BWS_ORG_ID`          | URL whose body is the Bitwarden org ID                             | required if `ORC_ENABLED`        |
 
@@ -111,7 +112,10 @@ the internal registry, and bounces the `orc` supervisor job.
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `ConfigManager`
 - `src/orc/model.py` — markdown → config parsing and routine/theme types
-- `src/orc/dal.py` — Hubitat, Chromecast, iCal, Bitwarden integrations
+- `src/orc/dal/` — integrations split by target: `lights.py` (Hubitat),
+  `chromecast.py`, `tv.py` / `lgtv.py` (LG webOS + WoL), `feeds.py` (iCal /
+  market holidays), `bws.py` (Bitwarden), `discovery.py`, `sqlite.py`,
+  `_decorators.py`
 - `src/orc/plugins.py` — plugin functions (reboot, sensor handler, …)
 - `src/orc/apscheduler.py` — context-injecting executor and `requires_ctx`
 - `src/orc/locale.py` — log-message string constants
