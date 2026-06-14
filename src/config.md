@@ -54,7 +54,7 @@
 
 ---
 
-##### Super Routines
+##### Plugins
 
 | Name           | Expression     |
 |----------------|----------------|
