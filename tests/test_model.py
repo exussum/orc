@@ -17,6 +17,10 @@ class Chromecast(Enum):
     x = 1
 
 
+class TV(Enum):
+    t = 1
+
+
 def _routines_md(rows):
     header = "| ID | Name | Expression | State | Trigger |\n|----|------|------------|-------|---------|\n"
     return "##### Routines\n\n" + header + "".join(rows) + "\n---\n"
@@ -148,7 +152,7 @@ def test_build_themes_succeeds_with_required():
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | Alice |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, {"Alice": "alice.local"})
+    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV, {"Alice": "alice.local"})
     assert set(themes) == {"work day", "day off"}
     assert themes["work day"].configs[0].items[0].trigger == "Alice"
     assert themes["day off"].configs[0].items[0].trigger == "Alice"
@@ -160,7 +164,7 @@ def test_build_themes_succeeds_with_builtin_trigger(label, expected):
         _routines_md([f"| ROUTINE_RESET | Reset | Light | off | {label} |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast)
+    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV)
     assert themes["work day"].configs[0].items[0].trigger == expected
 
 
@@ -170,7 +174,7 @@ def test_build_themes_missing_reset_routine():
         + _themes_md(["| work day | ROUTINE_OFF | 1:00 |\n", "| day off | ROUTINE_OFF | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required routines.*Reset"):
-        m.build_themes(doc, "Routines", "Themes", Light, Chromecast)
+        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV)
 
 
 def test_build_themes_missing_required_theme():
@@ -178,7 +182,7 @@ def test_build_themes_missing_required_theme():
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | System |\n"]) + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required themes.*day off"):
-        m.build_themes(doc, "Routines", "Themes", Light, Chromecast)
+        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV)
 
 
 def test_build_themes_unknown_trigger_name():
@@ -187,7 +191,7 @@ def test_build_themes_unknown_trigger_name():
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Unknown trigger names.*Ghost"):
-        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, {"Alice": "alice.local"})
+        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV, {"Alice": "alice.local"})
 
 
 def test_build_people():
@@ -202,11 +206,11 @@ def test_build_people_multiple_hosts():
 
 def test_build_config_succeeds_with_required():
     doc = Document(_rooms_md(["| Living Room | Light.a | on |\n", "| Bedroom | Light.b | on |\n"]))
-    rooms = m.build_config(doc, "Room Configs", Light, Chromecast, required=("Living Room",))
+    rooms = m.build_config(doc, "Room Configs", Light, Chromecast, TV, required=("Living Room",))
     assert set(rooms) == {"Living Room", "Bedroom"}
 
 
 def test_build_config_missing_required_room():
     doc = Document(_rooms_md(["| Bedroom | Light.b | on |\n"]))
     with pytest.raises(ValueError, match="Missing required entries.*Living Room"):
-        m.build_config(doc, "Room Configs", Light, Chromecast, required=("Living Room",))
+        m.build_config(doc, "Room Configs", Light, Chromecast, TV, required=("Living Room",))

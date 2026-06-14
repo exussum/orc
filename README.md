@@ -112,7 +112,7 @@ the internal registry, and bounces the `orc` supervisor job.
 - `src/orc/api.py` — schedule construction, rule routing, `ConfigManager`
 - `src/orc/model.py` — markdown → config parsing and routine/theme types
 - `src/orc/dal.py` — Hubitat, Chromecast, iCal, Bitwarden integrations
-- `src/orc/plugins.py` — super-routine plugin functions (reboot, sensor handler, …)
+- `src/orc/plugins.py` — plugin functions (reboot, sensor handler, …)
 - `src/orc/apscheduler.py` — context-injecting executor and `requires_ctx`
 - `src/orc/locale.py` — log-message string constants
 - `src/orc/view.py` + `templates/` + `static/` — Flask UI
