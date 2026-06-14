@@ -245,3 +245,8 @@ def set_theme():
 @bp.route("/api/version")
 def version():
     return {"version": app.orc.version_manager.version}, 200
+
+
+@bp.route("/api/durations")
+def durations():
+    return config.durations, 200
