@@ -26,8 +26,8 @@ from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
-from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
+from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.tv import fetch_macs  # noqa: F401
 from orc.locale import Log
 
@@ -318,7 +318,7 @@ def set_theme_override(config_manager, name, start, end):
 def check_presence(ctx):
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
     if not pairs:
-        return
+        return ctx.config_manager.present_names
     before = ctx.config_manager.present_names
     with Pool(max_workers=len(pairs)) as ex:
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
@@ -328,6 +328,7 @@ def check_presence(ctx):
         log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=name))
     for name in sorted(before - after):
         log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=name))
+    return after
 
 
 def get_schedule(config_manager):
