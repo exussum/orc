@@ -23,7 +23,7 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
-_CLASS_SORT = {"Light": 1, "Chromecast": 1, "TV": 0}
+_CLASS_SORT = {"TV": 0, "Light": 1, "Chromecast": 2}
 
 
 class LogSource(str, Enum):
