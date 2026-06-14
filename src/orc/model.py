@@ -23,7 +23,7 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
-_CLASS_SORT = {"Light": 0, "Chromecast": 1, "TV": 2}
+_CLASS_SORT = {"Light": 1, "Chromecast": 1, "TV": 0}
 
 
 class LogSource(str, Enum):
@@ -184,7 +184,12 @@ def build_enum(doc, section, sub_section, id_lookup=None):
     if sub_section not in ("Light", "Chromecast", "TV"):
         raise ValueError(f"sub_section must be 'Light', 'Chromecast', or 'TV', got '{sub_section}'")
 
-    sub_table = next((sub_table for (type, sub_table) in doc_to_sub_tables(doc, section, 3) if type == sub_section))
+    sub_table = next(
+        (sub_table for (type, sub_table) in doc_to_sub_tables(doc, section, 3) if type == sub_section),
+        None,
+    )
+    if sub_table is None:
+        return DeviceEnum(sub_section, {}, module="orc")
 
     for label, idx in (("device id", 1), ("names", 2)):
         vals = [e[idx] for e in sub_table]
