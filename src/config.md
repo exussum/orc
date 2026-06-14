@@ -1,10 +1,10 @@
 ##### Devices
 
-| Type  | ID            | Hubitat Name        |
-|-------|---------------|---------------------|
-| Light | BEDROOM_LAMP  | bedroom lamp        |
-|       | LIVING_ROOM   | living room desk    |
-| Sound | LIVING_ROOM   | Living room mini    |
+| Type       | ID           | Hubitat Name     |
+|------------|--------------|------------------|
+| Light      | BEDROOM_LAMP | bedroom lamp     |
+|            | LIVING_ROOM  | living room desk |
+| Chromecast | LIVING_ROOM  | Living room mini |
 
 ---
 
@@ -15,7 +15,7 @@
 | ROUTINE_RESET      | Reset      | Light      | off   | System  |
 | ROUTINE_LIGHTS_ON  | Lights On  | Light      | on    | System  |
 | ROUTINE_LIGHTS_OFF | Lights Off | Light      | off   | System  |
-| ROUTINE_QUIET      | Quiet      | Sound      | stop  | System  |
+| ROUTINE_QUIET      | Quiet      | Chromecast | stop  | System  |
 
 ---
 
@@ -50,7 +50,7 @@
 
 | Theme   | Expression | State |
 |---------|------------|-------|
-| Silence | Sound      | stop  |
+| Silence | Chromecast | stop  |
 
 ---
 

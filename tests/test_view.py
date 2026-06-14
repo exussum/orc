@@ -193,6 +193,16 @@ def test_set_theme_set_parses_dates(client, ctx, good_version):
     apply_change.assert_called_once_with(ctx, "vacation", date(2100, 1, 1), date(2100, 1, 10))
 
 
+# --- /api/durations ---
+
+
+def test_durations_returns_config(client):
+    with patch.object(config, "durations", {"TV Lights": 3.0, "Reset": 0.5}):
+        response = client.get("/api/durations")
+    assert response.status_code == 200
+    assert response.get_json() == {"TV Lights": 3.0, "Reset": 0.5}
+
+
 # --- /api/schedule/<id>/pause: toggles pause/resume ---
 
 
