@@ -119,15 +119,14 @@ def trigger_sensor(ctx, device_id, event):
         _each_sound(ctx, ctx.api.pause)
     else:
         ctx.api.execute(ctx.model.Config(entrance, ctx.config.OFF))
-
-    ctx.scheduler.add_job(
-        _run_trigger_sensor_off,
-        DateTrigger(ctx.api.local_now() + timedelta(minutes=5)),
-        name="Trigger Sensor",
-        id="trigger-sensor",
-        replace_existing=True,
-        jobstore=JOBSTORE_MEMORY,
-    )
+        ctx.scheduler.add_job(
+            _run_trigger_sensor_off,
+            DateTrigger(ctx.api.local_now() + timedelta(minutes=2)),
+            name="Trigger Sensor",
+            id="trigger-sensor",
+            replace_existing=True,
+            jobstore=JOBSTORE_MEMORY,
+        )
 
 
 def video_conference(ctx):
@@ -158,22 +157,24 @@ def _run_trigger_sensor_off(ctx):
 
     for name in list(plugin_ctx.config_manager.presence()):
         plugin_ctx.api.expire_presence(plugin_ctx.config_manager, name)
-    plugin_ctx.api.check_presence(ctx=ctx)
+    present = plugin_ctx.api.check_presence(ctx=ctx)
+
+    if not present:
+        plugin_ctx.api.execute(plugin_ctx.model.Config(plugin_ctx.TV, plugin_ctx.config.OFF))
 
     if not _daytime(plugin_ctx):
         # If it's night, the lights were unaffected, just stop the sound.
-        _each_sound(plugin_ctx, plugin_ctx.api.stop)
-        log(Log.TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME)
-    elif plugin_ctx.config_manager.present_names:
+        action, msg = plugin_ctx.api.stop, Log.TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME
+    elif present:
         # If people are around, they're in control of the lights, stop the sound.
-        _each_sound(plugin_ctx, plugin_ctx.api.stop)
-        log(Log.TRIGGER_SENSOR_OFF_SKIPPED_PRESENT.format(names=", ".join(sorted(plugin_ctx.config_manager.present_names))))
-    elif any(1 for s in plugin_ctx.api.capture_sounds().items if s.content):
+        action, msg = plugin_ctx.api.stop, Log.TRIGGER_SENSOR_OFF_SKIPPED_PRESENT.format(names=", ".join(sorted(present)))
+    elif any(s.content for s in plugin_ctx.api.capture_sounds().items):
         # Stuff is playing for a reason, resume it.
-        log(Log.TRIGGER_SENSOR_OFF_SKIPPED_SOUNDS)
-        _each_sound(plugin_ctx, plugin_ctx.api.resume)
+        action, msg = plugin_ctx.api.resume, Log.TRIGGER_SENSOR_OFF_SKIPPED_SOUNDS
     else:
         # If it's daytime, no one is home, and it's quiet, turn off the lights, resume the sound (in case it gets falsely paused)
         plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
-        log(Log.TRIGGER_SENSOR_OFF_APPLIED)
-        _each_sound(plugin_ctx, plugin_ctx.api.resume)
+        action, msg = plugin_ctx.api.resume, Log.TRIGGER_SENSOR_OFF_APPLIED
+
+    log(msg)
+    _each_sound(plugin_ctx, action)
