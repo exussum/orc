@@ -27,6 +27,7 @@ from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
+from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
 from orc.dal.tv import fetch_macs  # noqa: F401
 from orc.locale import Log
 
