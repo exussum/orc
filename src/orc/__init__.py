@@ -50,7 +50,7 @@ class Config:
         self.button_highlight_configs = m.build_highlights(doc, "Button Highlights")
         self.durations = m.build_durations(doc, "Durations")
         self.default_config = self.room_configs["Living Room"]
-        self.reset_config = m.squish_configs(m.Configs(*self.schedule_routines["Reset"].items))
+        self.reset_config = m.squish_configs(m.Configs(*(i for i in self.schedule_routines["Reset"].items if i.what is not TV)))
 
 
 config = Config()
