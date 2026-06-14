@@ -23,6 +23,12 @@ def fetch_presence():
     return {name: datetime.fromisoformat(last_seen) for name, last_seen in rows}
 
 
+def fetch_lg_tv_client_key(hostname):
+    with _theme_override_conn() as conn:
+        row = conn.execute("SELECT client_key FROM orc_lg_tv WHERE hostname = ?", (hostname,)).fetchone()
+    return row[0] if row else None
+
+
 def fetch_theme_override():
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT name, start, end FROM orc_theme_override WHERE id = 0").fetchone()
@@ -39,6 +45,16 @@ def init_db():
         )
         conn.execute("CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)")
         conn.execute("CREATE TABLE IF NOT EXISTS orc_light (device_id INTEGER PRIMARY KEY, type TEXT, state TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS orc_lg_tv (hostname TEXT PRIMARY KEY, client_key TEXT NOT NULL)")
+
+
+def insert_lg_tv_client_key(hostname, client_key):
+    with _theme_override_conn() as conn:
+        conn.execute(
+            "INSERT INTO orc_lg_tv (hostname, client_key) VALUES (?, ?) "
+            "ON CONFLICT(hostname) DO UPDATE SET client_key=excluded.client_key",
+            (hostname, client_key),
+        )
 
 
 def insert_presence(name, when):

@@ -134,7 +134,6 @@ class Secrets:
     access_token: str
     market_holidays_url: str
     ics_url: str
-    lg_tv_client_keys: dict
 
 
 @dataclass
