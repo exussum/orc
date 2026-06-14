@@ -14,7 +14,10 @@ def pytest_sessionstart(session):
     class Chromecast(Enum):
         x = 1
 
-    orc.Light, orc.Chromecast = Light, Chromecast
+    class TV(Enum):
+        t = 1
+
+    orc.Light, orc.Chromecast, orc.TV = Light, Chromecast, TV
 
 
 @pytest.fixture(autouse=True)
