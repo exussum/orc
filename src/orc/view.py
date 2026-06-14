@@ -107,7 +107,7 @@ def index():
         render_template(
             "button.html",
             highlight_configs=config.button_highlight_configs,
-            super_routines=config.plugins,
+            plugins=config.plugins,
             room_configs=config.room_configs,
             ad_hoc_routines=config.ad_hoc_routines,
             schedule_routines=config.schedule_routines,

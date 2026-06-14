@@ -31,6 +31,7 @@ class PluginCtx:
     config_manager: ConfigManager
     Light: type[DeviceEnum]
     Chromecast: type[DeviceEnum]
+    TV: type[DeviceEnum]
     config: OrcConfig
     api: ModuleType
     model: ModuleType
@@ -54,12 +55,13 @@ def back_on_schedule(ctx):
 
 
 def build_ctx(config_manager, scheduler=None):
-    from orc import Chromecast, Light, api, config, model
+    from orc import TV, Chromecast, Light, api, config, model
 
     return PluginCtx(
         config_manager=config_manager,
         Light=Light,
         Chromecast=Chromecast,
+        TV=TV,
         config=config,
         api=api,
         model=model,
