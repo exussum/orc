@@ -1,3 +1,4 @@
+import csv
 import os
 from urllib.request import urlopen
 
@@ -27,6 +28,7 @@ def fetch_secrets():
         access_token="?access_token=" + get_secret("HUBITAT_ACCESS_TOKEN"),
         market_holidays_url=get_secret("MARKET_HOLIDAYS_URL"),
         ics_url=get_secret("ICS_URL"),
+        lg_tv_client_keys=dict(csv.reader(get_secret("LG_TV_CLIENT_KEYS").splitlines())),
     )
 
 

@@ -1,3 +1,4 @@
+import socket
 import time
 from contextlib import contextmanager
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -13,14 +14,6 @@ _YDL_OPTS = {
     "quiet": True,
     "no_warnings": True,
 }
-
-
-@requires_enabled({})
-def fetch_config():
-    chromecasts, browser = pychromecast.get_chromecasts()
-    devices = {e.cast_info.friendly_name: e.cast_info.host for e in chromecasts}
-    pychromecast.discovery.stop_discovery(browser)
-    return devices
 
 
 @requires_enabled(lambda device: m.SoundState(what=device, content=None, volume=0))
@@ -85,7 +78,8 @@ def set_volume(device, lvl):
 
 @contextmanager
 def _cast(device, **kwargs):
-    cast = pychromecast.get_chromecast_from_host((device.value, 8009, None, None, None), **kwargs)
+    ip = socket.gethostbyname(device.value)
+    cast = pychromecast.get_chromecast_from_host((ip, 8009, None, None, None), **kwargs)
     try:
         cast.wait(timeout=kwargs.get("timeout"))
         yield cast
