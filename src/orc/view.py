@@ -35,7 +35,7 @@ class VersionManager:
     def versioned(func: Callable[..., None]) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if not request.headers.get("orc-version") == VersionManager.version:
+            if not request.args.get("ignore-version") and not request.headers.get("orc-version") == VersionManager.version:
                 return {"version": VersionManager.version}, 412
             func(*args, **kwargs)
             VersionManager.version = str(random.random())
@@ -63,8 +63,6 @@ def cfg():
 
 @bp.route("/api/console/<id>")
 def console(id):
-    api.log(api.local_now(), m.LogSource.MANUAL, id)
-
     if id in config.plugins:
         plugins.execute_plugin(app.orc.config_manager, id)
     elif id in config.schedule_routines:
@@ -73,6 +71,7 @@ def console(id):
         api.execute(m.squish_configs(config.reset_config, config.ad_hoc_routines[id]))
     else:
         raise Exception("Unknown routine")
+    api.log(api.local_now(), m.LogSource.MANUAL, id)
     return {}, 200
 
 
@@ -168,11 +167,11 @@ def presence():
 
 @bp.route("/api/remote/<id>")
 def remote(id):
-    api.log(api.local_now(), m.LogSource.REMOTE, id)
     if id in ("TV Lights", "Partial TV Lights"):
         api.replace_config_for(app.orc.config_manager, id, timedelta(hours=3))
     else:
         app.orc.config_manager.resume(config.all_configs[id])
+    api.log(api.local_now(), m.LogSource.REMOTE, id)
     app.orc.version_manager.bump_version()
     return {}, 200
 
@@ -180,7 +179,6 @@ def remote(id):
 @bp.route("/api/room/<id>")
 def room(id):
     state = request.args.get("state")
-    api.log(api.local_now(), m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
     if state == config.ON:
         api.execute(config.room_configs[id])
     elif state == config.OFF:
@@ -189,6 +187,7 @@ def room(id):
         api.execute(m.squish_configs(config.room_configs_off, config.room_configs[id]))
     else:
         raise Exception("Unknown state")
+    api.log(api.local_now(), m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
 
     return {}, 200
 
