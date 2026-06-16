@@ -57,6 +57,7 @@ def cfg():
             tomorrow_theme=api.calculate_theme(app.orc.config_manager, tomorrow),
             lights=api.capture_lights(),
             sounds=api.capture_sounds(),
+            version=app.orc.version_manager.version,
         )
 
 
@@ -78,7 +79,7 @@ def console(id):
 @bp.route("/api/presence/<name>/checkin", methods=["POST"])
 @VersionManager.versioned
 def checkin_presence(name):
-    api.mark_present(app.orc.config_manager, [name])
+    api.mark_present(app.orc.config_manager, [name], when=api.local_now() + timedelta(hours=1))
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
 
 
@@ -106,7 +107,7 @@ def index():
     return (
         render_template(
             "button.html",
-            highlight_configs=config.button_highlight_configs,
+            highlight_configs=[(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlight_configs],
             plugins=config.plugins,
             room_configs=config.room_configs,
             ad_hoc_routines=config.ad_hoc_routines,
