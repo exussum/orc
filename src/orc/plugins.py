@@ -155,8 +155,7 @@ def _run_trigger_sensor_off(ctx):
         plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, Log.TRIGGER_SENSOR_OFF_PREFIX.format(msg=msg)
     )
 
-    for name in list(plugin_ctx.config_manager.presence()):
-        plugin_ctx.api.expire_presence(plugin_ctx.config_manager, name)
+    plugin_ctx.api.expire_presence(plugin_ctx.config_manager, list(plugin_ctx.config_manager.presence()))
     present = plugin_ctx.api.check_presence(ctx=ctx)
 
     if not present:
