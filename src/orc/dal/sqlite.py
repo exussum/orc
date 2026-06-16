@@ -8,9 +8,12 @@ from sqlalchemy.engine.url import make_url
 from orc import config
 
 
-def delete_presence(name):
+def delete_presence(names, before):
     with _theme_override_conn() as conn:
-        conn.execute("DELETE FROM orc_presence WHERE name = ?", (name,))
+        conn.executemany(
+            "DELETE FROM orc_presence WHERE name = ? AND last_seen < ?",
+            [(name, before.isoformat()) for name in names],
+        )
 
 
 def delete_theme_override():
@@ -58,11 +61,11 @@ def insert_lg_tv_client_key(hostname, client_key):
         )
 
 
-def insert_presence(name, when):
+def insert_presence(names, when):
     with _theme_override_conn() as conn:
-        conn.execute(
-            "INSERT INTO orc_presence (name, last_seen) VALUES (?, ?) " "ON CONFLICT(name) DO UPDATE SET last_seen=excluded.last_seen",
-            (name, when.isoformat()),
+        conn.executemany(
+            "INSERT INTO orc_presence (name, last_seen) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET last_seen=excluded.last_seen",
+            [(name, when.isoformat()) for name in names],
         )
 
 
