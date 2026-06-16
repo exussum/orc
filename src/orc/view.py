@@ -37,7 +37,9 @@ class VersionManager:
         def wrapper(*args, **kwargs):
             if not request.args.get("ignore-version") and not request.headers.get("orc-version") == VersionManager.version:
                 return {"version": VersionManager.version}, 412
-            func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            if result is not None:
+                return result
             VersionManager.version = str(random.random())
             return {"version": VersionManager.version}, 200
 
@@ -70,7 +72,7 @@ def console(id):
     elif id in config.ad_hoc_routines:
         api.execute(m.squish_configs(config.reset_config, config.ad_hoc_routines[id]))
     else:
-        raise Exception("Unknown routine")
+        return {"error": "Unknown routine"}, 404
     api.log(api.local_now(), m.LogSource.MANUAL, id)
     return {}, 200
 
@@ -133,6 +135,8 @@ def log():
 @VersionManager.versioned
 def pause(id):
     job = app.orc.scheduler.get_job(id)
+    if job is None:
+        return {"error": "Unknown job"}, 404
     if job.next_run_time:
         job.pause()
     else:
@@ -169,8 +173,10 @@ def presence():
 def remote(id):
     if id in ("TV Lights", "Partial TV Lights"):
         api.replace_config_for(app.orc.config_manager, id, timedelta(hours=3))
-    else:
+    elif id in config.all_configs:
         app.orc.config_manager.resume(config.all_configs[id])
+    else:
+        return {"error": "Unknown id"}, 404
     api.log(api.local_now(), m.LogSource.REMOTE, id)
     app.orc.version_manager.bump_version()
     return {}, 200
@@ -179,6 +185,8 @@ def remote(id):
 @bp.route("/api/room/<id>")
 def room(id):
     state = request.args.get("state")
+    if id not in config.room_configs:
+        return {"error": "Unknown room"}, 404
     if state == config.ON:
         api.execute(config.room_configs[id])
     elif state == config.OFF:
@@ -196,6 +204,8 @@ def room(id):
 @VersionManager.versioned
 def run(id):
     job = app.orc.scheduler.get_job(id)
+    if job is None:
+        return {"error": "Unknown job"}, 404
     api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
     job.func(*job.args, ctx=app.orc, force=True)
 
