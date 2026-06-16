@@ -2,6 +2,7 @@ import io
 import itertools
 import os
 import sys
+import threading
 import time
 import wave
 from collections import namedtuple as nt
@@ -9,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
+from functools import wraps
 from importlib import resources
 
 import pygame
@@ -78,6 +80,15 @@ def unwrap_rule_container(f):
                 f(args[0], e, *args[2:])
         else:
             f(*args)
+
+    return wrapper
+
+
+def synchronized(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
 
     return wrapper
 
@@ -162,6 +173,7 @@ def play_text(text):
 
 class ConfigManager:
     def __init__(self, theme_override=None, presence=None):
+        self._lock = threading.RLock()
         self.snapshot = None
         self._theme_override = theme_override
         self._presence = dict(presence) if presence else {}
@@ -176,6 +188,7 @@ class ConfigManager:
     def theme_override(self, value):
         self._theme_override = value
 
+    @synchronized
     def replace_config(self, target_config, end):
 
         if not self.snapshot:
@@ -185,6 +198,7 @@ class ConfigManager:
 
         execute(target_config)
 
+    @synchronized
     def resume(self, target_config):
         if self.snapshot and local_now() <= self.snapshot.end:
             routine = self.snapshot.routine
@@ -194,6 +208,7 @@ class ConfigManager:
         self.snapshot = None
         execute(routine)
 
+    @synchronized
     def update_snapshot(self, rule):
         what = [rule.what] if isinstance(rule.what, Enum) else rule.what
         items = {e.what: e for e in self.snapshot.routine.items}
@@ -202,21 +217,26 @@ class ConfigManager:
         items.update({e: replace(rule, what=e) for e in what})
         self.snapshot = self.snapshot._replace(routine=m.Configs(*items.values()))
 
+    @synchronized
     def presence(self):
         return dict(self._presence)
 
     @property
+    @synchronized
     def present_names(self):
         cutoff = local_now() - _PRESENCE_WINDOW
         return {name for name, ts in self._presence.items() if ts >= cutoff}
 
+    @synchronized
     def mark_present(self, names, when):
         for name in names:
             self._presence[name] = when
 
+    @synchronized
     def expire_presence(self, name):
         self._presence.pop(name, None)
 
+    @synchronized
     def reload_presence(self, presence):
         self._presence = dict(presence)
 
@@ -240,6 +260,7 @@ class ConfigManager:
             theme_name = config.THEME_DAY_OFF
         return theme_name
 
+    @synchronized
     @unwrap_rule_container
     def route_rule(self, rule, force):
         if rule.trigger == m.Trigger.SYSTEM and self.snapshot:
