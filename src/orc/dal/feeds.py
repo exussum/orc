@@ -1,6 +1,5 @@
 import sys
 from datetime import datetime
-from functools import lru_cache
 
 import icalendar
 import recurring_ical_events
@@ -9,14 +8,18 @@ import requests
 from orc import config
 from orc.dal._decorators import requires_enabled
 
+_holidays_cache = {}
+
 
 @requires_enabled([])
-@lru_cache(maxsize=2)
 def fetch_holidays(year):
+    if year in _holidays_cache:
+        return _holidays_cache[year]
     result = requests.get(config.secrets.market_holidays_url, timeout=config.http_timeout).json()
     if "error" in result:
         print(result["error"], file=sys.stderr)
         return []
+    _holidays_cache[year] = result
     return result
 
 
