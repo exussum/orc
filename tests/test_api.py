@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from unittest.mock import call, patch
 
 import pytest
@@ -247,16 +247,16 @@ class TestPresence:
 
     def test_mark_and_query(self):
         assert self.target.present_names == set()
-        self.target.mark_present(["Alice"], when=api.local_now())
+        api.mark_present(self.target, ["Alice"], when=api.local_now())
         assert self.target.present_names == {"Alice"}
 
     def test_expire(self):
-        self.target.mark_present(["Alice"], when=api.local_now())
-        self.target.expire_presence("Alice")
+        api.mark_present(self.target, ["Alice"], when=api.local_now() - timedelta(minutes=1))
+        api.expire_presence(self.target, ["Alice"])
         assert self.target.present_names == set()
 
     def test_stale_entry_outside_12h_window(self):
-        self.target.mark_present(["Alice"], when=datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
+        api.mark_present(self.target, ["Alice"], when=datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
         assert self.target.present_names == set()
 
     def test_run_iot_job_skips_when_presence_absent(self):
@@ -266,7 +266,7 @@ class TestPresence:
         route.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self):
-        self.target.mark_present(["Alice"], when=api.local_now())
+        api.mark_present(self.target, ["Alice"], when=api.local_now())
         rule = self._routine("partner-r", "Alice")
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
@@ -291,7 +291,7 @@ class TestPresence:
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
-        self.target.mark_present(["Bob"], when=api.local_now())
+        api.mark_present(self.target, ["Bob"], when=api.local_now())
         rule = self._routine("anyone-r", m.Trigger.ANYONE)
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
@@ -312,7 +312,7 @@ class TestPresence:
         assert squished.items == ()
 
     def test_replay_day_runs_routines_for_present_people(self):
-        self.target.mark_present(["Alice"], when=api.local_now())
+        api.mark_present(self.target, ["Alice"], when=api.local_now())
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "execute") as execute:

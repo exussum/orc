@@ -149,11 +149,11 @@ def play_text(text):
 
 
 class ConfigManager:
-    def __init__(self, theme_override=None, presence=None):
+    def __init__(self, theme_override=None):
         self._lock = threading.RLock()
         self.snapshot = None
         self._theme_override = theme_override
-        self._presence = dict(presence) if presence else {}
+        self._presence = {}
 
     @property
     def theme_override(self):
@@ -205,17 +205,8 @@ class ConfigManager:
         return {name for name, ts in self._presence.items() if ts >= cutoff}
 
     @synchronized
-    def mark_present(self, names, when):
-        for name in names:
-            self._presence[name] = when
-
-    @synchronized
-    def expire_presence(self, name):
-        self._presence.pop(name, None)
-
-    @synchronized
-    def reload_presence(self, presence):
-        self._presence = dict(presence)
+    def reload_presence(self):
+        self._presence = dict(sqlite.fetch_presence())
 
     def active_override(self, today):
         if self.theme_override and self.theme_override.start <= today <= self.theme_override.end:
@@ -276,26 +267,27 @@ def clear_theme_override(config_manager):
     sqlite.delete_theme_override()
 
 
-def expire_presence(config_manager, name):
-    config_manager.expire_presence(name)
-    sqlite.delete_presence(name)
+def expire_presence(config_manager, names):
+    sqlite.delete_presence(names, local_now())
+    config_manager.reload_presence()
 
 
 def make_config_manager():
     row = sqlite.fetch_theme_override()
     theme_override = ThemeOverride(*row) if row else None
-    return ConfigManager(theme_override=theme_override, presence=sqlite.fetch_presence())
+    cm = ConfigManager(theme_override=theme_override)
+    cm.reload_presence()
+    return cm
 
 
 def mark_present(config_manager, names, when):
-    config_manager.mark_present(names, when=when)
-    for name in names:
-        sqlite.insert_presence(name, when)
+    sqlite.insert_presence(names, when)
+    config_manager.reload_presence()
 
 
 def delete_all_presence(config_manager):
     sqlite.delete_all_presence(local_now())
-    config_manager.reload_presence(sqlite.fetch_presence())
+    config_manager.reload_presence()
 
 
 def replace_config_for(config_manager, id, duration):
