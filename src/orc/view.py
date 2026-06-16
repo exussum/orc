@@ -87,7 +87,7 @@ def checkin_presence(name):
 @bp.route("/api/presence/<name>/expire", methods=["POST"])
 @VersionManager.versioned
 def expire_presence(name):
-    api.expire_presence(app.orc.config_manager, name)
+    api.expire_presence(app.orc.config_manager, [name])
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
 
 
