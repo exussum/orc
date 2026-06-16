@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import contextmanager
 from datetime import date, datetime
 
 import requests
@@ -90,8 +91,14 @@ def _read_light(light):
     return row if row else (None, None)
 
 
+@contextmanager
 def _theme_override_conn():
-    return sqlite3.connect(make_url(config.jobs_db).database)
+    conn = sqlite3.connect(make_url(config.jobs_db).database)
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def _write_light(light, *, type=None, state=None):
