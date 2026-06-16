@@ -74,9 +74,9 @@ def insert_theme_override(override):
         )
 
 
-def delete_all_presence():
+def delete_all_presence(before):
     with _theme_override_conn() as conn:
-        conn.execute("DELETE FROM orc_presence")
+        conn.execute("DELETE FROM orc_presence WHERE last_seen < ?", (before.isoformat(),))
 
 
 def _fetch_hubitat_device(light):
