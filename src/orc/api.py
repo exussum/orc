@@ -65,7 +65,7 @@ def log(when, source, action):
 
 
 def log_entries():
-    return _ACTIVITY_LOG.entries
+    return list(_ACTIVITY_LOG.entries)
 
 
 def unwrap_rule_container(f):
