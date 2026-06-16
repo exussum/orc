@@ -84,6 +84,16 @@ def test_remote_other_resumes(client, ctx):
     resume.assert_called_once_with(fake_cfg)
 
 
+def test_remote_unknown_id_returns_404(client, ctx):
+    with (
+        patch.object(config, "all_configs", {}),
+        patch.object(ctx.config_manager, "resume") as resume,
+    ):
+        response = client.get("/api/remote/nope")
+    assert response.status_code == 404
+    resume.assert_not_called()
+
+
 # --- /api/console: 4-way branch ---
 
 
@@ -122,14 +132,14 @@ def test_console_ad_hoc(client):
     ex.assert_called_once_with(m.squish_configs(reset, routine))
 
 
-def test_console_unknown_raises(client):
+def test_console_unknown_returns_404(client):
     with (
         patch.object(config, "plugins", {}),
         patch.object(config, "schedule_routines", {}),
         patch.object(config, "ad_hoc_routines", {}),
     ):
         response = client.get("/api/console/nope")
-    assert response.status_code == 500
+    assert response.status_code == 404
 
 
 # --- /api/room: 4-way branch on state ---
@@ -172,6 +182,13 @@ def test_room_unknown_state_raises(client):
     with patch.object(config, "room_configs", {"Living Room": m.Configs()}):
         response = client.get("/api/room/Living Room?state=bogus")
     assert response.status_code == 500
+
+
+def test_room_unknown_id_returns_404(client):
+    with patch.object(config, "room_configs", {}), patch.object(api, "execute") as ex:
+        response = client.get("/api/room/nope?state=on")
+    assert response.status_code == 404
+    ex.assert_not_called()
 
 
 # --- /api/schedule/set_theme: form parsing + conditional date.fromisoformat ---
@@ -220,3 +237,15 @@ def test_pause_when_paused_resumes(client, scheduler, good_version):
     client.get("/api/schedule/iot-x/pause", headers=good_version)
     job.resume.assert_called_once()
     job.pause.assert_not_called()
+
+
+def test_pause_unknown_job_returns_404(client, scheduler, good_version):
+    scheduler.get_job.return_value = None
+    response = client.get("/api/schedule/nope/pause", headers=good_version)
+    assert response.status_code == 404
+
+
+def test_run_unknown_job_returns_404(client, scheduler, good_version):
+    scheduler.get_job.return_value = None
+    response = client.get("/api/schedule/nope/run", headers=good_version)
+    assert response.status_code == 404
