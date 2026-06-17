@@ -6,10 +6,11 @@ from aiowebostv import WebOsClient
 from getmac import get_mac_address
 from wakeonlan import send_magic_packet
 
+from orc._locked_dict import LockedDict
 from orc.dal._decorators import requires_enabled
 from orc.dal.sqlite import fetch_lg_tv_client_key
 
-_macs: dict = {}
+_macs = LockedDict()
 
 
 @requires_enabled({})
@@ -20,7 +21,7 @@ def fetch_macs(tvs):
             print(f"[tv.fetch_macs] could not resolve MAC for {tv.name} ({tv.value}); 'on' will fail until refreshed", file=sys.stderr)
             continue
         _macs[tv] = mac
-    return dict(_macs)
+    return _macs.copy()
 
 
 @requires_enabled(None)
