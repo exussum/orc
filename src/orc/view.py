@@ -214,6 +214,8 @@ def run(id):
 @VersionManager.versioned
 def run_presence_check():
     job = app.orc.scheduler.get_job("presence-cron")
+    if job is None:
+        return {"error": "Unknown job"}, 404
     api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
     api.delete_all_presence()
     job.func(ctx=app.orc)
