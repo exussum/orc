@@ -10,7 +10,7 @@ from apscheduler.schedulers.base import BaseScheduler
 from mistletoe.block_token import Heading, Table
 
 if TYPE_CHECKING:
-    from orc.api import ConfigManager
+    from orc.api import SnapshotManager
     from orc.view import VersionManager
 
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
@@ -138,7 +138,7 @@ class Secrets:
 
 @dataclass
 class AppContext:
-    config_manager: "ConfigManager"
+    snapshot_manager: "SnapshotManager"
     scheduler: BaseScheduler
     sound_path: str
     version_manager: "VersionManager"
