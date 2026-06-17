@@ -13,7 +13,7 @@ from gunicorn.app.base import BaseApplication
 import orc as config
 from orc import api
 from orc import model as m
-from orc.apscheduler import JOBSTORE_DEFAULT, JOBSTORE_MEMORY, ContextThreadPoolExecutor
+from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY, ContextThreadPoolExecutor
 from orc.locale import Log
 from orc.view import VersionManager, bp
 
