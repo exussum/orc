@@ -194,7 +194,7 @@ def build_enum(doc, section, sub_section, id_lookup=None):
     if sub_table is None:
         return DeviceEnum(sub_section, {}, module="orc")
 
-    for label, idx in (("device id", 1), ("names", 2)):
+    for label, idx in (("names", 1), ("device id", 2)):
         vals = [e[idx] for e in sub_table]
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
