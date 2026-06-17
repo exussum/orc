@@ -29,7 +29,10 @@ from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
 from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
+from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
+from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
+from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.tv import fetch_macs  # noqa: F401
 from orc.locale import Log
 
@@ -148,22 +151,10 @@ def play_text(text):
 # --- State manager ---
 
 
-class ConfigManager:
-    def __init__(self, theme_override=None):
+class SnapshotManager:
+    def __init__(self):
         self._lock = threading.RLock()
         self.snapshot = None
-        self._theme_override = theme_override
-        self._presence = {}
-
-    @property
-    def theme_override(self):
-        if self._theme_override and self._theme_override.end < local_now().date():
-            return None
-        return self._theme_override
-
-    @theme_override.setter
-    def theme_override(self, value):
-        self._theme_override = value
 
     @synchronized
     def replace_config(self, target_config, end):
@@ -195,40 +186,6 @@ class ConfigManager:
         self.snapshot = self.snapshot._replace(routine=m.Configs(*items.values()))
 
     @synchronized
-    def presence(self):
-        return dict(self._presence)
-
-    @property
-    @synchronized
-    def present_names(self):
-        cutoff = local_now() - _PRESENCE_WINDOW
-        return {name for name, ts in self._presence.items() if ts >= cutoff}
-
-    @synchronized
-    def reload_presence(self):
-        self._presence = dict(sqlite.fetch_presence())
-
-    def active_override(self, today):
-        if self.theme_override and self.theme_override.start <= today <= self.theme_override.end:
-            return self.theme_override
-        return None
-
-    def calculate_theme(self, today, holidays=()):
-        if override := self.active_override(today):
-            return override.name
-
-        if today.weekday() not in (5, 6):
-            today_iso = today.strftime("%Y-%m-%d")
-            theme_name = (
-                config.THEME_DAY_OFF
-                if next((e for e in holidays if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
-                else config.THEME_WORK_DAY
-            )
-        else:
-            theme_name = config.THEME_DAY_OFF
-        return theme_name
-
-    @synchronized
     @unwrap_rule_container
     def route_rule(self, rule, force):
         if rule.trigger == m.Trigger.SYSTEM and self.snapshot:
@@ -241,63 +198,74 @@ class ConfigManager:
             execute(rule)
 
 
+def current_theme_override():
+    row = sqlite.fetch_theme_override()
+    if not row:
+        return None
+    override = ThemeOverride(*row)
+    if override.end < local_now().date():
+        return None
+    return override
+
+
+def active_theme_override(today):
+    cur = current_theme_override()
+    if cur and cur.start <= today <= cur.end:
+        return cur
+    return None
+
+
+def calculate_theme(today):
+    if override := active_theme_override(today):
+        return override.name
+
+    if today.weekday() not in (5, 6):
+        today_iso = today.strftime("%Y-%m-%d")
+        holidays = feeds.fetch_holidays(today.year)
+        return (
+            config.THEME_DAY_OFF
+            if next((e for e in holidays if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
+            else config.THEME_WORK_DAY
+        )
+    return config.THEME_DAY_OFF
+
+
+def set_theme_override(name, start, end):
+    sqlite.insert_theme_override(ThemeOverride(name, start, end))
+
+
+def present_names():
+    cutoff = local_now() - _PRESENCE_WINDOW
+    return {name for name, ts in sqlite.fetch_presence().items() if ts >= cutoff}
+
+
+def expire_presence(names):
+    sqlite.delete_presence(names, local_now())
+
+
+def delete_all_presence():
+    sqlite.delete_all_presence(local_now())
+
+
+def replace_config_for(snapshot_manager, id, duration):
+    snapshot_manager.replace_config(config.ad_hoc_routines[id], local_now() + duration)
+
+
 def apply_theme_change(ctx, name, start, end):
     now = local_now()
     today = now.date()
-    before = calculate_theme(ctx.config_manager, today)
+    before = calculate_theme(today)
     if not name:
         log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
-        clear_theme_override(ctx.config_manager)
+        clear_theme_override()
     else:
-        set_theme_override(ctx.config_manager, name, start, end)
+        set_theme_override(name, start, end)
         log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
-    after = calculate_theme(ctx.config_manager, today)
+    after = calculate_theme(today)
     ctx.scheduler.remove_all_jobs()
     setup_scheduler(ctx)
     if before != after:
-        replay_day(ctx.config_manager, now)
-
-
-def calculate_theme(config_manager, today):
-    return config_manager.calculate_theme(today, feeds.fetch_holidays(today.year))
-
-
-def clear_theme_override(config_manager):
-    config_manager.theme_override = None
-    sqlite.delete_theme_override()
-
-
-def expire_presence(config_manager, names):
-    sqlite.delete_presence(names, local_now())
-    config_manager.reload_presence()
-
-
-def make_config_manager():
-    row = sqlite.fetch_theme_override()
-    theme_override = ThemeOverride(*row) if row else None
-    cm = ConfigManager(theme_override=theme_override)
-    cm.reload_presence()
-    return cm
-
-
-def mark_present(config_manager, names, when):
-    sqlite.insert_presence(names, when)
-    config_manager.reload_presence()
-
-
-def delete_all_presence(config_manager):
-    sqlite.delete_all_presence(local_now())
-    config_manager.reload_presence()
-
-
-def replace_config_for(config_manager, id, duration):
-    config_manager.replace_config(config.ad_hoc_routines[id], local_now() + duration)
-
-
-def set_theme_override(config_manager, name, start, end):
-    override = ThemeOverride(name, start, end)
-    config_manager.theme_override = override
-    sqlite.insert_theme_override(override)
+        replay_day(now)
 
 
 # --- Scheduling & job handlers ---
@@ -307,12 +275,12 @@ def set_theme_override(config_manager, name, start, end):
 def check_presence(ctx):
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
     if not pairs:
-        return ctx.config_manager.present_names
-    before = ctx.config_manager.present_names
+        return present_names()
+    before = present_names()
     with Pool(max_workers=len(pairs)) as ex:
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
-    mark_present(ctx.config_manager, present, local_now())
-    after = ctx.config_manager.present_names
+    mark_present(present, local_now())
+    after = present_names()
     for name in sorted(after - before):
         log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=name))
     for name in sorted(before - after):
@@ -320,7 +288,7 @@ def check_presence(ctx):
     return after
 
 
-def get_schedule(config_manager):
+def get_schedule():
     result = []
     for x in range(2):
         now = local_now() + timedelta(days=x)
@@ -342,10 +310,10 @@ def get_schedule(config_manager):
                 sunset = t.utc_datetime() - timedelta(hours=1)
             prev = curr
 
-        if override := config_manager.active_override(today):
+        if override := active_theme_override(today):
             cfg = config.themes.get(override.name)
         else:
-            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(calculate_theme(config_manager, today))
+            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(calculate_theme(today))
 
         for e in cfg.configs:
             if e.when == m.SUNRISE:
@@ -375,14 +343,14 @@ def next_iot_job(scheduler, present_names):
 @requires_ctx
 def run_iot_job(job, ctx, force=False):
     rule = job.rule
-    if should_skip_for_presence(rule, force, ctx.config_manager.present_names):
+    if should_skip_for_presence(rule, force, present_names()):
         absent = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
         detail = f"absent: {', '.join(absent)}" if absent else "no one present"
         log(local_now(), m.LogSource.IOT, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     if not force:
         log(local_now(), m.LogSource.IOT, rule.name)
-    ctx.config_manager.route_rule(rule, force)
+    ctx.snapshot_manager.route_rule(rule, force)
 
 
 def setup_scheduler(ctx):
@@ -427,13 +395,13 @@ def should_skip_for_presence(rule, force, present_names):
 
 @requires_ctx
 def _rebuild_cal_schedule(ctx):
-    _schedule_cal_tasks(ctx.scheduler, ctx.config_manager)
+    _schedule_cal_tasks(ctx.scheduler)
 
 
 @requires_ctx
 def _rebuild_iot_schedule(ctx):
     now = local_now()
-    for time, rule in get_schedule(ctx.config_manager):
+    for time, rule in get_schedule():
         if now <= time:
             ctx.scheduler.add_job(
                 run_iot_job,
@@ -462,9 +430,9 @@ def _safe_ping(name, host):
         return name, False
 
 
-def _schedule_cal_tasks(scheduler, config_manager):
+def _schedule_cal_tasks(scheduler):
     now = local_now()
-    if calculate_theme(config_manager, now.date()) == config.THEME_WORK_DAY and (now.time().minute in _CALENDAR_CHECK_MINUTES):
+    if calculate_theme(now.date()) == config.THEME_WORK_DAY and (now.time().minute in _CALENDAR_CHECK_MINUTES):
         events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))
         warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
         alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
@@ -495,8 +463,8 @@ def light_test():
     time.sleep(10)
 
 
-def replay_day(config_manager, now):
-    jobs = sorted(get_schedule(config_manager), key=lambda x: x[0])
-    present_names = config_manager.present_names
-    configs = (cfg for (when, cfg) in jobs if when <= now and not should_skip_for_presence(cfg, False, present_names))
+def replay_day(now):
+    jobs = sorted(get_schedule(), key=lambda x: x[0])
+    present = present_names()
+    configs = (cfg for (when, cfg) in jobs if when <= now and not should_skip_for_presence(cfg, False, present))
     execute(m.squish_configs(*configs))

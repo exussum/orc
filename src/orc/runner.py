@@ -55,7 +55,7 @@ def _build_app():
 
     api.init_db()
 
-    config_manager = api.make_config_manager()
+    snapshot_manager = api.SnapshotManager()
     version_manager = VersionManager()
 
     scheduler = BackgroundScheduler(
@@ -67,7 +67,7 @@ def _build_app():
     )
 
     ctx = m.AppContext(
-        config_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix(), version_manager
+        snapshot_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.mp3").resolve().as_posix(), version_manager
     )
     scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), JOBSTORE_DEFAULT)
     scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)

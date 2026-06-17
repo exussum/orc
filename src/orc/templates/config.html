@@ -27,10 +27,10 @@
             <div id="internals-collapse" class="collapse" aria-labelledby="internals-heading" data-parent="#config-accordion">
                 <div class="card-body">
                     <ul>
-                        <li>Snapshot State: {{ ctx.config_manager.snapshot }}</li>
+                        <li>Snapshot State: {{ ctx.snapshot_manager.snapshot }}</li>
                         <li>Today's theme: {{ today_theme }}</li>
                         <li>Tomorrow's theme: {{ tomorrow_theme }}</li>
-                        <li>Theme Override: {{ ctx.config_manager.theme_override }}</li>
+                        <li>Theme Override: {{ theme_override }}</li>
                     </ul>
                 </div>
             </div>
