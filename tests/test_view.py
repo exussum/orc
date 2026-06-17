@@ -18,7 +18,7 @@ def scheduler():
 @pytest.fixture
 def ctx(scheduler):
     return m.AppContext(
-        config_manager=api.ConfigManager(),
+        snapshot_manager=api.SnapshotManager(),
         scheduler=scheduler,
         sound_path="/tmp/alert.mp3",
         version_manager=VersionManager(),
@@ -71,14 +71,14 @@ def test_remote_tv_lights(client, ctx):
     with patch.object(api, "replace_config_for") as rcf:
         response = client.get("/api/remote/TV Lights")
     assert response.status_code == 200
-    rcf.assert_called_once_with(ctx.config_manager, "TV Lights", timedelta(hours=3))
+    rcf.assert_called_once_with(ctx.snapshot_manager, "TV Lights", timedelta(hours=3))
 
 
 def test_remote_other_resumes(client, ctx):
     fake_cfg = object()
     with (
         patch.object(config, "all_configs", {"Silence": fake_cfg}),
-        patch.object(ctx.config_manager, "resume") as resume,
+        patch.object(ctx.snapshot_manager, "resume") as resume,
     ):
         client.get("/api/remote/Silence")
     resume.assert_called_once_with(fake_cfg)
@@ -87,7 +87,7 @@ def test_remote_other_resumes(client, ctx):
 def test_remote_unknown_id_returns_404(client, ctx):
     with (
         patch.object(config, "all_configs", {}),
-        patch.object(ctx.config_manager, "resume") as resume,
+        patch.object(ctx.snapshot_manager, "resume") as resume,
     ):
         response = client.get("/api/remote/nope")
     assert response.status_code == 404
@@ -104,7 +104,7 @@ def test_console_plugin(client, ctx):
     ):
         response = client.get("/api/console/do-thing")
     assert response.status_code == 200
-    exec_plugin.assert_called_once_with(ctx.config_manager, "do-thing")
+    exec_plugin.assert_called_once_with(ctx.snapshot_manager, "do-thing")
 
 
 def test_console_schedule_routine(client):

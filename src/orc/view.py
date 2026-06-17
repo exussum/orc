@@ -55,8 +55,9 @@ def cfg():
             "config.html",
             html=HtmlRenderer().render(Document(f)),
             ctx=app.orc,
-            today_theme=api.calculate_theme(app.orc.config_manager, today),
-            tomorrow_theme=api.calculate_theme(app.orc.config_manager, tomorrow),
+            today_theme=api.calculate_theme(today),
+            tomorrow_theme=api.calculate_theme(tomorrow),
+            theme_override=api.current_theme_override(),
             lights=api.capture_lights(),
             sounds=api.capture_sounds(),
             version=app.orc.version_manager.version,
@@ -66,7 +67,7 @@ def cfg():
 @bp.route("/api/console/<id>")
 def console(id):
     if id in config.plugins:
-        plugins.execute_plugin(app.orc.config_manager, id)
+        plugins.execute_plugin(app.orc.snapshot_manager, id)
     elif id in config.schedule_routines:
         api.execute(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
@@ -80,20 +81,20 @@ def console(id):
 @bp.route("/api/presence/<name>/checkin", methods=["POST"])
 @VersionManager.versioned
 def checkin_presence(name):
-    api.mark_present(app.orc.config_manager, [name], when=api.local_now() + timedelta(hours=1))
+    api.mark_present([name], when=api.local_now() + timedelta(hours=1))
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
 
 
 @bp.route("/api/presence/<name>/expire", methods=["POST"])
 @VersionManager.versioned
 def expire_presence(name):
-    api.expire_presence(app.orc.config_manager, [name])
+    api.expire_presence([name])
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
 
 
 @bp.route("/api/hubitat/callback", methods=["POST"])
 def hubitat_callback():
-    ctx = plugins.build_ctx(app.orc.config_manager, app.orc.scheduler)
+    ctx = plugins.build_ctx(app.orc.snapshot_manager, app.orc.scheduler)
     device_id = request.json["content"]["deviceId"]
     value = request.json["content"]["value"]
     plugins.trigger_sensor(ctx, device_id, value)
@@ -102,7 +103,7 @@ def hubitat_callback():
 
 @bp.route("/")
 def index():
-    present_names = app.orc.config_manager.present_names
+    present_names = api.present_names()
     next_schedule = api.next_iot_job(app.orc.scheduler, present_names)
 
     return (
@@ -145,9 +146,8 @@ def pause(id):
 
 @bp.route("/presence/")
 def presence():
-    cm = app.orc.config_manager
-    last_seen = cm.presence()
-    present = cm.present_names
+    last_seen = api.last_seen()
+    present = api.present_names()
     rows = [
         {
             "name": name,
@@ -172,9 +172,9 @@ def presence():
 @bp.route("/api/remote/<id>")
 def remote(id):
     if id in ("TV Lights", "Partial TV Lights"):
-        api.replace_config_for(app.orc.config_manager, id, timedelta(hours=3))
+        api.replace_config_for(app.orc.snapshot_manager, id, timedelta(hours=3))
     elif id in config.all_configs:
-        app.orc.config_manager.resume(config.all_configs[id])
+        app.orc.snapshot_manager.resume(config.all_configs[id])
     else:
         return {"error": "Unknown id"}, 404
     api.log(api.local_now(), m.LogSource.REMOTE, id)
@@ -215,18 +215,18 @@ def run(id):
 def run_presence_check():
     job = app.orc.scheduler.get_job("presence-cron")
     api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
-    api.delete_all_presence(app.orc.config_manager)
+    api.delete_all_presence()
     job.func(ctx=app.orc)
 
 
 @bp.route("/schedule/")
 def schedule():
     jobs = sorted(api.jobs_by_type(app.orc.scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
-    theme_override = app.orc.config_manager.theme_override
+    theme_override = api.current_theme_override()
 
     theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
 
-    present_names = app.orc.config_manager.present_names
+    present_names = api.present_names()
     absent_by_job = {j.id: api.should_skip_for_presence(j.args[0].rule, False, present_names) for j in jobs}
 
     return (
