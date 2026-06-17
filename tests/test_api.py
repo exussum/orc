@@ -23,7 +23,7 @@ class TestManagingConfig:
         self.target = api.SnapshotManager()
 
     def test_resume_with_snapshot(self, execute, snapshot_config):
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
+        self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.resume(None)
         assert execute.call_args_list == [call(snapshot_config)]
 
@@ -34,7 +34,7 @@ class TestManagingConfig:
 
     def test_resume_with_old_snapshot(self, execute, snapshot_config):
         routine = object()
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=PAST)
+        self.target.snapshot = m.SnapShot(routine=snapshot_config, end=PAST)
         self.target.resume(routine)
         assert execute.call_args_list == [call(routine)]
         assert not self.target.snapshot
@@ -48,7 +48,7 @@ class TestRouteRule:
     def test_snapshot_update_overwrite_set(self, update_light, snapshot_config):
         rule = m.Config(set((orc.Light.b,)), config.ON, trigger=m.Trigger.SYSTEM)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
+        self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
         self.target.route_rule(rule, False)
 
@@ -61,7 +61,7 @@ class TestRouteRule:
     def test_snapshot_update_add(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON, trigger=m.Trigger.SYSTEM)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
+        self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
@@ -74,7 +74,7 @@ class TestRouteRule:
     def test_rule_ignored(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
+        self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
@@ -86,7 +86,7 @@ class TestRouteRule:
     def test_rule_old_snapshot(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=PAST)
+        self.target.snapshot = m.SnapShot(routine=snapshot_config, end=PAST)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot is None
@@ -95,7 +95,7 @@ class TestRouteRule:
     def test_snapshot_bypassed(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, config.ON)
 
-        self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
+        self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
 
         self.target.route_rule(rule, True)
 
@@ -160,7 +160,7 @@ def test_unwrapper_class_routine(snapshot_config):
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
 class TestActiveOverride:
-    OVERRIDE = api.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))
+    OVERRIDE = m.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))
 
     @pytest.fixture(autouse=True)
     def _setup(self):

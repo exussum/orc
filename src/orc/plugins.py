@@ -14,7 +14,7 @@ from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 from flask import request
 
-from orc.apscheduler import JOBSTORE_MEMORY, requires_ctx
+from orc._decorators import requires_ctx
 from orc.locale import Log
 
 _SENSOR_ID_ENTRANCE = 16
@@ -125,7 +125,7 @@ def trigger_sensor(ctx, device_id, event):
             name="Trigger Sensor",
             id="trigger-sensor",
             replace_existing=True,
-            jobstore=JOBSTORE_MEMORY,
+            jobstore=ctx.api.JOBSTORE_MEMORY,
         )
 
 

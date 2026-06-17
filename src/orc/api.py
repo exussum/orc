@@ -1,3 +1,4 @@
+import copy
 import io
 import itertools
 import os
@@ -5,7 +6,6 @@ import sys
 import threading
 import time
 import wave
-from collections import namedtuple as nt
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -13,6 +13,7 @@ from enum import Enum
 from importlib import resources
 
 import pygame
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from piper import PiperVoice
@@ -22,8 +23,7 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config
 from orc import model as m
-from orc._decorators import synchronized, unwrap_rule_container
-from orc.apscheduler import JOBSTORE_MEMORY, requires_ctx
+from orc._decorators import requires_ctx, synchronized, unwrap_rule_container
 from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
@@ -50,8 +50,24 @@ _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
 _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
 
 
-SnapShot = nt("SnapShot", "routine end")
-ThemeOverride = nt("ThemeOverride", "name start end")
+JOBSTORE_DEFAULT = "default"
+JOBSTORE_MEMORY = "memory"
+
+
+class ContextThreadPoolExecutor(ThreadPoolExecutor):
+    def __init__(self, ctx: "m.AppContext", max_workers=1):
+        super().__init__(max_workers=max_workers)
+        self.ctx = ctx
+
+    def _do_submit_job(self, job, run_times):
+        dispatch_job = copy.copy(job)
+        dispatch_job._jobstore_alias = job._jobstore_alias
+        dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
+        return super()._do_submit_job(dispatch_job, run_times)
+
+    def run_now(self, job, **extra_kwargs):
+        return job.func(*job.args, ctx=self.ctx, **{**job.kwargs, **extra_kwargs})
+
 
 # --- Utilities ---
 
@@ -160,7 +176,7 @@ class SnapshotManager:
     def replace_config(self, target_config, end):
 
         if not self.snapshot:
-            self.snapshot = SnapShot(capture_lights(), end)
+            self.snapshot = m.SnapShot(capture_lights(), end)
             items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshot.routine.items)
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(end=end, items=items))
 
@@ -202,7 +218,7 @@ def current_theme_override():
     row = sqlite.fetch_theme_override()
     if not row:
         return None
-    override = ThemeOverride(*row)
+    override = m.ThemeOverride(*row)
     if override.end < local_now().date():
         return None
     return override
@@ -231,7 +247,7 @@ def calculate_theme(today):
 
 
 def set_theme_override(name, start, end):
-    sqlite.insert_theme_override(ThemeOverride(name, start, end))
+    sqlite.insert_theme_override(m.ThemeOverride(name, start, end))
 
 
 def present_names():
@@ -356,30 +372,20 @@ def run_iot_job(job, ctx, force=False):
 def setup_scheduler(ctx):
     if not jobs_by_type(ctx.scheduler, m.IotJob):
         _rebuild_iot_schedule(ctx=ctx)
-    ctx.scheduler.add_job(
-        _rebuild_iot_schedule,
-        CronTrigger.from_crontab("10 0 * * *"),
-        replace_existing=True,
-        id="iot-cron",
-        name="Iot Cron",
-        jobstore=JOBSTORE_MEMORY,
+    crons = (
+        (_rebuild_iot_schedule, "10 0 * * *", "iot-cron", "Iot Cron"),
+        (_rebuild_cal_schedule, "*/5 8-18 * * *", "cal-cron", "Calendar Cron"),
+        (check_presence, "5 * * * *", "presence-cron", "Presence Cron"),
     )
-    ctx.scheduler.add_job(
-        _rebuild_cal_schedule,
-        CronTrigger.from_crontab("*/5 8-18 * * *"),
-        replace_existing=True,
-        id="cal-cron",
-        name="Calendar Cron",
-        jobstore=JOBSTORE_MEMORY,
-    )
-    ctx.scheduler.add_job(
-        check_presence,
-        CronTrigger.from_crontab("5 * * * *"),
-        replace_existing=True,
-        id="presence-cron",
-        name="Presence Cron",
-        jobstore=JOBSTORE_MEMORY,
-    )
+    for func, crontab, job_id, name in crons:
+        ctx.scheduler.add_job(
+            func,
+            CronTrigger.from_crontab(crontab),
+            replace_existing=True,
+            id=job_id,
+            name=name,
+            jobstore=JOBSTORE_MEMORY,
+        )
 
 
 def should_skip_for_presence(rule, force, present_names):
@@ -432,7 +438,7 @@ def _safe_ping(name, host):
 
 def _schedule_cal_tasks(scheduler):
     now = local_now()
-    if calculate_theme(now.date()) == config.THEME_WORK_DAY and (now.time().minute in _CALENDAR_CHECK_MINUTES):
+    if now.time().minute in _CALENDAR_CHECK_MINUTES and calculate_theme(now.date()) == config.THEME_WORK_DAY:
         events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))
         warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
         alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
