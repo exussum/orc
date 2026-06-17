@@ -338,6 +338,8 @@ def get_schedule():
                 time = sunset
             else:
                 time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
+            if time is None:
+                continue
             result.append((time.astimezone(config.tz), e))
     return result
 
