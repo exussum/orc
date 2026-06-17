@@ -1,5 +1,5 @@
 import re
-from collections import defaultdict, deque
+from collections import defaultdict, deque, namedtuple as nt
 from dataclasses import KW_ONLY, dataclass, replace
 from datetime import datetime, time
 from enum import Enum
@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Tuple
 
 from apscheduler.schedulers.base import BaseScheduler
 from mistletoe.block_token import Heading, Table
+
+SnapShot = nt("SnapShot", "routine end")
+ThemeOverride = nt("ThemeOverride", "name start end")
 
 if TYPE_CHECKING:
     from orc.api import SnapshotManager

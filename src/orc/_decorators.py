@@ -3,6 +3,16 @@ from functools import wraps
 from orc import model as m
 
 
+def requires_ctx(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if kwargs.get("ctx") is None:
+            raise ValueError("ctx must be injected by the executor")
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
 def synchronized(method):
     @wraps(method)
     def wrapper(self, *args, **kwargs):
