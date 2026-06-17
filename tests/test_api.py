@@ -20,7 +20,7 @@ def snapshot_config():
 @patch("orc.api.execute")
 class TestManagingConfig:
     def setup_method(self):
-        self.target = api.ConfigManager()
+        self.target = api.SnapshotManager()
 
     def test_resume_with_snapshot(self, execute, snapshot_config):
         self.target.snapshot = api.SnapShot(routine=snapshot_config, end=FUTURE)
@@ -43,7 +43,7 @@ class TestManagingConfig:
 @patch("orc.api.lights.update_light")
 class TestRouteRule:
     def setup_method(self):
-        self.target = api.ConfigManager()
+        self.target = api.SnapshotManager()
 
     def test_snapshot_update_overwrite_set(self, update_light, snapshot_config):
         rule = m.Config(set((orc.Light.b,)), config.ON, trigger=m.Trigger.SYSTEM)
@@ -164,27 +164,26 @@ class TestActiveOverride:
 
     @pytest.fixture(autouse=True)
     def _setup(self):
-        self.target = api.ConfigManager()
-        self.target.theme_override = self.OVERRIDE
+        api.set_theme_override(*self.OVERRIDE)
 
     def test_no_override(self):
-        self.target.theme_override = None
-        assert self.target.active_override(date(2026, 1, 5)) is None
+        api.clear_theme_override()
+        assert api.active_theme_override(date(2026, 1, 5)) is None
 
     def test_active_inside_window(self):
-        assert self.target.active_override(date(2026, 1, 5)) == self.OVERRIDE
+        assert api.active_theme_override(date(2026, 1, 5)) == self.OVERRIDE
 
     def test_active_on_start_boundary(self):
-        assert self.target.active_override(date(2026, 1, 1)) == self.OVERRIDE
+        assert api.active_theme_override(date(2026, 1, 1)) == self.OVERRIDE
 
     def test_active_on_end_boundary(self):
-        assert self.target.active_override(date(2026, 1, 10)) == self.OVERRIDE
+        assert api.active_theme_override(date(2026, 1, 10)) == self.OVERRIDE
 
     def test_inactive_before_window(self):
-        assert self.target.active_override(date(2025, 12, 31)) is None
+        assert api.active_theme_override(date(2025, 12, 31)) is None
 
     def test_inactive_after_window(self):
-        assert self.target.active_override(date(2026, 1, 11)) is None
+        assert api.active_theme_override(date(2026, 1, 11)) is None
 
 
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
@@ -196,7 +195,6 @@ class TestGetSchedule:
 
     @pytest.fixture(autouse=True)
     def _setup(self):
-        self.target = api.ConfigManager()
         self.themes = {
             "saturday": self._theme("saturday", "sat-r"),
             "sunday": self._theme("sunday", "sun-r"),
@@ -212,52 +210,52 @@ class TestGetSchedule:
 
     def test_override_wins_over_weekday_named_theme(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
-        self.target.theme_override = api.ThemeOverride("vacation", date(2026, 1, 3), date(2026, 1, 4))
-        assert self._names(api.get_schedule(self.target)) == ["vac-r", "vac-r"]
+        api.set_theme_override("vacation", date(2026, 1, 3), date(2026, 1, 4))
+        assert self._names(api.get_schedule()) == ["vac-r", "vac-r"]
 
     def test_empty_override_clears_weekday_named_theme(self):
         self.themes["empty"] = self._theme("empty")
-        self.target.theme_override = api.ThemeOverride("empty", date(2026, 1, 3), date(2026, 1, 4))
-        assert self._names(api.get_schedule(self.target)) == []
+        api.set_theme_override("empty", date(2026, 1, 3), date(2026, 1, 4))
+        assert self._names(api.get_schedule()) == []
 
     def test_weekday_named_theme_used_when_no_override(self):
-        assert self._names(api.get_schedule(self.target)) == ["sat-r", "sun-r"]
+        assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
 
     def test_falls_back_to_calculate_theme_when_no_weekday_match(self):
         del self.themes["saturday"]
         del self.themes["sunday"]
-        assert self._names(api.get_schedule(self.target)) == ["off-r", "off-r"]
+        assert self._names(api.get_schedule()) == ["off-r", "off-r"]
 
     def test_override_outside_window_does_not_apply(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
-        self.target.theme_override = api.ThemeOverride("vacation", date(2025, 12, 1), date(2025, 12, 31))
-        assert self._names(api.get_schedule(self.target)) == ["sat-r", "sun-r"]
+        api.set_theme_override("vacation", date(2025, 12, 1), date(2025, 12, 31))
+        assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
 
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
 class TestPresence:
     @pytest.fixture(autouse=True)
     def _setup(self):
-        self.target = api.ConfigManager()
-        self.ctx = type("Ctx", (), {"config_manager": self.target})()
+        self.target = api.SnapshotManager()
+        self.ctx = type("Ctx", (), {"snapshot_manager": self.target})()
 
     @staticmethod
     def _routine(name, trigger):
         return m.Routine(name, time(8, 0), (m.Config(orc.Light.a, config.OFF, trigger=trigger),))
 
     def test_mark_and_query(self):
-        assert self.target.present_names == set()
-        api.mark_present(self.target, ["Alice"], when=api.local_now())
-        assert self.target.present_names == {"Alice"}
+        assert api.present_names() == set()
+        api.mark_present(["Alice"], when=api.local_now())
+        assert api.present_names() == {"Alice"}
 
     def test_expire(self):
-        api.mark_present(self.target, ["Alice"], when=api.local_now() - timedelta(minutes=1))
-        api.expire_presence(self.target, ["Alice"])
-        assert self.target.present_names == set()
+        api.mark_present(["Alice"], when=api.local_now() - timedelta(minutes=1))
+        api.expire_presence(["Alice"])
+        assert api.present_names() == set()
 
     def test_stale_entry_outside_12h_window(self):
-        api.mark_present(self.target, ["Alice"], when=datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
-        assert self.target.present_names == set()
+        api.mark_present(["Alice"], when=datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
+        assert api.present_names() == set()
 
     def test_run_iot_job_skips_when_presence_absent(self):
         rule = self._routine("partner-r", "Alice")
@@ -266,7 +264,7 @@ class TestPresence:
         route.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self):
-        api.mark_present(self.target, ["Alice"], when=api.local_now())
+        api.mark_present(["Alice"], when=api.local_now())
         rule = self._routine("partner-r", "Alice")
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
@@ -291,7 +289,7 @@ class TestPresence:
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
-        api.mark_present(self.target, ["Bob"], when=api.local_now())
+        api.mark_present(["Bob"], when=api.local_now())
         rule = self._routine("anyone-r", m.Trigger.ANYONE)
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
@@ -307,16 +305,16 @@ class TestPresence:
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "execute") as execute:
-            api.replay_day(self.target, api.local_now())
+            api.replay_day(api.local_now())
         squished = execute.call_args.args[0]
         assert squished.items == ()
 
     def test_replay_day_runs_routines_for_present_people(self):
-        api.mark_present(self.target, ["Alice"], when=api.local_now())
+        api.mark_present(["Alice"], when=api.local_now())
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "execute") as execute:
-            api.replay_day(self.target, api.local_now())
+            api.replay_day(api.local_now())
         squished = execute.call_args.args[0]
         assert [c.trigger for c in squished.items] == ["Alice"]
 
@@ -330,4 +328,4 @@ class TestPresence:
 
             with patch.object(api.discovery, "ping_host", side_effect=ping):
                 api.check_presence(ctx=self.ctx)
-        assert self.target.present_names == {"Bob"}
+        assert api.present_names() == {"Bob"}

@@ -22,13 +22,13 @@ _SENSOR_EVENT_ACTIVE = "active"
 
 if TYPE_CHECKING:
     from orc import Config as OrcConfig
-    from orc.api import ConfigManager
+    from orc.api import SnapshotManager
     from orc.model import DeviceEnum
 
 
 @dataclass
 class PluginCtx:
-    config_manager: ConfigManager
+    snapshot_manager: SnapshotManager
     Light: type[DeviceEnum]
     Chromecast: type[DeviceEnum]
     TV: type[DeviceEnum]
@@ -51,14 +51,14 @@ def all_lights_on(ctx):
 
 
 def back_on_schedule(ctx):
-    ctx.api.replay_day(ctx.config_manager, ctx.api.local_now())
+    ctx.api.replay_day(ctx.api.local_now())
 
 
-def build_ctx(config_manager, scheduler=None):
+def build_ctx(snapshot_manager, scheduler=None):
     from orc import TV, Chromecast, Light, api, config, model
 
     return PluginCtx(
-        config_manager=config_manager,
+        snapshot_manager=snapshot_manager,
         Light=Light,
         Chromecast=Chromecast,
         TV=TV,
@@ -69,16 +69,16 @@ def build_ctx(config_manager, scheduler=None):
     )
 
 
-def execute_plugin(config_manager, id):
-    ctx = build_ctx(config_manager)
+def execute_plugin(snapshot_manager, id):
+    ctx = build_ctx(snapshot_manager)
     getattr(sys.modules[__name__], ctx.config.plugins[id])(ctx)
 
 
 def light_test(ctx):
     end = ctx.api.local_now() + timedelta(minutes=10)
-    ctx.config_manager.replace_config(ctx.model.Config(ctx.Light, ctx.config.OFF), end)
+    ctx.snapshot_manager.replace_config(ctx.model.Config(ctx.Light, ctx.config.OFF), end)
     ctx.api.light_test()
-    ctx.config_manager.resume(ctx.config.default_config)
+    ctx.snapshot_manager.resume(ctx.config.default_config)
 
 
 def pair_lg_tv(ctx):
@@ -150,12 +150,12 @@ def _each_sound(ctx, action):
 
 @requires_ctx
 def _run_trigger_sensor_off(ctx):
-    plugin_ctx = build_ctx(ctx.config_manager, ctx.scheduler)
+    plugin_ctx = build_ctx(ctx.snapshot_manager, ctx.scheduler)
     log = lambda msg: plugin_ctx.api.log(
         plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, Log.TRIGGER_SENSOR_OFF_PREFIX.format(msg=msg)
     )
 
-    plugin_ctx.api.expire_presence(plugin_ctx.config_manager, list(plugin_ctx.config_manager.presence()))
+    plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
     present = plugin_ctx.api.check_presence(ctx=ctx)
 
     if not present:
