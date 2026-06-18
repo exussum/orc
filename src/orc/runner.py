@@ -64,6 +64,7 @@ def _build_app():
             JOBSTORE_MEMORY: MemoryJobStore(),
         },
         job_defaults={"misfire_grace_time": 30},
+        timezone=config.config.tz,
     )
 
     ctx = m.AppContext(
