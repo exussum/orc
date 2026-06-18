@@ -1,6 +1,20 @@
+import contextlib
+import os
 from functools import wraps
 
 from orc import model as m
+
+
+@contextlib.contextmanager
+def silence_fd(fd):
+    saved = os.dup(fd)
+    with open(os.devnull, "w") as devnull:
+        os.dup2(devnull.fileno(), fd)
+        try:
+            yield
+        finally:
+            os.dup2(saved, fd)
+            os.close(saved)
 
 
 def requires_ctx(f):
