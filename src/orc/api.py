@@ -16,14 +16,13 @@ import pygame
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from piper import PiperVoice
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
 import orc
 from orc import config
 from orc import model as m
-from orc._decorators import requires_ctx, synchronized, unwrap_rule_container
+from orc._decorators import requires_ctx, silence_fd, synchronized, unwrap_rule_container
 from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
@@ -42,7 +41,10 @@ _CALENDAR_CHECK_MINUTES = (55, 10, 25, 40)
 
 _MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
-_VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
+with silence_fd(2):
+    from piper import PiperVoice
+
+    _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
 
 _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
@@ -284,9 +286,6 @@ def apply_theme_change(ctx, name, start, end):
         replay_day(now)
 
 
-# --- Scheduling & job handlers ---
-
-
 @requires_ctx
 def check_presence(ctx):
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
@@ -382,7 +381,7 @@ def setup_scheduler(ctx):
     for func, crontab, job_id, name in crons:
         ctx.scheduler.add_job(
             func,
-            CronTrigger.from_crontab(crontab),
+            CronTrigger.from_crontab(crontab, timezone=config.tz),
             replace_existing=True,
             id=job_id,
             name=name,
@@ -413,7 +412,7 @@ def _rebuild_iot_schedule(ctx):
         if now <= time:
             ctx.scheduler.add_job(
                 run_iot_job,
-                DateTrigger(time),
+                DateTrigger(time, timezone=config.tz),
                 args=[m.IotJob(rule)],
                 name=rule.name,
                 id=f"iot-{rule.name}-{time.date().isoformat()}",
@@ -454,17 +453,13 @@ def _schedule_cal_tasks(scheduler):
         for id, event in calendar_by_id.items():
             scheduler.add_job(
                 _run_cal_job,
-                DateTrigger(event.datetime),
+                DateTrigger(event.datetime, timezone=config.tz),
                 args=[m.CalendarJob(event.type, event.summary)],
                 replace_existing=True,
                 id=id,
                 name=event.summary,
                 jobstore=JOBSTORE_MEMORY,
             )
-
-
-# --- Manual triggers / replay ---
-
 
 def light_test():
     execute(m.Config(orc.Light, config.ON))
