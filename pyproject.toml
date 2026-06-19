@@ -8,13 +8,13 @@ requires = [
 dependencies = [
     "APScheduler==3.11.2",
     "Flask==3.1.3",
-    "SQLAlchemy==2.0.50",
+    "SQLAlchemy==2.0.51",
     "aiowebostv==0.7.5",
     "skyfield==1.54",
     "bitwarden-sdk==2.1.0",
     "getmac==0.9.5",
     "gunicorn==26.0.0",
-    "icalendar==7.1.2",
+    "icalendar==7.1.3",
     "icmplib==3.0.4",
     "mistletoe==1.5.1",
     "orc_data==0.0.1",
@@ -32,7 +32,7 @@ version = "0.0.1"
 [project.optional-dependencies]
 test = [
     "freezegun==1.5.5",
-    "pytest==9.0.3",
+    "pytest==9.1.0",
 ]
 lint = [
     "black==26.5.1",
