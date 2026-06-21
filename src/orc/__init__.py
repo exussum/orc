@@ -13,6 +13,8 @@ class Config:
     FOLLOW = "follow"
     THEME_WORK_DAY = "work day"
     THEME_DAY_OFF = "day off"
+    AUDIO_INFO = "INFO"
+    AUDIO_FATAL = "FATAL"
 
     def __init__(self):
         self.orc_config = os.getenv("ORC_CONFIG", "src/config.md")
@@ -51,6 +53,7 @@ class Config:
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=self.OFF)
         self.button_highlight_configs = m.build_highlights(doc, "Button Highlights")
         self.durations = m.build_durations(doc, "Durations")
+        self.audio_volumes = m.build_audio_volumes(doc, "Audio Volumes", required=(self.AUDIO_INFO, self.AUDIO_FATAL))
         self.default_config = self.room_configs["Living Room"]
         self.reset_config = m.squish_configs(m.Configs(*(i for i in self.schedule_routines["Reset"].items if i.what is not TV)))
 
