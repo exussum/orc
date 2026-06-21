@@ -169,6 +169,22 @@ def build_config(doc, section, light, chromecast, tv, required=()):
     return result
 
 
+def build_audio_volumes(doc, section, required):
+    rows = doc_to_table(doc, section, 2)
+
+    def _valid(s):
+        return s is not None and s.isdigit() and 0 <= int(s) <= 100
+
+    invalid = [(name, s) for (name, s) in rows if not _valid(s)]
+    if invalid:
+        details = ", ".join(f"'{s}' in '{n}'" for n, s in invalid)
+        raise ValueError(f"Invalid volume values in section '{section}': {details}")
+    result = {name: int(s) for name, s in rows}
+    if missing := set(required) - result.keys():
+        raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
+    return result
+
+
 def build_durations(doc, section):
     rows = doc_to_table(doc, section, 2)
 

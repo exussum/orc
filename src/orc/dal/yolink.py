@@ -5,6 +5,7 @@ import os
 import signal
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -265,7 +266,7 @@ def _run():
 
             client = mqtt.Client(
                 mqtt.CallbackAPIVersion.VERSION2,
-                client_id=f"orc-{config.config.secrets.yolink_id}",
+                client_id=str(uuid.uuid4()),
                 userdata={"home_id": home_id},
             )
             client.username_pw_set(access_token, "")
