@@ -27,6 +27,8 @@ def fetch_secrets():
         access_token="?access_token=" + get_secret("HUBITAT_ACCESS_TOKEN"),
         market_holidays_url=get_secret("MARKET_HOLIDAYS_URL"),
         ics_url=get_secret("ICS_URL"),
+        yolink_id=get_secret("YOLINK_ID"),
+        yolink_secret=get_secret("YOLINK_SECRET"),
     )
 
 

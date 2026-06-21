@@ -30,6 +30,18 @@ class LockedDict:
             self._data[key] = value
             return value
 
+    def update(self, key, fn):
+        with self._lock:
+            new = fn(self._data.get(key))
+            if new is None:
+                return None
+            self._data[key] = new
+            return new
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+
     def copy(self):
         with self._lock:
             return dict(self._data)

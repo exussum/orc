@@ -23,7 +23,7 @@ import orc
 from orc import config
 from orc import model as m
 from orc._decorators import requires_ctx, silence_fd, synchronized, unwrap_rule_container
-from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv
+from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv, yolink
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
@@ -91,6 +91,52 @@ def log_entries():
     return list(_ACTIVITY_LOG.entries)
 
 
+# --- YoLink leak sensors ---
+
+
+def test_yolink(name):
+    return yolink.simulate_transition(name)
+
+
+_YOLINK_BATTERY_LOW_THRESHOLD = 1
+_YOLINK_SIGNAL_WEAK_THRESHOLD = -90
+
+
+def _on_yolink_transition(name, kind, old, new):
+    msg = None
+    if kind == "connection":
+        msg = (Log.YOLINK_CONNECTED if new == "connected" else Log.YOLINK_DISCONNECTED).format(name=name)
+    elif kind == "leak" and new in (yolink.STATE_WET, yolink.STATE_DRY):
+        msg = (Log.YOLINK_WATER_DETECTED if new == yolink.STATE_WET else Log.YOLINK_WATER_CLEARED).format(name=name)
+    elif kind == "battery":
+        old_low = old is not None and old <= _YOLINK_BATTERY_LOW_THRESHOLD
+        new_low = new <= _YOLINK_BATTERY_LOW_THRESHOLD
+        if new_low and not old_low:
+            msg = Log.YOLINK_LOW_BATTERY.format(name=name, battery=new)
+        elif old_low and not new_low:
+            msg = Log.YOLINK_BATTERY_RESTORED.format(name=name, battery=new)
+    elif kind == "signal":
+        old_weak = old is not None and old <= _YOLINK_SIGNAL_WEAK_THRESHOLD
+        new_weak = new <= _YOLINK_SIGNAL_WEAK_THRESHOLD
+        if new_weak and not old_weak:
+            msg = Log.YOLINK_WEAK_SIGNAL.format(name=name, signal=new)
+        elif old_weak and not new_weak:
+            msg = Log.YOLINK_SIGNAL_RESTORED.format(name=name, signal=new)
+    elif kind == "interval" and old is not None:
+        msg = Log.YOLINK_INTERVAL_CHANGED.format(name=name, interval=new)
+    elif kind == "online" and old is not None:
+        msg = (Log.YOLINK_ONLINE if new else Log.YOLINK_OFFLINE).format(name=name)
+
+    if msg:
+        log(local_now(), m.LogSource.IOT, msg)
+        play_text(msg)
+
+
+def start_yolink():
+    yolink.set_transition_callback(_on_yolink_transition)
+    yolink.start()
+
+
 # --- Device control & audio ---
 
 
@@ -101,6 +147,10 @@ def capture_lights():
 def capture_sounds():
     with Pool(max_workers=len(orc.Chromecast)) as ex:
         return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
+
+
+def capture_leak_sensors():
+    return yolink.snapshot()
 
 
 @unwrap_rule_container
@@ -125,10 +175,7 @@ def execute(rule):
                 chromecast.stop(w)
             else:
                 if rule.state not in stream:
-                    if "http" in rule.state:
-                        stream[rule.state] = (rule.state, rule.state)
-                    else:
-                        stream[rule.state] = chromecast.fetch_youtube_stream_metadata(rule.state)
+                    stream[rule.state] = (rule.state, rule.state) if "http" in rule.state else chromecast.fetch_youtube_stream_metadata(rule.state)
                 chromecast.play(w, *stream[rule.state])
         elif isinstance(w, orc.TV):
             if rule.state == config.ON:
@@ -142,12 +189,15 @@ def execute(rule):
         sleep(0.1)
 
 
-def play_alert(path):
+def _play_pygame_sound(source):
     pygame.mixer.init()
-    sound = pygame.mixer.Sound(path)
-    playing = sound.play()
+    playing = pygame.mixer.Sound(source).play()
     while playing.get_busy():
         pygame.time.delay(100)
+
+
+def play_alert(path):
+    _play_pygame_sound(path)
 
 
 def play_text(text):
@@ -159,11 +209,7 @@ def play_text(text):
         for audio_bytes in _VOICE.synthesize(text):
             fh.writeframes(audio_bytes.audio_int16_bytes)
     buf.seek(0)
-
-    pygame.mixer.init()
-    playing = pygame.mixer.Sound(buf).play()
-    while playing.get_busy():
-        pygame.time.delay(100)
+    _play_pygame_sound(buf)
 
 
 # --- State manager ---
@@ -206,14 +252,13 @@ class SnapshotManager:
     @synchronized
     @unwrap_rule_container
     def route_rule(self, rule, force):
-        if rule.trigger == m.Trigger.SYSTEM and self.snapshot:
+        if self.snapshot and rule.trigger == m.Trigger.SYSTEM:
             self.update_snapshot(rule)
-            execute(rule)
         elif self.snapshot and local_now() > self.snapshot.end:
             self.snapshot = None
-            execute(rule)
-        elif not self.snapshot or force:
-            execute(rule)
+        elif self.snapshot and not force:
+            return
+        execute(rule)
 
 
 def current_theme_override():
@@ -221,31 +266,22 @@ def current_theme_override():
     if not row:
         return None
     override = m.ThemeOverride(*row)
-    if override.end < local_now().date():
-        return None
-    return override
+    return override if override.end >= local_now().date() else None
 
 
 def active_theme_override(today):
     cur = current_theme_override()
-    if cur and cur.start <= today <= cur.end:
-        return cur
-    return None
+    return cur if cur and cur.start <= today <= cur.end else None
 
 
 def calculate_theme(today):
     if override := active_theme_override(today):
         return override.name
-
-    if today.weekday() not in (5, 6):
-        today_iso = today.strftime("%Y-%m-%d")
-        holidays = feeds.fetch_holidays(today.year)
-        return (
-            config.THEME_DAY_OFF
-            if next((e for e in holidays if e["date"] == today_iso and e["exchange"] == "NYSE"), None)
-            else config.THEME_WORK_DAY
-        )
-    return config.THEME_DAY_OFF
+    if today.weekday() in (5, 6):
+        return config.THEME_DAY_OFF
+    today_iso = today.strftime("%Y-%m-%d")
+    is_holiday = any(e["date"] == today_iso and e["exchange"] == "NYSE" for e in feeds.fetch_holidays(today.year))
+    return config.THEME_DAY_OFF if is_holiday else config.THEME_WORK_DAY
 
 
 def set_theme_override(name, start, end):

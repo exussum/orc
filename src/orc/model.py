@@ -137,6 +137,8 @@ class Secrets:
     access_token: str
     market_holidays_url: str
     ics_url: str
+    yolink_id: str
+    yolink_secret: str
 
 
 @dataclass
@@ -184,8 +186,8 @@ def build_durations(doc, section):
 
 
 def build_enum(doc, section, sub_section, id_lookup=None):
-    if sub_section not in ("Light", "Chromecast", "TV"):
-        raise ValueError(f"sub_section must be 'Light', 'Chromecast', or 'TV', got '{sub_section}'")
+    if sub_section not in ("Light", "Chromecast", "TV", "Leak"):
+        raise ValueError(f"sub_section must be 'Light', 'Chromecast', 'TV', or 'Leak', got '{sub_section}'")
 
     sub_table = next(
         (sub_table for (type, sub_table) in doc_to_sub_tables(doc, section, 3) if type == sub_section),
