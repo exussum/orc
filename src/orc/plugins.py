@@ -103,7 +103,7 @@ def sound_test(ctx):
     url = f"{base}static/alert.mp3"
     ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Chromecast, url)))
     ctx.api.play_text("audio test")
-    ctx.api.play_alert(str(Path(__file__).parent / "static" / "alert.mp3"))
+    ctx.api.play_alert(str(Path(__file__).parent / "static" / "alert.wav"))
 
 
 def trigger_sensor(ctx, device_id, event):
