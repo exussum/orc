@@ -75,6 +75,7 @@ def _build_app():
     scheduler.start(paused=True)
 
     api.setup_scheduler(ctx)
+    api.start_yolink()
 
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
