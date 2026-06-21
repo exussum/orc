@@ -10,32 +10,30 @@
                 </div>
             </div>
             {% endif %}
-            <div class="card mb-1">
-                <div class="card-body table-responsive">
-                    <table class="table mb-0">
+            <div class="orc-card mb-2">
+                <div class="p-4 overflow-x-auto">
+                    <table class="w-full table-fixed text-left mb-0">
                         {% if ns.prev_day is none %}
                         <tr>
-                            <th class="col-1">Run</th>
-                            <th class="col-1">Enabled</th>
-                            <th>Job</th>
-                            <th>When</th>
+                            <th class="px-2 py-1 font-normal w-16">Run</th>
+                            <th class="px-2 py-1 font-normal w-16">Enabled</th>
+                            <th class="px-2 py-1 font-normal w-64">Job</th>
+                            <th class="px-2 py-1 font-normal">When</th>
                         </tr>
                         {% endif %}
         {% endif %}
                         <tr>
-                            <td class="col-1">
-                                <button class="btn {{ 'btn-secondary' if absent else 'btn-primary' }} orc-runner" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;</button>
+                            <td class="px-2 py-3 align-middle w-16">
+                                <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;</button>
                             </td>
-                            <td class="col-1">
-                                <div class="form-group">
-                                    <div class="custom-control custom-switch">
-                                        <input type="checkbox" class="custom-control-input orc-enable" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
-                                        <label class="custom-control-label" for="enable-{{ job.id }}"></label>
-                                    </div>
-                                </div>
+                            <td class="px-2 py-3 align-middle w-16">
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" class="orc-enable sr-only peer" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
+                                    <div class="orc-switch"></div>
+                                </label>
                             </td>
-                            <td>{{ job.name }}</td>
-                            <td>{{ day.strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
+                            <td class="px-2 py-3 align-middle w-64">{{ job.name }}</td>
+                            <td class="px-2 py-3 align-middle">{{ day.strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
                         </tr>
         {% set ns.prev_day = day %}
     {% endfor %}
@@ -46,14 +44,14 @@
     {% endif %}
 {% endblock %}
 {% block menu_links %}
-    <div class="nav">
+    <div class="flex">
         <form>
             <div id="orc-theme-form-elements">
                 <div>
                     <label for="orc-theme-select">Theme:</label>
                 </div>
                 <div>
-                    <select name="theme" class="form-control orc-theme-changer" id="orc-theme-select">
+                    <select name="theme" class="orc-input orc-theme-changer" id="orc-theme-select">
                         <option value="">default</option>
                         <option value="away">away</option>
                         <option value="babysitter">babysitter</option>
@@ -62,19 +60,19 @@
                     </select>
                 </div>
                 <div>
-                    <input id="orc-theme-submit" type="button" class="btn btn-primary" value="⏎" onClick="set_theme()" />
+                    <input id="orc-theme-submit" type="button" class="orc-btn w-full" value="⏎" onClick="set_theme()" />
                 </div>
                 <div class="orc-theme-schedule">
                     <label>Start</label>
                 </div>
                 <div class="orc-theme-schedule orc-theme-form-date-input">
-                    <input type="date" value="{{ theme.start }}" name="start" class="form-control orc-theme-changer" id="orc-theme-select-start" />
+                    <input type="date" value="{{ theme.start }}" name="start" class="orc-input orc-theme-changer" id="orc-theme-select-start" />
                 </div>
                 <div class="orc-theme-schedule">
                     <label>End</label>
                 </div>
                 <div class="orc-theme-schedule orc-theme-form-date-input">
-                    <input type="date" value="{{ theme.end }}" name="end" class="form-control orc-theme-changer" id="orc-theme-select-end" />
+                    <input type="date" value="{{ theme.end }}" name="end" class="orc-input orc-theme-changer" id="orc-theme-select-end" />
                 </div>
             </div>
         </form>
