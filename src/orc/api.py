@@ -217,25 +217,20 @@ def _play_stream(chunks, channels, rate, gain):
         pa.terminate()
 
 
-def _wav_chunks(path):
-    with wave.open(path, "rb") as wf:
-        channels, rate = wf.getnchannels(), wf.getframerate()
-        chunks = iter(lambda: wf.readframes(4096), b"")
-        yield channels, rate
-        yield from chunks
+def _gain_for(level):
+    return config.audio_volumes[level or config.AUDIO_INFO] / 100.0
 
 
 def play_alert(path, level=None):
-    gain = config.audio_volumes[level or config.AUDIO_INFO] / 100.0
-    stream = _wav_chunks(path)
-    channels, rate = next(stream)
-    _play_stream(stream, channels, rate, gain)
+    with wave.open(path, "rb") as wf:
+        channels, rate = wf.getnchannels(), wf.getframerate()
+        chunks = iter(lambda: wf.readframes(4096), b"")
+        _play_stream(chunks, channels, rate, _gain_for(level))
 
 
 def play_text(text, level=None):
-    gain = config.audio_volumes[level or config.AUDIO_INFO] / 100.0
     chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
-    _play_stream(chunks, 1, _VOICE.config.sample_rate, gain)
+    _play_stream(chunks, 1, _VOICE.config.sample_rate, _gain_for(level))
 
 
 # --- State manager ---
