@@ -76,7 +76,7 @@
             {% if next_routine %}
                 <div class="orc-button-next">
                     <div>
-                        <div><b>{{ next_routine.name }}</b></div>
+                        <div>{{ next_routine.name }}</div>
                         <div>At: {{ next_routine.trigger.run_date.time().strftime("%I:%M %p") }}</div>
                     </div>
                     <button class="orc-btn orc-pause" data-type="console" data-id="{{ next_routine.id }}">Skip</button>
