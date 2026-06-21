@@ -69,6 +69,12 @@ async function checkVersion() {
     }
 }
 
+document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {
+    const menu = document.getElementById("admin-navbar-collapse");
+    const open = menu.classList.toggle("hidden");
+    e.currentTarget.setAttribute("aria-expanded", String(!open));
+});
+
 if (window.matchMedia("(display-mode: standalone)").matches) window.resizeTo(400, 670);
 
 if (!performance.getEntriesByType("navigation")[0]?.transferSize) window.addEventListener("load", checkVersion);

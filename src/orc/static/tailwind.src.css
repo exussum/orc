@@ -1,0 +1,261 @@
+@import "tailwindcss";
+
+@source "../templates";
+@source "./*.js";
+
+@theme {
+    --color-orc-bg: #1a1a1a;
+    --color-orc-border: #282828;
+    --color-orc-primary: #2a9fd6;
+    --color-orc-primary-hover: #2387b7;
+    --color-orc-primary-hover-border: #2180ac;
+    --color-orc-primary-active: #2180ac;
+    --color-orc-primary-active-border: #1f78a1;
+    --color-orc-secondary: #555;
+    --color-orc-secondary-hover: #424242;
+    --color-orc-secondary-hover-border: #3c3b3b;
+    --color-orc-secondary-active: #3c3b3b;
+    --color-orc-secondary-active-border: #353535;
+    --color-orc-remote: #9933cc;
+    --color-orc-system: #ff8800;
+    --color-orc-iot: #adafae;
+}
+
+@utility orc-card {
+    @apply rounded border;
+    background-color: var(--color-orc-bg);
+    border-color: var(--color-orc-border);
+}
+
+@utility orc-btn {
+    --orc-btn-color: var(--color-orc-primary);
+    --orc-btn-color-hover: var(--color-orc-primary-hover);
+    --orc-btn-color-hover-border: var(--color-orc-primary-hover-border);
+    --orc-btn-color-active: var(--color-orc-primary-active);
+    --orc-btn-color-active-border: var(--color-orc-primary-active-border);
+    --orc-btn-focus-ring: rgba(74, 173, 220, 0.5);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--orc-btn-color);
+    border-radius: 0.25rem;
+    color: #fff;
+    font-weight: 400;
+    background-color: var(--orc-btn-color);
+    height: 38px;
+    line-height: 1.5;
+    transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+    &:hover {
+        background-color: var(--orc-btn-color-hover);
+        border-color: var(--orc-btn-color-hover-border);
+    }
+    &:focus {
+        outline: 0;
+        box-shadow: 0 0 0 0.2rem var(--orc-btn-focus-ring);
+    }
+    &:active {
+        background-color: var(--orc-btn-color-active);
+        border-color: var(--orc-btn-color-active-border);
+    }
+    &:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+    }
+}
+
+@utility orc-btn-absent {
+    --orc-btn-color: var(--color-orc-secondary);
+    --orc-btn-color-hover: var(--color-orc-secondary-hover);
+    --orc-btn-color-hover-border: var(--color-orc-secondary-hover-border);
+    --orc-btn-color-active: var(--color-orc-secondary-active);
+    --orc-btn-color-active-border: var(--color-orc-secondary-active-border);
+    --orc-btn-focus-ring: rgba(111, 111, 111, 0.5);
+}
+
+@utility orc-badge-calendar {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-semibold text-white;
+    background-color: var(--color-orc-secondary);
+}
+
+@utility orc-badge-iot {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-semibold text-white;
+    background-color: var(--color-orc-iot);
+}
+
+@utility orc-badge-remote {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-semibold text-white;
+    background-color: var(--color-orc-remote);
+}
+
+@utility orc-badge-system {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-semibold text-white;
+    background-color: var(--color-orc-system);
+}
+
+@utility orc-badge-manual {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-semibold text-white;
+    background-color: var(--color-orc-primary);
+}
+
+@utility orc-input {
+    @apply block w-full px-2 py-1.5 rounded text-white;
+    background-color: var(--color-orc-bg);
+    border: 1px solid var(--color-orc-border);
+    height: 38px;
+    line-height: 1.5;
+}
+
+@utility orc-navbar {
+    background-color: var(--color-orc-bg);
+    border: 1px solid var(--color-orc-border);
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+@utility orc-input-filtered {
+    display: none;
+}
+
+@utility orc-room-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+@utility orc-routine-buttons {
+    display: flex;
+    overflow: auto;
+    justify-content: space-between;
+}
+
+@utility orc-button {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    text-align: center;
+}
+
+@utility orc-button-label {
+    height: 2lh;
+    font-size: 10px;
+    width: 70px;
+    margin-bottom: 5px;
+    display: flex;
+    flex-flow: column-reverse;
+}
+
+@utility orc-theme-form-date-input {
+    grid-column-start: 2;
+    grid-column-end: 4;
+}
+
+@utility orc-button-next {
+    display: flex;
+    gap: 10px;
+}
+
+@utility orc-overflow {
+    overflow: visible;
+}
+
+@utility orc-ribbon {
+    height: 28px;
+    width: 28px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: none;
+}
+
+@utility orc-runner {
+    position: relative;
+}
+
+@utility orc-nav-link {
+    display: block;
+    padding: 0.25rem 0.5rem;
+    color: rgb(255 255 255 / 0.7);
+    &:hover {
+        color: white;
+    }
+    &.active {
+        color: white;
+        font-weight: 600;
+    }
+}
+
+@utility orc-accordion-summary {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    color: var(--color-orc-primary);
+    font-size: 1.125rem;
+    font-weight: 600;
+    &:hover {
+        color: var(--color-orc-primary-hover);
+    }
+}
+
+@utility orc-dropdown-item {
+    display: block;
+    padding: 0.375rem 0.75rem;
+    color: white;
+    &:hover {
+        background-color: rgb(255 255 255 / 0.1);
+    }
+}
+
+@utility orc-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 1090;
+}
+
+/* dropup variant of <details> — menu pops above the summary */
+@utility orc-dropup {
+    position: relative;
+    & > .orc-dropdown-menu {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        min-width: 10rem;
+        margin-bottom: 4px;
+        background-color: var(--color-orc-bg);
+        border: 1px solid var(--color-orc-border);
+        border-radius: 4px;
+        padding: 4px 0;
+        z-index: 1000;
+    }
+}
+
+@utility orc-switch {
+    @apply relative w-9 h-5 bg-orc-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orc-primary/30 peer-checked:bg-orc-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all;
+}
+
+@layer components {
+    div#orc-theme-form-elements {
+        display: grid;
+        grid-template-columns: 2fr 2fr 1fr;
+        background-color: transparent;
+        gap: 4px;
+    }
+
+    div#orc-config td {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    div#orc-config th {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+}
