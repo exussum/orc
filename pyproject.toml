@@ -21,7 +21,7 @@ dependencies = [
     "piper-tts==1.4.2",
     "pychromecast==14.0.10",
     "paho-mqtt==2.1.0",
-    "pygame==2.6.1",
+    "pyaudio==0.2.14",
     "recurring-ical-events==3.8.2",
     "requests==2.34.2",
     "wakeonlan==3.3.0",
@@ -60,7 +60,6 @@ known_third_party = ["apscheduler"]
 minversion = "9.0"
 pythonpath = [ "src", "data/src" ]
 testpaths = [ "tests" ]
-filterwarnings = "ignore::UserWarning:pygame"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/orc"]
