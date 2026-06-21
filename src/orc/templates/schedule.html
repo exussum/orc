@@ -1,34 +1,49 @@
 {% extends 'base.html' %}
 {% block body %}
-    <table class="table">
-        <tr>
-            <th class="col-1">Run</th>
-            <th class="col-1">Enabled</th>
-            <th>Job</th>
-            <th>When</th>
-        </tr>
-        {% set ns = namespace(prev_day=None) %}
-        {% for job in jobs %}
-            {% set day = job.trigger.run_date.date() %}
-            {% set absent = absent_by_job[job.id] %}
-            <tr {% if ns.prev_day is not none and day != ns.prev_day %}class="orc-day-break"{% endif %}>
-                <td class="col-1">
-                    <button class="btn {{ 'btn-secondary' if absent else 'btn-primary' }} orc-runner" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;</button>
-                </td>
-                <td class="col-1">
-                    <div class="form-group">
-                        <div class="custom-control custom-switch">
-                            <input type="checkbox" class="custom-control-input orc-enable" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
-                            <label class="custom-control-label" for="enable-{{ job.id }}"></label>
-                        </div>
-                    </div>
-                </td>
-                <td>{{ job.name }}</td>
-                <td>{{ day.strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
-            </tr>
-            {% set ns.prev_day = day %}
-        {% endfor %}
-    </table>
+    {% set ns = namespace(prev_day=None) %}
+    {% for job in jobs %}
+        {% set day = job.trigger.run_date.date() %}
+        {% set absent = absent_by_job[job.id] %}
+        {% if day != ns.prev_day %}
+            {% if ns.prev_day is not none %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+            <div class="card mb-1">
+                <div class="card-body table-responsive">
+                    <table class="table mb-0">
+                        {% if ns.prev_day is none %}
+                        <tr>
+                            <th class="col-1">Run</th>
+                            <th class="col-1">Enabled</th>
+                            <th>Job</th>
+                            <th>When</th>
+                        </tr>
+                        {% endif %}
+        {% endif %}
+                        <tr>
+                            <td class="col-1">
+                                <button class="btn {{ 'btn-secondary' if absent else 'btn-primary' }} orc-runner" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;</button>
+                            </td>
+                            <td class="col-1">
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input orc-enable" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
+                                        <label class="custom-control-label" for="enable-{{ job.id }}"></label>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>{{ job.name }}</td>
+                            <td>{{ day.strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
+                        </tr>
+        {% set ns.prev_day = day %}
+    {% endfor %}
+    {% if ns.prev_day is not none %}
+                    </table>
+                </div>
+            </div>
+    {% endif %}
 {% endblock %}
 {% block menu_links %}
     <div class="nav">
