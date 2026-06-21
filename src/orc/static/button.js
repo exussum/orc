@@ -3,22 +3,12 @@ async function run(el) {
     await call(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
 }
 
-const expertRoutines = ["Light Test", "Sound Test", "Restore Snapshot", "Video Conference", "Pair LG TV"];
-const isPowerUser = localStorage.getItem("isPowerUser");
-
 document.querySelectorAll(".orc-runner").forEach((el) => {
     el.addEventListener("click", (e) => run(e.currentTarget));
 });
 
 document.querySelector(".orc-pause")?.addEventListener("click", (e) => {
     call(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).finally(() => location.reload());
-});
-
-document.querySelectorAll(".orc-button").forEach((el) => {
-    const dataSelector = el.querySelector(".orc-runner");
-    if (isPowerUser !== "true" && expertRoutines.includes(dataSelector.getAttribute("data-id"))) {
-        el.classList.add("orc-input-filtered");
-    }
 });
 
 const highlight_configs = window.orcHighlightConfigs.map(([name, start, end]) => [
