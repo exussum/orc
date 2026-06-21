@@ -34,14 +34,14 @@
         </div>
         {% block page_body %}
             <div class="container vh-100">
-                <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-2" role="navigation">
+                <nav class="navbar navbar-expand-lg navbar-dark orc-navbar mt-1 mb-1" role="navigation">
                     <!-- Brand and toggle get grouped for better mobile display -->
+                    <div class="navbar-brand">ORChestration</div>
                     <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#admin-navbar-collapse" aria-controls="admin-navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
                         <span class="navbar-toggler-icon"></span>
                     </button>
                     <!-- navbar content -->
                     <div class="collapse navbar-collapse" id="admin-navbar-collapse">
-                        <div class="navbar-brand">ORChestration</div>
                         <ul class="nav navbar-nav mr-auto">
                             <li><a class="nav-link {% if request.url_rule.endpoint == "button.index" %}active{% endif %}" href="/">Remote</a></li>
                             <li><a class="nav-link {% if request.url_rule.endpoint == "button.schedule" %}active{% endif %}" href="/schedule/">Schedule</a></li>

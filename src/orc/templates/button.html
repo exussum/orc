@@ -1,62 +1,65 @@
 {% extends 'base.html' %}
 {% block body %}
-    <div class="orc-room-buttons">
-        {% for id in room_configs %}
-            <div>{{ id }}</div>
-            <div class="orc-button">
-                <button class="orc-runner btn btn-primary" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                    <i class="bi bi-lightbulb-fill"></i>
-                </button>
-            </div>
-            <div class="orc-button">
-                <button class="orc-runner btn btn-primary" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                    <i class="bi bi-lightbulb-off"></i>
-                </button>
-            </div>
-            <div class="orc-button">
-                <button class="orc-runner btn btn-primary" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                    <i class="bi bi-geo"></i>
-                </button>
-            </div>
-        {% endfor %}
-    </div>
-    <hr class="hr orc-hr" />
-    <div>
-        <div><b>Theme</b></div>
-        <div class="orc-routine-buttons">
-            {% for id in ad_hoc_routines %}
+    <div class="card mb-1">
+        <div class="orc-room-buttons card-body">
+            {% for id in room_configs %}
+                <div>{{ id }}</div>
                 <div class="orc-button">
-                    <div class="orc-button-label">{{ id }}</div>
-                    <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                        <svg class="orc-ribbon">
-                            <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
-                        </svg>
-                        <i class="bi bi-clipboard-check"></i>
+                    <button class="orc-runner btn btn-primary" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                        <i class="bi bi-lightbulb-fill"></i>
+                    </button>
+                </div>
+                <div class="orc-button">
+                    <button class="orc-runner btn btn-primary" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                        <i class="bi bi-lightbulb-off"></i>
+                    </button>
+                </div>
+                <div class="orc-button">
+                    <button class="orc-runner btn btn-primary" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                        <i class="bi bi-geo"></i>
                     </button>
                 </div>
             {% endfor %}
         </div>
     </div>
-    <hr class="hr orc-hr" />
-    <div>
-        <div><b>Plugin</b></div>
-        <div class="orc-routine-buttons">
-            {% for id in plugins %}
-                <div class="orc-button">
-                    <div class="orc-button-label">{{ id }}</div>
-                    <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                        <svg height="28" width="28" class="orc-ribbon">
-                            <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
-                        </svg>
-                        <i class="bi bi-rocket-takeoff"></i>
-                    </button>
-                </div>
-            {% endfor %}
+    <div class="card mb-1">
+        <div class="card-body">
+            <h6 class="card-title">Theme</h6>
+            <div class="orc-routine-buttons">
+                {% for id in ad_hoc_routines %}
+                    <div class="orc-button">
+                        <div class="orc-button-label">{{ id }}</div>
+                        <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                            <svg class="orc-ribbon">
+                                <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
+                            </svg>
+                            <i class="bi bi-clipboard-check"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
         </div>
     </div>
-    <hr class="hr orc-hr" />
-    <div class="orc-power-user">
-        <div class="orc-routine-buttons orc-overflow">
+    <div class="card mb-1">
+        <div class="card-body">
+            <h6 class="card-title">Plugin</h6>
+            <div class="orc-routine-buttons">
+                {% for id in plugins %}
+                    <div class="orc-button">
+                        <div class="orc-button-label">{{ id }}</div>
+                        <button class="orc-runner btn btn-primary" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                            <svg height="28" width="28" class="orc-ribbon">
+                                <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
+                            </svg>
+                            <i class="bi bi-rocket-takeoff"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="orc-power-user card mb-1">
+        <div class="orc-routine-buttons orc-overflow card-body">
             <div>
                 <div class="btn-group dropup">
                     <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Routines</button>
