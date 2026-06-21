@@ -1,31 +1,31 @@
 {% extends 'base.html' %}
 {% block body %}
-    <div class="card mb-1">
-        <div class="card-body table-responsive">
-            <table class="table mb-0">
+    <div class="orc-card mb-2">
+        <div class="p-4 overflow-x-auto">
+            <table class="w-full text-left mb-0">
                 <tr>
-                    <th>Name</th>
-                    <th>Hostname</th>
-                    <th>Status</th>
-                    <th>Last Seen</th>
-                    <th></th>
+                    <th class="px-2 py-1 font-normal">Name</th>
+                    <th class="px-2 py-1 font-normal">Hostname</th>
+                    <th class="px-2 py-1 font-normal">Status</th>
+                    <th class="px-2 py-1 font-normal">Last Seen</th>
+                    <th class="px-2 py-1 font-normal"></th>
                 </tr>
                 {% for row in rows %}
                     <tr>
-                        <td>{{ row.name }}</td>
-                        <td>
+                        <td class="px-2 py-1">{{ row.name }}</td>
+                        <td class="px-2 py-1">
                             {% for hostname in row.hostnames %}
                                 {{ hostname[:-(strip_suffix|length)] if strip_suffix and hostname.endswith(strip_suffix) else hostname }}
                                 <br>
                             {% endfor %}
                         </td>
-                        <td>{{ 'present' if row.present else 'absent' }}</td>
-                        <td>{% if row.last_seen %}{{ row.last_seen.strftime("%m/%d") }} {{ row.last_seen.time().strftime("%I:%M %p") }}{% endif %}</td>
-                        <td>
+                        <td class="px-2 py-1">{{ 'present' if row.present else 'absent' }}</td>
+                        <td class="px-2 py-1">{% if row.last_seen %}{{ row.last_seen.strftime("%m/%d") }} {{ row.last_seen.time().strftime("%I:%M %p") }}{% else %}—{% endif %}</td>
+                        <td class="px-2 py-1">
                             {% if row.present %}
-                                <button class="btn btn-primary orc-expire" data-name="{{ row.name }}">Expire</button>
+                                <button class="orc-btn orc-expire" data-name="{{ row.name }}">Expire</button>
                             {% else %}
-                                <button class="btn btn-primary orc-checkin" data-name="{{ row.name }}">Check In</button>
+                                <button class="orc-btn orc-checkin" data-name="{{ row.name }}">Check In</button>
                             {% endif %}
                         </td>
                     </tr>
@@ -33,9 +33,9 @@
             </table>
         </div>
     </div>
-    <div class="card mb-1">
-        <div class="card-body">
-            <button id="orc-presence-run" class="btn btn-primary">Run Check Now</button>
+    <div class="orc-card mb-2">
+        <div class="p-4">
+            <button id="orc-presence-run" class="orc-btn">Run Check Now</button>
         </div>
     </div>
 {% endblock %}
