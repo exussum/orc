@@ -24,7 +24,7 @@ class Config:
         self.tz = ZoneInfo(os.getenv("ORC_TZ", "America/New_York"))
         self.lat_long = (float(os.getenv("ORC_LAT", 40.7143)), float(os.getenv("ORC_LONG", -74.0060)))
         self.root_domain = os.getenv("ORC_ROOT_DOMAIN", "")
-        self.load(m.Secrets("", "", ""), {})
+        self.load(m.Secrets("", "", "", "", ""), {})
 
     def load(self, secrets, hubitat_config):
         self.secrets = secrets
@@ -35,9 +35,11 @@ class Config:
         Light = m.build_enum(doc, "Devices", "Light", hubitat_config)
         Chromecast = m.build_enum(doc, "Devices", "Chromecast")
         TV = m.build_enum(doc, "Devices", "TV")
+        Leak = m.build_enum(doc, "Devices", "Leak")
         globals()["Light"] = Light
         globals()["Chromecast"] = Chromecast
         globals()["TV"] = TV
+        globals()["Leak"] = Leak
         self.virtual_devices = {e for e in Light if isinstance(e.value, int) and e.value < 0}
         self.people = m.build_people(doc, "People")
         self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV, self.people)

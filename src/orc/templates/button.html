@@ -6,7 +6,7 @@
                 <div>{{ id }}</div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                        <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#light-bulb"/></svg>
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
@@ -33,7 +33,7 @@
                             <svg class="orc-ribbon">
                                 <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                             </svg>
-                            <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#clipboard-check"/></svg>
+                            <svg class="w-5 h-5"><use href="/static/icons.svg#clipboard-check"/></svg>
                         </button>
                     </div>
                 {% endfor %}
@@ -51,7 +51,7 @@
                             <svg class="orc-ribbon">
                                 <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                             </svg>
-                            <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#rocket-launch"/></svg>
+                            <svg class="w-5 h-5"><use href="/static/icons.svg#rocket-launch"/></svg>
                         </button>
                     </div>
                 {% endfor %}
@@ -64,7 +64,7 @@
                 <details class="orc-dropup">
                     <summary class="orc-btn cursor-pointer list-none select-none">
                         Routines
-                        <svg class="w-4 h-4 ml-1" fill="currentColor"><use href="/static/icons.svg#chevron-down"/></svg>
+                        <svg class="w-4 h-4 ml-1"><use href="/static/icons.svg#chevron-down"/></svg>
                     </summary>
                     <div class="orc-dropdown-menu">
                         {% for id in schedule_routines|sort %}
