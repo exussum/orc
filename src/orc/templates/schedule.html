@@ -17,7 +17,7 @@
                         <tr>
                             <th class="px-2 py-1 font-normal w-16">Run</th>
                             <th class="px-2 py-1 font-normal w-16">Enabled</th>
-                            <th class="px-2 py-1 font-normal w-64">Job</th>
+                            <th class="px-2 py-1 font-normal w-32 lg:w-64">Job</th>
                             <th class="px-2 py-1 font-normal">When</th>
                         </tr>
                         {% endif %}
@@ -32,7 +32,7 @@
                                     <div class="orc-switch"></div>
                                 </label>
                             </td>
-                            <td class="px-2 py-3 align-middle w-64">{{ job.name }}</td>
+                            <td class="px-2 py-3 align-middle w-32 lg:w-64">{{ job.name }}</td>
                             <td class="px-2 py-3 align-middle">{{ day.strftime("%m/%d") }} {{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
                         </tr>
         {% set ns.prev_day = day %}
