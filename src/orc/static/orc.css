@@ -1,7 +1,30 @@
-hr.orc-hr {
-    border: revert;
+body {
+    color: #fff;
 }
-    
+
+.table,
+.table-hover tbody tr:hover {
+    color: #fff;
+}
+
+nav.orc-navbar {
+    background-color: #1a1a1a;
+    border: 1px solid #282828;
+}
+
+div.card {
+    background-color: #1a1a1a;
+    border-color: #282828;
+}
+
+div.card-body {
+    padding: 1rem;
+}
+
+.card-title {
+    margin-bottom: 0;
+}
+
 div.orc-input-filtered {
     display: none;
 }
@@ -18,11 +41,12 @@ div.orc-routine-buttons {
 }
 
 div.orc-button {
-    margin-bottom: 10px;
+    margin-top: 5px;
+    margin-bottom: 5px;
     text-align: center;
 }
 div.orc-button-label {
-    height: 4em;
+    height: 2lh;
     font-size: 10px; 
     width: 70px;
     margin-bottom: 5px;
@@ -73,10 +97,6 @@ svg.orc-ribbon {
 
 button.orc-runner {
     position: relative;
-}
-
-tr.orc-day-break > td {
-    border-top: 2px solid currentColor;
 }
 
 div.progress.orc-progress {

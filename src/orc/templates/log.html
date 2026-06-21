@@ -1,33 +1,37 @@
 {% extends 'base.html' %}
 {% block body %}
-    <table class="table">
-        <tr>
-            <th>Time</th>
-            <th>Source</th>
-            <th>Action</th>
-        </tr>
-        {% for entry in entries %}
-            <tr>
-                <td class="text-nowrap">{{ entry.timestamp.strftime("%m/%d %I:%M:%S %p") }}</td>
-                <td>
-                    {% if entry.source == "calendar" %}
-                        <span class="badge badge-secondary">calendar</span>
-                    {% elif entry.source == "iot" %}
-                        <span class="badge badge-dark">iot</span>
-                    {% elif entry.source == "remote" %}
-                        <span class="badge badge-info">remote</span>
-                    {% elif entry.source == "system" %}
-                        <span class="badge badge-warning">system</span>
-                    {% else %}
-                        <span class="badge badge-primary">manual</span>
-                    {% endif %}
-                </td>
-                <td>{{ entry.action }}</td>
-            </tr>
-        {% else %}
-            <tr>
-                <td colspan="3" class="text-muted">No activity yet.</td>
-            </tr>
-        {% endfor %}
-    </table>
+    <div class="card mb-1">
+        <div class="card-body table-responsive">
+            <table class="table mb-0">
+                <tr>
+                    <th>Time</th>
+                    <th>Source</th>
+                    <th>Action</th>
+                </tr>
+                {% for entry in entries %}
+                    <tr>
+                        <td class="text-nowrap">{{ entry.timestamp.strftime("%m/%d %I:%M:%S %p") }}</td>
+                        <td>
+                            {% if entry.source == "calendar" %}
+                                <span class="badge badge-secondary">calendar</span>
+                            {% elif entry.source == "iot" %}
+                                <span class="badge badge-dark">iot</span>
+                            {% elif entry.source == "remote" %}
+                                <span class="badge badge-info">remote</span>
+                            {% elif entry.source == "system" %}
+                                <span class="badge badge-warning">system</span>
+                            {% else %}
+                                <span class="badge badge-primary">manual</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.action }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="text-muted">No activity yet.</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
 {% endblock %}
