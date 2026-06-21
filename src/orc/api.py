@@ -1,5 +1,5 @@
+import array
 import copy
-import io
 import itertools
 import os
 import sys
@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from importlib import resources
 
-import pygame
+import pyaudio
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -108,6 +108,10 @@ def _on_yolink_transition(name, kind, old, new):
         msg = (Log.YOLINK_CONNECTED if new == "connected" else Log.YOLINK_DISCONNECTED).format(name=name)
     elif kind == "leak" and new in (yolink.STATE_WET, yolink.STATE_DRY):
         msg = (Log.YOLINK_WATER_DETECTED if new == yolink.STATE_WET else Log.YOLINK_WATER_CLEARED).format(name=name)
+        if new == yolink.STATE_WET:
+            log(local_now(), m.LogSource.IOT, msg)
+            play_text(msg, level=config.AUDIO_FATAL)
+            return
     elif kind == "battery":
         old_low = old is not None and old <= _YOLINK_BATTERY_LOW_THRESHOLD
         new_low = new <= _YOLINK_BATTERY_LOW_THRESHOLD
@@ -189,27 +193,49 @@ def execute(rule):
         sleep(0.1)
 
 
-def _play_pygame_sound(source):
-    pygame.mixer.init()
-    playing = pygame.mixer.Sound(source).play()
-    while playing.get_busy():
-        pygame.time.delay(100)
+def _scale_int16(frames, gain):
+    if gain == 1.0:
+        return frames
+    samples = array.array("h", frames)
+    for i, s in enumerate(samples):
+        v = int(s * gain)
+        samples[i] = -32768 if v < -32768 else 32767 if v > 32767 else v
+    return samples.tobytes()
 
 
-def play_alert(path):
-    _play_pygame_sound(path)
+def _play_stream(chunks, channels, rate, gain):
+    pa = pyaudio.PyAudio()
+    try:
+        stream = pa.open(format=pyaudio.paInt16, channels=channels, rate=rate, output=True)
+        try:
+            for chunk in chunks:
+                stream.write(_scale_int16(chunk, gain))
+        finally:
+            stream.stop_stream()
+            stream.close()
+    finally:
+        pa.terminate()
 
 
-def play_text(text):
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as fh:
-        fh.setnchannels(1)
-        fh.setsampwidth(2)
-        fh.setframerate(_VOICE.config.sample_rate)
-        for audio_bytes in _VOICE.synthesize(text):
-            fh.writeframes(audio_bytes.audio_int16_bytes)
-    buf.seek(0)
-    _play_pygame_sound(buf)
+def _wav_chunks(path):
+    with wave.open(path, "rb") as wf:
+        channels, rate = wf.getnchannels(), wf.getframerate()
+        chunks = iter(lambda: wf.readframes(4096), b"")
+        yield channels, rate
+        yield from chunks
+
+
+def play_alert(path, level=None):
+    gain = config.audio_volumes[level or config.AUDIO_INFO] / 100.0
+    stream = _wav_chunks(path)
+    channels, rate = next(stream)
+    _play_stream(stream, channels, rate, gain)
+
+
+def play_text(text, level=None):
+    gain = config.audio_volumes[level or config.AUDIO_INFO] / 100.0
+    chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
+    _play_stream(chunks, 1, _VOICE.config.sample_rate, gain)
 
 
 # --- State manager ---
