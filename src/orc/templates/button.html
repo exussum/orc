@@ -6,17 +6,17 @@
                 <div>{{ id }}</div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-4 12.74V17h8v-2.26A7 7 0 0 0 12 2zm-3 18a3 3 0 0 0 6 0H9z"/></svg>
+                        <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#light-bulb"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17h6m-6 0v-2.26A7 7 0 1 1 15 14.74V17M9 20h6"/></svg>
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb-outline"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#map-pin"/></svg>
                     </button>
                 </div>
             {% endfor %}
@@ -33,7 +33,7 @@
                             <svg class="orc-ribbon">
                                 <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                             </svg>
-                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6v2H9zM5 5h4v2h6V5h4v16H5z"/><path d="M9 14l2 2 4-4"/></svg>
+                            <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#clipboard-check"/></svg>
                         </button>
                     </div>
                 {% endfor %}
@@ -44,27 +44,27 @@
         <div class="p-4">
             <h6 class="text-base mb-0">Plugin</h6>
             <div class="orc-routine-buttons">
-                {% for id in plugins %}
+                {% for id in plugins if id not in ["Pair LG TV", "Reboot", "Light Test", "Sound Test"] %}
                     <div class="orc-button">
                         <div class="orc-button-label">{{ id }}</div>
                         <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
                             <svg class="orc-ribbon">
                                 <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                             </svg>
-                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c3 0 6 3 6 8v4l3 3h-6v3h-6v-3H3l3-3v-4c0-5 3-8 6-8zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+                            <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#rocket-launch"/></svg>
                         </button>
                     </div>
                 {% endfor %}
             </div>
         </div>
     </div>
-    <div class="orc-power-user orc-card mb-2">
+    <div class="orc-card mb-2">
         <div class="orc-routine-buttons orc-overflow p-4">
             <div>
                 <details class="orc-dropup">
                     <summary class="orc-btn cursor-pointer list-none select-none">
                         Routines
-                        <svg class="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor"><path d="M5 8l5 5 5-5z"/></svg>
+                        <svg class="w-4 h-4 ml-1" fill="currentColor"><use href="/static/icons.svg#chevron-down"/></svg>
                     </summary>
                     <div class="orc-dropdown-menu">
                         {% for id in schedule_routines|sort %}
