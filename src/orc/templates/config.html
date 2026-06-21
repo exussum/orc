@@ -9,27 +9,35 @@
                 <div class="orc-button">
                     <div class="orc-button-label">Light Test</div>
                     <button class="orc-btn orc-config-runner" data-id="Light Test" data-duration="{{ durations['Light Test'] }}">
-                        <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#light-bulb"/></svg>
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Sound Test</div>
                     <button class="orc-btn orc-config-runner" data-id="Sound Test" data-duration="{{ durations['Sound Test'] }}">
-                        <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#speaker-wave"/></svg>
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#speaker-wave"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Reboot</div>
                     <button class="orc-btn orc-config-runner" data-id="Reboot" data-duration="{{ durations['Reboot'] }}">
-                        <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#arrow-path"/></svg>
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#arrow-path"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Pair LG TV</div>
                     <button id="orc-pair-lg-tv" class="orc-btn" data-duration="{{ durations['Pair LG TV'] }}">
-                        <svg class="w-5 h-5" fill="currentColor"><use href="/static/icons.svg#tv"/></svg>
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#tv"/></svg>
                     </button>
                 </div>
+                {% for s in leak_sensors %}
+                    <div class="orc-button">
+                        <div class="orc-button-label">Test {{ s.name.replace('_', ' ').title() }}</div>
+                        <button class="orc-btn orc-yolink-test" data-name="{{ s.name }}">
+                            <svg class="w-5 h-5"><use href="/static/icons.svg#beaker"/></svg>
+                        </button>
+                    </div>
+                {% endfor %}
             </div>
         </div>
         <div class="orc-card mb-2">
@@ -58,9 +66,24 @@
                         {% endfor %}
                     </ul>
                     <h5 class="font-semibold mb-1">Sounds</h5>
-                    <ul class="list-disc list-inside">
+                    <ul class="list-disc list-inside mb-3">
                         {% for c in sounds.items %}
                             <li>{{ c.what.name }}: {{ c.content or '—' }} @ {{ c.volume }}%</li>
+                        {% endfor %}
+                    </ul>
+                    <h5 class="font-semibold mb-1">Leak Sensors</h5>
+                    <ul class="list-disc list-inside">
+                        {% for s in leak_sensors %}
+                            <li>
+                                {{ s.name }}:
+                                state={{ s.state or '—' }},
+                                connected={{ s.connected }},
+                                online={{ s.online if s.online is not none else '—' }},
+                                battery={{ s.battery if s.battery is not none else '—' }},
+                                signal={{ s.signal if s.signal is not none else '—' }},
+                                interval={{ s.interval if s.interval is not none else '—' }},
+                                last_change={{ s.last_change or '—' }}
+                            </li>
                         {% endfor %}
                     </ul>
                 </div>
@@ -90,6 +113,12 @@
             const dismiss = await notifyPairing(parseFloat(el.dataset.duration));
             await call("/api/console/Pair LG TV", el);
             dismiss?.();
+        });
+        document.querySelectorAll(".orc-yolink-test").forEach((el) => {
+            el.addEventListener("click", async (e) => {
+                const t = e.currentTarget;
+                await fetch(`/api/yolink/test/${encodeURIComponent(t.dataset.name)}`, { method: "POST" });
+            });
         });
     </script>
 {% endblock %}

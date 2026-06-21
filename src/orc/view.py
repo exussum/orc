@@ -61,6 +61,7 @@ def cfg():
             lights=api.capture_lights(),
             sounds=api.capture_sounds(),
             durations=config.durations,
+            leak_sensors=api.capture_leak_sensors(),
             version=app.orc.version_manager.version,
         )
 
@@ -76,6 +77,13 @@ def console(id):
     else:
         return {"error": "Unknown routine"}, 404
     api.log(api.local_now(), m.LogSource.MANUAL, id)
+    return {}, 200
+
+
+@bp.route("/api/yolink/test/<name>", methods=["POST"])
+def yolink_test(name):
+    if not api.test_yolink(name):
+        return {"error": "Unknown leak sensor"}, 404
     return {}, 200
 
 
