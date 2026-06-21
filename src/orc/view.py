@@ -60,6 +60,7 @@ def cfg():
             theme_override=api.current_theme_override(),
             lights=api.capture_lights(),
             sounds=api.capture_sounds(),
+            durations=config.durations,
             version=app.orc.version_manager.version,
         )
 
