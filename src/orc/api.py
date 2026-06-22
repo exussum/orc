@@ -1,4 +1,5 @@
 import array
+import audioop
 import copy
 import itertools
 import os
@@ -10,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
+from functools import lru_cache
 from importlib import resources
 
 import pyaudio
@@ -22,7 +24,13 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config
 from orc import model as m
-from orc._decorators import requires_ctx, silence_fd, synchronized, unwrap_rule_container
+from orc._decorators import (
+    audio_lock,
+    requires_ctx,
+    silence_fd,
+    synchronized,
+    unwrap_rule_container,
+)
 from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv, yolink
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
@@ -179,7 +187,9 @@ def execute(rule):
                 chromecast.stop(w)
             else:
                 if rule.state not in stream:
-                    stream[rule.state] = (rule.state, rule.state) if "http" in rule.state else chromecast.fetch_youtube_stream_metadata(rule.state)
+                    stream[rule.state] = (
+                        (rule.state, rule.state) if "http" in rule.state else chromecast.fetch_youtube_stream_metadata(rule.state)
+                    )
                 chromecast.play(w, *stream[rule.state])
         elif isinstance(w, orc.TV):
             if rule.state == config.ON:
@@ -203,19 +213,39 @@ def _scale_int16(frames, gain):
     return samples.tobytes()
 
 
-def _play_stream(chunks, channels, rate, gain):
+@lru_cache(maxsize=1)
+def _find_output_device(name):
     with silence_fd(2):
         pa = pyaudio.PyAudio()
     try:
-        stream = pa.open(format=pyaudio.paInt16, channels=channels, rate=rate, output=True)
-        try:
-            for chunk in chunks:
-                stream.write(_scale_int16(chunk, gain))
-        finally:
-            stream.stop_stream()
-            stream.close()
+        for i in range(pa.get_device_count()):
+            info = pa.get_device_info_by_index(i)
+            if name in info["name"] and info["maxOutputChannels"] > 0:
+                return i, info
     finally:
         pa.terminate()
+    raise RuntimeError(f"No audio output device matching ORC_AUDIO_DEVICE={name!r}")
+
+
+def _play_stream(chunks, channels, src_rate, gain):
+    idx, info = _find_output_device(config.audio_device)
+    dst_rate = int(info["defaultSampleRate"])
+    with audio_lock, silence_fd(2):
+        pa = pyaudio.PyAudio()
+        try:
+            stream = pa.open(format=pyaudio.paInt16, channels=channels, rate=dst_rate, output_device_index=idx, output=True)
+            try:
+                state = None
+                for chunk in chunks:
+                    scaled = _scale_int16(chunk, gain)
+                    if src_rate != dst_rate:
+                        scaled, state = audioop.ratecv(scaled, 2, channels, src_rate, dst_rate, state)
+                    stream.write(scaled)
+            finally:
+                stream.stop_stream()
+                stream.close()
+        finally:
+            pa.terminate()
 
 
 def _gain_for(level):
@@ -518,6 +548,7 @@ def _schedule_cal_tasks(scheduler):
                 name=event.summary,
                 jobstore=JOBSTORE_MEMORY,
             )
+
 
 def light_test():
     execute(m.Config(orc.Light, config.ON))

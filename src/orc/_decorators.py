@@ -1,8 +1,11 @@
 import contextlib
 import os
+import threading
 from functools import wraps
 
 from orc import model as m
+
+audio_lock = threading.Lock()
 
 
 @contextlib.contextmanager
