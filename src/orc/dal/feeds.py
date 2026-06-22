@@ -20,6 +20,7 @@ def fetch_holidays(year):
             print(result["error"], file=sys.stderr)
             return []
         return result
+
     return _holidays_cache.get_or_set(year, fetch)
 
 
