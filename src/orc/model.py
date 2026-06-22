@@ -1,5 +1,6 @@
 import re
-from collections import defaultdict, deque, namedtuple as nt
+from collections import defaultdict, deque
+from collections import namedtuple as nt
 from dataclasses import KW_ONLY, dataclass, replace
 from datetime import datetime, time
 from enum import Enum
