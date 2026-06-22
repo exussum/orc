@@ -56,10 +56,7 @@ def set_transition_callback(fn):
 
 def snapshot():
     sensors = _states.copy()
-    return [
-        sensors.get(device.value) or SensorState(name=device.name, device_id=device.value)
-        for device in config.Leak
-    ]
+    return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in config.Leak]
 
 
 def simulate_transition(name: str) -> bool:
