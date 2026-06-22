@@ -29,6 +29,12 @@ _states = LockedDict()  # device_id -> SensorState
 _on_transition = None  # callback (name, kind, old, new); kind in {"connection", "leak"}
 _thread = None
 
+# Flap suppression: paho auto-reconnects transient drops, so only treat the
+# connection as down once we've seen several disconnects in a short window.
+_FLAP_WINDOW_SEC = 60
+_FLAP_THRESHOLD = 3
+_disconnect_times: list[float] = []
+
 
 @dataclass(frozen=True)
 class SensorState:
@@ -245,7 +251,12 @@ def _on_connect(client, userdata, flags, rc, *args):
 
 
 def _on_disconnect(client, userdata, *args):
-    _set_connected(False)
+    now = time.time()
+    cutoff = now - _FLAP_WINDOW_SEC
+    _disconnect_times[:] = [t for t in _disconnect_times if t >= cutoff]
+    _disconnect_times.append(now)
+    if len(_disconnect_times) >= _FLAP_THRESHOLD:
+        _set_connected(False)
 
 
 def _run():

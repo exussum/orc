@@ -75,14 +75,16 @@
                     <ul class="list-disc list-inside">
                         {% for s in leak_sensors %}
                             <li>
-                                {{ s.name }}:
-                                state={{ s.state or '—' }},
-                                connected={{ s.connected }},
-                                online={{ s.online if s.online is not none else '—' }},
-                                battery={{ s.battery if s.battery is not none else '—' }},
-                                signal={{ s.signal if s.signal is not none else '—' }},
-                                interval={{ s.interval if s.interval is not none else '—' }},
-                                last_change={{ s.last_change or '—' }}
+                                {{ s.name }}
+                                <ul class="list-disc list-inside ml-4">
+                                    <li>state: {{ s.state or '—' }}</li>
+                                    <li>connected: {{ s.connected }}</li>
+                                    <li>online: {{ s.online if s.online is not none else '—' }}</li>
+                                    <li>battery: {{ s.battery if s.battery is not none else '—' }}</li>
+                                    <li>signal: {{ s.signal if s.signal is not none else '—' }}</li>
+                                    <li>interval: {{ s.interval if s.interval is not none else '—' }}</li>
+                                    <li>last_change: {{ s.last_change or '—' }}</li>
+                                </ul>
                             </li>
                         {% endfor %}
                     </ul>
