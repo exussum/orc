@@ -204,7 +204,8 @@ def _scale_int16(frames, gain):
 
 
 def _play_stream(chunks, channels, rate, gain):
-    pa = pyaudio.PyAudio()
+    with silence_fd(2):
+        pa = pyaudio.PyAudio()
     try:
         stream = pa.open(format=pyaudio.paInt16, channels=channels, rate=rate, output=True)
         try:
