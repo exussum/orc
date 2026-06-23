@@ -6,7 +6,6 @@ import signal
 import threading
 import time
 import uuid
-from dataclasses import dataclass
 from datetime import datetime
 
 import paho.mqtt.client as mqtt
@@ -14,6 +13,7 @@ import requests
 
 import orc as config
 from orc._locked_dict import LockedDict
+from orc.model import SensorState
 
 _AUTH_URL = "https://api.yosmart.com/open/yolink/token"
 _API_URL = "https://api.yosmart.com/open/yolink/v2/api"
@@ -27,7 +27,6 @@ _log = logging.getLogger(__name__)
 
 _states = LockedDict()  # device_id -> SensorState
 _on_transition = None  # callback (name, kind, old, new); kind in {"connection", "leak"}
-_thread = None
 
 # Flap suppression: paho auto-reconnects transient drops, so only treat the
 # connection as down once we've seen several disconnects in a short window.
@@ -35,18 +34,13 @@ _FLAP_WINDOW_SEC = 60
 _FLAP_THRESHOLD = 3
 _disconnect_times: list[float] = []
 
-
-@dataclass(frozen=True)
-class SensorState:
-    name: str
-    device_id: str
-    connected: bool = False
-    state: str | None = None
-    battery: int | None = None
-    signal: int | None = None
-    interval: int | None = None
-    online: bool | None = None
-    last_change: datetime | None = None
+_TRACKED_FIELDS = (
+    ("state", "leak"),
+    ("battery", "battery"),
+    ("signal", "signal"),
+    ("interval", "interval"),
+    ("online", "online"),
+)
 
 
 def set_transition_callback(fn):
@@ -59,36 +53,29 @@ def snapshot():
     return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in config.Leak]
 
 
-def simulate_transition(name: str) -> bool:
-    """Used by the Test button to fire the full alert path without touching real hardware.
-    Sets the sensor to wet, then auto-reverts to dry after a few seconds so the full
-    wet -> dry transition is exercised."""
+def _transition_to(new_state, require=None):
+    def fn(current):
+        if current is None or (require is not None and current.state != require):
+            return None
+        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=config.config.tz))
+
+    return fn
+
+
+def simulate_transition(name: str):
     sensor = next((s for s in _states.copy().values() if s.name == name), None)
     if sensor is None:
         return False
     device_id = sensor.device_id
+    prev = sensor.state if sensor.state in (STATE_DRY, STATE_WET) else STATE_DRY
 
-    prev_box = [None]
-
-    def go_wet(current):
-        if current is None:
-            return None
-        prev_box[0] = current.state if current.state in (STATE_DRY, STATE_WET) else STATE_DRY
-        return dataclasses.replace(current, state=STATE_WET, last_change=datetime.now(tz=config.config.tz))
-
-    if _states.update(device_id, go_wet) is None:
+    if _states.update(device_id, _transition_to(STATE_WET)) is None:
         return False
-    _fire("leak", name, prev_box[0], STATE_WET)
+    _fire("leak", name, prev, STATE_WET)
 
     def _revert():
         time.sleep(5)
-
-        def go_dry(current):
-            if current is None or current.state != STATE_WET:
-                return None
-            return dataclasses.replace(current, state=STATE_DRY, last_change=datetime.now(tz=config.config.tz))
-
-        if _states.update(device_id, go_dry) is not None:
+        if _states.update(device_id, _transition_to(STATE_DRY, require=STATE_WET)) is not None:
             _fire("leak", name, STATE_WET, STATE_DRY)
 
     threading.Thread(target=_revert, name=f"yolink-test-revert-{name}", daemon=True).start()
@@ -175,15 +162,6 @@ def _hydrate_states(access_token):
             interval=state.get("interval"),
             signal=(state.get("loraInfo") or {}).get("signal"),
         )
-
-
-_TRACKED_FIELDS = (
-    ("state", "leak"),
-    ("battery", "battery"),
-    ("signal", "signal"),
-    ("interval", "interval"),
-    ("online", "online"),
-)
 
 
 def _on_message(client, userdata, msg):
@@ -299,18 +277,14 @@ def _run():
 
 
 def start():
-    global _thread
+    if not len(config.Leak):
+        _log.info("yolink: no Leak devices in config.md, skipping")
+        return
+
     if not (config.config.secrets.yolink_id and config.config.secrets.yolink_secret):
         _log.info("yolink: secrets not set, skipping")
         return
-    devices = list(config.Leak)
-    if not devices:
-        _log.info("yolink: no Leak devices in config.md, skipping")
-        return
-    _states.clear()
-    for device in devices:
-        _states[device.value] = SensorState(name=device.name, device_id=device.value)
-    if _thread is not None and _thread.is_alive():
-        return
-    _thread = threading.Thread(target=_run, name="yolink-mqtt", daemon=True)
-    _thread.start()
+
+    global _states
+    _states = LockedDict({device.value: SensorState(name=device.name, device_id=device.value) for device in config.Leak})
+    threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()
