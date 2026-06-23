@@ -90,6 +90,10 @@ def reboot(ctx):
     os.kill(os.getppid(), signal.SIGTERM)
 
 
+def reboot_hubitat(ctx):
+    ctx.api.reboot_hubitat()
+
+
 def silence(ctx):
     ctx.api.execute(
         ctx.model.Configs(
@@ -103,7 +107,9 @@ def sound_test(ctx):
     url = f"{base}static/alert.mp3"
     ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Chromecast, url)))
     ctx.api.play_text("audio test")
-    ctx.api.play_alert(str(Path(__file__).parent / "static" / "alert.wav"))
+    alert_path = str(Path(__file__).parent / "static" / "alert.wav")
+    for level in (ctx.config.AUDIO_INFO, ctx.config.AUDIO_FATAL):
+        ctx.api.play_alert(alert_path, level=level)
 
 
 def trigger_sensor(ctx, device_id, event):
@@ -121,7 +127,7 @@ def trigger_sensor(ctx, device_id, event):
         ctx.api.execute(ctx.model.Config(entrance, ctx.config.OFF))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
-            DateTrigger(ctx.api.local_now() + timedelta(minutes=2)),
+            DateTrigger(ctx.api.local_now() + timedelta(minutes=2), timezone=ctx.config.tz),
             name="Trigger Sensor",
             id="trigger-sensor",
             replace_existing=True,
