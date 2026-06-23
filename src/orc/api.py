@@ -101,7 +101,7 @@ _YOLINK_SIGNAL_WEAK_THRESHOLD = -90
 
 def _on_yolink_transition(name, kind, old, new):
     msg = None
-    if kind == "connection":
+    if kind == "connection" and old is not None:
         msg = (Log.YOLINK_CONNECTED if new == "connected" else Log.YOLINK_DISCONNECTED).format(name=name)
     elif kind == "leak" and new in (yolink.STATE_WET, yolink.STATE_DRY):
         msg = (Log.YOLINK_WATER_DETECTED if new == yolink.STATE_WET else Log.YOLINK_WATER_CLEARED).format(name=name)
