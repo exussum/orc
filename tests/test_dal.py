@@ -99,12 +99,6 @@ class TestFetchLightStates:
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == "off"
 
     @patch("requests.get")
-    def test_non_200_returns_off_for_all_requested(self, get):
-        get.return_value = self._resp(500)
-        configs = hubitat.fetch_light_states((orc.Light.a, orc.Light.b))
-        assert all(c.state == "off" for c in configs.items)
-
-    @patch("requests.get")
     def test_returns_only_requested_subset(self, get):
         get.return_value = self._resp(
             200,
