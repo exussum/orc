@@ -89,6 +89,19 @@ class IotJob:
     rule: "Routine"
 
 
+@dataclass(frozen=True)
+class SensorState:
+    name: str
+    device_id: str
+    connected: bool = False
+    state: str | None = None
+    battery: int | None = None
+    signal: int | None = None
+    interval: int | None = None
+    online: bool | None = None
+    last_change: datetime | None = None
+
+
 @dataclass
 class Config:
     what: object

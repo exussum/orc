@@ -2,7 +2,6 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime
 
-import requests
 from sqlalchemy.engine.url import make_url
 
 from orc import config
@@ -81,13 +80,6 @@ def insert_theme_override(override):
 def delete_all_presence(before):
     with _theme_override_conn() as conn:
         conn.execute("DELETE FROM orc_presence WHERE last_seen < ?", (before.isoformat(),))
-
-
-def fetch_hubitat_devices():
-    resp = requests.get(f"{config.base_url}/devices/all{config.secrets.access_token}", timeout=config.http_timeout)
-    if resp.status_code != 200:
-        return None
-    return {int(d["id"]): d for d in resp.json()}
 
 
 def read_light(light):
