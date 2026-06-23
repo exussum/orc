@@ -249,6 +249,7 @@
     div#orc-theme-form-elements {
         display: grid;
         grid-template-columns: 2fr 2fr 1fr;
+        align-items: center;
         background-color: transparent;
         gap: 4px;
     }
