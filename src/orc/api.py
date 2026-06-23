@@ -41,6 +41,7 @@ from orc.locale import Log
 
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
+_WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
 
 _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
@@ -375,9 +376,9 @@ def next_iot_job(scheduler, present_names):
 @requires_ctx
 def run_iot_job(job, ctx, force=False):
     rule = job.rule
-    if should_skip_for_presence(rule, force, present_names()):
-        absent = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
-        detail = f"absent: {', '.join(absent)}" if absent else "no one present"
+    if should_skip(rule, force, present_names()):
+        unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
+        detail = ", ".join(unmet) if unmet else "no conditions met"
         log(local_now(), m.LogSource.IOT, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     if not force:
@@ -405,12 +406,39 @@ def setup_scheduler(ctx):
 
 
 def should_skip_for_presence(rule, force, present_names):
+    """Presence-only check used for scheduling display; weather triggers are not treated as absent."""
     if force or not rule.items:
         return False
     for c in rule.items:
-        if not c.trigger or c.trigger == m.Trigger.SYSTEM or c.trigger in present_names:
+        if not c.trigger or c.trigger == m.Trigger.SYSTEM or c.trigger in _WEATHER_TRIGGERS:
             return False
         if c.trigger == m.Trigger.ANYONE and present_names:
+            return False
+        if c.trigger in present_names:
+            return False
+    return True
+
+
+def should_skip(rule, force, present_names):
+    """Unified presence + real-time weather check used at rule execution time."""
+    if force or not rule.items:
+        return False
+    weather_triggers = [c.trigger for c in rule.items if c.trigger in _WEATHER_TRIGGERS]
+    if weather_triggers:
+        try:
+            weather_conditions = feeds.fetch_weather(*config.lat_long)
+        except Exception:
+            weather_conditions = frozenset()
+    else:
+        weather_conditions = frozenset()
+    for c in rule.items:
+        if not c.trigger or c.trigger == m.Trigger.SYSTEM:
+            return False
+        if c.trigger == m.Trigger.ANYONE and present_names:
+            return False
+        if c.trigger in present_names:
+            return False
+        if c.trigger in weather_conditions:
             return False
     return True
 
