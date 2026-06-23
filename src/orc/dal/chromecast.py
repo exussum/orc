@@ -16,11 +16,15 @@ _YDL_OPTS = {
 }
 
 
+_PLAYING_STATES = ("PLAYING", "BUFFERING")
+
+
 @requires_enabled(lambda device: m.SoundState(what=device, content=None, volume=0))
 def fetch_state(device):
     with _cast(device, timeout=5, tries=1) as cast:
-        time.sleep(3)
-        content = cast.media_controller.status.content_id
+        time.sleep(0.5)
+        ms = cast.media_controller.status
+        content = ms.content_id if ms and ms.player_state in _PLAYING_STATES else None
         return m.SoundState(
             what=device,
             content=_strip_googlevideo_params(content) if content else None,
