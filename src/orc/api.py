@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from importlib import resources
 
+import icmplib
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -24,10 +25,10 @@ from orc._decorators import (
     synchronized,
     unwrap_rule_container,
 )
-from orc.dal import chromecast, discovery, feeds, hubitat, sqlite, tv, usb, yolink
+from orc.dal import chromecast, feeds, hubitat, sqlite, tv, usb, yolink
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
-from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
+from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
@@ -40,7 +41,6 @@ from orc.locale import Log
 
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
-_CALENDAR_CHECK_MINUTES = (55, 10, 25, 40)
 
 _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
@@ -390,7 +390,7 @@ def setup_scheduler(ctx):
         _rebuild_iot_schedule(ctx=ctx)
     crons = (
         (_rebuild_iot_schedule, "10 0 * * *", "iot-cron", "Iot Cron"),
-        (_rebuild_cal_schedule, "*/5 8-18 * * *", "cal-cron", "Calendar Cron"),
+        (_rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "cal-cron", "Calendar Cron"),
         (check_presence, "5 * * * *", "presence-cron", "Presence Cron"),
     )
     for func, crontab, job_id, name in crons:
@@ -446,7 +446,7 @@ def _run_cal_job(job, ctx):
 
 def _safe_ping(name, host):
     try:
-        return name, discovery.ping_host(host)
+        return name, icmplib.ping(host, count=2, interval=0.1, timeout=1, privileged=True).is_alive
     except Exception as exc:
         log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
         return name, False
@@ -454,27 +454,28 @@ def _safe_ping(name, host):
 
 def _schedule_cal_tasks(scheduler):
     now = local_now()
-    if now.time().minute in _CALENDAR_CHECK_MINUTES and calculate_theme(now.date()) == config.THEME_WORK_DAY:
-        events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))
-        warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
-        alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
+    if calculate_theme(now.date()) != config.THEME_WORK_DAY:
+        return
 
-        calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
+    events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))
+    warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
+    alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
+    calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
 
-        for e in jobs_by_type(scheduler, m.CalendarJob):
-            if e.id not in calendar_by_id:
-                scheduler.remove_job(e.id)
+    for e in jobs_by_type(scheduler, m.CalendarJob):
+        if e.id not in calendar_by_id:
+            scheduler.remove_job(e.id)
 
-        for id, event in calendar_by_id.items():
-            scheduler.add_job(
-                _run_cal_job,
-                DateTrigger(event.datetime, timezone=config.tz),
-                args=[m.CalendarJob(event.type, event.summary)],
-                replace_existing=True,
-                id=id,
-                name=event.summary,
-                jobstore=JOBSTORE_MEMORY,
-            )
+    for id, event in calendar_by_id.items():
+        scheduler.add_job(
+            _run_cal_job,
+            DateTrigger(event.datetime, timezone=config.tz),
+            args=[m.CalendarJob(event.type, event.summary)],
+            replace_existing=True,
+            id=id,
+            name=event.summary,
+            jobstore=JOBSTORE_MEMORY,
+        )
 
 
 def light_test():
