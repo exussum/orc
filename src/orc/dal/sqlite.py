@@ -83,15 +83,22 @@ def delete_all_presence(before):
         conn.execute("DELETE FROM orc_presence WHERE last_seen < ?", (before.isoformat(),))
 
 
-def _fetch_hubitat_device(light):
-    resp = requests.get(f"{config.base_url}/devices/{light.value}{config.secrets.access_token}", timeout=config.http_timeout)
-    return resp.json() if resp.status_code == 200 else None
+def fetch_hubitat_devices():
+    resp = requests.get(f"{config.base_url}/devices/all{config.secrets.access_token}", timeout=config.http_timeout)
+    if resp.status_code != 200:
+        return None
+    return {int(d["id"]): d for d in resp.json()}
 
 
-def _read_light(light):
+def read_light(light):
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT type, state FROM orc_light WHERE device_id = ?", (light.value,)).fetchone()
     return row if row else (None, None)
+
+
+def read_lights():
+    with _theme_override_conn() as conn:
+        return conn.execute("SELECT device_id, state FROM orc_light WHERE state IS NOT NULL").fetchall()
 
 
 @contextmanager
@@ -104,7 +111,7 @@ def _theme_override_conn():
         conn.close()
 
 
-def _write_light(light, *, type=None, state=None):
+def write_light(light, *, type=None, state=None):
     with _theme_override_conn() as conn:
         conn.execute(
             "INSERT INTO orc_light (device_id, type, state) VALUES (?, ?, ?) "
