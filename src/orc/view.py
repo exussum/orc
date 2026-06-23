@@ -239,6 +239,7 @@ def schedule():
 
     present_names = api.present_names()
     absent_by_job = {j.id: api.should_skip_for_presence(j.args[0].rule, False, present_names) for j in jobs}
+    weather_by_job = {j.id: any(c.trigger in api._WEATHER_TRIGGERS for c in j.args[0].rule.items) for j in jobs}
 
     return (
         render_template(
@@ -248,6 +249,7 @@ def schedule():
             theme=theme,
             durations=config.durations,
             absent_by_job=absent_by_job,
+            weather_by_job=weather_by_job,
         ),
         200,
         {"Cache-control": "max-age=604800"},
