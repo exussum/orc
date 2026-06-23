@@ -8,6 +8,9 @@ import requests
 from orc import config
 from orc._locked_dict import LockedDict
 from orc.dal._decorators import requires_enabled
+from orc.model import WeatherCondition
+
+_SUNNY_CODES = {0, 1}  # WMO 0=clear sky, 1=mainly clear
 
 _holidays_cache = LockedDict()
 
@@ -22,6 +25,18 @@ def fetch_holidays(year):
         return result
 
     return _holidays_cache.get_or_set(year, fetch)
+
+
+@requires_enabled(frozenset())
+def fetch_weather(lat, lon):
+    response = requests.get(
+        "https://api.open-meteo.com/v1/forecast",
+        params={"latitude": lat, "longitude": lon, "current": "weather_code"},
+        timeout=config.http_timeout,
+    )
+    response.raise_for_status()
+    code = response.json()["current"]["weather_code"]
+    return frozenset({WeatherCondition.SUNNY} if code in _SUNNY_CODES else [])
 
 
 @requires_enabled(lambda *_: iter(()))
