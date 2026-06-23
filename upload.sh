@@ -17,6 +17,7 @@ rm -rf dist
 uv pip install '.[build]'
 uv build --wheel
 uv run --no-sync twine upload -u a -p a --repository-url http://registry.example.local dist/orc-*.whl
+git checkout src/orc/_build.py
 
 if [ "$1" = "full" ]; then
     uv run twine upload -u a -p a --repository-url http://registry.example.local data/dist/orc_data-*.whl
