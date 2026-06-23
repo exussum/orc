@@ -24,7 +24,10 @@
         {% endif %}
                         <tr>
                             <td class="px-2 py-3 align-middle w-16">
-                                <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;{% if weather_by_job[job.id] %}<span class="absolute top-0 right-0 text-xs leading-none">☀</span>{% endif %}</button>
+                                <div class="relative inline-block">
+                                    <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;</button>
+                                    {% if weather_by_job[job.id] %}<span class="absolute -top-1 -right-1 text-xs leading-none">☀</span>{% endif %}
+                                </div>
                             </td>
                             <td class="px-2 py-3 align-middle w-16">
                                 <label class="inline-flex items-center cursor-pointer">
