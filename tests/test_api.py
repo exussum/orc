@@ -40,7 +40,7 @@ class TestManagingConfig:
         assert not self.target.snapshot
 
 
-@patch("orc.api.lights.update_light")
+@patch("orc.api.hubitat.update_light")
 class TestRouteRule:
     def setup_method(self):
         self.target = api.SnapshotManager()

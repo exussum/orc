@@ -44,7 +44,7 @@
         <div class="p-4">
             <h6 class="text-base mb-0">Plugin</h6>
             <div class="orc-routine-buttons">
-                {% for id in plugins if id not in ["Pair LG TV", "Reboot", "Light Test", "Sound Test"] %}
+                {% for id in plugins if id not in ["Pair LG TV", "Reboot Orc", "Reboot Hubitat", "Light Test", "Sound Test"] %}
                     <div class="orc-button">
                         <div class="orc-button-label">{{ id }}</div>
                         <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
