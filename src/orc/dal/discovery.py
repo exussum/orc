@@ -13,4 +13,4 @@ def fetch_hubitat_config(secrets):
 
 @requires_enabled(False)
 def ping_host(hostname):
-    return icmplib.ping(hostname, count=2, timeout=1, privileged=True).is_alive
+    return icmplib.ping(hostname, count=2, interval=0.1, timeout=1, privileged=True).is_alive
