@@ -23,9 +23,9 @@
                         <td class="px-2 py-1">{% if row.last_seen %}{{ row.last_seen.strftime("%m/%d") }} {{ row.last_seen.time().strftime("%I:%M %p") }}{% else %}—{% endif %}</td>
                         <td class="px-2 py-1">
                             {% if row.present %}
-                                <button class="orc-btn orc-expire" data-name="{{ row.name }}">Expire</button>
+                                <button class="orc-btn orc-expire w-24" data-name="{{ row.name }}">Expire</button>
                             {% else %}
-                                <button class="orc-btn orc-checkin" data-name="{{ row.name }}">Check In</button>
+                                <button class="orc-btn orc-checkin w-24" data-name="{{ row.name }}">Check In</button>
                             {% endif %}
                         </td>
                     </tr>
