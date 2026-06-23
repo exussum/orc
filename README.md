@@ -13,6 +13,8 @@ a markdown config file.
 - Skips market-holiday rules via a configurable holidays endpoint.
 - Controls Hubitat lights (REST), Chromecast speakers (pychromecast + yt-dlp
   for YouTube audio), and an LG webOS TV (aiowebostv + Wake-on-LAN).
+- Supports weather-condition triggers (e.g. `SUNNY`) via the open-meteo API;
+  the schedule UI marks weather-triggered jobs with a ☀ badge.
 - Serves a small Flask UI for manual control, schedule inspection, theme
   override, and an activity log.
 
@@ -95,16 +97,18 @@ pytest
 
 ## Deploy
 
-`sh make.sh` builds a wheel and uploads it to the internal package registry.
-Pass `full` to also rebuild and upload the `orc_data` sub-package:
+`sh build.sh` builds both wheels locally (used during development / CI).
+
+`sh upload.sh` builds and publishes to the internal package registry.
+Pass `full` to also publish the `orc_data` sub-package:
 
 ```sh
-sh make.sh full
+sh upload.sh full
 ```
 
-`install.sh` is intended to run on the target host (invoked over SSH by
-`build-and-install.sh`); it uninstalls the running version, reinstalls from
-the internal registry, and bounces the `orc` supervisor job.
+`sh build-and-install.sh` runs `upload.sh` then SSHs to the target host and
+runs `install.sh`, which reinstalls from the registry and bounces the `orc`
+supervisor job.
 
 ## Layout
 
@@ -112,10 +116,11 @@ the internal registry, and bounces the `orc` supervisor job.
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `ConfigManager`
 - `src/orc/model.py` — markdown → config parsing and routine/theme types
-- `src/orc/dal/` — integrations split by target: `lights.py` (Hubitat),
-  `chromecast.py`, `tv.py` / `lgtv.py` (LG webOS + WoL), `feeds.py` (iCal /
-  market holidays), `bws.py` (Bitwarden), `discovery.py`, `sqlite.py`,
-  `_decorators.py`
+- `src/orc/dal/` — integrations split by target: `hubitat.py` (Hubitat
+  lights), `chromecast.py`, `tv.py` (LG webOS + WoL), `feeds.py` (iCal /
+  market holidays / open-meteo weather), `bws.py` (Bitwarden), `usb.py`
+  (pygame audio), `discovery.py`, `sqlite.py`, `_decorators.py`
+  (`requires_enabled`, `retry_async`)
 - `src/orc/plugins.py` — plugin functions (reboot, sensor handler, …)
 - `src/orc/apscheduler.py` — context-injecting executor and `requires_ctx`
 - `src/orc/locale.py` — log-message string constants
