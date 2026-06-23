@@ -18,8 +18,8 @@
                         <tr>
                             <th class="px-2 py-1 font-normal w-16">Run</th>
                             <th class="px-2 py-1 font-normal w-16">Enabled</th>
-                            <th class="px-2 py-1 font-normal w-32 lg:w-64">Job</th>
-                            <th class="px-2 py-1 font-normal">When</th>
+                            <th class="px-2 py-1 font-normal w-20 lg:w-40">Job</th>
+                            <th class="px-2 py-1 font-normal whitespace-nowrap">When</th>
                         </tr>
                         {% endif %}
         {% endif %}
@@ -36,8 +36,8 @@
                                     <div class="orc-switch"></div>
                                 </label>
                             </td>
-                            <td class="px-2 py-3 align-middle w-32 lg:w-64">{{ job.name }}</td>
-                            <td class="px-2 py-3 align-middle">{{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
+                            <td class="px-2 py-3 align-middle w-20 lg:w-40 text-sm">{{ job.name }}</td>
+                            <td class="px-2 py-3 align-middle whitespace-nowrap">{{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
                         </tr>
         {% set ns.prev_day = day %}
     {% endfor %}
