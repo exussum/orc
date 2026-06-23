@@ -2,9 +2,9 @@ import threading
 
 
 class LockedDict:
-    def __init__(self):
+    def __init__(self, initial=None):
         self._lock = threading.Lock()
-        self._data = {}
+        self._data = dict(initial) if initial else {}
 
     def __contains__(self, key):
         with self._lock:
@@ -37,10 +37,6 @@ class LockedDict:
                 return None
             self._data[key] = new
             return new
-
-    def clear(self):
-        with self._lock:
-            self._data.clear()
 
     def copy(self):
         with self._lock:
