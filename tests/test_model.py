@@ -158,7 +158,7 @@ def test_build_themes_succeeds_with_required():
     assert themes["day off"].configs[0].items[0].trigger == "Alice"
 
 
-@pytest.mark.parametrize("label,expected", [("System", m.Trigger.SYSTEM), ("Anyone", m.Trigger.ANYONE)])
+@pytest.mark.parametrize("label,expected", [("SYSTEM", m.Trigger.SYSTEM), ("ANYONE", m.Trigger.ANYONE)])
 def test_build_themes_succeeds_with_builtin_trigger(label, expected):
     doc = Document(
         _routines_md([f"| ROUTINE_RESET | Reset | Light | off | {label} |\n"])
@@ -170,7 +170,7 @@ def test_build_themes_succeeds_with_builtin_trigger(label, expected):
 
 def test_build_themes_missing_reset_routine():
     doc = Document(
-        _routines_md(["| ROUTINE_OFF | Lights Off | Light | off | System |\n"])
+        _routines_md(["| ROUTINE_OFF | Lights Off | Light | off | SYSTEM |\n"])
         + _themes_md(["| work day | ROUTINE_OFF | 1:00 |\n", "| day off | ROUTINE_OFF | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required routines.*Reset"):
@@ -179,7 +179,7 @@ def test_build_themes_missing_reset_routine():
 
 def test_build_themes_missing_required_theme():
     doc = Document(
-        _routines_md(["| ROUTINE_RESET | Reset | Light | off | System |\n"]) + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
+        _routines_md(["| ROUTINE_RESET | Reset | Light | off | SYSTEM |\n"]) + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required themes.*day off"):
         m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV)
