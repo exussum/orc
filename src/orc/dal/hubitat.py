@@ -3,9 +3,22 @@ import requests
 from orc import config
 from orc import model as m
 from orc.dal._decorators import requires_enabled
-from orc.dal.sqlite import fetch_hubitat_devices, read_lights, write_light
+from orc.dal.sqlite import read_lights, write_light
 
 _DB_TRUTH_DEVICE_TYPES = {"Generic Zigbee Outlet"}
+
+
+@requires_enabled({})
+def fetch_hubitat_config(secrets):
+    resp = requests.get(f"{config.base_url}/devices{secrets.access_token}", timeout=config.http_timeout)
+    resp.raise_for_status()
+    return {e["label"]: int(e["id"]) for e in resp.json()}
+
+
+def _fetch_hubitat_devices():
+    resp = requests.get(f"{config.base_url}/devices/all{config.secrets.access_token}", timeout=config.http_timeout)
+    resp.raise_for_status()
+    return {int(d["id"]): d for d in resp.json()}
 
 
 def _hubitat_body_to_state(body):
@@ -15,9 +28,7 @@ def _hubitat_body_to_state(body):
 
 @requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=config.OFF) for light in lights)))
 def fetch_light_states(lights):
-    bodies = fetch_hubitat_devices()
-    if bodies is None:
-        return m.Configs(*(m.Config(what=light, state=config.OFF) for light in lights))
+    bodies = _fetch_hubitat_devices()
     stored = dict(read_lights())
     configs = []
     for light in lights:
@@ -39,12 +50,14 @@ def update_light(light, on=None, brightness=None):
     else:
         url = f"{config.base_url}/devices/{light.value}/{config.ON if on else config.OFF}{config.secrets.access_token}"
         new_state = config.ON if on else config.OFF
-    body = requests.get(url, timeout=config.http_timeout).json()
-    device_type = body.get("type", "")
+    resp = requests.get(url, timeout=config.http_timeout)
+    resp.raise_for_status()
+    device_type = resp.json().get("type", "")
     if device_type in _DB_TRUTH_DEVICE_TYPES:
         write_light(light, type=device_type, state=new_state)
 
 
 @requires_enabled(None)
 def reboot():
-    requests.post(f"{config.base_url}/hub/reboot{config.secrets.access_token}", timeout=config.http_timeout)
+    resp = requests.post(f"{config.base_url}/hub/reboot{config.secrets.access_token}", timeout=config.http_timeout)
+    resp.raise_for_status()

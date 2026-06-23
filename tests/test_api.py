@@ -1,5 +1,5 @@
 from datetime import date, datetime, time, timedelta
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from freezegun import freeze_time
@@ -326,6 +326,6 @@ class TestPresence:
                     raise RuntimeError("dns boom")
                 return True
 
-            with patch.object(api.discovery, "ping_host", side_effect=ping):
+            with patch.object(api.icmplib, "ping", side_effect=lambda host, **_: MagicMock(is_alive=ping(host))):
                 api.check_presence(ctx=self.ctx)
         assert api.present_names() == {"Bob"}
