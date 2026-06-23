@@ -39,8 +39,12 @@ class LogSource(str, Enum):
 
 
 class Trigger(str, Enum):
-    SYSTEM = "System"
-    ANYONE = "Anyone"
+    SYSTEM = "SYSTEM"
+    ANYONE = "ANYONE"
+
+
+class WeatherCondition(str, Enum):
+    SUNNY = "SUNNY"
 
 
 @dataclass
@@ -277,7 +281,7 @@ def build_themes(doc, routine_section, theme_section, light, chromecast, tv, peo
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{routine_section}': {details}")
 
-    known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value}
+    known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value} | {wc.value for wc in WeatherCondition}
     invalid_trigger = [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in (None, "") and c[4] not in known_triggers]
     if invalid_trigger:
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_trigger)
@@ -308,9 +312,9 @@ def build_themes(doc, routine_section, theme_section, light, chromecast, tv, peo
     return themes
 
 
-def doc_to_sub_tables(doc, section, columns):
+def doc_to_sub_tables(doc, section, columns, *, min_columns=None):
     type, result = None, None
-    for e in doc_to_table(doc, section, columns):
+    for e in doc_to_table(doc, section, columns, min_columns=min_columns):
         if e[0] != type and e[0]:
             if result:
                 yield type, result
@@ -321,7 +325,7 @@ def doc_to_sub_tables(doc, section, columns):
         yield type, result
 
 
-def doc_to_table(doc, section, columns):
+def doc_to_table(doc, section, columns, *, min_columns=None):
     # Heading store their contents in a subsequent child element
     # https://github.com/miyuchina/mistletoe/issues/99
     idx = next(
@@ -335,13 +339,17 @@ def doc_to_table(doc, section, columns):
     if markdown_table is None:
         raise ValueError(f"No table found under section '{section}'")
 
+    effective_min = min_columns if min_columns is not None else columns
     rows = list(markdown_table.children)
-    invalid = [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]
+    invalid = [(i, len(row.children)) for i, row in enumerate(rows) if not (effective_min <= len(row.children) <= columns)]
     if invalid:
         details = ", ".join(f"row {i} has {count}" for i, count in invalid)
         raise ValueError(f"Expected {columns} columns in section '{section}', but: {details}")
 
-    return tuple(tuple(c.children[0].content if c.children else None for c in e.children) for e in rows)
+    return tuple(
+        tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children))
+        for e in rows
+    )
 
 
 def squish(items):

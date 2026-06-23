@@ -1,13 +1,14 @@
 import asyncio
 import socket
 import sys
+from contextlib import asynccontextmanager, suppress
 
 from aiowebostv import WebOsClient
 from getmac import get_mac_address
 from wakeonlan import send_magic_packet
 
 from orc._locked_dict import LockedDict
-from orc.dal._decorators import requires_enabled
+from orc.dal._decorators import requires_enabled, retry_async
 from orc.dal.sqlite import fetch_lg_tv_client_key
 
 _macs = LockedDict()
@@ -47,43 +48,41 @@ def off(tv):
 async def _power_off(host, client_key):
     if not await _is_port_open(host, 3000, timeout=0.5):
         return
-    await _with_client(host, client_key, lambda c: c.power_off(), action="power_off", deadline_secs=15)
+    await _connect_and_power_off(host, client_key)
 
 
 async def _wake_and_home(host, client_key):
-    await _wait_for_port(host, 3000, timeout=20)
-    await _with_client(host, client_key, lambda c: c.launch_app("com.webos.app.home"), action="launch_app(home)", deadline_secs=30)
+    await _wait_for_port(host, 3000)
+    await _connect_and_launch_home(host, client_key)
 
 
-async def _with_client(host, client_key, op, action, deadline_secs):
-    loop = asyncio.get_event_loop()
-    deadline = loop.time() + deadline_secs
-    last_err = None
-    while loop.time() < deadline:
-        client = WebOsClient(host, client_key)
-        try:
-            await client.connect()
-            await op(client)
-            return
-        except Exception as e:
-            last_err = e
-        finally:
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
-        await asyncio.sleep(0.1)
-    raise RuntimeError(f"{action} on {host} failed within {deadline_secs}s: {last_err}")
+@retry_async(deadline_secs=15)
+async def _connect_and_power_off(host, client_key):
+    async with _webos_client(host, client_key) as c:
+        await c.power_off()
 
 
-async def _wait_for_port(host, port, timeout):
-    loop = asyncio.get_event_loop()
-    deadline = loop.time() + timeout
-    while loop.time() < deadline:
-        if await _is_port_open(host, port, timeout=0.1):
-            return
-        await asyncio.sleep(0.1)
-    raise RuntimeError(f"TV {host}:{port} not reachable after {timeout}s; magic packet may have been dropped")
+@retry_async(deadline_secs=30)
+async def _connect_and_launch_home(host, client_key):
+    async with _webos_client(host, client_key) as c:
+        await c.launch_app("com.webos.app.home")
+
+
+@retry_async(deadline_secs=20)
+async def _wait_for_port(host, port):
+    if not await _is_port_open(host, port, timeout=0.1):
+        raise RuntimeError(f"TV {host}:{port} not reachable; magic packet may have been dropped")
+
+
+@asynccontextmanager
+async def _webos_client(host, client_key):
+    client = WebOsClient(host, client_key)
+    await client.connect()
+    try:
+        yield client
+    finally:
+        with suppress(Exception):
+            await client.disconnect()
 
 
 async def _is_port_open(host, port, timeout):
@@ -97,6 +96,7 @@ async def _is_port_open(host, port, timeout):
 
 
 def _resolve_mac(hostname):
+    # connect attempt primes the OS ARP cache so get_mac_address can resolve it
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(1)
         try:

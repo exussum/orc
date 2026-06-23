@@ -176,6 +176,7 @@ def _on_message(client, userdata, msg):
         return
     data = payload.get("data") or {}
 
+    # collect transitions inside the atomic update, fire after releasing the lock
     captured = {"name": None, "transitions": []}
 
     def apply(current):
@@ -202,6 +203,7 @@ def _on_message(client, userdata, msg):
 
 
 def _set_connected(connected):
+    # collect names inside the atomic update, fire after releasing the lock
     fired_names = []
 
     def apply(current):
@@ -234,38 +236,45 @@ def _on_disconnect(client, userdata, *args):
         _set_connected(False)
 
 
+def _auth_and_connect():
+    try:
+        access_token, expires_in = _authenticate()
+        home_id = _fetch_home_id(access_token)
+    except Exception:
+        _log.exception("yolink: auth failed; retrying in 60s")
+        raise
+
+    try:
+        _hydrate_states(access_token)
+    except Exception:
+        _log.exception("yolink: hydrate failed; continuing without initial state")
+
+    client = mqtt.Client(
+        mqtt.CallbackAPIVersion.VERSION2,
+        client_id=str(uuid.uuid4()),
+        userdata={"home_id": home_id},
+    )
+    client.username_pw_set(access_token, "")
+    client.on_connect = _on_connect
+    client.on_disconnect = _on_disconnect
+    client.on_message = _on_message
+    try:
+        client.connect(_MQTT_HOST, _MQTT_PORT, keepalive=60)
+    except Exception:
+        _log.exception("yolink: mqtt connect failed; retrying in 60s")
+        raise
+
+    return client, expires_in
+
+
 def _run():
     try:
         while True:
             try:
-                access_token, expires_in = _authenticate()
-                home_id = _fetch_home_id(access_token)
+                client, expires_in = _auth_and_connect()
             except Exception:
-                _log.exception("yolink: auth failed; retrying in 60s")
                 time.sleep(60)
                 continue
-
-            try:
-                _hydrate_states(access_token)
-            except Exception:
-                _log.exception("yolink: hydrate failed; continuing without initial state")
-
-            client = mqtt.Client(
-                mqtt.CallbackAPIVersion.VERSION2,
-                client_id=str(uuid.uuid4()),
-                userdata={"home_id": home_id},
-            )
-            client.username_pw_set(access_token, "")
-            client.on_connect = _on_connect
-            client.on_disconnect = _on_disconnect
-            client.on_message = _on_message
-            try:
-                client.connect(_MQTT_HOST, _MQTT_PORT, keepalive=60)
-            except Exception:
-                _log.exception("yolink: mqtt connect failed; retrying in 60s")
-                time.sleep(60)
-                continue
-
             client.loop_start()
             # Re-auth a few minutes before the token expires
             time.sleep(max(60, expires_in - 300))
