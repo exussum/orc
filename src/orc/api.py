@@ -1,20 +1,15 @@
-import array
-import audioop
 import copy
 import itertools
 import os
 import sys
 import threading
 import time
-import wave
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
-from functools import lru_cache
 from importlib import resources
 
-import pyaudio
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -25,34 +20,27 @@ import orc
 from orc import config
 from orc import model as m
 from orc._decorators import (
-    audio_lock,
     requires_ctx,
-    silence_fd,
     synchronized,
     unwrap_rule_container,
 )
-from orc.dal import chromecast, discovery, feeds, lights, sqlite, tv, yolink
+from orc.dal import chromecast, discovery, feeds, hubitat, sqlite, tv, usb, yolink
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.discovery import fetch_hubitat_config  # noqa: F401
+from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.tv import fetch_macs  # noqa: F401
+from orc.dal.usb import play_alert, play_text
 from orc.locale import Log
 
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
 _CALENDAR_CHECK_MINUTES = (55, 10, 25, 40)
-
-_MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
-_CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
-with silence_fd(2):
-    from piper import PiperVoice
-
-    _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
 
 _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
@@ -149,11 +137,11 @@ def start_yolink():
     yolink.start()
 
 
-# --- Device control & audio ---
+# --- Device control ---
 
 
 def capture_lights():
-    return m.Configs(*(lights.fetch_light_state(e) for e in orc.Light))
+    return hubitat.fetch_light_states(tuple(orc.Light))
 
 
 def capture_sounds():
@@ -177,9 +165,9 @@ def execute(rule):
 
         if isinstance(w, orc.Light):
             if isinstance(rule.state, int):
-                lights.update_light(w, brightness=rule.state)
+                hubitat.update_light(w, brightness=rule.state)
             else:
-                lights.update_light(w, on=rule.state == config.ON)
+                hubitat.update_light(w, on=rule.state == config.ON)
         elif isinstance(w, orc.Chromecast):
             if isinstance(rule.state, int):
                 chromecast.set_volume(w, rule.state)
@@ -201,67 +189,6 @@ def execute(rule):
         else:
             raise Exception("Unknown type")
         sleep(0.1)
-
-
-def _scale_int16(frames, gain):
-    if gain == 1.0:
-        return frames
-    samples = array.array("h", frames)
-    for i, s in enumerate(samples):
-        v = int(s * gain)
-        samples[i] = -32768 if v < -32768 else 32767 if v > 32767 else v
-    return samples.tobytes()
-
-
-@lru_cache(maxsize=1)
-def _find_output_device(name):
-    with silence_fd(2):
-        pa = pyaudio.PyAudio()
-    try:
-        for i in range(pa.get_device_count()):
-            info = pa.get_device_info_by_index(i)
-            if name in info["name"] and info["maxOutputChannels"] > 0:
-                return i, info
-    finally:
-        pa.terminate()
-    raise RuntimeError(f"No audio output device matching ORC_AUDIO_DEVICE={name!r}")
-
-
-def _play_stream(chunks, channels, src_rate, gain):
-    idx, info = _find_output_device(config.audio_device)
-    dst_rate = int(info["defaultSampleRate"])
-    with audio_lock, silence_fd(2):
-        pa = pyaudio.PyAudio()
-        try:
-            stream = pa.open(format=pyaudio.paInt16, channels=channels, rate=dst_rate, output_device_index=idx, output=True)
-            try:
-                state = None
-                for chunk in chunks:
-                    scaled = _scale_int16(chunk, gain)
-                    if src_rate != dst_rate:
-                        scaled, state = audioop.ratecv(scaled, 2, channels, src_rate, dst_rate, state)
-                    stream.write(scaled)
-            finally:
-                stream.stop_stream()
-                stream.close()
-        finally:
-            pa.terminate()
-
-
-def _gain_for(level):
-    return config.audio_volumes[level or config.AUDIO_INFO] / 100.0
-
-
-def play_alert(path, level=None):
-    with wave.open(path, "rb") as wf:
-        channels, rate = wf.getnchannels(), wf.getframerate()
-        chunks = iter(lambda: wf.readframes(4096), b"")
-        _play_stream(chunks, channels, rate, _gain_for(level))
-
-
-def play_text(text, level=None):
-    chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
-    _play_stream(chunks, 1, _VOICE.config.sample_rate, _gain_for(level))
 
 
 # --- State manager ---
