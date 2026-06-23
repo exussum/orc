@@ -1,2 +1,2 @@
-SHA = "dev"
-BUILD_TIME = "dev"
+SHA = "80c65ea"
+BUILD_TIME = "2026-06-23T22:16:00Z"
