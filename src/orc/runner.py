@@ -11,7 +11,7 @@ from flask import Flask
 from gunicorn.app.base import BaseApplication
 
 import orc as config
-from orc import api
+from orc import _build, api
 from orc import model as m
 from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY, ContextThreadPoolExecutor
 from orc.locale import Log
@@ -22,7 +22,12 @@ def flask():
     app, scheduler = _build_app()
     scheduler.resume()
     api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
+    _print_started()
     app.run(host="0.0.0.0", port=8000, use_reloader=False)
+
+
+def _print_started():
+    print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
 def web():
@@ -42,6 +47,7 @@ def web():
                 sys.exit(4)
             scheduler.resume()
             api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
+            _print_started()
             return app
 
     GunicornApp().run()
@@ -81,6 +87,7 @@ def _build_app():
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
     app.orc = ctx
+    app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
 
     return app, scheduler
