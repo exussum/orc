@@ -36,7 +36,7 @@ def fetch_weather(lat, lon):
     )
     response.raise_for_status()
     code = response.json()["current"]["weather_code"]
-    return frozenset({WeatherCondition.SUNNY} if code in _SUNNY_CODES else [])
+    return frozenset({WeatherCondition.SUNNY if code in _SUNNY_CODES else WeatherCondition.CLOUDY})
 
 
 @requires_enabled(lambda *_: iter(()))
