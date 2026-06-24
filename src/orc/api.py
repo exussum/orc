@@ -367,7 +367,7 @@ def next_iot_job(scheduler, present_names):
             for j in jobs
             if j.next_run_time
             and not any(cfg.trigger == m.Trigger.SYSTEM for cfg in j.args[0].rule.items)
-            and not should_skip_for_presence(j.args[0].rule, False, present_names)
+            and matching_items(j.args[0].rule, False, j.next_run_time, present_names)
         ),
         None,
     )
@@ -376,14 +376,15 @@ def next_iot_job(scheduler, present_names):
 @requires_ctx
 def run_iot_job(job, ctx, force=False):
     rule = job.rule
-    if should_skip(rule, force, present_names()):
+    now = local_now()
+    if not (matched := matching_items(rule, force, now, present_names())):
         unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
         detail = ", ".join(unmet) if unmet else "no conditions met"
-        log(local_now(), m.LogSource.IOT, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
+        log(now, m.LogSource.IOT, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
-    if not force:
-        log(local_now(), m.LogSource.IOT, rule.name)
-    ctx.snapshot_manager.route_rule(rule, force)
+    elif not force:
+        log(now, m.LogSource.IOT, rule.name)
+    ctx.snapshot_manager.route_rule(replace(rule, items=matched), force)
 
 
 def setup_scheduler(ctx):
@@ -405,42 +406,24 @@ def setup_scheduler(ctx):
         )
 
 
-def should_skip_for_presence(rule, force, present_names):
-    """Presence-only check used for scheduling display; weather triggers are not treated as absent."""
-    if force or not rule.items:
-        return False
-    for c in rule.items:
-        if not c.trigger or c.trigger == m.Trigger.SYSTEM or c.trigger in _WEATHER_TRIGGERS:
-            return False
-        if c.trigger == m.Trigger.ANYONE and present_names:
-            return False
-        if c.trigger in present_names:
-            return False
-    return True
 
-
-def should_skip(rule, force, present_names):
-    """Unified presence + real-time weather check used at rule execution time."""
-    if force or not rule.items:
-        return False
-    weather_triggers = [c.trigger for c in rule.items if c.trigger in _WEATHER_TRIGGERS]
-    if weather_triggers:
-        try:
-            weather_conditions = feeds.fetch_weather(*config.lat_long)
-        except Exception:
-            weather_conditions = frozenset()
-    else:
-        weather_conditions = frozenset()
+def matching_items(rule, force, now, pnames):
+    if force:
+        return rule.items
+    hour = now.replace(minute=0, second=0, microsecond=0)
+    matched = []
     for c in rule.items:
         if not c.trigger or c.trigger == m.Trigger.SYSTEM:
-            return False
-        if c.trigger == m.Trigger.ANYONE and present_names:
-            return False
-        if c.trigger in present_names:
-            return False
-        if c.trigger in weather_conditions:
-            return False
-    return True
+            matched.append(c)
+        elif c.trigger == m.Trigger.ANYONE and pnames:
+            matched.append(c)
+        elif c.trigger in pnames:
+            matched.append(c)
+        elif c.trigger in _WEATHER_TRIGGERS and c.trigger in feeds.fetch_weather(hour, *config.lat_long):
+            matched.append(c)
+    return tuple(matched)
+
+
 
 
 @requires_ctx
@@ -514,5 +497,5 @@ def light_test():
 def replay_day(now):
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
-    configs = (cfg for (when, cfg) in jobs if when <= now and not should_skip_for_presence(cfg, False, present))
+    configs = (replace(cfg, items=matching_items(cfg, False, now, present)) for (when, cfg) in jobs if when <= now)
     execute(m.squish_configs(*configs))

@@ -271,7 +271,7 @@ class TestPresence:
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_runs_when_no_presence_required(self):
-        rule = m.Routine("r", time(8, 0), ())
+        rule = m.Routine("r", time(8, 0), (m.Config(orc.Light.a, config.OFF),))
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_called_once_with(rule, False)
