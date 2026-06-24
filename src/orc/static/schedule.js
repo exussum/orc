@@ -4,11 +4,15 @@ const selectEl = document.querySelector("#orc-theme-select");
 const scheduleEl = document.querySelectorAll(".orc-theme-schedule");
 
 async function set_theme() {
+    const el = document.getElementById("orc-theme-submit");
+    el.disabled = true;
+    const container = startProgress(parseFloat(el.dataset.duration));
     await fetch("/api/schedule/set_theme", {
         method: "POST",
         headers: { "orc-version": version },
         body: new URLSearchParams({ start: startEl.value, end: endEl.value, theme: selectEl.value }),
     });
+    if (container) container.style.display = "none";
     location.reload();
 }
 
