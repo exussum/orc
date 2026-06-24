@@ -1,5 +1,6 @@
 import sys
 from datetime import datetime
+from functools import lru_cache
 
 import icalendar
 import recurring_ical_events
@@ -28,14 +29,16 @@ def fetch_holidays(year):
 
 
 @requires_enabled(frozenset())
-def fetch_weather(lat, lon):
+@lru_cache(maxsize=10)
+def fetch_weather(now, lat, lon):
+    date_str = now.strftime("%Y-%m-%d")
     response = requests.get(
         "https://api.open-meteo.com/v1/forecast",
-        params={"latitude": lat, "longitude": lon, "current": "weather_code"},
+        params={"latitude": lat, "longitude": lon, "hourly": "weather_code", "start_date": date_str, "end_date": date_str},
         timeout=config.http_timeout,
     )
     response.raise_for_status()
-    code = response.json()["current"]["weather_code"]
+    code = response.json()["hourly"]["weather_code"][now.hour]
     return frozenset({WeatherCondition.SUNNY if code in _SUNNY_CODES else WeatherCondition.CLOUDY})
 
 
