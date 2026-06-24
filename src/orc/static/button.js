@@ -1,6 +1,6 @@
 async function run(el) {
     if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${el.dataset.id}?`)) return;
-    await call(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
+    await get(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
 }
 
 document.querySelectorAll(".orc-runner").forEach((el) => {
@@ -8,7 +8,7 @@ document.querySelectorAll(".orc-runner").forEach((el) => {
 });
 
 document.querySelector(".orc-pause")?.addEventListener("click", (e) => {
-    call(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).finally(() => location.reload());
+    get(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).finally(() => location.reload());
 });
 
 const highlight_configs = window.orcHighlightConfigs.map(([name, start, end]) => [

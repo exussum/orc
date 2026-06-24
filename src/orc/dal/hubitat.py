@@ -51,7 +51,9 @@ def update_light(light, on=None, brightness=None):
         url = f"{config.base_url}/devices/{light.value}/{config.ON if on else config.OFF}{config.secrets.access_token}"
         new_state = config.ON if on else config.OFF
     resp = requests.get(url, timeout=config.http_timeout)
-    resp.raise_for_status()
+    # Plugs/outlets don't support setLevel and return 500; treat as a no-op
+    if not (brightness is not None and resp.status_code == 500):
+        resp.raise_for_status()
     device_type = resp.json().get("type", "")
     if device_type in _DB_TRUTH_DEVICE_TYPES:
         write_light(light, type=device_type, state=new_state)
