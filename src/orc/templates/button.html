@@ -3,7 +3,7 @@
     <div class="orc-card mb-2">
         <div class="orc-room-buttons p-4">
             {% for id in room_configs %}
-                <div>{{ id }}</div>
+                <div class="text-sm self-center">{{ id }}</div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb"/></svg>
