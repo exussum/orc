@@ -45,6 +45,7 @@ class Trigger(str, Enum):
 
 class WeatherCondition(str, Enum):
     SUNNY = "SUNNY"
+    CLOUDY = "CLOUDY"
 
 
 @dataclass
