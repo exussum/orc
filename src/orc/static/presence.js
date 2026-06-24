@@ -1,25 +1,16 @@
 async function checkin(el) {
-    el.disabled = true;
-    fetch(`/api/presence/${encodeURIComponent(el.dataset.name)}/checkin`, {
-        method: "POST",
-        headers: { "orc-version": version },
-    }).then(() => location.reload());
+    await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/checkin`, el);
+    location.reload();
 }
 
 async function expire(el) {
-    el.disabled = true;
-    fetch(`/api/presence/${encodeURIComponent(el.dataset.name)}/expire`, {
-        method: "POST",
-        headers: { "orc-version": version },
-    }).then(() => location.reload());
+    await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/expire`, el);
+    location.reload();
 }
 
 async function runCheck(el) {
-    el.disabled = true;
-    fetch(`/api/presence/run`, {
-        method: "POST",
-        headers: { "orc-version": version },
-    }).then(() => location.reload());
+    await get("/api/presence/run", el);
+    location.reload();
 }
 
 document.querySelectorAll(".orc-checkin").forEach((el) => {
