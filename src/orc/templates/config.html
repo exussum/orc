@@ -33,6 +33,12 @@
                     </button>
                 </div>
                 <div class="orc-button">
+                    <div class="orc-button-label">Rebuild Jobs</div>
+                    <button id="orc-rebuild-jobs" class="orc-btn">
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#calendar"/></svg>
+                    </button>
+                </div>
+                <div class="orc-button">
                     <div class="orc-button-label">Reboot Orc</div>
                     <button class="orc-btn orc-config-runner" data-id="Reboot Orc" data-duration="{{ durations['Reboot Orc'] }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#arrow-path"/></svg>
@@ -113,19 +119,21 @@
             el.addEventListener("click", async (e) => {
                 const t = e.currentTarget;
                 if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${t.dataset.id}?`)) return;
-                await call(`/api/console/${t.dataset.id}`, t);
+                await get(`/api/console/${t.dataset.id}`, t);
             });
+        });
+        document.getElementById("orc-rebuild-jobs").addEventListener("click", async (e) => {
+            await get("/api/rebuild_jobs", e.currentTarget);
         });
         document.getElementById("orc-pair-lg-tv").addEventListener("click", async (e) => {
             const el = e.currentTarget;
             const dismiss = await notifyPairing(parseFloat(el.dataset.duration));
-            await call("/api/console/Pair LG TV", el);
+            await get("/api/console/Pair LG TV", el);
             dismiss?.();
         });
         document.querySelectorAll(".orc-yolink-test").forEach((el) => {
             el.addEventListener("click", async (e) => {
-                const t = e.currentTarget;
-                await fetch(`/api/yolink/test/${encodeURIComponent(t.dataset.name)}`, { method: "POST" });
+                await get(`/api/yolink/test/${encodeURIComponent(e.currentTarget.dataset.name)}`, e.currentTarget);
             });
         });
     </script>
