@@ -4,19 +4,20 @@ const selectEl = document.querySelector("#orc-theme-select");
 const scheduleEl = document.querySelectorAll(".orc-theme-schedule");
 
 async function set_theme() {
-    fetch("/api/schedule/set_theme", {
+    await fetch("/api/schedule/set_theme", {
         method: "POST",
         headers: { "orc-version": version },
         body: new URLSearchParams({ start: startEl.value, end: endEl.value, theme: selectEl.value }),
-    }).then(() => location.reload());
+    });
+    location.reload();
 }
 
 async function run(el) {
-    await call(`/api/schedule/${el.dataset.id}/run`, el);
+    await get(`/api/schedule/${el.dataset.id}/run`, el);
 }
 
 async function pause(el) {
-    await call(`/api/schedule/${el.dataset.id}/pause`, el, () => {
+    await get(`/api/schedule/${el.dataset.id}/pause`, el, () => {
         el.checked = !el.checked;
     });
 }
