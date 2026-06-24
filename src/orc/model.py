@@ -178,7 +178,7 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
 
 
 def build_config(doc, section, light, chromecast, tv, required=()):
-    sub_tables = list(doc_to_sub_tables(doc, section, 3))
+    sub_tables = list(_doc_to_sub_tables(doc, section, 3))
     if invalid := _validate_states(sub_tables, 2):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{section}': {details}")
@@ -189,7 +189,7 @@ def build_config(doc, section, light, chromecast, tv, required=()):
 
 
 def build_audio_volumes(doc, section, required):
-    rows = doc_to_table(doc, section, 2)
+    rows = _doc_to_table(doc, section, 2)
 
     def _valid(s):
         return s is not None and s.isdigit() and 0 <= int(s) <= 100
@@ -205,7 +205,7 @@ def build_audio_volumes(doc, section, required):
 
 
 def build_durations(doc, section):
-    rows = doc_to_table(doc, section, 2)
+    rows = _doc_to_table(doc, section, 2)
 
     def _valid(s):
         try:
@@ -225,7 +225,7 @@ def build_enum(doc, section, sub_section, id_lookup=None):
         raise ValueError(f"sub_section must be 'Light', 'Chromecast', 'TV', or 'Leak', got '{sub_section}'")
 
     sub_table = next(
-        (sub_table for (type, sub_table) in doc_to_sub_tables(doc, section, 3) if type == sub_section),
+        (sub_table for (type, sub_table) in _doc_to_sub_tables(doc, section, 3) if type == sub_section),
         None,
     )
     if sub_table is None:
@@ -244,7 +244,7 @@ def build_enum(doc, section, sub_section, id_lookup=None):
 
 
 def build_highlights(doc, section):
-    rows = doc_to_table(doc, section, 3)
+    rows = _doc_to_table(doc, section, 3)
 
     invalid = [(name, val) for (name, start, end) in rows for val in (start, end) if _str_to_time(val) is None]
     if invalid:
@@ -255,7 +255,7 @@ def build_highlights(doc, section):
 
 
 def build_people(doc, section):
-    rows = doc_to_table(doc, section, 2)
+    rows = _doc_to_table(doc, section, 2)
     people = defaultdict(set)
     for name, host in rows:
         people[name].add(host)
@@ -266,7 +266,7 @@ def build_plugins(doc, section):
     from orc import plugins
 
     result = {}
-    for type, e in doc_to_sub_tables(doc, section, 2):
+    for type, e in _doc_to_sub_tables(doc, section, 2):
         result[type] = e[0][1]
 
     if missing := [k for k, v in result.items() if not (isinstance(v, str) and hasattr(plugins, v))]:
@@ -276,7 +276,7 @@ def build_plugins(doc, section):
 
 
 def build_themes(doc, routine_section, theme_section, light, chromecast, tv, people=None):
-    routine_tables = list(doc_to_sub_tables(doc, routine_section, 5))
+    routine_tables = list(_doc_to_sub_tables(doc, routine_section, 5))
 
     if invalid := _validate_states(routine_tables, 3):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
@@ -288,7 +288,7 @@ def build_themes(doc, routine_section, theme_section, light, chromecast, tv, peo
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_trigger)
         raise ValueError(f"Unknown trigger names in section '{routine_section}': {details}")
 
-    theme_tables = list(doc_to_sub_tables(doc, theme_section, 3))
+    theme_tables = list(_doc_to_sub_tables(doc, theme_section, 3))
 
     for theme_type, e in theme_tables:
         for c in e:
@@ -313,9 +313,9 @@ def build_themes(doc, routine_section, theme_section, light, chromecast, tv, peo
     return themes
 
 
-def doc_to_sub_tables(doc, section, columns, *, min_columns=None):
+def _doc_to_sub_tables(doc, section, columns, *, min_columns=None):
     type, result = None, None
-    for e in doc_to_table(doc, section, columns, min_columns=min_columns):
+    for e in _doc_to_table(doc, section, columns, min_columns=min_columns):
         if e[0] != type and e[0]:
             if result:
                 yield type, result
@@ -326,7 +326,7 @@ def doc_to_sub_tables(doc, section, columns, *, min_columns=None):
         yield type, result
 
 
-def doc_to_table(doc, section, columns, *, min_columns=None):
+def _doc_to_table(doc, section, columns, *, min_columns=None):
     # Heading store their contents in a subsequent child element
     # https://github.com/miyuchina/mistletoe/issues/99
     idx = next(
@@ -353,7 +353,7 @@ def doc_to_table(doc, section, columns, *, min_columns=None):
     )
 
 
-def squish(items):
+def _squish(items):
     from orc import Config
 
     if not items:
@@ -391,7 +391,7 @@ def squish_configs(*configs, state_override=None):
                     )
                 )
 
-    rules = list(chain.from_iterable(squish(e) for e in rules.values()))
+    rules = list(chain.from_iterable(_squish(e) for e in rules.values()))
     rules.sort(key=_op_cmp)
     return Configs(*rules)
 

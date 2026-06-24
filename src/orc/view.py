@@ -66,6 +66,13 @@ def cfg():
         )
 
 
+@bp.route("/api/rebuild_jobs")
+def rebuild_jobs():
+    api.rebuild_iot_schedule(ctx=app.orc)
+    api.rebuild_cal_schedule(ctx=app.orc)
+    return {"version": VersionManager.version}, 200
+
+
 @bp.route("/api/console/<id>")
 def console(id):
     if id in config.plugins:
@@ -77,24 +84,24 @@ def console(id):
     else:
         return {"error": "Unknown routine"}, 404
     api.log(api.local_now(), m.LogSource.MANUAL, id)
-    return {}, 200
+    return {"version": VersionManager.version}, 200
 
 
-@bp.route("/api/yolink/test/<name>", methods=["POST"])
+@bp.route("/api/yolink/test/<name>")
 def yolink_test(name):
     if not api.test_yolink(name):
         return {"error": "Unknown leak sensor"}, 404
-    return {}, 200
+    return {"version": VersionManager.version}, 200
 
 
-@bp.route("/api/presence/<name>/checkin", methods=["POST"])
+@bp.route("/api/presence/<name>/checkin")
 @VersionManager.versioned
 def checkin_presence(name):
     api.mark_present([name], when=api.local_now() + timedelta(hours=1))
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
 
 
-@bp.route("/api/presence/<name>/expire", methods=["POST"])
+@bp.route("/api/presence/<name>/expire")
 @VersionManager.versioned
 def expire_presence(name):
     api.expire_presence([name])
@@ -188,7 +195,7 @@ def remote(id):
         return {"error": "Unknown id"}, 404
     api.log(api.local_now(), m.LogSource.REMOTE, id)
     app.orc.version_manager.bump_version()
-    return {}, 200
+    return {"version": VersionManager.version}, 200
 
 
 @bp.route("/api/room/<id>")
@@ -205,8 +212,7 @@ def room(id):
     else:
         raise Exception("Unknown state")
     api.log(api.local_now(), m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
-
-    return {}, 200
+    return {"version": VersionManager.version}, 200
 
 
 @bp.route("/api/schedule/<id>/run")
@@ -219,7 +225,7 @@ def run(id):
     job.func(*job.args, ctx=app.orc, force=True)
 
 
-@bp.route("/api/presence/run", methods=["POST"])
+@bp.route("/api/presence/run")
 @VersionManager.versioned
 def run_presence_check():
     job = app.orc.scheduler.get_job("presence-cron")

@@ -35,7 +35,7 @@ async function notifyPairing(durationSec) {
     return () => { clearTimeout(timer); notification.close(); };
 }
 
-async function call(url, el, onFailure = () => {}) {
+async function get(url, el, onFailure = () => {}) {
     el.disabled = true;
     const container = startProgress(parseFloat(el.dataset.duration || "0"));
     let response = null;
@@ -59,6 +59,7 @@ async function call(url, el, onFailure = () => {}) {
         if (container) container.style.display = "none";
     }
 }
+
 
 async function checkVersion() {
     const spinner = document.getElementById("orc-version-spinner");
