@@ -389,10 +389,10 @@ def run_iot_job(job, ctx, force=False):
 
 def setup_scheduler(ctx):
     if not jobs_by_type(ctx.scheduler, m.IotJob):
-        _rebuild_iot_schedule(ctx=ctx)
+        rebuild_iot_schedule(ctx=ctx)
     crons = (
-        (_rebuild_iot_schedule, "10 0 * * *", "iot-cron", "Iot Cron"),
-        (_rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "cal-cron", "Calendar Cron"),
+        (rebuild_iot_schedule, "10 0 * * *", "iot-cron", "Iot Cron"),
+        (rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "cal-cron", "Calendar Cron"),
         (check_presence, "5 * * * *", "presence-cron", "Presence Cron"),
     )
     for func, crontab, job_id, name in crons:
@@ -419,7 +419,7 @@ def matching_items(rule, force, now, pnames):
             matched.append(c)
         elif c.trigger in pnames:
             matched.append(c)
-        elif c.trigger in _WEATHER_TRIGGERS and c.trigger in feeds.fetch_weather(hour, *config.lat_long):
+        elif c.trigger in _WEATHER_TRIGGERS and pnames and c.trigger in feeds.fetch_weather(hour, *config.lat_long):
             matched.append(c)
     return tuple(matched)
 
@@ -427,12 +427,12 @@ def matching_items(rule, force, now, pnames):
 
 
 @requires_ctx
-def _rebuild_cal_schedule(ctx):
+def rebuild_cal_schedule(ctx):
     _schedule_cal_tasks(ctx.scheduler)
 
 
 @requires_ctx
-def _rebuild_iot_schedule(ctx):
+def rebuild_iot_schedule(ctx):
     now = local_now()
     for time, rule in get_schedule():
         if now <= time:
