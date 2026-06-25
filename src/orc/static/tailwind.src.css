@@ -116,7 +116,7 @@
     border-radius: 0.25rem;
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-end;
 }
 
 @utility orc-room-buttons {
