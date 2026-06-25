@@ -69,7 +69,6 @@ def cfg():
 @bp.route("/api/rebuild_jobs")
 def rebuild_jobs():
     api.rebuild_iot_schedule(ctx=app.orc)
-    api.rebuild_cal_schedule(ctx=app.orc)
     return {"version": VersionManager.version}, 200
 
 
