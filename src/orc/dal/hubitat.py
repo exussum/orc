@@ -10,9 +10,9 @@ _DB_TRUTH_DEVICE_TYPES = {"Generic Zigbee Outlet"}
 
 @requires_enabled({})
 def fetch_hubitat_config(secrets):
-    resp = requests.get(f"{config.base_url}/devices{secrets.access_token}", timeout=config.http_timeout)
+    resp = requests.get(f"{config.base_url}/devices/all{secrets.access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
-    return {e["label"]: int(e["id"]) for e in resp.json()}
+    return {e["label"]: (int(e["id"]), frozenset(e.get("capabilities", []))) for e in resp.json()}
 
 
 def _fetch_hubitat_devices():
@@ -44,16 +44,20 @@ def fetch_light_states(lights):
 
 @requires_enabled(None)
 def update_light(light, on=None, brightness=None):
-    if brightness is not None:
+    if brightness is not None and "ChangeLevel" in light.capabilities:
         url = f"{config.base_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}"
         new_state = brightness
     else:
+        if brightness == 0:
+            on = False
+        elif brightness == 100:
+            on = True
+        elif brightness is not None:
+            raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
         url = f"{config.base_url}/devices/{light.value}/{config.ON if on else config.OFF}{config.secrets.access_token}"
         new_state = config.ON if on else config.OFF
     resp = requests.get(url, timeout=config.http_timeout)
-    # Plugs/outlets don't support setLevel and return 500; treat as a no-op
-    if not (brightness is not None and resp.status_code == 500):
-        resp.raise_for_status()
+    resp.raise_for_status()
     device_type = resp.json().get("type", "")
     if device_type in _DB_TRUTH_DEVICE_TYPES:
         write_light(light, type=device_type, state=new_state)
