@@ -380,7 +380,10 @@ def run_iot_job(job, ctx, force=False):
         log(now, m.LogSource.IOT, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     elif not force:
-        log(now, m.LogSource.IOT, rule.name)
+        if weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
+            log(now, m.LogSource.IOT, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
+        else:
+            log(now, m.LogSource.IOT, rule.name)
     ctx.snapshot_manager.route_rule(replace(rule, items=matched), force)
 
 
