@@ -64,4 +64,12 @@ testpaths = [ "tests" ]
 [tool.hatch.build.targets.wheel]
 packages = ["src/orc"]
 
+[[tool.uv.index]]
+name = "private"
+url = "http://registry.int.exussum.org"
+explicit = true
+
+[tool.uv.sources]
+orc_data = {index = "private"}
+
 
