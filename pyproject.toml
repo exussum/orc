@@ -12,7 +12,6 @@ dependencies = [
     "aiowebostv==0.7.5",
     "skyfield==1.54",
     "bitwarden-sdk==2.1.0",
-    "getmac==0.9.5",
     "gunicorn==26.0.0",
     "icalendar==7.1.2",
     "icmplib==3.0.4",
@@ -25,7 +24,6 @@ dependencies = [
     "pyaudio==0.2.14",
     "recurring-ical-events==3.8.2",
     "requests==2.34.2",
-    "wakeonlan==3.3.0",
     "yt-dlp==2026.6.9",
 ]
 name = "orc"

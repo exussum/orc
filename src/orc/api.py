@@ -35,7 +35,6 @@ from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
-from orc.dal.tv import fetch_macs  # noqa: F401
 from orc.dal.usb import play_alert, play_text
 from orc.locale import Log
 
@@ -181,9 +180,7 @@ def execute(rule):
                     )
                 chromecast.play(w, *stream[rule.state])
         elif isinstance(w, orc.TV):
-            if rule.state == config.ON:
-                tv.on(w)
-            elif rule.state == config.OFF:
+            if rule.state == config.OFF:
                 tv.off(w)
             else:
                 raise Exception(f"Unsupported TV state: {rule.state!r}")

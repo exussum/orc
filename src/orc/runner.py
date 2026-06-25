@@ -57,7 +57,6 @@ def _build_app():
     if os.getenv("ORC_ENABLED"):
         secrets = api.fetch_secrets()
         config.config.load(secrets, api.fetch_hubitat_config(secrets))
-        api.fetch_macs(config.TV)
 
     api.init_db()
 

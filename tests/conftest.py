@@ -1,15 +1,16 @@
-from enum import Enum
-
 import pytest
+
+from orc.model import DeviceEnum
 
 
 def pytest_sessionstart(session):
     import orc
+    from enum import Enum
 
-    class Light(Enum):
-        a = 1
-        b = 2
-        c = 3
+    class Light(DeviceEnum):
+        a = (1, frozenset(["ChangeLevel"]))
+        b = (2, frozenset())
+        c = (3, frozenset())
 
     class Chromecast(Enum):
         x = 1
