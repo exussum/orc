@@ -174,7 +174,15 @@ class DeviceEnumMeta(type(Enum)):
 
 
 class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
-    pass
+    def __new__(cls, value, capabilities=frozenset()):
+        obj = object.__new__(cls)
+        if isinstance(value, tuple):
+            obj._value_ = value[0]
+            obj.capabilities = value[1]
+        else:
+            obj._value_ = value
+            obj.capabilities = capabilities
+        return obj
 
 
 def build_config(doc, section, light, chromecast, tv, required=()):
@@ -239,7 +247,7 @@ def build_enum(doc, section, sub_section, id_lookup=None):
     if id_lookup is None:
         members = {e[1]: e[2] for e in sub_table}
     else:
-        members = {e[1]: id_lookup.get(e[2], -(i + 1)) for i, e in enumerate(sub_table)}
+        members = {e[1]: id_lookup.get(e[2], (-(i + 1), frozenset())) for i, e in enumerate(sub_table)}
     return DeviceEnum(sub_section, members, module="orc")
 
 
