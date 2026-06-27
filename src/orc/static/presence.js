@@ -1,16 +1,13 @@
 async function checkin(el) {
-    await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/checkin`, el);
-    location.reload();
+    if (await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/checkin`, el)) location.reload();
 }
 
 async function expire(el) {
-    await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/expire`, el);
-    location.reload();
+    if (await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/expire`, el)) location.reload();
 }
 
 async function runCheck(el) {
-    await get("/api/presence/run", el);
-    location.reload();
+    if (await get("/api/presence/run", el)) location.reload();
 }
 
 document.querySelectorAll(".orc-checkin").forEach((el) => {
