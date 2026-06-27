@@ -17,7 +17,7 @@ class Chromecast(Enum):
     x = 1
 
 
-class TV(Enum):
+class BroadLink(Enum):
     t = 1
 
 
@@ -152,7 +152,7 @@ def test_build_themes_succeeds_with_required():
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | Alice |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV, {"Alice": "alice.local"})
+    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, BroadLink, {"Alice": "alice.local"})
     assert set(themes) == {"work day", "day off"}
     assert themes["work day"].configs[0].items[0].trigger == "Alice"
     assert themes["day off"].configs[0].items[0].trigger == "Alice"
@@ -191,7 +191,7 @@ def test_build_themes_unknown_trigger_name():
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Unknown trigger names.*Ghost"):
-        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV, {"Alice": "alice.local"})
+        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, BroadLink, {"Alice": "alice.local"})
 
 
 def test_build_people():
@@ -206,11 +206,11 @@ def test_build_people_multiple_hosts():
 
 def test_build_config_succeeds_with_required():
     doc = Document(_rooms_md(["| Living Room | Light.a | on |\n", "| Bedroom | Light.b | on |\n"]))
-    rooms = m.build_config(doc, "Room Configs", Light, Chromecast, TV, required=("Living Room",))
+    rooms = m.build_config(doc, "Room Configs", Light, Chromecast, BroadLink, required=("Living Room",))
     assert set(rooms) == {"Living Room", "Bedroom"}
 
 
 def test_build_config_missing_required_room():
     doc = Document(_rooms_md(["| Bedroom | Light.b | on |\n"]))
     with pytest.raises(ValueError, match="Missing required entries.*Living Room"):
-        m.build_config(doc, "Room Configs", Light, Chromecast, TV, required=("Living Room",))
+        m.build_config(doc, "Room Configs", Light, Chromecast, BroadLink, required=("Living Room",))

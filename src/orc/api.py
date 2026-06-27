@@ -38,6 +38,7 @@ from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.usb import play_alert, play_text
 from orc.locale import Log
 
+_BROADLINK_CODES = "/etc/orc/broadlink_codes.json"
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
 _WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
@@ -179,14 +180,18 @@ def execute(rule):
                         (rule.state, rule.state) if "http" in rule.state else chromecast.fetch_youtube_stream_metadata(rule.state)
                     )
                 chromecast.play(w, *stream[rule.state])
-        elif isinstance(w, orc.TV):
+        elif isinstance(w, orc.WebOS):
             if rule.state == config.OFF:
                 tv.off(w)
-            elif rule.state == config.ON:
-                _TV_CODES = None
-                broadlink.tv_on(w, _TV_CODES)
             else:
-                raise Exception(f"Unsupported TV state: {rule.state!r}")
+                raise Exception(f"WebOS only supports off, got: {rule.state!r}")
+        elif isinstance(w, orc.BroadLink):
+            if rule.state == config.ON:
+                if tv.is_off(orc.WebOS[w.name]):
+                    broadlink.tv_toggle(w, _BROADLINK_CODES)
+            else:
+                raise Exception(f"BroadLink only supports on, got: {rule.state!r}")
+
         else:
             raise Exception("Unknown type")
         sleep(0.1)
