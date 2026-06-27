@@ -356,8 +356,7 @@ def _doc_to_table(doc, section, columns, *, min_columns=None):
         raise ValueError(f"Expected {columns} columns in section '{section}', but: {details}")
 
     return tuple(
-        tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children))
-        for e in rows
+        tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children)) for e in rows
     )
 
 

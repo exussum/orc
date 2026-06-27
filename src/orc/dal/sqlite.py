@@ -7,11 +7,11 @@ from sqlalchemy.engine.url import make_url
 from orc import config
 
 
-def delete_presence(names, before):
+def delete_presence(names, before, force):
     with _theme_override_conn() as conn:
         conn.executemany(
-            "DELETE FROM orc_presence WHERE name = ? AND last_seen < ?",
-            [(name, before.isoformat()) for name in names],
+            "DELETE FROM orc_presence WHERE name = ? AND (last_seen < ? or TRUE = ?)",
+            [(name, before.isoformat(), force) for name in names],
         )
 
 
