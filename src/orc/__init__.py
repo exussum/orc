@@ -39,10 +39,12 @@ class Config:
         Chromecast = m.build_enum(doc, "Devices", "Chromecast")
         TV = m.build_enum(doc, "Devices", "TV")
         Leak = m.build_enum(doc, "Devices", "Leak")
+        AC = m.build_enum(doc, "Devices", "AC")
         globals()["Light"] = Light
         globals()["Chromecast"] = Chromecast
         globals()["TV"] = TV
         globals()["Leak"] = Leak
+        globals()["AC"] = AC
         self.virtual_devices = {e for e in Light if isinstance(e.value, int) and e.value < 0}
         self.people = m.build_people(doc, "People")
         self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV, self.people)
