@@ -12,10 +12,10 @@
 
 | ID                 | Name       | Expression | State | Trigger |
 |--------------------|------------|------------|-------|---------|
-| ROUTINE_RESET      | Reset      | Light      | off   | System  |
-| ROUTINE_LIGHTS_ON  | Lights On  | Light      | on    | System  |
-| ROUTINE_LIGHTS_OFF | Lights Off | Light      | off   | System  |
-| ROUTINE_QUIET      | Quiet      | Chromecast | stop  | System  |
+| ROUTINE_RESET      | Reset      | Light      | off   | SYSTEM  |
+| ROUTINE_LIGHTS_ON  | Lights On  | Light      | on    | SYSTEM  |
+| ROUTINE_LIGHTS_OFF | Lights Off | Light      | off   | SYSTEM  |
+| ROUTINE_QUIET      | Quiet      | Chromecast | stop  | SYSTEM  |
 
 ---
 
@@ -68,6 +68,15 @@
 | Name    | Start | End   |
 |---------|-------|-------|
 | Silence | 21:00 | 23:59 |
+
+---
+
+### Audio Volumes
+
+| Level | Volume |
+|-------|--------|
+| INFO  | 4      |
+| FATAL | 10     |
 
 ---
 

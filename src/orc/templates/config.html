@@ -59,7 +59,19 @@
             <div class="p-4">
                 <ul class="list-disc list-inside">
                     <li>Internal Version: {{ version }}</li>
-                    <li>Snapshot State: {{ ctx.snapshot_manager.snapshot }}</li>
+                    <li>Snapshot State:
+                        {% set snap = ctx.snapshot_manager.snapshot %}
+                        {% if snap %}
+                            until {{ snap.end.strftime('%H:%M') }}
+                            <ul class="list-disc list-inside ml-4">
+                                {% for c in snap.routine.items %}
+                                    <li>{{ c.what.name }}={{ c.state }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            None
+                        {% endif %}
+                    </li>
                     <li>Theme Override: {{ theme_override }}</li>
                     <li>Today's theme: {{ today_theme }}</li>
                     <li>Tomorrow's theme: {{ tomorrow_theme }}</li>

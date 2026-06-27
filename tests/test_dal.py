@@ -89,6 +89,11 @@ class TestFetchLightStates:
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == 50
 
     @patch("requests.get")
+    def test_on_with_string_level_returns_int(self, get):
+        get.return_value = self._resp(200, [self._device(orc.Light.a, {"switch": "on", "level": "50"})])
+        assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == 50
+
+    @patch("requests.get")
     def test_on_without_level_returns_on(self, get):
         get.return_value = self._resp(200, [self._device(orc.Light.a, {"switch": "on"})])
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == "on"
