@@ -7,6 +7,10 @@ from orc.dal._decorators import requires_enabled, retry_async
 from orc.dal.sqlite import fetch_lg_tv_client_key
 
 
+def is_off(tv):
+    return not asyncio.run(_is_port_open(tv.value, 3000, timeout=0.5))
+
+
 @requires_enabled(None)
 def off(tv):
     client_key = fetch_lg_tv_client_key(tv.value)
