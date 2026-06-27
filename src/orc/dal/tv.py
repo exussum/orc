@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager, suppress
 
 from aiowebostv import WebOsClient
 
-from orc.dal._decorators import requires_enabled, retry_async
+from orc.dal._decorators import requires_enabled
 from orc.dal.sqlite import fetch_lg_tv_client_key
 
 
@@ -22,13 +22,12 @@ def off(tv):
 async def _power_off(host, client_key):
     if not await _is_port_open(host, 3000, timeout=0.5):
         return
-    await _connect_and_power_off(host, client_key)
-
-
-@retry_async(deadline_secs=15)
-async def _connect_and_power_off(host, client_key):
-    async with _webos_client(host, client_key) as c:
-        await c.power_off()
+    try:
+        async with _webos_client(host, client_key) as c:
+            await c.power_off()
+    except Exception:
+        if await _is_port_open(host, 3000, timeout=1.0):
+            raise
 
 
 @asynccontextmanager
