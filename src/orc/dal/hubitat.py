@@ -23,7 +23,7 @@ def _fetch_hubitat_devices():
 
 def _hubitat_body_to_state(body):
     attrs = body["attributes"]
-    return attrs["level"] if ("level" in attrs and attrs["switch"] == config.ON) else attrs["switch"]
+    return int(attrs["level"]) if ("level" in attrs and attrs["switch"] == config.ON) else attrs["switch"]
 
 
 @requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=config.OFF) for light in lights)))
