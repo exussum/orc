@@ -37,20 +37,22 @@ class Config:
 
         Light = m.build_enum(doc, "Devices", "Light", hubitat_config)
         Chromecast = m.build_enum(doc, "Devices", "Chromecast")
-        TV = m.build_enum(doc, "Devices", "TV")
+        BroadLink = m.build_enum(doc, "Devices", "BroadLink")
+        WebOS = m.build_enum(doc, "Devices", "WebOS")
         Leak = m.build_enum(doc, "Devices", "Leak")
         AC = m.build_enum(doc, "Devices", "AC")
         globals()["Light"] = Light
         globals()["Chromecast"] = Chromecast
-        globals()["TV"] = TV
+        globals()["BroadLink"] = BroadLink
+        globals()["WebOS"] = WebOS
         globals()["Leak"] = Leak
         globals()["AC"] = AC
         self.virtual_devices = {e for e in Light if isinstance(e.value, int) and e.value < 0}
         self.people = m.build_people(doc, "People")
-        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, TV, self.people)
+        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, BroadLink, self.people)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
-        self.room_configs = m.build_config(doc, "Room Configs", Light, Chromecast, TV, required=("Living Room",))
-        self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Chromecast, TV)
+        self.room_configs = m.build_config(doc, "Room Configs", Light, Chromecast, BroadLink, required=("Living Room",))
+        self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Chromecast, BroadLink)
         self.plugins = m.build_plugins(doc, "Plugins")
         self.all_configs = self.ad_hoc_routines | self.room_configs
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=self.OFF)
@@ -58,7 +60,7 @@ class Config:
         self.durations = m.build_durations(doc, "Durations")
         self.audio_volumes = m.build_audio_volumes(doc, "Audio Volumes", required=(self.AUDIO_INFO, self.AUDIO_FATAL))
         self.default_config = self.room_configs["Living Room"]
-        self.reset_config = m.squish_configs(m.Configs(*(i for i in self.schedule_routines["Reset"].items if i.what is not TV)))
+        self.reset_config = m.squish_configs(m.Configs(*(i for i in self.schedule_routines["Reset"].items if i.what is not WebOS)))
 
 
 config = Config()

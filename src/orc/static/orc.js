@@ -21,6 +21,7 @@ function startProgress(seconds) {
     return container;
 }
 
+
 async function notifyPairing(durationSec) {
     if (!("Notification" in window)) return () => {};
     let permission = Notification.permission;
