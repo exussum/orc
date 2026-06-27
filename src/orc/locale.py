@@ -15,6 +15,8 @@ class Log:
     PRESENCE_EXPIRED = "Presence expired: {name}"
     PRESENCE_CHECKED_IN = "Presence checked in: {name}"
 
+    VERSION_MISMATCH = "Version mismatch: client={client} server={server}"
+
     JOB_FORCED = "Force run: {job_name}"
     ROOM_SET = "Room: {id} {state}"
 

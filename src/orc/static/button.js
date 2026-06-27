@@ -8,7 +8,7 @@ document.querySelectorAll(".orc-runner").forEach((el) => {
 });
 
 document.querySelector(".orc-pause")?.addEventListener("click", (e) => {
-    get(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).finally(() => location.reload());
+    get(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).then((ok) => { if (ok) location.reload(); });
 });
 
 const highlight_configs = window.orcHighlightConfigs.map(([name, start, end]) => [
