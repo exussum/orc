@@ -154,6 +154,10 @@ def capture_leak_sensors():
     return yolink.snapshot()
 
 
+def capture_tv():
+    return {w.name: "off" if tv.is_off(w) else "on" for w in orc.WebOS}
+
+
 @unwrap_rule_container
 def execute(rule):
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
