@@ -67,6 +67,7 @@ def cfg():
             sounds=api.capture_sounds(),
             durations=config.durations,
             leak_sensors=api.capture_leak_sensors(),
+            tv_states=api.capture_tv(),
             version=app.orc.version_manager.version,
         )
 
