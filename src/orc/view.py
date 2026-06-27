@@ -36,7 +36,11 @@ class VersionManager:
         @wraps(func)
         def wrapper(*args, **kwargs):
             if not request.args.get("ignore-version") and not request.headers.get("orc-version") == VersionManager.version:
-                api.log(api.local_now(), m.LogSource.SYSTEM, Log.VERSION_MISMATCH.format(client=request.headers.get("orc-version"), server=VersionManager.version))
+                api.log(
+                    api.local_now(),
+                    m.LogSource.SYSTEM,
+                    Log.VERSION_MISMATCH.format(client=request.headers.get("orc-version"), server=VersionManager.version),
+                )
                 return {"version": VersionManager.version}, 412
             result = func(*args, **kwargs)
             if result is not None:

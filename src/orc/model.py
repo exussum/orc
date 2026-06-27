@@ -27,7 +27,7 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
-_CLASS_SORT = {"TV": 0, "Light": 1, "Chromecast": 2}
+_CLASS_SORT = {"TV": 0, "Light": 1, "Chromecast": 2, "AC": 3}
 
 
 class LogSource(str, Enum):
@@ -229,8 +229,8 @@ def build_durations(doc, section):
 
 
 def build_enum(doc, section, sub_section, id_lookup=None):
-    if sub_section not in ("Light", "Chromecast", "TV", "Leak"):
-        raise ValueError(f"sub_section must be 'Light', 'Chromecast', 'TV', or 'Leak', got '{sub_section}'")
+    if sub_section not in ("Light", "Chromecast", "TV", "Leak", "AC"):
+        raise ValueError(f"sub_section must be 'Light', 'Chromecast', 'TV', 'Leak', or 'AC', got '{sub_section}'")
 
     sub_table = next(
         (sub_table for (type, sub_table) in _doc_to_sub_tables(doc, section, 3) if type == sub_section),
