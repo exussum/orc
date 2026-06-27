@@ -58,10 +58,11 @@
             </div>
             <div class="p-4">
                 <ul class="list-disc list-inside">
+                    <li>Internal Version: {{ version }}</li>
                     <li>Snapshot State: {{ ctx.snapshot_manager.snapshot }}</li>
+                    <li>Theme Override: {{ theme_override }}</li>
                     <li>Today's theme: {{ today_theme }}</li>
                     <li>Tomorrow's theme: {{ tomorrow_theme }}</li>
-                    <li>Theme Override: {{ theme_override }}</li>
                 </ul>
             </div>
         </div>

@@ -270,8 +270,8 @@ def present_names():
     return {name for name, ts in sqlite.fetch_presence().items() if ts >= cutoff}
 
 
-def expire_presence(names):
-    sqlite.delete_presence(names, local_now())
+def expire_presence(names, force=False):
+    sqlite.delete_presence(names, local_now(), force)
 
 
 def delete_all_presence():
@@ -406,7 +406,6 @@ def setup_scheduler(ctx):
         )
 
 
-
 def matching_items(rule, force, now, pnames):
     if force:
         return rule.items
@@ -422,8 +421,6 @@ def matching_items(rule, force, now, pnames):
         elif c.trigger in _WEATHER_TRIGGERS and pnames and c.trigger in feeds.fetch_weather(hour, *config.lat_long):
             matched.append(c)
     return tuple(matched)
-
-
 
 
 @requires_ctx
