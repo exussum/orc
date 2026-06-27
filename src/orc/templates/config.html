@@ -84,6 +84,12 @@
                             <li>{{ c.what.name }}: {{ c.content or '—' }} @ {{ c.volume }}%</li>
                         {% endfor %}
                     </ul>
+                    <h5 class="font-semibold mb-1">TV</h5>
+                    <ul class="list-disc list-inside mb-3">
+                        {% for name, state in tv_states.items() %}
+                            <li>{{ name }}: {{ state }}</li>
+                        {% endfor %}
+                    </ul>
                     <h5 class="font-semibold mb-1">Leak Sensors</h5>
                     <ul class="list-disc list-inside">
                         {% for s in leak_sensors %}

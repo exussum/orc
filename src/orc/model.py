@@ -185,12 +185,12 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
         return obj
 
 
-def build_config(doc, section, light, chromecast, broadlink, required=()):
+def build_config(doc, section, light, chromecast, broadlink, webos, required=()):
     sub_tables = list(_doc_to_sub_tables(doc, section, 3))
     if invalid := _validate_states(sub_tables, 2):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{section}': {details}")
-    result = {type: Configs(*[_build_config(c[1], chromecast, light, broadlink, c[2]) for c in e]) for type, e in sub_tables}
+    result = {type: Configs(*[_build_config(c[1], chromecast, light, broadlink, webos, c[2]) for c in e]) for type, e in sub_tables}
     if missing := set(required) - result.keys():
         raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
     return result
@@ -283,7 +283,7 @@ def build_plugins(doc, section):
     return result
 
 
-def build_themes(doc, routine_section, theme_section, light, chromecast, broadlink, people=None):
+def build_themes(doc, routine_section, theme_section, light, chromecast, broadlink, webos, people=None):
     routine_tables = list(_doc_to_sub_tables(doc, routine_section, 5))
 
     if invalid := _validate_states(routine_tables, 3):
@@ -305,7 +305,7 @@ def build_themes(doc, routine_section, theme_section, light, chromecast, broadli
 
     routines = {}
     for type, e in routine_tables:
-        configs = [_build_config(c[2], chromecast, light, broadlink, c[3], c[4]) for c in e]
+        configs = [_build_config(c[2], chromecast, light, broadlink, webos, c[3], c[4]) for c in e]
         routines[type] = Routine(e[0][1], "", configs)
 
     if missing := {"Reset"} - {r.name for r in routines.values()}:
@@ -403,10 +403,10 @@ def squish_configs(*configs, state_override=None):
     return Configs(*rules)
 
 
-def _build_config(cmd, chromecast, light, broadlink, state, trigger=None):
+def _build_config(cmd, chromecast, light, broadlink, webos, state, trigger=None):
     if state.isdigit():
         state = int(state)
-    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Chromecast": chromecast, "BroadLink": broadlink}), state, trigger=trigger or None)
+    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Chromecast": chromecast, "BroadLink": broadlink, "WebOS": webos}), state, trigger=trigger or None)
 
 
 def _op_cmp(k):
