@@ -31,7 +31,8 @@ class PluginCtx:
     snapshot_manager: SnapshotManager
     Light: type[DeviceEnum]
     Chromecast: type[DeviceEnum]
-    TV: type[DeviceEnum]
+    BroadLink: type[DeviceEnum]
+    WebOS: type[DeviceEnum]
     config: OrcConfig
     api: ModuleType
     model: ModuleType
@@ -55,13 +56,14 @@ def back_on_schedule(ctx):
 
 
 def build_ctx(snapshot_manager, scheduler=None):
-    from orc import TV, Chromecast, Light, api, config, model
+    from orc import BroadLink, WebOS, Chromecast, Light, api, config, model
 
     return PluginCtx(
         snapshot_manager=snapshot_manager,
         Light=Light,
         Chromecast=Chromecast,
-        TV=TV,
+        BroadLink=BroadLink,
+        WebOS=WebOS,
         config=config,
         api=api,
         model=model,
@@ -82,7 +84,7 @@ def light_test(ctx):
 
 
 def pair_lg_tv(ctx):
-    for tv in ctx.TV:
+    for tv in ctx.WebOS:
         ctx.api.pair_lg_tv(tv.value)
 
 
@@ -169,7 +171,7 @@ def _run_trigger_sensor_off(ctx):
     present = plugin_ctx.api.check_presence(ctx=ctx)
 
     if not present:
-        plugin_ctx.api.execute(plugin_ctx.model.Config(plugin_ctx.TV, plugin_ctx.config.OFF))
+        plugin_ctx.api.execute(plugin_ctx.model.Config(plugin_ctx.WebOS, plugin_ctx.config.OFF))
 
     if not _daytime(plugin_ctx):
         # If it's night, the lights were unaffected, just stop the sound.

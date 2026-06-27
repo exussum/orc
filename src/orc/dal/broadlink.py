@@ -23,14 +23,14 @@ def _send(dev, code_b64):
 
 @requires_enabled(None)
 def set_ac(device, codes_file, mode, fan, temp):
-    _send(_connect(device), _codes(codes_file)["commands"][mode][fan][str(temp)])
+    _send(_connect(device), _codes(codes_file)["ac"]["commands"][mode][fan][str(temp)])
 
 
 @requires_enabled(None)
-def tv_on(device, codes_file):
-    _send(_connect(device), _codes(codes_file)["commands"]["on"])
+def tv_toggle(device, codes_file):
+    _send(_connect(device), _codes(codes_file)["tv"]["commands"]["toggle"])
 
 
 @requires_enabled(None)
 def ac_off(device, codes_file):
-    _send(_connect(device), _codes(codes_file)["commands"]["off"])
+    _send(_connect(device), _codes(codes_file)["ac"]["commands"]["off"])
