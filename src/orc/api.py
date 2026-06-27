@@ -25,7 +25,7 @@ from orc._decorators import (
     synchronized,
     unwrap_rule_container,
 )
-from orc.dal import chromecast, feeds, hubitat, sqlite, tv, usb, yolink
+from orc.dal import broadlink, chromecast, feeds, hubitat, sqlite, tv, usb, yolink
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
@@ -182,6 +182,9 @@ def execute(rule):
         elif isinstance(w, orc.TV):
             if rule.state == config.OFF:
                 tv.off(w)
+            elif rule.state == config.ON:
+                _TV_CODES = None
+                broadlink.tv_on(w, _TV_CODES)
             else:
                 raise Exception(f"Unsupported TV state: {rule.state!r}")
         else:
