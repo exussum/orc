@@ -5,7 +5,7 @@ import signal
 import sys
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import time, timedelta
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
@@ -117,17 +117,21 @@ def trigger_sensor(ctx, device_id, event):
         return
 
     entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
+    now = ctx.api.local_now()
 
     if event == _SENSOR_EVENT_ACTIVE:
-        ctx.api.execute(ctx.model.Config(entrance, 20))
         if _daytime(ctx):
+            ctx.api.execute(ctx.model.Config(entrance, 20))
             ctx.api.execute(ctx.config.default_config)
+        else:
+            ctx.api.execute(ctx.model.Config(entrance, 1))
+
         _each_sound(ctx, ctx.api.pause)
     else:
         ctx.api.execute(ctx.model.Config(entrance, ctx.config.OFF))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
-            DateTrigger(ctx.api.local_now() + timedelta(minutes=2), timezone=ctx.config.tz),
+            DateTrigger(now + timedelta(minutes=2), timezone=ctx.config.tz),
             name="Trigger Sensor",
             id="trigger-sensor",
             replace_existing=True,
