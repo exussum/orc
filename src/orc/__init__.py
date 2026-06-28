@@ -39,6 +39,7 @@ class Config:
         Chromecast = m.build_enum(doc, "Devices", "Chromecast")
         BroadLink = m.build_enum(doc, "Devices", "BroadLink")
         WebOS = m.build_enum(doc, "Devices", "WebOS")
+        LGTV = m.build_enum(doc, "Devices", "LGTV")
         Leak = m.build_enum(doc, "Devices", "Leak")
         AC = m.build_enum(doc, "Devices", "AC")
         globals()["Light"] = Light
@@ -47,12 +48,13 @@ class Config:
         globals()["WebOS"] = WebOS
         globals()["Leak"] = Leak
         globals()["AC"] = AC
+        globals()["LGTV"] = LGTV
         self.virtual_devices = {e for e in Light if isinstance(e.value, int) and e.value < 0}
         self.people = m.build_people(doc, "People")
-        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, BroadLink, WebOS, self.people)
+        self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, LGTV, self.people)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
-        self.room_configs = m.build_config(doc, "Room Configs", Light, Chromecast, BroadLink, WebOS, required=("Living Room",))
-        self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Chromecast, BroadLink, WebOS)
+        self.room_configs = m.build_config(doc, "Room Configs", Light, Chromecast, LGTV, required=("Living Room",))
+        self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
         self.plugins = m.build_plugins(doc, "Plugins")
         self.all_configs = self.ad_hoc_routines | self.room_configs
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=self.OFF)

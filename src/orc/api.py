@@ -155,7 +155,7 @@ def capture_leak_sensors():
 
 
 def capture_tv():
-    return {w.name: "off" if tv.is_off(w) else "on" for w in orc.WebOS}
+    return {w.name: "off" if tv.is_off(w) else "on" for w in orc.LGTV}
 
 
 @unwrap_rule_container
@@ -184,18 +184,15 @@ def execute(rule):
                         (rule.state, rule.state) if "http" in rule.state else chromecast.fetch_youtube_stream_metadata(rule.state)
                     )
                 chromecast.play(w, *stream[rule.state])
-        elif isinstance(w, orc.WebOS):
+        elif isinstance(w, orc.LGTV):
+            webos_device, bl_device = orc.WebOS[w.name], orc.BroadLink[w.name]
             if rule.state == config.OFF:
-                tv.off(w)
+                tv.off(webos_device)
+            elif rule.state == config.ON:
+                if tv.is_off(webos_device):
+                    broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
             else:
-                raise Exception(f"WebOS only supports off, got: {rule.state!r}")
-        elif isinstance(w, orc.BroadLink):
-            if rule.state == config.ON:
-                if tv.is_off(orc.WebOS[w.name]):
-                    broadlink.tv_toggle(w, _BROADLINK_CODES)
-            else:
-                raise Exception(f"BroadLink only supports on, got: {rule.state!r}")
-
+                raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
         else:
             raise Exception("Unknown type")
         sleep(0.1)
