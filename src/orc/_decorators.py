@@ -1,3 +1,6 @@
+# Separate from api.py to avoid a circular import: api.py imports these decorators,
+# so anything that imports api must not live here.
+
 import contextlib
 import os
 import threading
@@ -51,3 +54,5 @@ def unwrap_rule_container(f):
             f(*args)
 
     return wrapper
+
+

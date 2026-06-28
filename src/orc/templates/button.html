@@ -5,17 +5,17 @@
             {% for id in room_configs %}
                 <div class="text-sm self-center">{{ id }}</div>
                 <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                    <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                    <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb-outline"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                    <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#map-pin"/></svg>
                     </button>
                 </div>
@@ -29,7 +29,7 @@
                 {% for id in ad_hoc_routines %}
                     <div class="orc-button">
                         <div class="orc-button-label">{{ id }}</div>
-                        <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                        <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                             <svg class="orc-ribbon">
                                 <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                             </svg>
@@ -47,7 +47,7 @@
                 {% for id in plugins if id not in ["Pair LG TV", "Reboot Orc", "Reboot Hubitat", "Light Test", "Sound Test"] %}
                     <div class="orc-button">
                         <div class="orc-button-label">{{ id }}</div>
-                        <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">
+                        <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                             <svg class="orc-ribbon">
                                 <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
                             </svg>
@@ -68,7 +68,7 @@
                     </summary>
                     <div class="orc-dropdown-menu">
                         {% for id in schedule_routines|sort %}
-                            <a class="orc-dropdown-item orc-runner" href="#" data-type="console" data-id="{{ id }}" data-duration="{{ durations[id] }}">{{ id }}</a>
+                            <a class="orc-dropdown-item orc-runner" href="#" data-type="console" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">{{ id }}</a>
                         {% endfor %}
                     </div>
                 </details>
