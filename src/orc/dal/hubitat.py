@@ -15,17 +15,6 @@ def fetch_hubitat_config(secrets):
     return {e["label"]: (int(e["id"]), frozenset(e.get("capabilities", []))) for e in resp.json()}
 
 
-def _fetch_hubitat_devices():
-    resp = requests.get(f"{config.base_url}/devices/all{config.secrets.access_token}", timeout=config.http_timeout)
-    resp.raise_for_status()
-    return {int(d["id"]): d for d in resp.json()}
-
-
-def _hubitat_body_to_state(body):
-    attrs = body["attributes"]
-    return int(attrs["level"]) if ("level" in attrs and attrs["switch"] == config.ON) else attrs["switch"]
-
-
 @requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=config.OFF) for light in lights)))
 def fetch_light_states(lights):
     bodies = _fetch_hubitat_devices()
@@ -67,3 +56,14 @@ def update_light(light, on=None, brightness=None):
 def reboot():
     resp = requests.post(f"{config.base_url}/hub/reboot{config.secrets.access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
+
+
+def _fetch_hubitat_devices():
+    resp = requests.get(f"{config.base_url}/devices/all{config.secrets.access_token}", timeout=config.http_timeout)
+    resp.raise_for_status()
+    return {int(d["id"]): d for d in resp.json()}
+
+
+def _hubitat_body_to_state(body):
+    attrs = body["attributes"]
+    return int(attrs["level"]) if ("level" in attrs and attrs["switch"] == config.ON) else attrs["switch"]

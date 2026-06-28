@@ -6,6 +6,8 @@ from sqlalchemy.engine.url import make_url
 
 from orc import config
 
+_ALPHA = 0.3
+
 
 def delete_presence(names, before, force):
     with _theme_override_conn() as conn:
@@ -94,19 +96,6 @@ def read_lights():
         return conn.execute("SELECT device_id, state FROM orc_light WHERE state IS NOT NULL").fetchall()
 
 
-@contextmanager
-def _theme_override_conn():
-    conn = sqlite3.connect(make_url(config.jobs_db).database)
-    try:
-        with conn:
-            yield conn
-    finally:
-        conn.close()
-
-
-_ALPHA = 0.3
-
-
 def update_avg(name, duration):
     sql = """
     INSERT INTO orc_durations (name, samples, avg) VALUES (?, 1, ?)
@@ -130,3 +119,13 @@ def write_light(light, *, type=None, state=None):
             "state = COALESCE(excluded.state, orc_light.state)",
             (light.value, type, str(state) if state is not None else None),
         )
+
+
+@contextmanager
+def _theme_override_conn():
+    conn = sqlite3.connect(make_url(config.jobs_db).database)
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
