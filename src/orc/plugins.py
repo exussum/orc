@@ -126,7 +126,7 @@ def trigger_sensor(ctx, device_id, event):
             ctx.api.execute(ctx.model.Config(entrance, 20))
             ctx.api.execute(ctx.config.default_config)
         else:
-            ctx.api.execute(ctx.model.Config(entrance, 1))
+            ctx.api.execute(ctx.model.Config(entrance[:1], 1))
 
         _each_sound(ctx, ctx.api.pause)
     else:
