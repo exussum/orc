@@ -106,11 +106,12 @@ def _theme_override_conn():
 
 _ALPHA = 0.3
 
-def update_avg(name, duration): 
+
+def update_avg(name, duration):
     sql = """
     INSERT INTO orc_durations (name, samples, avg) VALUES (?, 1, ?)
     ON CONFLICT(name) DO UPDATE SET samples = samples + 1, avg = ? * ? + (1 - ?) * avg WHERE name = ?;
-    """     
+    """
     with _theme_override_conn() as conn:
         conn.execute(sql, (name, duration, duration, _ALPHA, _ALPHA, name))
 
