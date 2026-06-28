@@ -3,6 +3,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
 from functools import wraps
+from itertools import groupby
 
 from flask import Blueprint
 from flask import current_app as app
@@ -75,7 +76,7 @@ def cfg():
 @bp.route("/api/rebuild_jobs")
 def rebuild_jobs():
     with api.record_duration("Rebuild Jobs"):
-        ctx.scheduler.remove_all_jobs()
+        app.orc.scheduler.remove_all_jobs()
         api.rebuild_iot_schedule(ctx=app.orc)
     return {"version": VersionManager.version}, 200
 
@@ -151,8 +152,9 @@ def index():
 
 @bp.route("/log/")
 def log():
+    entries_grouped = [(day, list(es)) for day, es in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
     return (
-        render_template("log.html", version=app.orc.version_manager.version, entries=api.log_entries()),
+        render_template("log.html", version=app.orc.version_manager.version, entries_grouped=entries_grouped),
         200,
         {"Cache-control": "no-store"},
     )
@@ -259,12 +261,13 @@ def schedule():
     present_names = api.present_names()
     absent_by_job = {j.id: not api.matching_items(j.args[0].rule, False, j.trigger.run_date, present_names) for j in jobs}
     weather_by_job = {j.id: any(c.trigger in api._WEATHER_TRIGGERS for c in j.args[0].rule.items) for j in jobs}
+    jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
 
     return (
         render_template(
             "schedule.html",
             version=app.orc.version_manager.version,
-            jobs=jobs,
+            jobs_grouped=jobs_grouped,
             theme=theme,
             durations=dict(api.fetch_durations()),
             absent_by_job=absent_by_job,

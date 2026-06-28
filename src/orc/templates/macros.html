@@ -1,0 +1,31 @@
+{% macro btn(label, icon, duration) -%}
+<div class="orc-button">
+    <div class="orc-button-label">{{ label }}</div>
+    <button class="orc-btn orc-config-runner" data-id="{{ label }}" data-duration="{{ duration }}">
+        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ icon }}"/></svg>
+    </button>
+</div>
+{%- endmacro %}
+
+{% macro btn_stripe(label, icon, duration) -%}
+<div class="orc-button">
+    <div class="orc-button-label">{{ label }}</div>
+    <button class="orc-runner orc-btn" data-type="console" data-id="{{ label }}" data-duration="{{ duration }}">
+        <svg class="orc-ribbon">
+            <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
+        </svg>
+        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ icon }}"/></svg>
+    </button>
+</div>
+{%- endmacro %}
+
+{% macro day_card(day, table_fixed=false) %}
+<div class="orc-card mb-2">
+    <div class="px-4 pt-3 pb-0 text-sm font-semibold">{{ day.strftime("%A, %B %-d") }}</div>
+    <div class="p-4 overflow-x-auto">
+        <table class="w-full{% if table_fixed %} table-fixed{% endif %} text-left mb-0">
+            {{ caller() }}
+        </table>
+    </div>
+</div>
+{% endmacro %}
