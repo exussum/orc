@@ -1,6 +1,7 @@
 import contextlib
 import copy
 import itertools
+import math
 import os
 import sys
 import threading
@@ -33,16 +34,21 @@ from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
-from orc.dal.sqlite import fetch_durations  # noqa: F401
+from orc.dal.sqlite import fetch_durations as _fetch_durations
+from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import update_avg  # noqa: F401
-from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.usb import play_alert, play_text
 from orc.locale import Log
 
+JOBSTORE_DEFAULT = "default"
+JOBSTORE_MEMORY = "memory"
+
 _BROADLINK_CODES = "/etc/orc/broadlink_codes.json"
 _PRESENCE_WINDOW = timedelta(hours=9)
+_YOLINK_BATTERY_LOW_THRESHOLD = 1
+_YOLINK_SIGNAL_WEAK_THRESHOLD = -90
 _ACTIVITY_LOG = m.ActivityLog()
 _WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
 
@@ -52,8 +58,8 @@ _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
 _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
 
 
-JOBSTORE_DEFAULT = "default"
-JOBSTORE_MEMORY = "memory"
+def fetch_durations():
+    return [(name, math.ceil(avg)) for name, avg in _fetch_durations()]
 
 
 @contextlib.contextmanager
@@ -105,8 +111,9 @@ def test_yolink(name):
     return yolink.simulate_transition(name)
 
 
-_YOLINK_BATTERY_LOW_THRESHOLD = 1
-_YOLINK_SIGNAL_WEAK_THRESHOLD = -90
+def start_yolink():
+    yolink.set_transition_callback(_on_yolink_transition)
+    yolink.start()
 
 
 def _on_yolink_transition(name, kind, old, new):
@@ -141,11 +148,6 @@ def _on_yolink_transition(name, kind, old, new):
     if msg:
         log(local_now(), m.LogSource.IOT, msg)
         play_text(msg)
-
-
-def start_yolink():
-    yolink.set_transition_callback(_on_yolink_transition)
-    yolink.start()
 
 
 # --- Device control ---
@@ -462,6 +464,18 @@ def rebuild_iot_schedule(ctx):
             )
 
 
+def light_test():
+    execute(m.Config(orc.Light, config.ON))
+    time.sleep(10)
+
+
+def replay_day(now):
+    jobs = sorted(get_schedule(), key=lambda x: x[0])
+    present = present_names()
+    configs = (replace(cfg, items=matching_items(cfg, False, now, present)) for (when, cfg) in jobs if when <= now)
+    execute(m.squish_configs(*configs))
+
+
 @requires_ctx
 def _run_cal_job(job, ctx):
     if job.event_type == m.CalendarEvent.WARNING:
@@ -503,15 +517,3 @@ def _schedule_cal_tasks(scheduler):
             name=event.summary,
             jobstore=JOBSTORE_MEMORY,
         )
-
-
-def light_test():
-    execute(m.Config(orc.Light, config.ON))
-    time.sleep(10)
-
-
-def replay_day(now):
-    jobs = sorted(get_schedule(), key=lambda x: x[0])
-    present = present_names()
-    configs = (replace(cfg, items=matching_items(cfg, False, now, present)) for (when, cfg) in jobs if when <= now)
-    execute(m.squish_configs(*configs))

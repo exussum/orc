@@ -15,13 +15,13 @@ import orc as config
 from orc._locked_dict import LockedDict
 from orc.model import SensorState
 
+STATE_DRY = "normal"
+STATE_WET = "alert"
+
 _AUTH_URL = "https://api.yosmart.com/open/yolink/token"
 _API_URL = "https://api.yosmart.com/open/yolink/v2/api"
 _MQTT_HOST = "api.yosmart.com"
 _MQTT_PORT = 8003
-
-STATE_DRY = "normal"
-STATE_WET = "alert"
 
 _log = logging.getLogger(__name__)
 
@@ -53,15 +53,6 @@ def snapshot():
     return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in config.Leak]
 
 
-def _transition_to(new_state, require=None):
-    def fn(current):
-        if current is None or (require is not None and current.state != require):
-            return None
-        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=config.config.tz))
-
-    return fn
-
-
 def simulate_transition(name: str):
     sensor = next((s for s in _states.copy().values() if s.name == name), None)
     if sensor is None:
@@ -80,6 +71,29 @@ def simulate_transition(name: str):
 
     threading.Thread(target=_revert, name=f"yolink-test-revert-{name}", daemon=True).start()
     return True
+
+
+def start():
+    if not len(config.Leak):
+        _log.info("yolink: no Leak devices in config.md, skipping")
+        return
+
+    if not (config.config.secrets.yolink_id and config.config.secrets.yolink_secret):
+        _log.info("yolink: secrets not set, skipping")
+        return
+
+    global _states
+    _states = LockedDict({device.value: SensorState(name=device.name, device_id=device.value) for device in config.Leak})
+    threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()
+
+
+def _transition_to(new_state, require=None):
+    def fn(current):
+        if current is None or (require is not None and current.state != require):
+            return None
+        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=config.config.tz))
+
+    return fn
 
 
 def _fire(kind, name, old, new):
@@ -283,17 +297,3 @@ def _run():
     finally:
         _log.error("yolink: thread exiting; signaling SIGTERM to process for restart")
         os.kill(os.getpid(), signal.SIGTERM)
-
-
-def start():
-    if not len(config.Leak):
-        _log.info("yolink: no Leak devices in config.md, skipping")
-        return
-
-    if not (config.config.secrets.yolink_id and config.config.secrets.yolink_secret):
-        _log.info("yolink: secrets not set, skipping")
-        return
-
-    global _states
-    _states = LockedDict({device.value: SensorState(name=device.name, device_id=device.value) for device in config.Leak})
-    threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()

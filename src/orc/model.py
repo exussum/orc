@@ -17,10 +17,10 @@ if TYPE_CHECKING:
     from orc.api import SnapshotManager
     from orc.view import VersionManager
 
-_YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
-
 SUNRISE = "sunrise"
 SUNSET = "sunset"
+
+_YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
@@ -282,6 +282,30 @@ def build_themes(doc, routine_section, theme_section, light, chromecast, lgtv, p
     return {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
 
 
+def squish_configs(*configs, state_override=None):
+    """
+    Take multiple Configs objects, and merge them into one as if they were run sequentially, removing duplicates
+    and handling brightness changes.
+    """
+    rules = defaultdict(list)
+    for routine in configs:
+        for rule in routine.items:
+
+            what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+            for e in what:
+                rules[e].append(
+                    Config(
+                        what=e,
+                        state=rule.state if state_override is None else state_override,
+                        trigger=rule.trigger,
+                    )
+                )
+
+    rules = list(chain.from_iterable(_squish(e) for e in rules.values()))
+    rules.sort(key=_op_cmp)
+    return Configs(*rules)
+
+
 def _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people):
     from orc import Config
 
@@ -359,30 +383,6 @@ def _squish(items):
         if isinstance(items[e].state, int):
             return (items[e], last)
     return (last,)
-
-
-def squish_configs(*configs, state_override=None):
-    """
-    Take multiple Configs objects, and merge them into one as if they were run sequentially, removing duplicates
-    and handling brightness changes.
-    """
-    rules = defaultdict(list)
-    for routine in configs:
-        for rule in routine.items:
-
-            what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-            for e in what:
-                rules[e].append(
-                    Config(
-                        what=e,
-                        state=rule.state if state_override is None else state_override,
-                        trigger=rule.trigger,
-                    )
-                )
-
-    rules = list(chain.from_iterable(_squish(e) for e in rules.values()))
-    rules.sort(key=_op_cmp)
-    return Configs(*rules)
 
 
 def _build_config(cmd, chromecast, light, lgtv, state, trigger=None):

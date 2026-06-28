@@ -26,10 +26,6 @@ def flask():
     app.run(host="0.0.0.0", port=8000, use_reloader=False)
 
 
-def _print_started():
-    print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
-
-
 def web():
     class GunicornApp(BaseApplication):
         def load_config(self):
@@ -51,6 +47,10 @@ def web():
             return app
 
     GunicornApp().run()
+
+
+def _print_started():
+    print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
 def _build_app():
