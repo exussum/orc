@@ -56,7 +56,7 @@ def back_on_schedule(ctx):
 
 
 def build_ctx(snapshot_manager, scheduler=None):
-    from orc import BroadLink, WebOS, Chromecast, Light, api, config, model
+    from orc import BroadLink, Chromecast, Light, WebOS, api, config, model
 
     return PluginCtx(
         snapshot_manager=snapshot_manager,
