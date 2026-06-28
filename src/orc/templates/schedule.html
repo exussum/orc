@@ -26,7 +26,7 @@
                         <tr>
                             <td class="px-2 py-3 align-middle w-16">
                                 <div class="relative inline-block">
-                                    <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.id }}" data-duration="{{ durations[job.name] }}">&nbsp;</button>
+                                    <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.id }}" data-duration="{{ durations.get(job.name, 0) }}">&nbsp;</button>
                                     {% if weather_by_job[job.id] %}<span class="orc-weather-badge">🌤</span>{% endif %}
                                 </div>
                             </td>

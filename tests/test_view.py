@@ -214,7 +214,7 @@ def test_set_theme_set_parses_dates(client, ctx, good_version):
 
 
 def test_durations_returns_config(client):
-    with patch.object(config, "durations", {"TV Lights": 3.0, "Reset": 0.5}):
+    with patch("orc.api.fetch_durations", return_value=[("TV Lights", 3.0), ("Reset", 0.5)]):
         response = client.get("/api/durations")
     assert response.status_code == 200
     assert response.get_json() == {"TV Lights": 3.0, "Reset": 0.5}

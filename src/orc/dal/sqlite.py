@@ -49,6 +49,7 @@ def init_db():
         conn.execute("CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)")
         conn.execute("CREATE TABLE IF NOT EXISTS orc_light (device_id INTEGER PRIMARY KEY, type TEXT, state TEXT)")
         conn.execute("CREATE TABLE IF NOT EXISTS orc_lg_tv (hostname TEXT PRIMARY KEY, client_key TEXT NOT NULL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS orc_durations (name TEXT PRIMARY KEY, samples INTEGER NOT NULL, avg REAL NOT NULL)")
 
 
 def insert_lg_tv_client_key(hostname, client_key):
@@ -101,6 +102,22 @@ def _theme_override_conn():
             yield conn
     finally:
         conn.close()
+
+
+_ALPHA = 0.3
+
+def update_avg(name, duration): 
+    sql = """
+    INSERT INTO orc_durations (name, samples, avg) VALUES (?, 1, ?)
+    ON CONFLICT(name) DO UPDATE SET samples = samples + 1, avg = ? * ? + (1 - ?) * avg WHERE name = ?;
+    """     
+    with _theme_override_conn() as conn:
+        conn.execute(sql, (name, duration, duration, _ALPHA, _ALPHA, name))
+
+
+def fetch_durations():
+    with _theme_override_conn() as conn:
+        return conn.execute("SELECT name, avg FROM orc_durations").fetchall()
 
 
 def write_light(light, *, type=None, state=None):
