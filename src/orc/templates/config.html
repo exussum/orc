@@ -18,14 +18,12 @@
                         <svg class="w-5 h-5"><use href="/static/icons.svg#speaker-wave"/></svg>
                     </button>
                 </div>
-                {% for s in leak_sensors %}
-                    <div class="orc-button">
-                        <div class="orc-button-label">Test {{ s.name.replace('_', ' ').title() }}</div>
-                        <button class="orc-btn orc-yolink-test" data-name="{{ s.name }}">
-                            <svg class="w-5 h-5"><use href="/static/icons.svg#beaker"/></svg>
-                        </button>
-                    </div>
-                {% endfor %}
+                <div class="orc-button">
+                    <div class="orc-button-label">Test Kitchen Leak Sensor</div>
+                    <button class="orc-btn orc-yolink-test" data-name="KITCHEN_LEAK_SENSOR" data-duration="{{ durations.get('KITCHEN_LEAK_SENSOR', 0) }}">
+                        <svg class="w-5 h-5"><use href="/static/icons.svg#beaker"/></svg>
+                    </button>
+                </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Pair LG TV</div>
                     <button id="orc-pair-lg-tv" class="orc-btn" data-duration="{{ durations.get('Pair LG TV', 0) }}">
@@ -34,7 +32,7 @@
                 </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Rebuild Jobs</div>
-                    <button id="orc-rebuild-jobs" class="orc-btn">
+                    <button id="orc-rebuild-jobs" class="orc-btn" data-duration="{{ durations.get('Rebuild Jobs', 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#calendar"/></svg>
                     </button>
                 </div>
