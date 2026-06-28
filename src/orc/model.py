@@ -27,7 +27,7 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
-_CLASS_SORT = {"BroadLink": 0, "WebOS": 0, "Light": 1, "Chromecast": 2, "AC": 3}
+_CLASS_SORT = {"LGTV": 0, "Light": 1, "Chromecast": 2, "AC": 3}
 
 
 class LogSource(str, Enum):
@@ -185,12 +185,12 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
         return obj
 
 
-def build_config(doc, section, light, chromecast, broadlink, webos, required=()):
+def build_config(doc, section, light, chromecast, lgtv, required=()):
     sub_tables = list(_doc_to_sub_tables(doc, section, 3))
     if invalid := _validate_states(sub_tables, 2):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{section}': {details}")
-    result = {type: Configs(*[_build_config(c[1], chromecast, light, broadlink, webos, c[2]) for c in e]) for type, e in sub_tables}
+    result = {type: Configs(*[_build_config(c[1], chromecast, light, lgtv, c[2]) for c in e]) for type, e in sub_tables}
     if missing := set(required) - result.keys():
         raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
     return result
@@ -229,13 +229,10 @@ def build_durations(doc, section):
 
 
 def build_enum(doc, section, sub_section, id_lookup=None):
-    if sub_section not in ("Light", "Chromecast", "BroadLink", "WebOS", "Leak", "AC"):
-        raise ValueError(f"sub_section must be 'Light', 'Chromecast', 'BroadLink', 'WebOS', 'Leak', or 'AC', got '{sub_section}'")
+    if sub_section not in ("LGTV", "Light", "Chromecast", "BroadLink", "WebOS", "Leak", "AC"):
+        raise ValueError(f"sub_section must be 'LGTV', 'Light', 'Chromecast', 'BroadLink', 'WebOS', 'Leak', or 'AC', got '{sub_section}'")
 
-    sub_table = next(
-        (sub_table for (type, sub_table) in _doc_to_sub_tables(doc, section, 3) if type == sub_section),
-        None,
-    )
+    sub_table = next((sub_table for (type, sub_table) in _doc_to_sub_tables(doc, section, 3) if type == sub_section), None)
     if sub_table is None:
         return DeviceEnum(sub_section, {}, module="orc")
 
@@ -283,42 +280,43 @@ def build_plugins(doc, section):
     return result
 
 
-def build_themes(doc, routine_section, theme_section, light, chromecast, broadlink, webos, people=None):
+def build_themes(doc, routine_section, theme_section, light, chromecast, lgtv, people=None):
     routine_tables = list(_doc_to_sub_tables(doc, routine_section, 5))
+    theme_tables = list(_doc_to_sub_tables(doc, theme_section, 3))
+
+    _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people)
 
     if invalid := _validate_states(routine_tables, 3):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{routine_section}': {details}")
 
-    known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value} | {wc.value for wc in WeatherCondition}
-    invalid_trigger = [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in (None, "") and c[4] not in known_triggers]
-    if invalid_trigger:
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_trigger)
-        raise ValueError(f"Unknown trigger names in section '{routine_section}': {details}")
+    routines = {}
+    for type, e in routine_tables:
+        configs = [_build_config(c[2], chromecast, light, lgtv, c[3], c[4]) for c in e]
+        routines[type] = Routine(e[0][1], "", configs)
 
-    theme_tables = list(_doc_to_sub_tables(doc, theme_section, 3))
+    return {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
+
+
+def _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people):
+    from orc import Config
+
+    if missing := {Config.THEME_WORK_DAY, Config.THEME_DAY_OFF} - {e[0] for e in theme_tables}:
+        raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
 
     for theme_type, e in theme_tables:
         for c in e:
             if not _str_to_time(c[2]) and c[2] not in (SUNRISE, SUNSET):
                 raise ValueError(f"Invalid time '{c[2]}' in theme '{theme_type}': expected HH:MM, '{SUNRISE}', or '{SUNSET}'")
 
-    routines = {}
-    for type, e in routine_tables:
-        configs = [_build_config(c[2], chromecast, light, broadlink, webos, c[3], c[4]) for c in e]
-        routines[type] = Routine(e[0][1], "", configs)
+    known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value} | {wc.value for wc in WeatherCondition}
 
-    if missing := {"Reset"} - {r.name for r in routines.values()}:
+    if invalid_trigger := [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in (None, "") and c[4] not in known_triggers]:
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_trigger)
+        raise ValueError(f"Unknown trigger names in section '{routine_section}': {details}")
+
+    if missing := {"Reset"} - {c[1] for type, e in routine_tables for c in e}:
         raise ValueError(f"Missing required routines in section '{routine_section}': {', '.join(sorted(missing))}")
-
-    themes = {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
-
-    from orc import Config
-
-    if missing := {Config.THEME_WORK_DAY, Config.THEME_DAY_OFF} - themes.keys():
-        raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
-
-    return themes
 
 
 def _doc_to_sub_tables(doc, section, columns, *, min_columns=None):
@@ -403,10 +401,10 @@ def squish_configs(*configs, state_override=None):
     return Configs(*rules)
 
 
-def _build_config(cmd, chromecast, light, broadlink, webos, state, trigger=None):
+def _build_config(cmd, chromecast, light, lgtv, state, trigger=None):
     if state.isdigit():
         state = int(state)
-    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Chromecast": chromecast, "BroadLink": broadlink, "WebOS": webos}), state, trigger=trigger or None)
+    return Config(eval(cmd, {"__builtins__": {}}, {"Light": light, "Chromecast": chromecast, "LGTV": lgtv}), state, trigger=trigger or None)
 
 
 def _op_cmp(k):
