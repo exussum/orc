@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import itertools
 import os
@@ -32,8 +33,10 @@ from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
+from orc.dal.sqlite import fetch_durations  # noqa: F401
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
+from orc.dal.sqlite import update_avg  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.usb import play_alert, play_text
 from orc.locale import Log
@@ -51,6 +54,13 @@ _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_lo
 
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
+
+
+@contextlib.contextmanager
+def record_duration(name):
+    start = time.perf_counter()
+    yield
+    update_avg(name, time.perf_counter() - start)
 
 
 class ContextThreadPoolExecutor(ThreadPoolExecutor):

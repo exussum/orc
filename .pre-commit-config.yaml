@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pycqa/isort
+    rev: 8.0.1
+    hooks:
+      - id: isort
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: scripts/run-tests.sh
+        language: script
+        pass_filenames: false
+        always_run: true
