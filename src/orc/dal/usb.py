@@ -17,6 +17,18 @@ with silence_fd(2):
     _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
 
 
+def play_alert(path, level=None):
+    with wave.open(path, "rb") as wf:
+        channels, rate = wf.getnchannels(), wf.getframerate()
+        chunks = iter(lambda: wf.readframes(4096), b"")
+        _play_stream(chunks, channels, rate, _gain_for(level))
+
+
+def play_text(text, level=None):
+    chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
+    _play_stream(chunks, 1, _VOICE.config.sample_rate, _gain_for(level))
+
+
 def _scale_int16(frames, gain):
     if gain == 1.0:
         return frames
@@ -64,15 +76,3 @@ def _play_stream(chunks, channels, src_rate, gain):
 
 def _gain_for(level):
     return config.audio_volumes[level or config.AUDIO_INFO] / 100.0
-
-
-def play_alert(path, level=None):
-    with wave.open(path, "rb") as wf:
-        channels, rate = wf.getnchannels(), wf.getframerate()
-        chunks = iter(lambda: wf.readframes(4096), b"")
-        _play_stream(chunks, channels, rate, _gain_for(level))
-
-
-def play_text(text, level=None):
-    chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
-    _play_stream(chunks, 1, _VOICE.config.sample_rate, _gain_for(level))
