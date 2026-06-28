@@ -74,8 +74,9 @@ def cfg():
 
 @bp.route("/api/rebuild_jobs")
 def rebuild_jobs():
-    ctx.scheduler.remove_all_jobs()
-    api.rebuild_iot_schedule(ctx=app.orc)
+    with api.record_duration("Rebuild Jobs"):
+        ctx.scheduler.remove_all_jobs()
+        api.rebuild_iot_schedule(ctx=app.orc)
     return {"version": VersionManager.version}, 200
 
 
@@ -97,8 +98,9 @@ def console(id):
 
 @bp.route("/api/yolink/test/<name>")
 def yolink_test(name):
-    if not api.test_yolink(name):
-        return {"error": "Unknown leak sensor"}, 404
+    with api.record_duration(name):
+        if not api.test_yolink(name):
+            return {"error": "Unknown leak sensor"}, 404
     return {"version": VersionManager.version}, 200
 
 
