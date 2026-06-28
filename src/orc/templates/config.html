@@ -8,13 +8,13 @@
             <div class="orc-routine-buttons p-4">
                 <div class="orc-button">
                     <div class="orc-button-label">Light Test</div>
-                    <button class="orc-btn orc-config-runner" data-id="Light Test" data-duration="{{ durations['Light Test'] }}">
+                    <button class="orc-btn orc-config-runner" data-id="Light Test" data-duration="{{ durations.get('Light Test', 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Sound Test</div>
-                    <button class="orc-btn orc-config-runner" data-id="Sound Test" data-duration="{{ durations['Sound Test'] }}">
+                    <button class="orc-btn orc-config-runner" data-id="Sound Test" data-duration="{{ durations.get('Sound Test', 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#speaker-wave"/></svg>
                     </button>
                 </div>
@@ -28,7 +28,7 @@
                 {% endfor %}
                 <div class="orc-button">
                     <div class="orc-button-label">Pair LG TV</div>
-                    <button id="orc-pair-lg-tv" class="orc-btn" data-duration="{{ durations['Pair LG TV'] }}">
+                    <button id="orc-pair-lg-tv" class="orc-btn" data-duration="{{ durations.get('Pair LG TV', 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#tv"/></svg>
                     </button>
                 </div>
@@ -40,13 +40,13 @@
                 </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Reboot Orc</div>
-                    <button class="orc-btn orc-config-runner" data-id="Reboot Orc" data-duration="{{ durations['Reboot Orc'] }}">
+                    <button class="orc-btn orc-config-runner" data-id="Reboot Orc" data-duration="{{ durations.get('Reboot Orc', 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#arrow-path"/></svg>
                     </button>
                 </div>
                 <div class="orc-button">
                     <div class="orc-button-label">Reboot Hubitat</div>
-                    <button class="orc-btn orc-config-runner" data-id="Reboot Hubitat" data-duration="{{ durations['Reboot Hubitat'] }}">
+                    <button class="orc-btn orc-config-runner" data-id="Reboot Hubitat" data-duration="{{ durations.get('Reboot Hubitat', 0) }}">
                         <svg class="w-5 h-5"><use href="/static/icons.svg#arrow-path"/></svg>
                     </button>
                 </div>
