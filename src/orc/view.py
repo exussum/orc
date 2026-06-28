@@ -65,7 +65,7 @@ def cfg():
             theme_override=api.current_theme_override(),
             lights=api.capture_lights(),
             sounds=api.capture_sounds(),
-            durations=config.durations,
+            durations=dict(api.fetch_durations()),
             leak_sensors=api.capture_leak_sensors(),
             tv_states=api.capture_tv(),
             version=app.orc.version_manager.version,
@@ -82,13 +82,15 @@ def rebuild_jobs():
 @bp.route("/api/console/<id>")
 def console(id):
     if id in config.plugins:
-        plugins.execute_plugin(app.orc.snapshot_manager, id)
+        action = lambda: plugins.execute_plugin(app.orc.snapshot_manager, id)
     elif id in config.schedule_routines:
-        api.execute(config.schedule_routines[id])
+        action = lambda: api.execute(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
-        api.execute(m.squish_configs(config.reset_config, config.ad_hoc_routines[id]))
+        action = lambda: api.execute(m.squish_configs(config.reset_config, config.ad_hoc_routines[id]))
     else:
         return {"error": "Unknown routine"}, 404
+    with api.record_duration(id):
+        action()
     api.log(api.local_now(), m.LogSource.MANUAL, id)
     return {"version": VersionManager.version}, 200
 
@@ -137,7 +139,7 @@ def index():
             ad_hoc_routines=config.ad_hoc_routines,
             schedule_routines=config.schedule_routines,
             next_routine=next_schedule,
-            durations=config.durations,
+            durations=dict(api.fetch_durations()),
             version=app.orc.version_manager.version,
         ),
         200,
@@ -194,11 +196,13 @@ def presence():
 @bp.route("/api/remote/<id>")
 def remote(id):
     if id in ("TV Lights", "Partial TV Lights"):
-        api.replace_config_for(app.orc.snapshot_manager, id, timedelta(hours=3))
+        action = lambda: api.replace_config_for(app.orc.snapshot_manager, id, timedelta(hours=3))
     elif id in config.all_configs:
-        app.orc.snapshot_manager.resume(config.all_configs[id])
+        action = lambda: app.orc.snapshot_manager.resume(config.all_configs[id])
     else:
         return {"error": "Unknown id"}, 404
+    with api.record_duration(id):
+        action()
     api.log(api.local_now(), m.LogSource.REMOTE, id)
     app.orc.version_manager.bump_version()
     return {"version": VersionManager.version}, 200
@@ -209,14 +213,15 @@ def room(id):
     state = request.args.get("state")
     if id not in config.room_configs:
         return {"error": "Unknown room"}, 404
-    if state == config.ON:
-        api.execute(config.room_configs[id])
-    elif state == config.OFF:
-        api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.room_configs[id].items)))
-    elif state == config.FOLLOW:
-        api.execute(m.squish_configs(config.room_configs_off, config.room_configs[id]))
-    else:
-        raise Exception("Unknown state")
+    with api.record_duration(id):
+        if state == config.ON:
+            api.execute(config.room_configs[id])
+        elif state == config.OFF:
+            api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.room_configs[id].items)))
+        elif state == config.FOLLOW:
+            api.execute(m.squish_configs(config.room_configs_off, config.room_configs[id]))
+        else:
+            raise Exception("Unknown state")
     api.log(api.local_now(), m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
     return {"version": VersionManager.version}, 200
 
@@ -259,7 +264,7 @@ def schedule():
             version=app.orc.version_manager.version,
             jobs=jobs,
             theme=theme,
-            durations=config.durations,
+            durations=dict(api.fetch_durations()),
             absent_by_job=absent_by_job,
             weather_by_job=weather_by_job,
         ),
@@ -284,4 +289,4 @@ def version():
 
 @bp.route("/api/durations")
 def durations():
-    return config.durations, 200
+    return dict(api.fetch_durations()), 200
