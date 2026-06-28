@@ -1,42 +1,33 @@
 {% extends 'base.html' %}
+{% from 'macros.html' import day_card %}
 {% block body %}
-    {% set ns = namespace(prev_day=None) %}
-    {% for entry in entries %}
-        {% set day = entry.timestamp.date() %}
-        {% if day != ns.prev_day %}
-            {% if ns.prev_day is not none %}
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-            <div class="orc-card mb-2">
-                <div class="px-4 pt-3 pb-0 text-sm font-semibold">{{ day.strftime("%A, %B %-d") }}</div>
-                <div class="p-4 overflow-x-auto">
-                    <table class="w-full text-left mb-0">
-                        <tr>
-                            <th class="px-2 py-1 font-normal">Time</th>
-                            <th class="px-2 py-1 font-normal">Source</th>
-                            <th class="px-2 py-1 font-normal">Action</th>
-                        </tr>
-        {% endif %}
-                        <tr>
-                            <td class="px-2 py-1 whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</td>
-                            <td class="px-2 py-1">
-                                {% if entry.source == "calendar" %}
-                                    <span class="orc-badge-calendar">calendar</span>
-                                {% elif entry.source == "iot" %}
-                                    <span class="orc-badge-iot">iot</span>
-                                {% elif entry.source == "remote" %}
-                                    <span class="orc-badge-remote">remote</span>
-                                {% elif entry.source == "system" %}
-                                    <span class="orc-badge-system">system</span>
-                                {% else %}
-                                    <span class="orc-badge-manual">manual</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-2 py-1">{{ entry.action }}</td>
-                        </tr>
-        {% set ns.prev_day = day %}
+    {% for day, entries in entries_grouped %}
+        {% call day_card(day) %}
+            <tr>
+                <th class="px-2 py-1 font-normal">Time</th>
+                <th class="px-2 py-1 font-normal">Source</th>
+                <th class="px-2 py-1 font-normal">Action</th>
+            </tr>
+            {% for entry in entries %}
+                <tr>
+                    <td class="px-2 py-1 whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</td>
+                    <td class="px-2 py-1">
+                        {% if entry.source == "calendar" %}
+                            <span class="orc-badge-calendar">calendar</span>
+                        {% elif entry.source == "iot" %}
+                            <span class="orc-badge-iot">iot</span>
+                        {% elif entry.source == "remote" %}
+                            <span class="orc-badge-remote">remote</span>
+                        {% elif entry.source == "system" %}
+                            <span class="orc-badge-system">system</span>
+                        {% else %}
+                            <span class="orc-badge-manual">manual</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-2 py-1">{{ entry.action }}</td>
+                </tr>
+            {% endfor %}
+        {% endcall %}
     {% else %}
         <div class="orc-card mb-2">
             <div class="p-4 overflow-x-auto">
@@ -48,9 +39,4 @@
             </div>
         </div>
     {% endfor %}
-    {% if ns.prev_day is not none %}
-                    </table>
-                </div>
-            </div>
-    {% endif %}
 {% endblock %}

@@ -1,51 +1,37 @@
 {% extends 'base.html' %}
+{% from 'macros.html' import day_card %}
 {% block body %}
-    {% set ns = namespace(prev_day=None) %}
-    {% for job in jobs %}
-        {% set day = job.trigger.run_date.date() %}
-        {% set absent = absent_by_job[job.id] %}
-        {% if day != ns.prev_day %}
-            {% if ns.prev_day is not none %}
-                    </table>
-                </div>
-            </div>
+    {% for day, day_jobs in jobs_grouped %}
+        {% call day_card(day, table_fixed=true) %}
+            {% if loop.first %}
+                <tr>
+                    <th class="px-2 py-1 font-normal w-16">Run</th>
+                    <th class="px-2 py-1 font-normal w-16">Enabled</th>
+                    <th class="px-2 py-1 font-normal w-20 lg:w-40">Job</th>
+                    <th class="px-2 py-1 font-normal whitespace-nowrap">When</th>
+                </tr>
             {% endif %}
-            <div class="orc-card mb-2">
-                <div class="px-4 pt-3 pb-0 text-sm font-semibold">{{ day.strftime("%A, %B %-d") }}</div>
-                <div class="p-4 overflow-x-auto">
-                    <table class="w-full table-fixed text-left mb-0">
-                        {% if ns.prev_day is none %}
-                        <tr>
-                            <th class="px-2 py-1 font-normal w-16">Run</th>
-                            <th class="px-2 py-1 font-normal w-16">Enabled</th>
-                            <th class="px-2 py-1 font-normal w-20 lg:w-40">Job</th>
-                            <th class="px-2 py-1 font-normal whitespace-nowrap">When</th>
-                        </tr>
-                        {% endif %}
-        {% endif %}
-                        <tr>
-                            <td class="px-2 py-3 align-middle w-16">
-                                <div class="relative inline-block">
-                                    <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.id }}" data-duration="{{ durations.get(job.name, 0) }}">&nbsp;</button>
-                                    {% if weather_by_job[job.id] %}<span class="orc-weather-badge">🌤</span>{% endif %}
-                                </div>
-                            </td>
-                            <td class="px-2 py-3 align-middle w-16">
-                                <label class="inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" class="orc-enable sr-only peer" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
-                                    <div class="orc-switch"></div>
-                                </label>
-                            </td>
-                            <td class="px-2 py-3 align-middle w-20 lg:w-40 text-sm">{{ job.name }}</td>
-                            <td class="px-2 py-3 align-middle whitespace-nowrap">{{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
-                        </tr>
-        {% set ns.prev_day = day %}
+            {% for job in day_jobs %}
+                {% set absent = absent_by_job[job.id] %}
+                <tr>
+                    <td class="px-2 py-3 align-middle w-16">
+                        <div class="relative inline-block">
+                            <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.id }}" data-duration="{{ durations.get(job.name, 0) }}">&nbsp;</button>
+                            {% if weather_by_job[job.id] %}<span class="orc-weather-badge">🌤</span>{% endif %}
+                        </div>
+                    </td>
+                    <td class="px-2 py-3 align-middle w-16">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="orc-enable sr-only peer" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
+                            <div class="orc-switch"></div>
+                        </label>
+                    </td>
+                    <td class="px-2 py-3 align-middle w-20 lg:w-40 text-sm">{{ job.name }}</td>
+                    <td class="px-2 py-3 align-middle whitespace-nowrap">{{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
+                </tr>
+            {% endfor %}
+        {% endcall %}
     {% endfor %}
-    {% if ns.prev_day is not none %}
-                    </table>
-                </div>
-            </div>
-    {% endif %}
 {% endblock %}
 {% block menu_links %}
     <div class="flex">
