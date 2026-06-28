@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta
+from enum import Enum
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -329,3 +330,41 @@ class TestPresence:
             with patch.object(api.icmplib, "ping", side_effect=lambda host, **_: MagicMock(is_alive=ping(host))):
                 api.check_presence(ctx=self.ctx)
         assert api.present_names() == {"Bob"}
+
+
+class TestExecuteLGTV:
+    @pytest.fixture(autouse=True)
+    def _lgtv_enums(self):
+        class LGTV(Enum):
+            living_room = 1
+
+        class WebOS(Enum):
+            living_room = 1
+
+        class BroadLink(Enum):
+            living_room = 1
+
+        with (
+            patch.object(orc, "LGTV", LGTV, create=True),
+            patch.object(orc, "WebOS", WebOS, create=True),
+            patch.object(orc, "BroadLink", BroadLink, create=True),
+        ):
+            self.lgtv = LGTV.living_room
+            self.webos = WebOS.living_room
+            self.bl = BroadLink.living_room
+            yield
+
+    def test_off_sends_webos_off(self):
+        with patch.object(api.tv, "off") as tv_off:
+            api.execute(m.Config(self.lgtv, config.OFF))
+        tv_off.assert_called_once_with(self.webos)
+
+    def test_on_toggles_broadlink_when_tv_is_off(self):
+        with patch.object(api.tv, "is_off", return_value=True), patch.object(api.broadlink, "tv_toggle") as tv_toggle:
+            api.execute(m.Config(self.lgtv, config.ON))
+        tv_toggle.assert_called_once_with(self.bl, api._BROADLINK_CODES)
+
+    def test_on_skips_toggle_when_tv_already_on(self):
+        with patch.object(api.tv, "is_off", return_value=False), patch.object(api.broadlink, "tv_toggle") as tv_toggle:
+            api.execute(m.Config(self.lgtv, config.ON))
+        tv_toggle.assert_not_called()
