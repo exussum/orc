@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'macros.html' import btn_stripe %}
 {% block body %}
     <div class="orc-card mb-2">
         <div class="orc-room-buttons p-4">
@@ -27,15 +28,7 @@
             <h6 class="text-base mb-0">Theme</h6>
             <div class="orc-routine-buttons">
                 {% for id in ad_hoc_routines %}
-                    <div class="orc-button">
-                        <div class="orc-button-label">{{ id }}</div>
-                        <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                            <svg class="orc-ribbon">
-                                <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
-                            </svg>
-                            <svg class="w-5 h-5"><use href="/static/icons.svg#clipboard-check"/></svg>
-                        </button>
-                    </div>
+                    {{ btn_stripe(id, "clipboard-check", durations.get(id, 0)) }}
                 {% endfor %}
             </div>
         </div>
@@ -45,15 +38,7 @@
             <h6 class="text-base mb-0">Plugin</h6>
             <div class="orc-routine-buttons">
                 {% for id in plugins if id not in ["Pair LG TV", "Reboot Orc", "Reboot Hubitat", "Light Test", "Sound Test"] %}
-                    <div class="orc-button">
-                        <div class="orc-button-label">{{ id }}</div>
-                        <button class="orc-runner orc-btn" data-type="console" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                            <svg class="orc-ribbon">
-                                <polyline points="7 0 14 0 0 14 0 7" stroke="white" fill="white" stroke-width="1"></polyline>
-                            </svg>
-                            <svg class="w-5 h-5"><use href="/static/icons.svg#rocket-launch"/></svg>
-                        </button>
-                    </div>
+                    {{ btn_stripe(id, "rocket-launch", durations.get(id, 0)) }}
                 {% endfor %}
             </div>
         </div>
