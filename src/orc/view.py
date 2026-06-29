@@ -81,14 +81,18 @@ def rebuild_jobs():
     return {"version": VersionManager.version}, 200
 
 
-@bp.route("/api/console/<id>")
-def console(id):
+@bp.route("/api/run/<id>")
+def run_routine(id):
     if id in config.plugins:
         action = lambda: plugins.execute_plugin(app.orc.snapshot_manager, id)
     elif id in config.schedule_routines:
         action = lambda: api.execute(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
-        action = lambda: api.execute(m.squish_configs(config.reset_config, config.ad_hoc_routines[id]))
+        routine = config.ad_hoc_routines[id]
+        if routine.snapshot:
+            action = lambda: api.replace_config_for(app.orc.snapshot_manager, id)
+        else:
+            action = lambda: api.execute(m.squish_configs(config.reset_config, routine))
     else:
         return {"error": "Unknown routine"}, 404
     with api.record_duration(id):
@@ -195,21 +199,6 @@ def presence():
         200,
         {"Cache-control": "no-store"},
     )
-
-
-@bp.route("/api/remote/<id>")
-def remote(id):
-    if id in ("TV Lights", "Partial TV Lights"):
-        action = lambda: api.replace_config_for(app.orc.snapshot_manager, id, timedelta(hours=3))
-    elif id in config.all_configs:
-        action = lambda: app.orc.snapshot_manager.resume(config.all_configs[id])
-    else:
-        return {"error": "Unknown id"}, 404
-    with api.record_duration(id):
-        action()
-    api.log(api.local_now(), m.LogSource.REMOTE, id)
-    app.orc.version_manager.bump_version()
-    return {"version": VersionManager.version}, 200
 
 
 @bp.route("/api/room/<id>")

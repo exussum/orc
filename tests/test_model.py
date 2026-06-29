@@ -204,6 +204,33 @@ def test_build_people_multiple_hosts():
     assert m.build_people(doc, "People") == {"Alice": {"phone.local", "laptop.local"}}
 
 
+def _ad_hoc_md(rows):
+    header = "| Theme | Expression | State | Snapshot |\n|-------|------------|-------|----------|\n"
+    return "##### Ad-Hoc Routines\n\n" + header + "".join(rows) + "\n---\n"
+
+
+def test_build_ad_hoc_routines_no_snapshot():
+    doc = Document(_ad_hoc_md(["| Silence | Chromecast.x | stop |  |\n"]))
+    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
+    assert set(routines) == {"Silence"}
+    assert routines["Silence"].snapshot is None
+
+
+def test_build_ad_hoc_routines_with_snapshot():
+    from datetime import timedelta
+
+    doc = Document(_ad_hoc_md(["| TV Lights | Light.a | on | 3 |\n"]))
+    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
+    assert set(routines) == {"TV Lights"}
+    assert routines["TV Lights"].snapshot == timedelta(hours=3)
+
+
+def test_build_ad_hoc_routines_invalid_snapshot():
+    doc = Document(_ad_hoc_md(["| Foo | Light.a | on | bad |\n"]))
+    with pytest.raises(ValueError, match="Invalid snapshot values"):
+        m.build_ad_hoc_routines(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
+
+
 def test_build_config_succeeds_with_required():
     doc = Document(_rooms_md(["| Living Room | Light.a | on |\n", "| Bedroom | Light.b | on |\n"]))
     rooms = m.build_config(doc, "Room Configs", Light, Chromecast, LGTV, required=("Living Room",))

@@ -64,37 +64,7 @@ def test_versioned_bumps_after_success(client, ctx, good_version):
     assert ctx.version_manager.version != old
 
 
-# --- /api/remote: branches on id ---
-
-
-def test_remote_tv_lights(client, ctx):
-    with patch.object(api, "replace_config_for") as rcf:
-        response = client.get("/api/remote/TV Lights")
-    assert response.status_code == 200
-    rcf.assert_called_once_with(ctx.snapshot_manager, "TV Lights", timedelta(hours=3))
-
-
-def test_remote_other_resumes(client, ctx):
-    fake_cfg = object()
-    with (
-        patch.object(config, "all_configs", {"Silence": fake_cfg}),
-        patch.object(ctx.snapshot_manager, "resume") as resume,
-    ):
-        client.get("/api/remote/Silence")
-    resume.assert_called_once_with(fake_cfg)
-
-
-def test_remote_unknown_id_returns_404(client, ctx):
-    with (
-        patch.object(config, "all_configs", {}),
-        patch.object(ctx.snapshot_manager, "resume") as resume,
-    ):
-        response = client.get("/api/remote/nope")
-    assert response.status_code == 404
-    resume.assert_not_called()
-
-
-# --- /api/console: 4-way branch ---
+# --- /api/run: 4-way branch ---
 
 
 def test_console_plugin(client, ctx):
@@ -102,7 +72,7 @@ def test_console_plugin(client, ctx):
         patch.object(config, "plugins", {"do-thing": "fn"}),
         patch("orc.view.plugins.execute_plugin") as exec_plugin,
     ):
-        response = client.get("/api/console/do-thing")
+        response = client.get("/api/run/do-thing")
     assert response.status_code == 200
     exec_plugin.assert_called_once_with(ctx.snapshot_manager, "do-thing")
 
@@ -114,13 +84,13 @@ def test_console_schedule_routine(client):
         patch.object(config, "plugins", {}),
         patch.object(api, "execute") as ex,
     ):
-        client.get("/api/console/r")
+        client.get("/api/run/r")
     ex.assert_called_once_with(routine)
 
 
 def test_console_ad_hoc(client):
     reset = m.Configs(m.Config(orc.Light.a, config.OFF))
-    routine = m.Configs(m.Config(orc.Light.b, config.ON))
+    routine = m.AdhocConfig(m.Config(orc.Light.b, config.ON))
     with (
         patch.object(config, "plugins", {}),
         patch.object(config, "schedule_routines", {}),
@@ -128,8 +98,20 @@ def test_console_ad_hoc(client):
         patch.object(config, "reset_config", reset),
         patch.object(api, "execute") as ex,
     ):
-        client.get("/api/console/r")
+        client.get("/api/run/r")
     ex.assert_called_once_with(m.squish_configs(reset, routine))
+
+
+def test_console_ad_hoc_snapshot(client, ctx):
+    routine = m.AdhocConfig(m.Config(orc.Light.b, config.ON), snapshot=timedelta(hours=3))
+    with (
+        patch.object(config, "plugins", {}),
+        patch.object(config, "schedule_routines", {}),
+        patch.object(config, "ad_hoc_routines", {"r": routine}),
+        patch.object(api, "replace_config_for") as rcf,
+    ):
+        client.get("/api/run/r")
+    rcf.assert_called_once_with(ctx.snapshot_manager, "r")
 
 
 def test_console_unknown_returns_404(client):
@@ -138,7 +120,7 @@ def test_console_unknown_returns_404(client):
         patch.object(config, "schedule_routines", {}),
         patch.object(config, "ad_hoc_routines", {}),
     ):
-        response = client.get("/api/console/nope")
+        response = client.get("/api/run/nope")
     assert response.status_code == 404
 
 

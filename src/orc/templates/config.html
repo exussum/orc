@@ -117,7 +117,7 @@
             el.addEventListener("click", async (e) => {
                 const t = e.currentTarget;
                 if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${t.dataset.id}?`)) return;
-                await get(`/api/console/${t.dataset.id}`, t);
+                await get(`/api/run/${t.dataset.id}`, t);
             });
         });
         document.getElementById("orc-rebuild-jobs").addEventListener("click", async (e) => {
@@ -126,7 +126,7 @@
         document.getElementById("orc-pair-lg-tv").addEventListener("click", async (e) => {
             const el = e.currentTarget;
             const dismiss = await notifyPairing(parseFloat(el.dataset.duration));
-            await get("/api/console/Pair LG TV", el);
+            await get("/api/run/Pair LG TV", el);
             dismiss?.();
         });
         document.querySelectorAll(".orc-yolink-test").forEach((el) => {
