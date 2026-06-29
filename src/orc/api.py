@@ -32,7 +32,7 @@ from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
-from orc.dal.lgtv import pair as pair_lg_tv  # noqa: F401
+from orc.dal.lgtv import pair as _pair_lgtv
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
 from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
@@ -168,6 +168,10 @@ def capture_leak_sensors():
 
 def capture_tv():
     return {w.name: "off" if tv.is_off(w) else "on" for w in orc.LGTV}
+
+
+def pair_lg_tv(lgtv):
+    _pair_lgtv(orc.WebOS[lgtv.name].value)
 
 
 @unwrap_rule_container
