@@ -303,8 +303,9 @@ def delete_all_presence():
     sqlite.delete_all_presence(local_now())
 
 
-def replace_config_for(snapshot_manager, id, duration):
-    snapshot_manager.replace_config(config.ad_hoc_routines[id], local_now() + duration)
+def replace_config_for(snapshot_manager, id):
+    routine = config.ad_hoc_routines[id]
+    snapshot_manager.replace_config(routine, local_now() + routine.snapshot)
 
 
 def apply_theme_change(ctx, name, start, end):

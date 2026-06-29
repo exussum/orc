@@ -12,7 +12,7 @@ a markdown config file.
   routines around them.
 - Skips market-holiday rules via a configurable holidays endpoint.
 - Controls Hubitat lights (REST), Chromecast speakers (pychromecast + yt-dlp
-  for YouTube audio), and an LG webOS TV (aiowebostv + Wake-on-LAN).
+  for YouTube audio), and an LG webOS TV (aiowebostv + BroadLink IR).
 - Supports weather-condition triggers (e.g. `SUNNY`) via the open-meteo API;
   the schedule UI marks weather-triggered jobs with a ☀ badge.
 - Serves a small Flask UI for manual control, schedule inspection, theme
@@ -47,6 +47,7 @@ Two config surfaces:
    | `ORC_HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                                   | `120`                            |
    | `ORC_ROOT_DOMAIN`     | Trailing domain stripped from hostnames in the presence view       | `""`                             |
    | `ORC_INTERNAL_URL`    | LAN-reachable base URL Chromecasts use to fetch static audio       | `""` (falls back to request host) |
+   | `ORC_AUDIO_DEVICE`    | ALSA device string for local USB audio output                      | `""`                             |
    | `BWS_ACCESS_TOKEN`    | URL whose body is the Bitwarden access token                       | required if `ORC_ENABLED`        |
    | `BWS_ORG_ID`          | URL whose body is the Bitwarden org ID                             | required if `ORC_ENABLED`        |
 
@@ -60,7 +61,7 @@ and no env vars are required — defaults are sufficient.
 
 ## Secrets (Bitwarden)
 
-When `ORC_ENABLED` is set, three secrets are pulled from Bitwarden Secrets
+When `ORC_ENABLED` is set, five secrets are pulled from Bitwarden Secrets
 Manager by name:
 
 | Key                    | Used for                                            |
@@ -68,6 +69,8 @@ Manager by name:
 | `HUBITAT_ACCESS_TOKEN` | Hubitat Maker API access token (appended as query)  |
 | `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates        |
 | `ICS_URL`              | iCal feed URL for calendar-driven routines          |
+| `YOLINK_ID`            | Yolink API client ID                                |
+| `YOLINK_SECRET`        | Yolink API client secret                            |
 
 ## Running
 
@@ -97,16 +100,14 @@ pytest
 
 ## Deploy
 
-`sh build.sh` builds both wheels locally (used during development / CI).
-
-`sh upload.sh` builds and publishes to the internal package registry.
+`sh scripts/upload.sh` builds and publishes to the internal package registry.
 Pass `full` to also publish the `orc_data` sub-package:
 
 ```sh
-sh upload.sh full
+sh scripts/upload.sh full
 ```
 
-`sh build-and-install.sh` runs `upload.sh` then SSHs to the target host and
+`sh scripts/build-and-install.sh` runs `upload.sh` then SSHs to the target host and
 runs `install.sh`, which reinstalls from the registry and bounces the `orc`
 supervisor job.
 
@@ -114,15 +115,15 @@ supervisor job.
 
 - `src/orc/__init__.py` — `Config` (env vars + markdown-config loader)
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
-- `src/orc/api.py` — schedule construction, rule routing, `ConfigManager`
+- `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
 - `src/orc/model.py` — markdown → config parsing and routine/theme types
 - `src/orc/dal/` — integrations split by target: `hubitat.py` (Hubitat
   lights), `chromecast.py`, `tv.py` (LG webOS + WoL), `feeds.py` (iCal /
   market holidays / open-meteo weather), `bws.py` (Bitwarden), `usb.py`
-  (pygame audio), `discovery.py`, `sqlite.py`, `_decorators.py`
-  (`requires_enabled`, `retry_async`)
+  (pyaudio + piper TTS), `yolink.py`, `broadlink.py`, `lgtv.py`, `sqlite.py`,
+  `_decorators.py` (`requires_enabled`, `retry_async`)
+- `src/orc/_decorators.py` — `requires_ctx` scheduler decorator
 - `src/orc/plugins.py` — plugin functions (reboot, sensor handler, …)
-- `src/orc/apscheduler.py` — context-injecting executor and `requires_ctx`
 - `src/orc/locale.py` — log-message string constants
 - `src/orc/view.py` + `templates/` + `static/` — Flask UI
 - `src/config.md` — device/routine/theme definitions

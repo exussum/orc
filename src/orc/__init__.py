@@ -54,9 +54,8 @@ class Config:
         self.themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, LGTV, self.people)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
         self.room_configs = m.build_config(doc, "Room Configs", Light, Chromecast, LGTV, required=("Living Room",))
-        self.ad_hoc_routines = m.build_config(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
+        self.ad_hoc_routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
         self.plugins = m.build_plugins(doc, "Plugins")
-        self.all_configs = self.ad_hoc_routines | self.room_configs
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=self.OFF)
         self.button_highlight_configs = m.build_highlights(doc, "Button Highlights")
         self.audio_volumes = m.build_audio_volumes(doc, "Audio Volumes", required=(self.AUDIO_INFO, self.AUDIO_FATAL))
