@@ -17,6 +17,8 @@ from orc.locale import Log
 
 bp = Blueprint("button", __name__)
 
+ORC_RESTORE_SNAPSHOT = "ORC_RESTORE_SNAPSHOT"
+
 
 @bp.after_request
 def no_cache(response):
@@ -83,7 +85,9 @@ def rebuild_jobs():
 
 @bp.route("/api/run/<id>")
 def run_routine(id):
-    if id in config.plugins:
+    if id == ORC_RESTORE_SNAPSHOT:
+        action = lambda: app.orc.snapshot_manager.resume(config.default_config)
+    elif id in config.plugins:
         action = lambda: plugins.execute_plugin(app.orc.snapshot_manager, id)
     elif id in config.schedule_routines:
         action = lambda: api.execute(config.schedule_routines[id])
