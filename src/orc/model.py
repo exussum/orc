@@ -212,8 +212,7 @@ def build_ad_hoc_routines(doc, section, light, chromecast, lgtv):
     if invalid := _validate_states(sub_tables, 2):
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
         raise ValueError(f"Invalid state values in section '{section}': {details}")
-    invalid_snapshots = [(type, e[0][3]) for type, e in sub_tables if e[0][3] is not None and not e[0][3].isdigit()]
-    if invalid_snapshots:
+    if invalid_snapshots := [(type, e[0][3]) for type, e in sub_tables if e[0][3] is not None and not e[0][3].isdigit()]:
         details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_snapshots)
         raise ValueError(f"Invalid snapshot values in section '{section}': {details}")
 
@@ -232,8 +231,7 @@ def build_audio_volumes(doc, section, required):
     def _valid(s):
         return s is not None and s.isdigit() and 0 <= int(s) <= 100
 
-    invalid = [(name, s) for (name, s) in rows if not _valid(s)]
-    if invalid:
+    if invalid := [(name, s) for (name, s) in rows if not _valid(s)]:
         details = ", ".join(f"'{s}' in '{n}'" for n, s in invalid)
         raise ValueError(f"Invalid volume values in section '{section}': {details}")
     result = {name: int(s) for name, s in rows}
@@ -265,8 +263,7 @@ def build_enum(doc, section, sub_section, id_lookup=None):
 def build_highlights(doc, section):
     rows = _doc_to_table(doc, section, 3)
 
-    invalid = [(name, val) for (name, start, end) in rows for val in (start, end) if _str_to_time(val) is None]
-    if invalid:
+    if invalid := [(name, val) for (name, start, end) in rows for val in (start, end) if _str_to_time(val) is None]:
         details = ", ".join(f"'{v}' in '{n}'" for n, v in invalid)
         raise ValueError(f"Invalid time values in section '{section}': {details}")
 
@@ -386,10 +383,9 @@ def _doc_to_table(doc, section, columns, *, min_columns=None):
 
     effective_min = min_columns if min_columns is not None else columns
     rows = list(markdown_table.children)
-    invalid = [(i, len(row.children)) for i, row in enumerate(rows) if not (effective_min <= len(row.children) <= columns)]
-    if invalid:
-        details = ", ".join(f"row {i} has {count}" for i, count in invalid)
-        raise ValueError(f"Expected {columns} columns in section '{section}', but: {details}")
+    if invalid := [(i, len(row.children)) for i, row in enumerate(rows) if not (effective_min <= len(row.children) <= columns)]:
+        bad_rows = ", ".join(str(i) for i, _ in invalid)
+        raise ValueError(f"Expected {columns} columns in section '{section}', but rows {bad_rows} have the wrong number")
 
     return tuple(
         tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children)) for e in rows
