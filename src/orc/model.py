@@ -131,6 +131,15 @@ class Configs:
 
 
 @dataclass
+class AdhocConfig(Configs):
+    snapshot: "timedelta | None" = None
+
+    def __init__(self, *items: Config, snapshot=None) -> None:
+        super().__init__(*items)
+        self.snapshot = snapshot
+
+
+@dataclass
 class Routine:
     name: str
     when: str
@@ -194,6 +203,27 @@ def build_config(doc, section, light, chromecast, lgtv, required=()):
     if missing := set(required) - result.keys():
         raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
     return result
+
+
+def build_ad_hoc_routines(doc, section, light, chromecast, lgtv):
+    from datetime import timedelta
+
+    sub_tables = list(_doc_to_sub_tables(doc, section, 4, min_columns=3))
+    if invalid := _validate_states(sub_tables, 2):
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
+        raise ValueError(f"Invalid state values in section '{section}': {details}")
+    invalid_snapshots = [(type, e[0][3]) for type, e in sub_tables if e[0][3] is not None and not e[0][3].isdigit()]
+    if invalid_snapshots:
+        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_snapshots)
+        raise ValueError(f"Invalid snapshot values in section '{section}': {details}")
+
+    def _make(e):
+        snap_val = e[0][3]
+        return AdhocConfig(
+            *[_build_config(c[1], chromecast, light, lgtv, c[2]) for c in e], snapshot=timedelta(hours=int(snap_val)) if snap_val else None
+        )
+
+    return {type: _make(e) for type, e in sub_tables}
 
 
 def build_audio_volumes(doc, section, required):
