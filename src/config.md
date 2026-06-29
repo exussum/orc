@@ -48,9 +48,9 @@
 
 ##### Ad-Hoc Routines
 
-| Theme   | Expression | State |
-|---------|------------|-------|
-| Silence | Chromecast | stop  |
+| Theme   | Expression | State | Snapshot |
+|---------|------------|-------|----------|
+| Silence | Chromecast | stop  |          |
 
 ---
 

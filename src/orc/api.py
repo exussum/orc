@@ -167,7 +167,7 @@ def capture_leak_sensors():
 
 
 def capture_tv():
-    return {w.name: "off" if tv.is_off(w) else "on" for w in orc.LGTV}
+    return {w.name: "off" if tv.is_off(orc.WebOS[w.name]) else "on" for w in orc.LGTV}
 
 
 def pair_lg_tv(lgtv):
