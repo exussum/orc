@@ -3,19 +3,20 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
 from functools import wraps
-from itertools import groupby
+from itertools import chain, groupby
 
 from flask import Blueprint
 from flask import current_app as app
 from flask import render_template, request
 from mistletoe import Document, HtmlRenderer
 
+import orc
 from orc import api, config
 from orc import model as m
 from orc import plugins
 from orc.locale import Log
 
-bp = Blueprint("button", __name__)
+bp = Blueprint("controls", __name__)
 
 ORC_RESTORE_SNAPSHOT = "ORC_RESTORE_SNAPSHOT"
 
@@ -73,6 +74,16 @@ def cfg():
             tv_states=api.capture_tv(),
             version=app.orc.version_manager.version,
         )
+
+
+@bp.route("/device/")
+def device():
+    devices = map(list, (orc.Light, orc.Chromecast, orc.LGTV, orc.AC))
+    return render_template(
+        "device.html",
+        ctx=app.orc,
+        devices_grouped=[(name, es) for name, es in groupby(chain.from_iterable(devices), key=lambda e: e.name.split("_")[0].title())],
+    )
 
 
 @bp.route("/api/rebuild_jobs")
@@ -143,7 +154,7 @@ def index():
 
     return (
         render_template(
-            "button.html",
+            "controls.html",
             highlight_configs=[(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlight_configs],
             plugins=config.plugins,
             room_configs=config.room_configs,
@@ -160,7 +171,7 @@ def index():
 
 @bp.route("/log/")
 def log():
-    entries_grouped = [(day, list(es)) for day, es in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
+    entries_grouped = [(day, es) for day, es in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
     return (
         render_template("log.html", version=app.orc.version_manager.version, entries_grouped=entries_grouped),
         200,
@@ -254,7 +265,7 @@ def schedule():
     present_names = api.present_names()
     absent_by_job = {j.id: not api.matching_items(j.args[0].rule, False, j.trigger.run_date, present_names) for j in jobs}
     weather_by_job = {j.id: any(c.trigger in api._WEATHER_TRIGGERS for c in j.args[0].rule.items) for j in jobs}
-    jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
+    jobs_grouped = [(day, js) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
 
     return (
         render_template(
