@@ -53,7 +53,7 @@
                     </summary>
                     <div class="orc-dropdown-menu">
                         {% for id in schedule_routines|sort %}
-                            <a class="orc-dropdown-item orc-runner" href="#" data-type="console" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">{{ id }}</a>
+                            <a class="orc-dropdown-item orc-runner" href="#" data-type="run" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">{{ id }}</a>
                         {% endfor %}
                     </div>
                 </details>
@@ -64,7 +64,7 @@
                         <div>{{ next_routine.name }}</div>
                         <div>At: {{ next_routine.trigger.run_date.time().strftime("%I:%M %p") }}</div>
                     </div>
-                    <button class="orc-btn orc-pause" data-type="console" data-id="{{ next_routine.id }}">Skip</button>
+                    <button class="orc-btn orc-pause" data-type="run" data-id="{{ next_routine.id }}">Skip</button>
                 </div>
             {% endif %}
         </div>
