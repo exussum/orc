@@ -142,9 +142,9 @@ def trigger_sensor(ctx, device_id, event):
 def video_conference(ctx):
     ctx.api.execute(
         ctx.model.Configs(
-            ctx.model.Config(ctx.Light.OFFICE_TABLE, 5),
-            ctx.model.Config(ctx.Light.OFFICE_FLOOR, ctx.config.ON),
-            ctx.model.Config(ctx.Light.OFFICE_DESK, 50),
+            ctx.model.Config(ctx.Light.OFFICE_TABLE_LAMP, 5),
+            ctx.model.Config(ctx.Light.OFFICE_FLOOR_LAMP, ctx.config.ON),
+            ctx.model.Config(ctx.Light.OFFICE_DESK_LAMP, 50),
         )
     )
 
