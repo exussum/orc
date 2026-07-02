@@ -85,6 +85,15 @@ async function checkVersion() {
     }
 }
 
+async function run(el) {
+    await get(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
+}
+
+async function run_with_confirm(el) {
+    if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${el.dataset.id}?`)) return;
+    await run(el);
+}
+
 document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {
     const menu = document.getElementById("admin-navbar-collapse");
     const open = menu.classList.toggle("hidden");
