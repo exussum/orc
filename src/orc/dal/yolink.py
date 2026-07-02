@@ -12,7 +12,7 @@ import paho.mqtt.client as mqtt
 import requests
 
 import orc as config
-from orc._locked_dict import LockedDict
+from orc.collections import LockedDict
 from orc.model import SensorState
 
 STATE_DRY = "normal"

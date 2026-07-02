@@ -51,6 +51,7 @@ orc = "orc.runner:web"
 
 [tool.black]
 line-length = 140
+target-version = ["py313"]
 
 [tool.isort]
 profile = "black"

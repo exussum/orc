@@ -1,5 +1,6 @@
 import pytest
 
+from orc import model as m
 from orc.model import DeviceEnum
 
 
@@ -9,7 +10,7 @@ def pytest_sessionstart(session):
     import orc
 
     class Light(DeviceEnum):
-        a = (1, frozenset(["ChangeLevel"]))
+        a = (1, frozenset([m.Capability.change_level]))
         b = (2, frozenset())
         c = (3, frozenset())
 
