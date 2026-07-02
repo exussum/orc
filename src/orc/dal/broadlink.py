@@ -8,7 +8,14 @@ from orc.dal._decorators import requires_enabled
 
 @requires_enabled(None)
 def set_ac(device, codes_file, mode, fan, temp):
-    _send(_connect(device), _codes(codes_file)["ac"]["commands"][mode][fan][str(temp)])
+    cmds = _codes(codes_file)["ac"]["commands"][mode]
+    if mode == "fan_only":
+        code = cmds[fan]
+    elif mode == "dry":
+        code = cmds[str(temp)]
+    else:
+        code = cmds[fan][str(temp)]
+    _send(_connect(device), code)
 
 
 @requires_enabled(None)
@@ -23,7 +30,11 @@ def ac_off(device, codes_file):
 
 def _connect(device):
     dev = bl.hello(device.value)
-    dev.auth()
+    for attempt in range(4):
+        if dev.auth():
+            return dev
+        if attempt == 3:
+            raise ConnectionError(f"Broadlink auth failed for {device.value}")
     return dev
 
 
