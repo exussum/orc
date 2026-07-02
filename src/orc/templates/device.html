@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block head_scripts %}<script src="/static/device.js" defer></script>{% endblock %}
+{% from 'macros.html' import day_card %}
+{% block body %}
+    {% for (title, devices) in devices_grouped %}
+        {% set other = devices | selectattr('type', 'ne', 'AC') | list %}
+        {% set ac = devices | selectattr('type', 'eq', 'AC') | list %}
+        {% for card in [other, ac] if card %}
+        <div class="orc-card mb-2">
+            <div class="p-4">
+                <div class="text-sm font-semibold mb-2">{{ title }}</div>
+                <div class="orc-device-grid">
+                    {% for device in card %}
+                        {% if device.type == "AC" %}
+                            <div class="col-span-full text-sm font-medium">{{ device.name }}</div>
+                            <div class="text-sm">Power</div>
+                            <div class="flex gap-4">
+                                <button class="orc-btn" data-state="off" data-id="{{ device.id }}" data-ac-power="{{ device.id }}">Off</button>
+                                <button class="orc-btn" data-state="on" data-id="{{ device.id }}" data-ac-power="{{ device.id }}">On</button>
+                            </div>
+                            <div class="text-sm">Temp</div>
+                            <div class="flex gap-4 items-center">
+                                <div class="inline-flex items-center justify-center w-12 h-[38px] text-sm" data-ac-temp="{{ device.id }}">75</div>
+                                <input type="range" min="70" max="80" value="75" class="w-96" data-ac-ctrl="{{ device.id }}"/>
+                            </div>
+                            <div class="text-sm">Mode</div>
+                            <div class="flex gap-4">
+                                {% for (value, label) in [("cool", "Cool"), ("fan_only", "Fan"), ("dry", "Dry"), ("econ", "Econ")] %}
+                                    <button class="orc-btn" data-value="{{ value }}" data-ac-mode="{{ device.id }}">{{ label }}</button>
+                                {% endfor %}
+                            </div>
+                            <div class="text-sm">Fan</div>
+                            <div class="flex gap-4">
+                                {% for speed in ["low", "mid", "high"] %}
+                                    <button class="orc-btn" data-value="{{ speed }}" data-ac-fan="{{ device.id }}" disabled>{{ speed | title }}</button>
+                                {% endfor %}
+                            </div>
+                            <div class="col-start-2"><button class="orc-btn" data-ac-set="{{ device.id }}" disabled>Set</button></div>
+                        {% elif device.type == "Chromecast" %}
+                            <div class="text-sm">{{ device.name }}</div>
+                            <div class="flex gap-4 items-center">
+                                <button class="orc-runner orc-btn" data-state="stop" data-type="device" data-id="{{ device.id }}">
+                                    <svg class="w-5 h-5"><use href="/static/icons.svg#stop"/></svg>
+                                </button>
+                                <input type="range" min="0" max="100" value="{{ device.volume }}" data-id="{{ device.id }}" data-param="volume" class="w-96" data-device-input="{{ device.id }}"/>
+                            </div>
+                        {% else %}
+                            <div class="text-sm">{{ device.name }}</div>
+                            {% if 'change_level' in device.capabilities %}
+                                <div class="flex gap-4"><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span><input type="range" min="0" max="100" value="{{ device.level }}" data-id="{{ device.id }}" class="w-96" data-device-input="{{ device.id }}"/></div>
+                            {% else %}
+                                <div class="flex gap-4">
+                                    <button class="orc-runner orc-btn" data-state="off" data-type="device" data-id="{{ device.id }}">
+                                        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ 'tv' if device.type == 'LGTV' else 'light-bulb-outline' }}"/></svg>
+                                    </button>
+                                    <button class="orc-runner orc-btn" data-state="on" data-type="device" data-id="{{ device.id }}">
+                                        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ 'tv' if device.type == 'LGTV' else 'light-bulb' }}"/></svg>
+                                    </button>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% endfor %}
+{% endblock %}
