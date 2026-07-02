@@ -5,6 +5,7 @@ from dataclasses import KW_ONLY, dataclass, replace
 from datetime import datetime, time
 from enum import Enum, auto
 from itertools import chain
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Tuple
 
 from apscheduler.schedulers.base import BaseScheduler
@@ -187,14 +188,16 @@ class DeviceEnumMeta(type(Enum)):
 
 
 class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
-    def __new__(cls, value, capabilities=frozenset()):
+    def __new__(cls, value, capabilities=frozenset(), room=None):
         obj = object.__new__(cls)
         if isinstance(value, tuple):
             obj._value_ = value[0]
-            obj.capabilities = value[1]
+            obj.capabilities = value[1] if len(value) > 1 else frozenset()
+            obj.room = value[2] if len(value) > 2 else None
         else:
             obj._value_ = value
             obj.capabilities = capabilities
+            obj.room = room
         return obj
 
 
@@ -248,19 +251,25 @@ def build_enum(doc, section, sub_section, id_lookup=None):
     if sub_section not in ("LGTV", "Light", "Chromecast", "BroadLink", "WebOS", "Leak", "AC"):
         raise ValueError(f"sub_section must be 'LGTV', 'Light', 'Chromecast', 'BroadLink', 'WebOS', 'Leak', or 'AC', got '{sub_section}'")
 
-    sub_table = next((sub_table for (type, sub_table) in _doc_to_sub_tables(doc, section, 3) if type == sub_section), None)
+    sub_table = next((sub_table for (type, sub_table) in _doc_to_sub_tables(doc, section, 4, min_columns=3) if type == sub_section), None)
     if sub_table is None:
         return DeviceEnum(sub_section, {}, module="orc")
 
-    for label, idx in (("names", 1), ("device id", 2)):
-        vals = [e[idx] for e in sub_table]
+    device_row = lambda e: SimpleNamespace(type=e[0], name=e[1], room=e[2], host=e[3])
+    rows = list(map(device_row, sub_table))
+
+    for label, attr in (("names", "name"), ("device id", "host")):
+        vals = [getattr(r, attr) for r in rows if getattr(r, attr) is not None]
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
 
-    if id_lookup is None:
-        members = {e[1]: e[2] for e in sub_table}
-    else:
-        members = {e[1]: id_lookup.get(e[2], (-(i + 1), frozenset())) for i, e in enumerate(sub_table)}
+    members, current_room = {}, None
+    for i, r in enumerate(rows):
+        current_room = r.room or current_room
+        if id_lookup is None:
+            members[r.name] = (r.host, frozenset(), current_room)
+        else:
+            members[r.name] = (*id_lookup.get(r.host, (-(i + 1), frozenset())), current_room)
     return DeviceEnum(sub_section, members, module="orc")
 
 
