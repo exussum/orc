@@ -44,4 +44,6 @@ def _codes(path):
 
 
 def _send(dev, code_b64):
-    dev.send_data(base64.b64decode(code_b64))
+    data = bytearray(base64.b64decode(code_b64))
+    data[1] = 2  # repeat 2 more times = 3 total
+    dev.send_data(bytes(data))
