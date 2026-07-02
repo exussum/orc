@@ -37,7 +37,8 @@
                     </button>
                     <div id="admin-navbar-collapse" class="hidden lg:flex w-full lg:w-auto items-end lg:flex-1 mt-2 lg:mt-0">
                         <ul class="flex flex-col lg:flex-row gap-1 lg:gap-4 mr-auto list-none p-0">
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "button.index" %}active{% endif %}" href="/">Remote</a></li>
+                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.index" %}active{% endif %}" href="/">Scene</a></li>
+                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.device" %}active{% endif %}" href="/device/">Device</a></li>
                             <li><a class="orc-nav-link {% if request.url_rule.endpoint == "button.schedule" %}active{% endif %}" href="/schedule/">Schedule</a></li>
                             <li><a class="orc-nav-link {% if request.url_rule.endpoint == "button.presence" %}active{% endif %}" href="/presence/">Presence</a></li>
                             <li><a class="orc-nav-link {% if request.url_rule.endpoint == "button.cfg" %}active{% endif %}" href="/config/">Config</a></li>
