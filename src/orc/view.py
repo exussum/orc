@@ -15,7 +15,6 @@ import orc
 from orc import api, config
 from orc import model as m
 from orc import plugins
-from orc.collections import build_trie, prefix_groups
 from orc.locale import Log
 
 bp = Blueprint("controls", __name__)
@@ -91,31 +90,24 @@ _DEVICE_TYPE_ORDER = {"Light": 0, "LGTV": 1, "Chromecast": 2, "AC": 3}
 def device():
     light_states = {c.what.name: c.state for c in api.capture_lights().items}
     sound_states = {c.what.name: c.volume for c in api.capture_sounds().items}
-    by_name = {d.name: d for d in chain.from_iterable((orc.Light, orc.Chromecast, orc.LGTV, orc.AC))}
-    trie = build_trie(by_name)
+    all_devices = list(chain.from_iterable((orc.Light, orc.Chromecast, orc.LGTV, orc.AC)))
 
-    def make_device(w):
+    def make_device(d):
         return SimpleNamespace(
-            name=" ".join(s.title() for s in w.split("_")),
-            id=w,
-            type=type(by_name[w]).__name__,
-            capabilities={c.name for c in by_name[w].capabilities},
-            level=_to_level(light_states.get(w)),
-            volume=sound_states.get(w, 0),
+            name=d.name.replace("_", " ").title(),
+            id=d.name,
+            type=type(d).__name__,
+            capabilities={c.name for c in d.capabilities},
+            level=_to_level(light_states.get(d.name)),
+            volume=sound_states.get(d.name, 0),
         )
 
-    def sort_key(w):
-        d = by_name[w]
+    def sort_key(d):
         has_level = "change_level" in {c.name for c in d.capabilities}
-        return (_DEVICE_TYPE_ORDER.get(type(d).__name__, 99), has_level, w)
+        return (_DEVICE_TYPE_ORDER.get(type(d).__name__, 99), has_level, d.name)
 
-    devices_grouped = sorted(
-        [
-            (" ".join(seg.title() for seg in path), [make_device(w) for w in sorted(words, key=sort_key)])
-            for path, words in prefix_groups(trie)
-        ],
-        key=lambda t: t[0],
-    )
+    rooms = sorted({d.room for d in all_devices})
+    devices_grouped = {room: [make_device(d) for d in sorted((d for d in all_devices if d.room == room), key=sort_key)] for room in rooms}
     return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped)
 
 
