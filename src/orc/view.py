@@ -204,7 +204,7 @@ def index():
 
 @bp.route("/log/")
 def log():
-    entries_grouped = [(day, es) for day, es in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
+    entries_grouped = [(day, list(es)) for day, es in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
     return (
         render_template("log.html", version=app.orc.version_manager.version, entries_grouped=entries_grouped),
         200,
@@ -321,7 +321,7 @@ def schedule():
     present_names = api.present_names()
     absent_by_job = {j.id: not api.matching_items(j.args[0].rule, False, j.trigger.run_date, present_names) for j in jobs}
     weather_by_job = {j.id: any(c.trigger in api._WEATHER_TRIGGERS for c in j.args[0].rule.items) for j in jobs}
-    jobs_grouped = [(day, js) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
+    jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
 
     return (
         render_template(
