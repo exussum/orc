@@ -201,12 +201,16 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
         return obj
 
 
+def _fmt(pairs):
+    return ", ".join(f"'{v}' in '{t}'" for t, v in pairs)
+
+
 def build_config(doc, section, light, chromecast, lgtv, required=()):
-    sub_tables = list(_doc_to_sub_tables(doc, section, 3))
-    if invalid := _validate_states(sub_tables, 2):
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
-        raise ValueError(f"Invalid state values in section '{section}': {details}")
-    result = {type: Configs(*[_build_config(c[1], chromecast, light, lgtv, c[2]) for c in e]) for type, e in sub_tables}
+    config_row = lambda e: SimpleNamespace(type=e[0], expr=e[1], state=e[2])
+    sub_tables = [(t, list(map(config_row, rows))) for t, rows in _doc_to_sub_tables(doc, section, 3)]
+    if invalid := _validate_states(sub_tables):
+        raise ValueError(f"Invalid state values in section '{section}': {_fmt(invalid)}")
+    result = {t: Configs(*[_build_config(r.expr, chromecast, light, lgtv, r.state) for r in rows]) for t, rows in sub_tables}
     if missing := set(required) - result.keys():
         raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
     return result
@@ -215,21 +219,22 @@ def build_config(doc, section, light, chromecast, lgtv, required=()):
 def build_ad_hoc_routines(doc, section, light, chromecast, lgtv):
     from datetime import timedelta
 
-    sub_tables = list(_doc_to_sub_tables(doc, section, 4, min_columns=3))
-    if invalid := _validate_states(sub_tables, 2):
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
-        raise ValueError(f"Invalid state values in section '{section}': {details}")
-    if invalid_snapshots := [(type, e[0][3]) for type, e in sub_tables if e[0][3] is not None and not e[0][3].isdigit()]:
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_snapshots)
-        raise ValueError(f"Invalid snapshot values in section '{section}': {details}")
+    adhoc_row = lambda e: SimpleNamespace(type=e[0], expr=e[1], state=e[2], snapshot=e[3])
+    sub_tables = [(t, list(map(adhoc_row, rows))) for t, rows in _doc_to_sub_tables(doc, section, 4, min_columns=3)]
+    if invalid := _validate_states(sub_tables):
+        raise ValueError(f"Invalid state values in section '{section}': {_fmt(invalid)}")
+    if invalid_snapshots := [
+        (t, rows[0].snapshot) for t, rows in sub_tables if rows[0].snapshot is not None and not rows[0].snapshot.isdigit()
+    ]:
+        raise ValueError(f"Invalid snapshot values in section '{section}': {_fmt(invalid_snapshots)}")
 
-    def _make(e):
-        snap_val = e[0][3]
-        return AdhocConfig(
-            *[_build_config(c[1], chromecast, light, lgtv, c[2]) for c in e], snapshot=timedelta(hours=int(snap_val)) if snap_val else None
+    return {
+        t: AdhocConfig(
+            *[_build_config(r.expr, chromecast, light, lgtv, r.state) for r in rows],
+            snapshot=timedelta(hours=int(rows[0].snapshot)) if rows[0].snapshot else None,
         )
-
-    return {type: _make(e) for type, e in sub_tables}
+        for t, rows in sub_tables
+    }
 
 
 def build_audio_volumes(doc, section, required):
@@ -239,8 +244,7 @@ def build_audio_volumes(doc, section, required):
         return s is not None and s.isdigit() and 0 <= int(s) <= 100
 
     if invalid := [(name, s) for (name, s) in rows if not _valid(s)]:
-        details = ", ".join(f"'{s}' in '{n}'" for n, s in invalid)
-        raise ValueError(f"Invalid volume values in section '{section}': {details}")
+        raise ValueError(f"Invalid volume values in section '{section}': {_fmt(invalid)}")
     result = {name: int(s) for name, s in rows}
     if missing := set(required) - result.keys():
         raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
@@ -277,16 +281,14 @@ def build_highlights(doc, section):
     rows = _doc_to_table(doc, section, 3)
 
     if invalid := [(name, val) for (name, start, end) in rows for val in (start, end) if _str_to_time(val) is None]:
-        details = ", ".join(f"'{v}' in '{n}'" for n, v in invalid)
-        raise ValueError(f"Invalid time values in section '{section}': {details}")
+        raise ValueError(f"Invalid time values in section '{section}': {_fmt(invalid)}")
 
     return [(name, _str_to_time(start), _str_to_time(end)) for (name, start, end) in rows]
 
 
 def build_people(doc, section):
-    rows = _doc_to_table(doc, section, 2)
     people = defaultdict(set)
-    for name, host in rows:
+    for name, host in _doc_to_table(doc, section, 2):
         people[name].add(host)
     return people
 
@@ -294,9 +296,7 @@ def build_people(doc, section):
 def build_plugins(doc, section):
     from orc import plugins
 
-    result = {}
-    for type, e in _doc_to_sub_tables(doc, section, 2):
-        result[type] = e[0][1]
+    result = {t: rows[0][1] for t, rows in _doc_to_sub_tables(doc, section, 2)}
 
     if missing := [k for k, v in result.items() if not (isinstance(v, str) and hasattr(plugins, v))]:
         raise ValueError(f"Unrecognised plugins in section '{section}': {', '.join(sorted(missing))}")
@@ -305,21 +305,21 @@ def build_plugins(doc, section):
 
 
 def build_themes(doc, routine_section, theme_section, light, chromecast, lgtv, people=None):
-    routine_tables = list(_doc_to_sub_tables(doc, routine_section, 5))
-    theme_tables = list(_doc_to_sub_tables(doc, theme_section, 3))
+    routine_row = lambda e: SimpleNamespace(type=e[0], name=e[1], expr=e[2], state=e[3], trigger=e[4])
+    theme_row = lambda e: SimpleNamespace(type=e[0], routine_id=e[1], time=e[2])
+    routine_tables = [(t, list(map(routine_row, rows))) for t, rows in _doc_to_sub_tables(doc, routine_section, 5)]
+    theme_tables = [(t, list(map(theme_row, rows))) for t, rows in _doc_to_sub_tables(doc, theme_section, 3)]
 
     _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people)
 
-    if invalid := _validate_states(routine_tables, 3):
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid)
-        raise ValueError(f"Invalid state values in section '{routine_section}': {details}")
+    if invalid := _validate_states(routine_tables):
+        raise ValueError(f"Invalid state values in section '{routine_section}': {_fmt(invalid)}")
 
-    routines = {}
-    for type, e in routine_tables:
-        configs = [_build_config(c[2], chromecast, light, lgtv, c[3], c[4]) for c in e]
-        routines[type] = Routine(e[0][1], "", configs)
-
-    return {type: Theme(type, *[replace(routines[c[1]], when=c[2]) for c in e]) for type, e in theme_tables}
+    routines = {
+        t: Routine(rows[0].name, "", [_build_config(r.expr, chromecast, light, lgtv, r.state, r.trigger) for r in rows])
+        for t, rows in routine_tables
+    }
+    return {t: Theme(t, *[replace(routines[r.routine_id], when=r.time) for r in rows]) for t, rows in theme_tables}
 
 
 def squish_configs(*configs, state_override=None):
@@ -349,21 +349,22 @@ def squish_configs(*configs, state_override=None):
 def _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people):
     from orc import Config
 
-    if missing := {Config.THEME_WORK_DAY, Config.THEME_DAY_OFF} - {e[0] for e in theme_tables}:
+    if missing := {Config.THEME_WORK_DAY, Config.THEME_DAY_OFF} - {t for t, _ in theme_tables}:
         raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
 
-    for theme_type, e in theme_tables:
-        for c in e:
-            if not _str_to_time(c[2]) and c[2] not in (SUNRISE, SUNSET):
-                raise ValueError(f"Invalid time '{c[2]}' in theme '{theme_type}': expected HH:MM, '{SUNRISE}', or '{SUNSET}'")
+    for theme_type, rows in theme_tables:
+        for r in rows:
+            if not _str_to_time(r.time) and r.time not in (SUNRISE, SUNSET):
+                raise ValueError(f"Invalid time '{r.time}' in theme '{theme_type}': expected HH:MM, '{SUNRISE}', or '{SUNSET}'")
 
     known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value} | {wc.value for wc in WeatherCondition}
 
-    if invalid_trigger := [(type, c[4]) for type, e in routine_tables for c in e if c[4] not in (None, "") and c[4] not in known_triggers]:
-        details = ", ".join(f"'{v}' in '{t}'" for t, v in invalid_trigger)
-        raise ValueError(f"Unknown trigger names in section '{routine_section}': {details}")
+    if invalid_trigger := [
+        (t, r.trigger) for t, rows in routine_tables for r in rows if r.trigger not in (None, "") and r.trigger not in known_triggers
+    ]:
+        raise ValueError(f"Unknown trigger names in section '{routine_section}': {_fmt(invalid_trigger)}")
 
-    if missing := {"Reset"} - {c[1] for type, e in routine_tables for c in e}:
+    if missing := {"Reset"} - {r.name for t, rows in routine_tables for r in rows}:
         raise ValueError(f"Missing required routines in section '{routine_section}': {', '.join(sorted(missing))}")
 
 
@@ -462,5 +463,5 @@ def _valid_state(e):
     return e in (Config.ON, Config.OFF, Config.STOP) or e.isdigit() or re.match(_YOUTUBE_ID_RE, e)
 
 
-def _validate_states(sub_tables, col):
-    return [(type, c[col]) for type, e in sub_tables for c in e if not _valid_state(c[col])]
+def _validate_states(sub_tables):
+    return [(t, r.state) for t, rows in sub_tables for r in rows if not _valid_state(r.state)]
