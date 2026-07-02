@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block head_scripts %}<script src="/static/device.js" defer></script>{% endblock %}
 {% block body %}
-    {% for (title, devices) in devices_grouped %}
+    {% for (title, devices) in devices_grouped.items() %}
         {% set other = devices | selectattr('type', 'ne', 'AC') | list %}
         {% set ac = devices | selectattr('type', 'eq', 'AC') | list %}
         {% for card in [other, ac] if card %}
