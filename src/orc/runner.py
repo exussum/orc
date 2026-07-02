@@ -41,6 +41,7 @@ def web():
             except Exception:
                 traceback.print_exc()
                 sys.exit(4)
+            app.debug = True
             scheduler.resume()
             api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
             _print_started()
