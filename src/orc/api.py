@@ -45,7 +45,7 @@ from orc.locale import Log
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
 
-_BROADLINK_CODES = "/etc/orc/broadlink_codes.json"
+_BROADLINK_CODES = os.getenv("ORC_BROADLINK_CODES", "/etc/orc/broadlink_codes.json")
 _PRESENCE_WINDOW = timedelta(hours=9)
 _YOLINK_BATTERY_LOW_THRESHOLD = 1
 _YOLINK_SIGNAL_WEAK_THRESHOLD = -90
@@ -212,6 +212,39 @@ def execute(rule):
         else:
             raise Exception("Unknown type")
         sleep(0.1)
+
+
+def ac_command(bl_device, state, mode=None, fan=None, temp=None):
+    if state == config.OFF:
+        broadlink.ac_off(bl_device, _BROADLINK_CODES)
+    else:
+        broadlink.set_ac(bl_device, _BROADLINK_CODES, mode or "cool", fan or "low", temp or 75)
+
+
+def device_command(id, state):
+    for enum_cls in (orc.Light, orc.LGTV, orc.Chromecast):
+        try:
+            device = enum_cls[id]
+        except KeyError:
+            continue
+        level = int(state) if state and state.isdigit() else None
+        if isinstance(device, orc.Light):
+            if level is not None:
+                hubitat.update_light(device, brightness=level)
+            else:
+                hubitat.update_light(device, on=state == config.ON)
+        elif isinstance(device, orc.LGTV):
+            webos_device, bl_device = orc.WebOS[device.name], orc.BroadLink[device.name]
+            if state == config.OFF:
+                tv.off(webos_device)
+            elif state == config.ON and tv.is_off(webos_device):
+                broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
+        elif isinstance(device, orc.Chromecast):
+            if level is not None:
+                chromecast.set_volume(device, level)
+            elif state == config.STOP:
+                chromecast.stop(device)
+        return
 
 
 # --- State manager ---
