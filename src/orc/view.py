@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import date, timedelta
 from functools import wraps
 from itertools import chain, groupby
+from types import SimpleNamespace
 
 from flask import Blueprint
 from flask import current_app as app
@@ -14,6 +15,7 @@ import orc
 from orc import api, config
 from orc import model as m
 from orc import plugins
+from orc.collections import build_trie, prefix_groups
 from orc.locale import Log
 
 bp = Blueprint("controls", __name__)
@@ -76,14 +78,45 @@ def cfg():
         )
 
 
+def _to_level(state):
+    if isinstance(state, int):
+        return state
+    return 100 if state == config.ON else 0
+
+
+_DEVICE_TYPE_ORDER = {"Light": 0, "LGTV": 1, "Chromecast": 2, "AC": 3}
+
+
 @bp.route("/device/")
 def device():
-    devices = map(list, (orc.Light, orc.Chromecast, orc.LGTV, orc.AC))
-    return render_template(
-        "device.html",
-        ctx=app.orc,
-        devices_grouped=[(name, es) for name, es in groupby(chain.from_iterable(devices), key=lambda e: e.name.split("_")[0].title())],
+    light_states = {c.what.name: c.state for c in api.capture_lights().items}
+    sound_states = {c.what.name: c.volume for c in api.capture_sounds().items}
+    by_name = {d.name: d for d in chain.from_iterable((orc.Light, orc.Chromecast, orc.LGTV, orc.AC))}
+    trie = build_trie(by_name)
+
+    def make_device(w):
+        return SimpleNamespace(
+            name=" ".join(s.title() for s in w.split("_")),
+            id=w,
+            type=type(by_name[w]).__name__,
+            capabilities={c.name for c in by_name[w].capabilities},
+            level=_to_level(light_states.get(w)),
+            volume=sound_states.get(w, 0),
+        )
+
+    def sort_key(w):
+        d = by_name[w]
+        has_level = "change_level" in {c.name for c in d.capabilities}
+        return (_DEVICE_TYPE_ORDER.get(type(d).__name__, 99), has_level, w)
+
+    devices_grouped = sorted(
+        [
+            (" ".join(seg.title() for seg in path), [make_device(w) for w in sorted(words, key=sort_key)])
+            for path, words in prefix_groups(trie)
+        ],
+        key=lambda t: t[0],
     )
+    return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped)
 
 
 @bp.route("/api/rebuild_jobs")
@@ -154,7 +187,7 @@ def index():
 
     return (
         render_template(
-            "controls.html",
+            "scene.html",
             highlight_configs=[(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlight_configs],
             plugins=config.plugins,
             room_configs=config.room_configs,
@@ -214,6 +247,29 @@ def presence():
         200,
         {"Cache-control": "no-store"},
     )
+
+
+@bp.route("/api/device/<id>")
+def device_api(id):
+    api.device_command(id, request.args.get("state"))
+    return {"version": VersionManager.version}, 200
+
+
+@bp.route("/api/device/ac/<id>")
+def ac(id):
+    state = request.args.get("state")
+    try:
+        bl_device = orc.AC[id]
+    except KeyError:
+        return {"error": "Unknown device"}, 404
+    api.ac_command(
+        bl_device,
+        state,
+        mode=request.args.get("mode"),
+        fan=request.args.get("fan"),
+        temp=int(t) if (t := request.args.get("temp")) else None,
+    )
+    return {"version": VersionManager.version}, 200
 
 
 @bp.route("/api/room/<id>")
