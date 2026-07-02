@@ -7,7 +7,7 @@ import recurring_ical_events
 import requests
 
 from orc import config
-from orc._locked_dict import LockedDict
+from orc.collections import LockedDict
 from orc.dal._decorators import requires_enabled
 from orc.model import WeatherCondition
 
