@@ -23,7 +23,7 @@ def flask():
     scheduler.resume()
     api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
     _print_started()
-    app.run(host="0.0.0.0", port=8000, use_reloader=True, debug=True)
+    app.run(host="0.0.0.0", port=8000, use_reloader=False)
 
 
 def web():
@@ -86,7 +86,6 @@ def _build_app():
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
     app.orc = ctx
-    app.jinja_env.auto_reload = True
     app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
 
