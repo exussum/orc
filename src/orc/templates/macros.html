@@ -23,7 +23,7 @@
 <div class="orc-card mb-2">
     <div class="px-4 pt-3 pb-0 text-sm font-semibold">{{ day.strftime("%A, %B %-d") }}</div>
     <div class="p-4 overflow-x-auto">
-        <table class="w-full{% if table_fixed %} table-fixed{% endif %} text-left mb-0">
+        <table class="w-full{% if table_fixed %} table-fixed{% endif %} text-left">
             {{ caller() }}
         </table>
     </div>

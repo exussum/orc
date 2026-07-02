@@ -25,7 +25,7 @@
     </div>
     <div class="orc-card mb-2">
         <div class="p-4">
-            <h6 class="text-base mb-0">Theme</h6>
+            <div class="text-base font-semibold">Theme</div>
             <div class="orc-routine-buttons">
                 {% for id in ad_hoc_routines %}
                     {{ btn_stripe(id, "clipboard-check", durations.get(id, 0)) }}
@@ -35,7 +35,7 @@
     </div>
     <div class="orc-card mb-2">
         <div class="p-4">
-            <h6 class="text-base mb-0">Plugin</h6>
+            <div class="text-base font-semibold">Plugin</div>
             <div class="orc-routine-buttons">
                 {% for id in plugins if id not in ["Pair LG TV", "Reboot Orc", "Reboot Hubitat", "Light Test", "Sound Test"] %}
                     {{ btn_stripe(id, "rocket-launch", durations.get(id, 0)) }}
@@ -44,7 +44,7 @@
         </div>
     </div>
     <div class="orc-card mb-2">
-        <div class="orc-routine-buttons orc-overflow p-4">
+        <div class="orc-routine-buttons overflow-visible p-4">
             <div>
                 <details class="orc-dropup">
                     <summary class="orc-btn cursor-pointer list-none select-none">

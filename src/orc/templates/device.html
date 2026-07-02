@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% block head_scripts %}<script src="/static/device.js" defer></script>{% endblock %}
-{% from 'macros.html' import day_card %}
 {% block body %}
     {% for (title, devices) in devices_grouped %}
         {% set other = devices | selectattr('type', 'ne', 'AC') | list %}
@@ -20,7 +19,7 @@
                             </div>
                             <div class="text-sm">Temp</div>
                             <div class="flex gap-4 items-center">
-                                <div class="inline-flex items-center justify-center w-12 h-[38px] text-sm" data-ac-temp="{{ device.id }}">75</div>
+                                <div class="inline-flex items-center justify-center w-12 h-[var(--orc-control-height)] text-sm" data-ac-temp="{{ device.id }}">75</div>
                                 <input type="range" min="70" max="80" value="75" class="w-full" data-ac-ctrl="{{ device.id }}"/>
                             </div>
                             <div class="text-sm">Mode</div>
