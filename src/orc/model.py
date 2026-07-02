@@ -3,7 +3,7 @@ from collections import defaultdict, deque
 from collections import namedtuple as nt
 from dataclasses import KW_ONLY, dataclass, replace
 from datetime import datetime, time
-from enum import Enum
+from enum import Enum, auto
 from itertools import chain
 from typing import TYPE_CHECKING, Tuple
 
@@ -28,6 +28,10 @@ _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
 _CLASS_SORT = {"LGTV": 0, "Light": 1, "Chromecast": 2, "AC": 3}
+
+
+class Capability(Enum):
+    change_level = auto()
 
 
 class LogSource(str, Enum):
