@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import btn %}
 {% block body %}
-    <div id="config-accordion">
+    <div>
         <div class="orc-card mb-2">
-            <div class="px-4 py-3 border-b" style="border-color: var(--color-orc-border);">
-                <h6 class="text-base mb-0">Setup</h6>
+            <div class="px-4 py-3 border-b border-orc-border">
+                <div class="text-base font-semibold">Setup</div>
             </div>
             <div class="orc-routine-buttons p-4">
                 {{ btn("Light Test", "light-bulb", durations.get('Light Test', 0)) }}
@@ -32,8 +32,8 @@
             </div>
         </div>
         <div class="orc-card mb-2">
-            <div class="px-4 py-3 border-b" style="border-color: var(--color-orc-border);">
-                <h6 class="text-base mb-0">Internals</h6>
+            <div class="px-4 py-3 border-b border-orc-border">
+                <div class="text-base font-semibold">Internals</div>
             </div>
             <div class="p-4">
                 <ul class="list-disc list-inside">
@@ -63,25 +63,25 @@
                     Devices
                 </summary>
                 <div class="p-4">
-                    <h5 class="font-semibold mb-1">Lights</h5>
+                    <div class="font-semibold mb-1">Lights</div>
                     <ul class="list-disc list-inside mb-3">
                         {% for c in lights.items %}
                             <li>{{ c.what.name }}: {{ c.state }}</li>
                         {% endfor %}
                     </ul>
-                    <h5 class="font-semibold mb-1">Sounds</h5>
+                    <div class="font-semibold mb-1">Sounds</div>
                     <ul class="list-disc list-inside mb-3">
                         {% for c in sounds.items %}
                             <li>{{ c.what.name }}: {{ c.content or '—' }} @ {{ c.volume }}%</li>
                         {% endfor %}
                     </ul>
-                    <h5 class="font-semibold mb-1">TV</h5>
+                    <div class="font-semibold mb-1">TV</div>
                     <ul class="list-disc list-inside mb-3">
                         {% for name, state in tv_states.items() %}
                             <li>{{ name }}: {{ state }}</li>
                         {% endfor %}
                     </ul>
-                    <h5 class="font-semibold mb-1">Leak Sensors</h5>
+                    <div class="font-semibold mb-1">Leak Sensors</div>
                     <ul class="list-disc list-inside">
                         {% for s in leak_sensors %}
                             <li>
@@ -106,7 +106,7 @@
                 <summary class="orc-accordion-summary">
                     Config.md
                 </summary>
-                <div class="p-4 font-mono overflow-x-auto" id="orc-config">{{ html|safe }}</div>
+                <div class="orc-config p-4 font-mono overflow-x-auto">{{ html|safe }}</div>
             </details>
         </div>
     </div>
