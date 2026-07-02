@@ -7,12 +7,19 @@ from orc.dal.sqlite import read_lights, write_light
 
 _DB_TRUTH_DEVICE_TYPES = {"Generic Zigbee Outlet"}
 
+_CAPABILITY_MAP = {
+    "ChangeLevel": m.Capability.change_level,
+}
+
 
 @requires_enabled({})
 def fetch_hubitat_config(secrets):
     resp = requests.get(f"{config.base_url}/devices/all{secrets.access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
-    return {e["label"]: (int(e["id"]), frozenset(e.get("capabilities", []))) for e in resp.json()}
+    return {
+        e["label"]: (int(e["id"]), frozenset(_CAPABILITY_MAP[c] for c in e.get("capabilities", []) if c in _CAPABILITY_MAP))
+        for e in resp.json()
+    }
 
 
 @requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=config.OFF) for light in lights)))
@@ -33,7 +40,7 @@ def fetch_light_states(lights):
 
 @requires_enabled(None)
 def update_light(light, on=None, brightness=None):
-    if brightness is not None and "ChangeLevel" in light.capabilities:
+    if brightness is not None and m.Capability.change_level in light.capabilities:
         url = f"{config.base_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}"
         new_state = brightness
     else:
