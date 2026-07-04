@@ -309,7 +309,9 @@ def build_themes(doc, routine_section, theme_section, people=None):
 def column_to_value(col, val):
     import orc
 
-    if col.lower() == "device":
+    if col.lower() == "value":
+        return int(val) if val and val.isdigit() else val
+    elif col.lower() == "device":
         return eval(val, vars(orc))
     elif col.lower() == "state":
         if val and val.isdigit():
