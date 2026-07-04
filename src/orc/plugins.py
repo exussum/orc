@@ -3,9 +3,8 @@ from __future__ import annotations
 import os
 import signal
 import sys
-from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import dataclass
-from datetime import time, timedelta
+from datetime import timedelta
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
@@ -14,75 +13,67 @@ from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 from flask import request
 
-from orc._decorators import requires_ctx
-from orc.locale import Log
-
-_SENSOR_ID_ENTRANCE = 16
-_SENSOR_EVENT_ACTIVE = "active"
+from orc._decorators import plugin_config, requires_ctx
 
 if TYPE_CHECKING:
     from orc import Config as OrcConfig
     from orc.api import SnapshotManager
-    from orc.model import DeviceEnum
 
 
 @dataclass
 class PluginCtx:
     snapshot_manager: SnapshotManager
-    Light: type[DeviceEnum]
-    Chromecast: type[DeviceEnum]
-    LGTV: type[DeviceEnum]
     config: OrcConfig
     api: ModuleType
     model: ModuleType
+    orc: ModuleType
     scheduler: BaseScheduler | None = None
 
 
 def all_lights_off(ctx):
     ctx.api.execute(
         ctx.model.Configs(
-            ctx.model.Config(ctx.Light, ctx.config.OFF),
+            ctx.model.Config(ctx.orc.Light, ctx.model.OFF),
         )
     )
 
 
 def all_lights_on(ctx):
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Light, ctx.config.ON), ctx.model.Config(ctx.Light, 100)))
+    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.orc.Light, ctx.model.ON), ctx.model.Config(ctx.orc.Light, 100)))
 
 
 def back_on_schedule(ctx):
     ctx.api.replay_day(ctx.api.local_now())
 
 
-def build_ctx(snapshot_manager, scheduler=None):
-    from orc import LGTV, Chromecast, Light, api, config, model
+def build_ctx(orc_ctx):
+    import orc
+    from orc import api, config, model
 
     return PluginCtx(
-        snapshot_manager=snapshot_manager,
-        Light=Light,
-        Chromecast=Chromecast,
-        LGTV=LGTV,
+        snapshot_manager=orc_ctx.snapshot_manager,
+        scheduler=orc_ctx.scheduler,
         config=config,
         api=api,
         model=model,
-        scheduler=scheduler,
+        orc=orc,
     )
 
 
-def execute_plugin(snapshot_manager, id):
-    ctx = build_ctx(snapshot_manager)
+def execute_plugin(orc_ctx, id):
+    ctx = build_ctx(orc_ctx)
     getattr(sys.modules[__name__], ctx.config.plugins[id])(ctx)
 
 
 def light_test(ctx):
     end = ctx.api.local_now() + timedelta(minutes=10)
-    ctx.snapshot_manager.replace_config(ctx.model.Config(ctx.Light, ctx.config.OFF), end)
+    ctx.snapshot_manager.replace_config(ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end)
     ctx.api.light_test()
     ctx.snapshot_manager.resume(ctx.config.default_config)
 
 
 def pair_lg_tv(ctx):
-    for tv in ctx.LGTV:
+    for tv in ctx.orc.LGTV:
         ctx.api.pair_lg_tv(tv)
 
 
@@ -97,7 +88,7 @@ def reboot_hubitat(ctx):
 def silence(ctx):
     ctx.api.execute(
         ctx.model.Configs(
-            ctx.model.Config(ctx.Chromecast, ctx.config.STOP),
+            ctx.model.Config(ctx.orc.Chromecast, ctx.model.STOP),
         )
     )
 
@@ -105,33 +96,36 @@ def silence(ctx):
 def sound_test(ctx):
     base = ctx.config.internal_url.rstrip("/") + "/" if ctx.config.internal_url else request.host_url
     url = f"{base}static/alert.mp3"
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.Chromecast, url)))
+    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.orc.Chromecast, url)))
     ctx.api.play_text("audio test")
     alert_path = str(Path(__file__).parent / "static" / "alert.wav")
-    for level in (ctx.config.AUDIO_INFO, ctx.config.AUDIO_FATAL):
+    for level in (ctx.model.AUDIO_INFO, ctx.model.AUDIO_FATAL):
         ctx.api.play_alert(alert_path, level=level)
 
 
-def trigger_sensor(ctx, device_id, event):
-    if int(device_id) != _SENSOR_ID_ENTRANCE:
+@plugin_config(
+    "sensor",
+    schema={
+        "Settings": ("Key", "Value"),
+        "Messages": ("Log", "Message"),
+        "Day": ("Trigger", "Device", "State"),
+        "Night": ("Trigger", "Device", "State"),
+    },
+)
+def trigger_sensor(ctx, sensor, device_id, event):
+    if int(device_id) != sensor.entrance_id:
         return
 
-    entrance = (ctx.Light.ENTRANCE_BULB_1, ctx.Light.ENTRANCE_BULB_2)
-    now = ctx.api.local_now()
+    phase = sensor.day if sensor.day_start <= ctx.api.local_now().hour < sensor.day_end else sensor.night
 
-    if event == _SENSOR_EVENT_ACTIVE:
-        if _daytime(ctx):
-            ctx.api.execute(ctx.model.Config(entrance, 20))
-            ctx.api.execute(ctx.config.default_config)
-        else:
-            ctx.api.execute(ctx.model.Config(entrance[:1], 1))
-
-        _each_sound(ctx, ctx.api.pause)
-    else:
-        ctx.api.execute(ctx.model.Config(entrance, ctx.config.OFF))
+    if event == sensor.active_event:
+        ctx.api.execute(_to_configs(ctx, phase.entrance_light))
+        ctx.api.execute(_to_configs(ctx, phase.entrance_config))
+    elif event == sensor.inactive_event:
+        ctx.api.execute(ctx.model.squish_configs(_to_configs(ctx, phase.entrance_light), state_override=ctx.model.OFF))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
-            DateTrigger(now + timedelta(minutes=2), timezone=ctx.config.tz),
+            DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
             name="Trigger Sensor",
             id="trigger-sensor",
             replace_existing=True,
@@ -139,51 +133,44 @@ def trigger_sensor(ctx, device_id, event):
         )
 
 
-def video_conference(ctx):
-    ctx.api.execute(
-        ctx.model.Configs(
-            ctx.model.Config(ctx.Light.OFFICE_TABLE_LAMP, 5),
-            ctx.model.Config(ctx.Light.OFFICE_FLOOR_LAMP, ctx.config.ON),
-            ctx.model.Config(ctx.Light.OFFICE_DESK_LAMP, 50),
-        )
-    )
-
-
-def _daytime(ctx):
-    return 10 <= ctx.api.local_now().hour < 22
-
-
-def _each_sound(ctx, action):
-    with Pool(max_workers=len(ctx.Chromecast)) as ex:
-        list(ex.map(action, ctx.Chromecast))
+@plugin_config("video_conference", schema={"Lights": ("Trigger", "Device", "State")})
+def video_conference(ctx, vc):
+    ctx.api.execute(_to_configs(ctx, vc.lights.lights))
 
 
 @requires_ctx
-def _run_trigger_sensor_off(ctx):
-    plugin_ctx = build_ctx(ctx.snapshot_manager, ctx.scheduler)
-    log = lambda msg: plugin_ctx.api.log(
-        plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, Log.TRIGGER_SENSOR_OFF_PREFIX.format(msg=msg)
-    )
+@plugin_config(
+    "sensor",
+    schema={
+        "Settings": ("Key", "Value"),
+        "Messages": ("Log", "Message"),
+        "Day": ("Trigger", "Device", "State"),
+        "Night": ("Trigger", "Device", "State"),
+    },
+)
+def _run_trigger_sensor_off(ctx, sensor):
+    plugin_ctx = build_ctx(ctx)
+    log = lambda msg: plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)
+    daytime = sensor.day_start <= plugin_ctx.api.local_now().hour < sensor.day_end
+    phase = sensor.day if daytime else sensor.night
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
     present = plugin_ctx.api.check_presence(ctx=ctx)
 
-    if not present:
-        plugin_ctx.api.execute(plugin_ctx.model.Config(plugin_ctx.LGTV, plugin_ctx.config.OFF))
-
-    if not _daytime(plugin_ctx):
-        # If it's night, the lights were unaffected, just stop the sound.
-        action, msg = plugin_ctx.api.stop, Log.TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME
+    if not daytime:
+        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.after_hours))
+        log(sensor.log_after_hours)
     elif present:
-        # If people are around, they're in control of the lights, stop the sound.
-        action, msg = plugin_ctx.api.stop, Log.TRIGGER_SENSOR_OFF_SKIPPED_PRESENT.format(names=", ".join(sorted(present)))
+        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.after_hours))
+        log(sensor.log_present)
     elif any(s.content for s in plugin_ctx.api.capture_sounds().items):
-        # Stuff is playing for a reason, resume it.
-        action, msg = plugin_ctx.api.resume, Log.TRIGGER_SENSOR_OFF_SKIPPED_SOUNDS
+        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
+        log(sensor.log_core_hours)
     else:
-        # If it's daytime, no one is home, and it's quiet, turn off the lights, resume the sound (in case it gets falsely paused)
-        plugin_ctx.api.execute(plugin_ctx.model.squish_configs(plugin_ctx.config.default_config, state_override=plugin_ctx.config.OFF))
-        action, msg = plugin_ctx.api.resume, Log.TRIGGER_SENSOR_OFF_APPLIED
+        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.shutdown))
+        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
+        log(sensor.log_shutdown)
 
-    log(msg)
-    _each_sound(plugin_ctx, action)
+
+def _to_configs(ctx, rows):
+    return ctx.model.Configs(*[ctx.model.Config(r.device, r.state) for r in rows])
