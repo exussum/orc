@@ -2,10 +2,9 @@ import re
 from collections import defaultdict, deque
 from collections import namedtuple as nt
 from dataclasses import KW_ONLY, dataclass, replace
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from enum import Enum, auto
 from itertools import chain
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Tuple
 
 from apscheduler.schedulers.base import BaseScheduler
@@ -34,6 +33,10 @@ AUDIO_INFO = "INFO"
 AUDIO_FATAL = "FATAL"
 
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
+
+_ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
+_ERR_SNAPSHOT = "Invalid snapshot {!r}: expected an integer number of hours"
+_ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
 
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
@@ -214,20 +217,12 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
 
 
 def build_ad_hoc_routines(doc, section):
-    from datetime import timedelta
-
-    sub_tables = [(t, rows) for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State", "Snapshot"))]
-    if invalid := {t for t, rows in sub_tables for r in rows if r.state is None}:
-        raise ValueError(f"Invalid state in section '{section}' for: {', '.join(sorted(invalid))}")
-    if invalid_snapshots := [t for t, rows in sub_tables if isinstance(rows[0].snapshot, str)]:
-        raise ValueError(f"Invalid snapshot values in section '{section}': {', '.join(sorted(invalid_snapshots))}")
-
     return {
         t: AdhocConfig(
             *[Config(r.device, r.state) for r in rows],
             snapshot=timedelta(hours=rows[0].snapshot) if rows[0].snapshot else None,
         )
-        for t, rows in sub_tables
+        for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State", "Snapshot"))
     }
 
 
@@ -246,10 +241,9 @@ def build_audio_volumes(doc, section, required):
 
 
 def build_config(doc, section, required=()):
-    sub_tables = [(t, rows) for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State"))]
-    if invalid := {t for t, rows in sub_tables for r in rows if r.state is None}:
-        raise ValueError(f"Invalid state in section '{section}' for: {', '.join(sorted(invalid))}")
-    result = {t: Configs(*[Config(r.device, r.state) for r in rows]) for t, rows in sub_tables}
+    result = {
+        t: Configs(*[Config(r.device, r.state) for r in rows]) for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State"))
+    }
     if missing := set(required) - result.keys():
         raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
     return result
@@ -279,12 +273,7 @@ def build_enum(doc, section, sub_section, id_lookup=None):
 
 
 def build_highlights(doc, section):
-    result = [(name, column_to_value("time", start), column_to_value("time", end)) for (name, start, end) in doc_to_table(doc, section, 3)]
-
-    if invalid := [(name, val) for name, start, end in result for val in (start, end) if val is None]:
-        raise ValueError(f"Invalid time values in section '{section}': {_fmt(invalid)}")
-
-    return result
+    return [(name, column_to_value("time", start), column_to_value("time", end)) for (name, start, end) in doc_to_table(doc, section, 3)]
 
 
 def build_people(doc, section):
@@ -311,9 +300,6 @@ def build_themes(doc, routine_section, theme_section, people=None):
 
     _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people)
 
-    if invalid := {t for t, rows in routine_tables for r in rows if r.state is None}:
-        raise ValueError(f"Invalid state in section '{routine_section}' for: {', '.join(sorted(invalid))}")
-
     routines = {
         t: Routine(rows[0].name, "", [Config(r.device, r.state, trigger=r.trigger or None) for r in rows]) for t, rows in routine_tables
     }
@@ -326,21 +312,27 @@ def column_to_value(col, val):
     if col.lower() == "device":
         return eval(val, vars(orc))
     elif col.lower() == "state":
+        if val and val.isdigit():
+            return int(val)
+        if val in (ON, OFF, STOP, PAUSE, RESUME) or (val and re.match(_YOUTUBE_ID_RE, val)):
+            return val
+        raise ValueError(_ERR_STATE.format(val))
+    elif col.lower() == "snapshot":
+        if val is None:
+            return None
         if val.isdigit():
             return int(val)
-        if val in (ON, OFF, STOP, PAUSE, RESUME) or re.match(_YOUTUBE_ID_RE, val):
-            return val
-        return None
-    elif col.lower() == "snapshot":
-        return int(val) if val and val.isdigit() else val
+        raise ValueError(_ERR_SNAPSHOT.format(val))
     elif col.lower() == "time":
         if val in (SUNRISE, SUNSET):
             return val
         parts = val.split(":") if val else []
         if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
-            return None
+            raise ValueError(_ERR_TIME.format(val))
         hour, minute = int(parts[0]), int(parts[1])
-        return time(hour, minute) if 0 <= hour <= 23 and 0 <= minute <= 59 else None
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError(_ERR_TIME.format(val))
+        return time(hour, minute)
     return val
 
 
@@ -410,11 +402,6 @@ def _typed_sub_tables(doc, section, columns):
 def _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people):
     if missing := {THEME_WORK_DAY, THEME_DAY_OFF} - {t for t, _ in theme_tables}:
         raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
-
-    for theme_type, rows in theme_tables:
-        for r in rows:
-            if r.time is None:
-                raise ValueError(f"Invalid time in theme '{theme_type}': expected HH:MM, '{SUNRISE}', or '{SUNSET}'")
 
     known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value} | {wc.value for wc in WeatherCondition}
 
