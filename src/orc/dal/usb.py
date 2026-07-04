@@ -7,6 +7,7 @@ from importlib import resources
 import pyaudio
 
 from orc import config
+from orc import model as m
 from orc._decorators import audio_lock, silence_fd
 
 _MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
@@ -75,4 +76,4 @@ def _play_stream(chunks, channels, src_rate, gain):
 
 
 def _gain_for(level):
-    return config.audio_volumes[level or config.AUDIO_INFO] / 100.0
+    return config.audio_volumes[level or m.AUDIO_INFO] / 100.0

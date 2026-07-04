@@ -22,7 +22,7 @@ def fetch_hubitat_config(secrets):
     }
 
 
-@requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=config.OFF) for light in lights)))
+@requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=m.OFF) for light in lights)))
 def fetch_light_states(lights):
     bodies = _fetch_hubitat_devices()
     stored = dict(read_lights())
@@ -31,8 +31,8 @@ def fetch_light_states(lights):
         body = bodies[light.value]
         is_truth = body["type"] in _DB_TRUTH_DEVICE_TYPES
         if is_truth and light.value not in stored:
-            write_light(light, type=body["type"], state=config.OFF)
-            stored[light.value] = config.OFF
+            write_light(light, type=body["type"], state=m.OFF)
+            stored[light.value] = m.OFF
         state = stored[light.value] if is_truth else _hubitat_body_to_state(body)
         configs.append(m.Config(what=light, state=state))
     return m.Configs(*configs)
@@ -50,8 +50,8 @@ def update_light(light, on=None, brightness=None):
             on = True
         elif brightness is not None:
             raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
-        url = f"{config.base_url}/devices/{light.value}/{config.ON if on else config.OFF}{config.secrets.access_token}"
-        new_state = config.ON if on else config.OFF
+        url = f"{config.base_url}/devices/{light.value}/{m.ON if on else m.OFF}{config.secrets.access_token}"
+        new_state = m.ON if on else m.OFF
     resp = requests.get(url, timeout=config.http_timeout)
     resp.raise_for_status()
     device_type = resp.json().get("type", "")
@@ -73,4 +73,4 @@ def _fetch_hubitat_devices():
 
 def _hubitat_body_to_state(body):
     attrs = body["attributes"]
-    return int(attrs["level"]) if ("level" in attrs and attrs["switch"] == config.ON) else attrs["switch"]
+    return int(attrs["level"]) if ("level" in attrs and attrs["switch"] == m.ON) else attrs["switch"]

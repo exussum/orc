@@ -29,7 +29,6 @@ from orc._decorators import (
 )
 from orc.dal import broadlink, chromecast, feeds, hubitat, sqlite, tv, usb, yolink
 from orc.dal.bws import fetch_secrets  # noqa: F401
-from orc.dal.chromecast import pause, resume, stop  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.lgtv import pair as _pair_lgtv
@@ -124,7 +123,7 @@ def _on_yolink_transition(name, kind, old, new):
         msg = (Log.YOLINK_WATER_DETECTED if new == yolink.STATE_WET else Log.YOLINK_WATER_CLEARED).format(name=name)
         if new == yolink.STATE_WET:
             log(local_now(), m.LogSource.IOT, msg)
-            play_text(msg, level=config.AUDIO_FATAL)
+            play_text(msg, level=m.AUDIO_FATAL)
             return
     elif kind == "battery":
         old_low = old is not None and old <= _YOLINK_BATTERY_LOW_THRESHOLD
@@ -188,12 +187,16 @@ def execute(rule):
             if isinstance(rule.state, int):
                 hubitat.update_light(w, brightness=rule.state)
             else:
-                hubitat.update_light(w, on=rule.state == config.ON)
+                hubitat.update_light(w, on=rule.state == m.ON)
         elif isinstance(w, orc.Chromecast):
             if isinstance(rule.state, int):
                 chromecast.set_volume(w, rule.state)
-            elif rule.state == config.STOP:
+            elif rule.state == m.STOP:
                 chromecast.stop(w)
+            elif rule.state == m.PAUSE:
+                chromecast.pause(w)
+            elif rule.state == m.RESUME:
+                chromecast.resume(w)
             else:
                 if rule.state not in stream:
                     stream[rule.state] = (
@@ -202,9 +205,9 @@ def execute(rule):
                 chromecast.play(w, *stream[rule.state])
         elif isinstance(w, orc.LGTV):
             webos_device, bl_device = orc.WebOS[w.name], orc.BroadLink[w.name]
-            if rule.state == config.OFF:
+            if rule.state == m.OFF:
                 tv.off(webos_device)
-            elif rule.state == config.ON:
+            elif rule.state == m.ON:
                 if tv.is_off(webos_device):
                     broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
             else:
@@ -215,7 +218,7 @@ def execute(rule):
 
 
 def ac_command(bl_device, state, mode=None, fan=None, temp=None):
-    if state == config.OFF:
+    if state == m.OFF:
         broadlink.ac_off(bl_device, _BROADLINK_CODES)
     else:
         broadlink.set_ac(bl_device, _BROADLINK_CODES, mode or "cool", fan or "low", temp or 75)
@@ -227,22 +230,24 @@ def device_command(id, state):
             device = enum_cls[id]
         except KeyError:
             continue
+
         level = int(state) if state and state.isdigit() else None
+
         if isinstance(device, orc.Light):
             if level is not None:
                 hubitat.update_light(device, brightness=level)
             else:
-                hubitat.update_light(device, on=state == config.ON)
+                hubitat.update_light(device, on=state == m.ON)
         elif isinstance(device, orc.LGTV):
             webos_device, bl_device = orc.WebOS[device.name], orc.BroadLink[device.name]
-            if state == config.OFF:
+            if state == m.OFF:
                 tv.off(webos_device)
-            elif state == config.ON and tv.is_off(webos_device):
+            elif state == m.ON and tv.is_off(webos_device):
                 broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
         elif isinstance(device, orc.Chromecast):
             if level is not None:
                 chromecast.set_volume(device, level)
-            elif state == config.STOP:
+            elif state == m.STOP:
                 chromecast.stop(device)
         return
 
@@ -313,10 +318,10 @@ def calculate_theme(today):
     if override := active_theme_override(today):
         return override.name
     if today.weekday() in (5, 6):
-        return config.THEME_DAY_OFF
+        return m.THEME_DAY_OFF
     today_iso = today.strftime("%Y-%m-%d")
     is_holiday = any(e["date"] == today_iso and e["exchange"] == "NYSE" for e in feeds.fetch_holidays(today.year))
-    return config.THEME_DAY_OFF if is_holiday else config.THEME_WORK_DAY
+    return m.THEME_DAY_OFF if is_holiday else m.THEME_WORK_DAY
 
 
 def set_theme_override(name, start, end):
@@ -503,7 +508,7 @@ def rebuild_iot_schedule(ctx):
 
 
 def light_test():
-    execute(m.Config(orc.Light, config.ON))
+    execute(m.Config(orc.Light, m.ON))
     time.sleep(10)
 
 
@@ -533,7 +538,7 @@ def _safe_ping(name, host):
 
 def _schedule_cal_tasks(scheduler):
     now = local_now()
-    if calculate_theme(now.date()) != config.THEME_WORK_DAY:
+    if calculate_theme(now.date()) != m.THEME_WORK_DAY:
         return
 
     events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))

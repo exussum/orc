@@ -1,16 +1,16 @@
 ##### Devices
 
-| Type       | ID           | Hubitat Name     |
-|------------|--------------|------------------|
-| Light      | BEDROOM_LAMP | bedroom lamp     |
-|            | LIVING_ROOM  | living room desk |
-| Chromecast | LIVING_ROOM  | Living room mini |
+| Type       | Name         | Room    | Host             |
+|------------|--------------|---------|------------------|
+| Light      | BEDROOM_LAMP | Bedroom | bedroom lamp     |
+|            | LIVING_ROOM  |         | living room desk |
+| Chromecast | LIVING_ROOM  | Living  | Living room mini |
 
 ---
 
 ##### Routines
 
-| ID                 | Name       | Expression | State | Trigger |
+| ID                 | Name       | Device     | State | Trigger |
 |--------------------|------------|------------|-------|---------|
 | ROUTINE_RESET      | Reset      | Light      | off   | SYSTEM  |
 | ROUTINE_LIGHTS_ON  | Lights On  | Light      | on    | SYSTEM  |
@@ -28,7 +28,7 @@
 
 ##### Themes
 
-| Name     | ID                 | Time    |
+| Name     | Routine            | Time    |
 |----------|--------------------|---------|
 | work day | ROUTINE_RESET      | 1:00    |
 |          | ROUTINE_LIGHTS_ON  | sunset  |
@@ -39,7 +39,7 @@
 
 ##### Room Configs
 
-| Room        | IDs                | State |
+| Room        | Device             | State |
 |-------------|--------------------|-------|
 | Living Room | Light.LIVING_ROOM  | on    |
 | Bedroom     | Light.BEDROOM_LAMP | on    |
@@ -48,7 +48,7 @@
 
 ##### Ad-Hoc Routines
 
-| Theme   | Expression | State | Snapshot |
+| Name    | Device     | State | Snapshot |
 |---------|------------|-------|----------|
 | Silence | Chromecast | stop  |          |
 
