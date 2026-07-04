@@ -44,72 +44,72 @@ def _rooms_md(rows):
 def test_squish_dim_then_off():
     cfg = (
         m.Config(Light.a, 10),
-        m.Config(Light.a, config.ON),
+        m.Config(Light.a, m.ON),
         m.Config(Light.a, 20),
-        m.Config(Light.a, config.ON),
-        m.Config(Light.a, config.OFF),
+        m.Config(Light.a, m.ON),
+        m.Config(Light.a, m.OFF),
     )
     assert m._squish(cfg) == (
         m.Config(Light.a, 20),
-        m.Config(Light.a, config.OFF),
+        m.Config(Light.a, m.OFF),
     )
 
 
 def test_squish_just_off():
-    cfg = (m.Config(Light.a, config.ON), m.Config(Light.a, config.OFF))
-    assert m._squish(cfg) == (m.Config(Light.a, config.OFF),)
+    cfg = (m.Config(Light.a, m.ON), m.Config(Light.a, m.OFF))
+    assert m._squish(cfg) == (m.Config(Light.a, m.OFF),)
 
 
 def test_squish_dim_on():
-    cfg = (m.Config(Light.a, 20), m.Config(Light.a, config.ON))
+    cfg = (m.Config(Light.a, 20), m.Config(Light.a, m.ON))
     assert m._squish(cfg) == (
         m.Config(Light.a, 20),
-        m.Config(Light.a, config.ON),
+        m.Config(Light.a, m.ON),
     )
 
 
 def test_squish_0_on():
-    cfg = (m.Config(Light.a, 0), m.Config(Light.a, config.ON))
+    cfg = (m.Config(Light.a, 0), m.Config(Light.a, m.ON))
     assert m._squish(cfg) == (
         m.Config(Light.a, 0),
-        m.Config(Light.a, config.ON),
+        m.Config(Light.a, m.ON),
     )
 
 
 def test_squish_just_on():
-    cfg = (m.Config(Light.a, config.OFF), m.Config(Light.a, config.ON))
-    assert m._squish(cfg) == (m.Config(Light.a, config.ON),)
+    cfg = (m.Config(Light.a, m.OFF), m.Config(Light.a, m.ON))
+    assert m._squish(cfg) == (m.Config(Light.a, m.ON),)
 
 
 def test_theme_squish_everything_off_start():
-    routine = m.Configs(m.Config(Light, config.OFF), m.Config(Light.a, config.ON))
+    routine = m.Configs(m.Config(Light, m.OFF), m.Config(Light.a, m.ON))
     assert m.squish_configs(routine) == m.Configs(
-        m.Config(Light.a, config.ON, trigger=None),
-        m.Config(Light.b, config.OFF, trigger=None),
-        m.Config(Light.c, config.OFF, trigger=None),
+        m.Config(Light.a, m.ON, trigger=None),
+        m.Config(Light.b, m.OFF, trigger=None),
+        m.Config(Light.c, m.OFF, trigger=None),
     )
 
 
 def test_theme_squish_double_on():
-    routine = m.Configs(m.Config(Light, config.ON), m.Config(Light.a, config.ON))
+    routine = m.Configs(m.Config(Light, m.ON), m.Config(Light.a, m.ON))
     assert m.squish_configs(routine) == m.Configs(
-        m.Config(Light.a, config.ON, trigger=None),
-        m.Config(Light.b, config.ON, trigger=None),
-        m.Config(Light.c, config.ON, trigger=None),
+        m.Config(Light.a, m.ON, trigger=None),
+        m.Config(Light.b, m.ON, trigger=None),
+        m.Config(Light.c, m.ON, trigger=None),
     )
 
 
 def test_theme_squish_dim_then_off():
     routine = m.Configs(
-        m.Config(Light, config.OFF),
+        m.Config(Light, m.OFF),
         m.Config(Light.a, 10),
-        m.Config(Light, config.OFF),
+        m.Config(Light, m.OFF),
     )
     assert m.squish_configs(routine) == m.Configs(
         m.Config(Light.a, 10, trigger=None),
-        m.Config(Light.a, config.OFF, trigger=None),
-        m.Config(Light.b, config.OFF, trigger=None),
-        m.Config(Light.c, config.OFF, trigger=None),
+        m.Config(Light.a, m.OFF, trigger=None),
+        m.Config(Light.b, m.OFF, trigger=None),
+        m.Config(Light.c, m.OFF, trigger=None),
     )
 
 
@@ -130,21 +130,21 @@ def test_op_cmp_dim():
 
 
 def test_op_cmp_on():
-    assert m._op_cmp(m.Config(Light.a, config.ON)) == (1, 0)
+    assert m._op_cmp(m.Config(Light.a, m.ON)) == (1, 0)
 
 
 def test_op_cmp_off():
-    assert m._op_cmp(m.Config(Light.a, config.OFF)) == (1, 1)
+    assert m._op_cmp(m.Config(Light.a, m.OFF)) == (1, 1)
 
 
 def test_op_cmp_sorts_dim_before_on_before_off():
-    configs = [m.Config(Light.a, config.OFF), m.Config(Light.b, config.ON), m.Config(Light.c, 50)]
-    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.c, 50), m.Config(Light.b, config.ON), m.Config(Light.a, config.OFF)]
+    configs = [m.Config(Light.a, m.OFF), m.Config(Light.b, m.ON), m.Config(Light.c, 50)]
+    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.c, 50), m.Config(Light.b, m.ON), m.Config(Light.a, m.OFF)]
 
 
 def test_op_cmp_sorts_by_class_name():
-    configs = [m.Config(Chromecast.x, config.ON), m.Config(Light.a, config.ON)]
-    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.a, config.ON), m.Config(Chromecast.x, config.ON)]
+    configs = [m.Config(Chromecast.x, m.ON), m.Config(Light.a, m.ON)]
+    assert sorted(configs, key=m._op_cmp) == [m.Config(Light.a, m.ON), m.Config(Chromecast.x, m.ON)]
 
 
 def test_build_themes_succeeds_with_required():
@@ -152,7 +152,7 @@ def test_build_themes_succeeds_with_required():
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | Alice |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, LGTV, {"Alice": "alice.local"})
+    themes = m.build_themes(doc, "Routines", "Themes", {"Alice": "alice.local"})
     assert set(themes) == {"work day", "day off"}
     assert themes["work day"].configs[0].items[0].trigger == "Alice"
     assert themes["day off"].configs[0].items[0].trigger == "Alice"
@@ -164,7 +164,7 @@ def test_build_themes_succeeds_with_builtin_trigger(label, expected):
         _routines_md([f"| ROUTINE_RESET | Reset | Light | off | {label} |\n"])
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
-    themes = m.build_themes(doc, "Routines", "Themes", Light, Chromecast, LGTV)
+    themes = m.build_themes(doc, "Routines", "Themes")
     assert themes["work day"].configs[0].items[0].trigger == expected
 
 
@@ -174,7 +174,7 @@ def test_build_themes_missing_reset_routine():
         + _themes_md(["| work day | ROUTINE_OFF | 1:00 |\n", "| day off | ROUTINE_OFF | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required routines.*Reset"):
-        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, LGTV)
+        m.build_themes(doc, "Routines", "Themes")
 
 
 def test_build_themes_missing_required_theme():
@@ -182,7 +182,7 @@ def test_build_themes_missing_required_theme():
         _routines_md(["| ROUTINE_RESET | Reset | Light | off | SYSTEM |\n"]) + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n"])
     )
     with pytest.raises(ValueError, match="Missing required themes.*day off"):
-        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, LGTV)
+        m.build_themes(doc, "Routines", "Themes")
 
 
 def test_build_themes_unknown_trigger_name():
@@ -191,7 +191,7 @@ def test_build_themes_unknown_trigger_name():
         + _themes_md(["| work day | ROUTINE_RESET | 1:00 |\n", "| day off | ROUTINE_RESET | 23:00 |\n"])
     )
     with pytest.raises(ValueError, match="Unknown trigger names.*Ghost"):
-        m.build_themes(doc, "Routines", "Themes", Light, Chromecast, LGTV, {"Alice": "alice.local"})
+        m.build_themes(doc, "Routines", "Themes", {"Alice": "alice.local"})
 
 
 def test_build_people():
@@ -211,7 +211,7 @@ def _ad_hoc_md(rows):
 
 def test_build_ad_hoc_routines_no_snapshot():
     doc = Document(_ad_hoc_md(["| Silence | Chromecast.x | stop |  |\n"]))
-    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
+    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
     assert set(routines) == {"Silence"}
     assert routines["Silence"].snapshot is None
 
@@ -220,7 +220,7 @@ def test_build_ad_hoc_routines_with_snapshot():
     from datetime import timedelta
 
     doc = Document(_ad_hoc_md(["| TV Lights | Light.a | on | 3 |\n"]))
-    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
+    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
     assert set(routines) == {"TV Lights"}
     assert routines["TV Lights"].snapshot == timedelta(hours=3)
 
@@ -228,16 +228,16 @@ def test_build_ad_hoc_routines_with_snapshot():
 def test_build_ad_hoc_routines_invalid_snapshot():
     doc = Document(_ad_hoc_md(["| Foo | Light.a | on | bad |\n"]))
     with pytest.raises(ValueError, match="Invalid snapshot values"):
-        m.build_ad_hoc_routines(doc, "Ad-Hoc Routines", Light, Chromecast, LGTV)
+        m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
 
 
 def test_build_config_succeeds_with_required():
     doc = Document(_rooms_md(["| Living Room | Light.a | on |\n", "| Bedroom | Light.b | on |\n"]))
-    rooms = m.build_config(doc, "Room Configs", Light, Chromecast, LGTV, required=("Living Room",))
+    rooms = m.build_config(doc, "Room Configs", required=("Living Room",))
     assert set(rooms) == {"Living Room", "Bedroom"}
 
 
 def test_build_config_missing_required_room():
     doc = Document(_rooms_md(["| Bedroom | Light.b | on |\n"]))
     with pytest.raises(ValueError, match="Missing required entries.*Living Room"):
-        m.build_config(doc, "Room Configs", Light, Chromecast, LGTV, required=("Living Room",))
+        m.build_config(doc, "Room Configs", required=("Living Room",))

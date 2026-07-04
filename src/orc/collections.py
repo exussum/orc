@@ -1,44 +1,6 @@
 import threading
-from collections import defaultdict, namedtuple
 
-Trie = namedtuple("Trie", ["word", "children"])
-
-
-def build_trie(words):
-    def build(words, depth):
-        groups, word = defaultdict(list), None
-        for w in words:
-            parts = w.split("_")
-            if depth >= len(parts):
-                word = w
-            else:
-                groups[parts[depth]].append(w)
-        return Trie(word, {seg: build(ws, depth + 1) for seg, ws in groups.items()})
-
-    return build(words, 0)
-
-
-def _all_words(node):
-    words = {node.word} if node.word else set()
-    for child in node.children.values():
-        words |= _all_words(child)
-    return words
-
-
-def prefix_groups(trie):
-    def dfs(node, path):
-        if not node.children:
-            result.append((path, {node.word}))
-        elif len(node.children) == 1:
-            ((seg, child),) = node.children.items()
-            dfs(child, [*path, seg])
-        else:
-            result.append((path, _all_words(node)))
-
-    result = []
-    for seg, child in trie.children.items():
-        dfs(child, [seg])
-    return result
+from mistletoe.block_token import Heading, Table
 
 
 class LockedDict:
@@ -81,3 +43,49 @@ class LockedDict:
     def copy(self):
         with self._lock:
             return dict(self._data)
+
+
+def doc_to_sub_tables(doc, section, columns, *, cast):
+    from types import SimpleNamespace
+
+    col_names = columns if isinstance(columns, tuple) else None
+    n_cols = len(columns) if col_names else columns
+    type, result = None, None
+    for e in doc_to_table(doc, section, n_cols):
+        if e[0] != type and e[0]:
+            if result:
+                yield type, result
+            type, result = e[0], []
+        row = (
+            SimpleNamespace(**{col_names[j].lower(): cast(col_names[j], e[j]) for j in range(1, len(col_names))})
+            if col_names and cast
+            else e
+        )
+        result.append(row)
+
+    if result:
+        yield type, result
+
+
+def doc_to_table(doc, section, columns):
+    # Heading store their contents in a subsequent child element
+    # https://github.com/miyuchina/mistletoe/issues/99
+    idx = next(
+        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),
+        None,
+    )
+    if idx is None:
+        raise ValueError(f"Section '{section}' not found in document")
+
+    markdown_table = next((e for e in doc.children[idx + 1 :] if isinstance(e, Table)), None)
+    if markdown_table is None:
+        raise ValueError(f"No table found under section '{section}'")
+
+    rows = list(markdown_table.children)
+    if invalid := [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]:
+        bad_rows = ", ".join(str(i) for i, _ in invalid)
+        raise ValueError(f"Expected {columns} columns in section '{section}', but rows {bad_rows} have the wrong number")
+
+    return tuple(
+        tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children)) for e in rows
+    )

@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import date, timedelta
 from functools import wraps
 from itertools import chain, groupby
+from pathlib import Path
 from types import SimpleNamespace
 
 from flask import Blueprint
@@ -60,7 +61,7 @@ class VersionManager:
 def cfg():
     today = date.today()
     tomorrow = today + timedelta(days=1)
-    with open(config.orc_config) as f:
+    with open(Path(config.config_dir) / "config.md") as f:
         return render_template(
             "config.html",
             html=HtmlRenderer().render(Document(f)),
@@ -80,7 +81,7 @@ def cfg():
 def _to_level(state):
     if isinstance(state, int):
         return state
-    return 100 if state == config.ON else 0
+    return 100 if state == m.ON else 0
 
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "LGTV": 1, "Chromecast": 2, "AC": 3}
@@ -124,7 +125,7 @@ def run_routine(id):
     if id == ORC_RESTORE_SNAPSHOT:
         action = lambda: app.orc.snapshot_manager.resume(config.default_config)
     elif id in config.plugins:
-        action = lambda: plugins.execute_plugin(app.orc.snapshot_manager, id)
+        action = lambda: plugins.execute_plugin(app.orc, id)
     elif id in config.schedule_routines:
         action = lambda: api.execute(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
@@ -165,7 +166,7 @@ def expire_presence(name):
 
 @bp.route("/api/hubitat/callback", methods=["POST"])
 def hubitat_callback():
-    ctx = plugins.build_ctx(app.orc.snapshot_manager, app.orc.scheduler)
+    ctx = plugins.build_ctx(app.orc)
     device_id = request.json["content"]["deviceId"]
     value = request.json["content"]["value"]
     plugins.trigger_sensor(ctx, device_id, value)
@@ -270,11 +271,11 @@ def room(id):
     if id not in config.room_configs:
         return {"error": "Unknown room"}, 404
     with api.record_duration(id):
-        if state == config.ON:
+        if state == m.ON:
             api.execute(config.room_configs[id])
-        elif state == config.OFF:
-            api.execute(m.Configs(*(replace(e, state=config.OFF) for e in config.room_configs[id].items)))
-        elif state == config.FOLLOW:
+        elif state == m.OFF:
+            api.execute(m.Configs(*(replace(e, state=m.OFF) for e in config.room_configs[id].items)))
+        elif state == m.FOLLOW:
             api.execute(m.squish_configs(config.room_configs_off, config.room_configs[id]))
         else:
             raise Exception("Unknown state")
