@@ -1,3 +1,4 @@
+import importlib
 import re
 from collections import defaultdict, deque
 from collections import namedtuple as nt
@@ -37,6 +38,7 @@ _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 _ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
 _ERR_SNAPSHOT = "Invalid snapshot {!r}: expected an integer number of hours"
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
+_ERR_PLUGIN = "Cannot load plugin {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. Ensure the module exists and the function is defined within it."
 
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
@@ -284,14 +286,7 @@ def build_people(doc, section):
 
 
 def build_plugins(doc, section):
-    from orc import plugins
-
-    result = {t: rows[0][1] for t, rows in doc_to_sub_tables(doc, section, 2, cast=None)}
-
-    if missing := [k for k, v in result.items() if not (isinstance(v, str) and hasattr(plugins, v))]:
-        raise ValueError(f"Unrecognised plugins in section '{section}': {', '.join(sorted(missing))}")
-
-    return result
+    return {t: rows[0].plugin for t, rows in doc_to_sub_tables(doc, section, ("Name", "Plugin"), cast=column_to_value)}
 
 
 def build_themes(doc, routine_section, theme_section, people=None):
@@ -335,6 +330,12 @@ def column_to_value(col, val):
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             raise ValueError(_ERR_TIME.format(val))
         return time(hour, minute)
+    elif col.lower() == "plugin":
+        try:
+            module_path, fn_name = val.rsplit(".", 1)
+            return getattr(importlib.import_module(module_path), fn_name)
+        except Exception as exc:
+            raise ValueError(_ERR_PLUGIN.format(val, exc)) from exc
     return val
 
 
