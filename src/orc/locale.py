@@ -20,12 +20,6 @@ class Log:
     JOB_FORCED = "Force run: {job_name}"
     ROOM_SET = "Room: {id} {state}"
 
-    TRIGGER_SENSOR_OFF_PREFIX = "Trigger sensor off: {msg}"
-    TRIGGER_SENSOR_OFF_SKIPPED_NIGHTTIME = "skip (nighttime)"
-    TRIGGER_SENSOR_OFF_SKIPPED_PRESENT = "skip (present: {names})"
-    TRIGGER_SENSOR_OFF_SKIPPED_SOUNDS = "skip (sounds playing)"
-    TRIGGER_SENSOR_OFF_APPLIED = "applying OFF"
-
     YOLINK_CONNECTED = "YoLink {name} connected"
     YOLINK_DISCONNECTED = "YoLink {name} disconnected"
     YOLINK_WATER_DETECTED = "Water detected in {name}"
