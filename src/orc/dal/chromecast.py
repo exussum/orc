@@ -46,12 +46,14 @@ def pause(device):
         time.sleep(1)
         if cast.media_controller.status.player_state in ("PLAYING", "BUFFERING"):
             cast.media_controller.pause()
-            time.sleep(1)
 
 
 @requires_enabled(None)
 def play(device, stream_url, title):
     with _cast(device) as cast:
+        if cast.status.app_id:
+            cast.quit_app()
+            time.sleep(1)
         cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
         cast.media_controller.block_until_active(timeout=10)
 
@@ -63,7 +65,6 @@ def resume(device):
         time.sleep(1)
         if cast.media_controller.status.player_state == "PAUSED":
             cast.media_controller.play()
-            time.sleep(1)
 
 
 @requires_enabled(None)
