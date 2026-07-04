@@ -16,7 +16,7 @@ _YDL_OPTS = {
 }
 
 
-_PLAYING_STATES = ("PLAYING", "BUFFERING")
+_PLAYING_STATES = ("PLAYING", "BUFFERING", "PAUSED")
 
 
 @requires_enabled(lambda device: m.SoundState(what=device, content=None, volume=0))
