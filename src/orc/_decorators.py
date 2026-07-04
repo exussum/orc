@@ -80,8 +80,14 @@ def _load_plugin_config(name, config_dir, schema):
 
     attrs = {}
     for section, columns in schema.items():
-        for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value):
-            attrs[trigger] = rows if len(rows) > 1 else rows[0]
+        if len(columns) == 2:
+            col_attr = columns[1].lower()
+            for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value):
+                attrs[trigger] = getattr(rows[0], col_attr)
+        else:
+            attrs[section.lower()] = SimpleNamespace(
+                **{trigger: rows for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value)}
+            )
 
     return SimpleNamespace(**attrs)
 
