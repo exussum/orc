@@ -56,10 +56,10 @@
 
 ##### Plugins
 
-| Name           | Expression     |
-|----------------|----------------|
-| All Lights On  | all_lights_on  |
-| All Lights Off | all_lights_off |
+| Name           | Plugin                     |
+|----------------|----------------------------|
+| All Lights On  | orc.plugins.all_lights_on  |
+| All Lights Off | orc.plugins.all_lights_off |
 
 ---
 
