@@ -62,7 +62,7 @@ def build_ctx(orc_ctx):
 
 def execute_plugin(orc_ctx, id):
     ctx = build_ctx(orc_ctx)
-    getattr(sys.modules[__name__], ctx.config.plugins[id])(ctx)
+    ctx.config.plugins[id](ctx)
 
 
 def light_test(ctx):
