@@ -15,7 +15,7 @@ PAST = datetime(2000, 1, 1, tzinfo=config.tz)
 
 @pytest.fixture
 def snapshot_config():
-    return m.Configs(m.Config(orc.Light.a, config.ON), m.Config(orc.Light.b, config.OFF))
+    return m.Configs(m.Config(orc.Light.a, m.ON), m.Config(orc.Light.b, m.OFF))
 
 
 @patch("orc.api.execute")
@@ -47,45 +47,45 @@ class TestRouteRule:
         self.target = api.SnapshotManager()
 
     def test_snapshot_update_overwrite_set(self, update_light, snapshot_config):
-        rule = m.Config(set((orc.Light.b,)), config.ON, trigger=m.Trigger.SYSTEM)
+        rule = m.Config(set((orc.Light.b,)), m.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(orc.Light.a, config.ON),
-            m.Config(orc.Light.b, config.ON, trigger=m.Trigger.SYSTEM),
+            m.Config(orc.Light.a, m.ON),
+            m.Config(orc.Light.b, m.ON, trigger=m.Trigger.SYSTEM),
         )
         assert update_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
 
     def test_snapshot_update_add(self, update_light, snapshot_config):
-        rule = m.Config(orc.Light.c, config.ON, trigger=m.Trigger.SYSTEM)
+        rule = m.Config(orc.Light.c, m.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(orc.Light.a, config.ON),
-            m.Config(orc.Light.b, config.OFF),
+            m.Config(orc.Light.a, m.ON),
+            m.Config(orc.Light.b, m.OFF),
             rule,
         )
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
     def test_rule_ignored(self, update_light, snapshot_config):
-        rule = m.Config(orc.Light.c, config.ON)
+        rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(orc.Light.a, config.ON),
-            m.Config(orc.Light.b, config.OFF),
+            m.Config(orc.Light.a, m.ON),
+            m.Config(orc.Light.b, m.OFF),
         )
         assert update_light.call_args_list == []
 
     def test_rule_old_snapshot(self, update_light, snapshot_config):
-        rule = m.Config(orc.Light.c, config.ON)
+        rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshot = m.SnapShot(routine=snapshot_config, end=PAST)
         self.target.route_rule(rule, False)
@@ -94,28 +94,28 @@ class TestRouteRule:
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
     def test_snapshot_bypassed(self, update_light, snapshot_config):
-        rule = m.Config(orc.Light.c, config.ON)
+        rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshot = m.SnapShot(routine=snapshot_config, end=FUTURE)
 
         self.target.route_rule(rule, True)
 
         assert self.target.snapshot.routine.items == (
-            m.Config(orc.Light.a, config.ON),
-            m.Config(orc.Light.b, config.OFF),
+            m.Config(orc.Light.a, m.ON),
+            m.Config(orc.Light.b, m.OFF),
         )
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
 
 def test_unwrapper_function_single_rule():
     calls = []
-    rule = m.Config(orc.Light.a, config.ON)
+    rule = m.Config(orc.Light.a, m.ON)
 
     @api.unwrap_rule_container
     def target(e):
         calls.append(e)
 
-    target(m.Config(orc.Light.a, config.ON))
+    target(m.Config(orc.Light.a, m.ON))
 
     assert calls == [rule]
 
@@ -134,14 +134,14 @@ def test_unwrapper_function_routine(snapshot_config):
 
 def test_unwrapper_class_single_rule():
     calls = []
-    rule = m.Config(orc.Light.a, config.ON)
+    rule = m.Config(orc.Light.a, m.ON)
 
     class Foo:
         @api.unwrap_rule_container
         def target(self, e):
             calls.append(e)
 
-    Foo().target(m.Config(orc.Light.a, config.ON))
+    Foo().target(m.Config(orc.Light.a, m.ON))
 
     assert calls == [rule]
 
@@ -242,7 +242,7 @@ class TestPresence:
 
     @staticmethod
     def _routine(name, trigger):
-        return m.Routine(name, time(8, 0), (m.Config(orc.Light.a, config.OFF, trigger=trigger),))
+        return m.Routine(name, time(8, 0), (m.Config(orc.Light.a, m.OFF, trigger=trigger),))
 
     def test_mark_and_query(self):
         assert api.present_names() == set()
@@ -272,7 +272,7 @@ class TestPresence:
         route.assert_called_once_with(rule, False)
 
     def test_run_iot_job_runs_when_no_presence_required(self):
-        rule = m.Routine("r", time(8, 0), (m.Config(orc.Light.a, config.OFF),))
+        rule = m.Routine("r", time(8, 0), (m.Config(orc.Light.a, m.OFF),))
         with patch.object(self.target, "route_rule") as route:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         route.assert_called_once_with(rule, False)
@@ -356,15 +356,15 @@ class TestExecuteLGTV:
 
     def test_off_sends_webos_off(self):
         with patch.object(api.tv, "off") as tv_off:
-            api.execute(m.Config(self.lgtv, config.OFF))
+            api.execute(m.Config(self.lgtv, m.OFF))
         tv_off.assert_called_once_with(self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
         with patch.object(api.tv, "is_off", return_value=True), patch.object(api.broadlink, "tv_toggle") as tv_toggle:
-            api.execute(m.Config(self.lgtv, config.ON))
+            api.execute(m.Config(self.lgtv, m.ON))
         tv_toggle.assert_called_once_with(self.bl, api._BROADLINK_CODES)
 
     def test_on_skips_toggle_when_tv_already_on(self):
         with patch.object(api.tv, "is_off", return_value=False), patch.object(api.broadlink, "tv_toggle") as tv_toggle:
-            api.execute(m.Config(self.lgtv, config.ON))
+            api.execute(m.Config(self.lgtv, m.ON))
         tv_toggle.assert_not_called()

@@ -74,7 +74,7 @@ def test_console_plugin(client, ctx):
     ):
         response = client.get("/api/run/do-thing")
     assert response.status_code == 200
-    exec_plugin.assert_called_once_with(ctx.snapshot_manager, "do-thing")
+    exec_plugin.assert_called_once_with(ctx, "do-thing")
 
 
 def test_console_schedule_routine(client):
@@ -89,8 +89,8 @@ def test_console_schedule_routine(client):
 
 
 def test_console_ad_hoc(client):
-    reset = m.Configs(m.Config(orc.Light.a, config.OFF))
-    routine = m.AdhocConfig(m.Config(orc.Light.b, config.ON))
+    reset = m.Configs(m.Config(orc.Light.a, m.OFF))
+    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON))
     with (
         patch.object(config, "plugins", {}),
         patch.object(config, "schedule_routines", {}),
@@ -103,7 +103,7 @@ def test_console_ad_hoc(client):
 
 
 def test_console_ad_hoc_snapshot(client, ctx):
-    routine = m.AdhocConfig(m.Config(orc.Light.b, config.ON), snapshot=timedelta(hours=3))
+    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
     with (
         patch.object(config, "plugins", {}),
         patch.object(config, "schedule_routines", {}),
@@ -128,7 +128,7 @@ def test_console_unknown_returns_404(client):
 
 
 def test_room_on(client):
-    routine = m.Configs(m.Config(orc.Light.a, config.ON))
+    routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
         patch.object(config, "room_configs", {"Living Room": routine}),
         patch.object(api, "execute") as ex,
@@ -138,19 +138,19 @@ def test_room_on(client):
 
 
 def test_room_off_replaces_state(client):
-    routine = m.Configs(m.Config(orc.Light.a, config.ON))
+    routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
         patch.object(config, "room_configs", {"Living Room": routine}),
         patch.object(api, "execute") as ex,
     ):
         client.get("/api/room/Living Room?state=off")
     (args,), _ = ex.call_args
-    assert all(c.state == config.OFF for c in args.items)
+    assert all(c.state == m.OFF for c in args.items)
 
 
 def test_room_follow(client):
-    routine = m.Configs(m.Config(orc.Light.a, config.ON))
-    off = m.Configs(m.Config(orc.Light.b, config.OFF))
+    routine = m.Configs(m.Config(orc.Light.a, m.ON))
+    off = m.Configs(m.Config(orc.Light.b, m.OFF))
     with (
         patch.object(config, "room_configs", {"Living Room": routine}),
         patch.object(config, "room_configs_off", off),

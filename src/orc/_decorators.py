@@ -5,8 +5,14 @@ import contextlib
 import os
 import threading
 from functools import wraps
+from pathlib import Path
+from types import SimpleNamespace
+
+from mistletoe import Document
 
 from orc import model as m
+from orc.collections import doc_to_sub_tables
+from orc.model import column_to_value
 
 audio_lock = threading.Lock()
 
@@ -40,6 +46,44 @@ def synchronized(method):
             return method(self, *args, **kwargs)
 
     return wrapper
+
+
+_UNSET = object()
+_FAILED = object()
+
+
+def plugin_config(name, *, schema):
+    def decorator(fn):
+        cache = _UNSET
+
+        @wraps(fn)
+        def wrapper(ctx, *args, **kwargs):
+            nonlocal cache
+            if cache is _UNSET:
+                try:
+                    cache = _load_plugin_config(name, ctx.config.config_dir, schema)
+                except Exception:
+                    cache = _FAILED
+            if cache is not _FAILED:
+                return fn(ctx, cache, *args, **kwargs)
+
+        wrapper._config = name
+        return wrapper
+
+    return decorator
+
+
+def _load_plugin_config(name, config_dir, schema):
+    path = Path(config_dir) / "plugins" / f"{name}.md"
+    with open(path) as fh:
+        doc = Document(fh)
+
+    attrs = {}
+    for section, columns in schema.items():
+        for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value):
+            attrs[trigger] = rows if len(rows) > 1 else rows[0]
+
+    return SimpleNamespace(**attrs)
 
 
 def unwrap_rule_container(f):
