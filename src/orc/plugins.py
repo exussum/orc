@@ -116,7 +116,9 @@ def trigger_sensor(ctx, sensor, device_id, event):
     if int(device_id) != sensor.entrance_id:
         return
 
-    phase = sensor.day if sensor.day_start <= ctx.api.local_now().hour < sensor.day_end else sensor.night
+    hour = ctx.api.local_now().hour
+    daytime = sensor.day_start <= hour < sensor.day_end
+    phase = sensor.day if daytime else sensor.night
 
     if event == sensor.active_event:
         ctx.api.execute(_to_configs(ctx, phase.entrance_light))
@@ -130,6 +132,7 @@ def trigger_sensor(ctx, sensor, device_id, event):
             id="trigger-sensor",
             replace_existing=True,
             jobstore=ctx.api.JOBSTORE_MEMORY,
+            args=(sensor,),
         )
 
 
@@ -139,19 +142,10 @@ def video_conference(ctx, vc):
 
 
 @requires_ctx
-@plugin_config(
-    "sensor",
-    schema={
-        "Settings": ("Key", "Value"),
-        "Messages": ("Log", "Message"),
-        "Day": ("Trigger", "Device", "State"),
-        "Night": ("Trigger", "Device", "State"),
-    },
-)
-def _run_trigger_sensor_off(ctx, sensor):
+def _run_trigger_sensor_off(sensor, *, ctx):
     plugin_ctx = build_ctx(ctx)
-    log = lambda msg: plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)
-    daytime = sensor.day_start <= plugin_ctx.api.local_now().hour < sensor.day_end
+    hour = plugin_ctx.api.local_now().hour
+    daytime = sensor.day_start <= hour < sensor.day_end
     phase = sensor.day if daytime else sensor.night
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
@@ -159,17 +153,18 @@ def _run_trigger_sensor_off(ctx, sensor):
 
     if not daytime:
         plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.after_hours))
-        log(sensor.log_after_hours)
+        msg = sensor.log_after_hours
     elif present:
         plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.after_hours))
-        log(sensor.log_present)
+        msg = sensor.log_present
     elif any(s.content for s in plugin_ctx.api.capture_sounds().items):
         plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
-        log(sensor.log_core_hours)
+        msg = sensor.log_core_hours
     else:
         plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.shutdown))
         plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
-        log(sensor.log_shutdown)
+        msg = sensor.log_shutdown
+    plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)
 
 
 def _to_configs(ctx, rows):
