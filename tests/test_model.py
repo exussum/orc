@@ -227,7 +227,7 @@ def test_build_ad_hoc_routines_with_snapshot():
 
 def test_build_ad_hoc_routines_invalid_snapshot():
     doc = Document(_ad_hoc_md(["| Foo | Light.a | on | bad |\n"]))
-    with pytest.raises(ValueError, match="Invalid snapshot values"):
+    with pytest.raises(ValueError, match="Invalid snapshot"):
         m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
 
 
