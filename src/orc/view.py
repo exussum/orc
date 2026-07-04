@@ -57,7 +57,7 @@ class VersionManager:
         return wrapper
 
 
-@bp.route("/config/")
+@bp.route("/system/")
 def cfg():
     today = date.today()
     tomorrow = today + timedelta(days=1)
@@ -314,6 +314,12 @@ def schedule():
     present_names = api.present_names()
     absent_by_job = {j.id: not api.matching_items(j.args[0].rule, False, j.trigger.run_date, present_names) for j in jobs}
     weather_by_job = {j.id: any(c.trigger in api._WEATHER_TRIGGERS for c in j.args[0].rule.items) for j in jobs}
+    presence_by_job = {
+        j.id: any(
+            c.trigger and c.trigger not in (m.Trigger.SYSTEM,) and c.trigger not in api._WEATHER_TRIGGERS for c in j.args[0].rule.items
+        )
+        for j in jobs
+    }
     jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
 
     return (
@@ -325,6 +331,7 @@ def schedule():
             durations=dict(api.fetch_durations()),
             absent_by_job=absent_by_job,
             weather_by_job=weather_by_job,
+            presence_by_job=presence_by_job,
         ),
         200,
         {"Cache-control": "max-age=604800"},

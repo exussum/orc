@@ -41,7 +41,7 @@
                             <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.device" %}active{% endif %}" href="/device/">Device</a></li>
                             <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.schedule" %}active{% endif %}" href="/schedule/">Schedule</a></li>
                             <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.presence" %}active{% endif %}" href="/presence/">Presence</a></li>
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.cfg" %}active{% endif %}" href="/config/">Config</a></li>
+                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.cfg" %}active{% endif %}" href="/system/">System</a></li>
                             <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.log" %}active{% endif %}" href="/log/">Log</a></li>
                         </ul>
                         {% block menu_links %}{% endblock %}
