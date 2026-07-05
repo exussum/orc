@@ -7,6 +7,7 @@ from itertools import chain, groupby
 from pathlib import Path
 from types import SimpleNamespace
 
+import nh3
 from flask import Blueprint
 from flask import current_app as app
 from flask import render_template, request
@@ -66,11 +67,11 @@ def cfg():
     if plugins_dir.is_dir():
         for p in sorted(plugins_dir.glob("*.md")):
             with open(p) as f:
-                plugin_htmls[p.stem] = HtmlRenderer().render(Document(f))
+                plugin_htmls[p.stem] = nh3.clean(HtmlRenderer().render(Document(f)))
     with open(Path(config.config_dir) / "config.md") as f:
         return render_template(
             "config.html",
-            html=HtmlRenderer().render(Document(f)),
+            html=nh3.clean(HtmlRenderer().render(Document(f))),
             plugin_htmls=plugin_htmls,
             ctx=app.orc,
             today_theme=api.calculate_theme(today),
