@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Tuple
 from apscheduler.schedulers.base import BaseScheduler
 
 from orc.collections import doc_to_sub_tables, doc_to_table
+from orc.security import safe_eval, safe_import
 
 SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
@@ -307,7 +308,8 @@ def column_to_value(col, val):
     if col.lower() == "value":
         return int(val) if val and val.isdigit() else val
     elif col.lower() == "device":
-        return eval(val, vars(orc))
+        _ns = {cls.__name__: cls for cls in (orc.Light, orc.Chromecast, orc.BroadLink, orc.WebOS, orc.Leak, orc.AC, orc.LGTV)}
+        return safe_eval(val, _ns)
     elif col.lower() == "state":
         if val and val.isdigit():
             return int(val)
@@ -332,8 +334,7 @@ def column_to_value(col, val):
         return time(hour, minute)
     elif col.lower() == "plugin":
         try:
-            module_path, fn_name = val.rsplit(".", 1)
-            return getattr(importlib.import_module(module_path), fn_name)
+            return safe_import(val)
         except Exception as exc:
             raise ValueError(_ERR_PLUGIN.format(val, exc)) from exc
     return val
