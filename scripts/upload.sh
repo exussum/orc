@@ -1,7 +1,7 @@
 #!/bin/sh
 
 rm -f src/orc/static/tailwind.min.css
-tailwindcss -i src/orc/static/tailwind.src.css -o src/orc/static/tailwind.min.css --minify
+tailwindcss -i src/css/tailwind.src.css -o src/orc/static/tailwind.min.css --minify
 
 if [ -n "$(git status --porcelain)" ]; then
     echo "Error: uncommitted changes present" >&2
