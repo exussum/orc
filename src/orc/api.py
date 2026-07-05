@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
-from importlib import resources
+from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 
 import icmplib
 from apscheduler.executors.pool import ThreadPoolExecutor
@@ -40,6 +40,7 @@ from orc.dal.sqlite import update_avg  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.usb import play_alert, play_text
 from orc.locale import Log
+from orc.security import safe_domain
 
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
@@ -200,7 +201,9 @@ def execute(rule):
             else:
                 if rule.state not in stream:
                     stream[rule.state] = (
-                        (rule.state, rule.state) if "http" in rule.state else chromecast.fetch_youtube_stream_metadata(rule.state)
+                        (safe_domain(rule.state), rule.state)
+                        if "http" in rule.state
+                        else chromecast.fetch_youtube_stream_metadata(rule.state)
                     )
                 chromecast.play(w, *stream[rule.state])
         elif isinstance(w, orc.LGTV):
