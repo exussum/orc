@@ -470,21 +470,28 @@ def setup_scheduler(ctx):
         )
 
 
+def matched_presence(rule, people=None):
+    return tuple(
+        c
+        for c in rule.items
+        if c.trigger
+        and c.trigger != m.Trigger.SYSTEM
+        and c.trigger not in _WEATHER_TRIGGERS
+        and (people is None or (c.trigger == m.Trigger.ANYONE and people) or c.trigger in people)
+    )
+
+
+def matched_weather(rule, now):
+    return tuple(c for c in rule.items if c.trigger in _WEATHER_TRIGGERS and c.trigger in feeds.fetch_weather(now, *config.lat_long))
+
+
 def matching_items(rule, force, now, pnames):
     if force:
         return rule.items
-    hour = now.replace(minute=0, second=0, microsecond=0)
-    matched = []
-    for c in rule.items:
-        if not c.trigger or c.trigger == m.Trigger.SYSTEM:
-            matched.append(c)
-        elif c.trigger == m.Trigger.ANYONE and pnames:
-            matched.append(c)
-        elif c.trigger in pnames:
-            matched.append(c)
-        elif c.trigger in _WEATHER_TRIGGERS and pnames and c.trigger in feeds.fetch_weather(hour, *config.lat_long):
-            matched.append(c)
-    return tuple(matched)
+    system = tuple(c for c in rule.items if not c.trigger or c.trigger == m.Trigger.SYSTEM)
+    presence = matched_presence(rule, pnames)
+    weather = matched_weather(rule, now) if pnames else ()
+    return system + presence + weather
 
 
 @requires_ctx
