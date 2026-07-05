@@ -231,3 +231,69 @@ def test_run_unknown_job_returns_404(client, scheduler, good_version):
     scheduler.get_job.return_value = None
     response = client.get("/api/schedule/nope/run", headers=good_version)
     assert response.status_code == 404
+
+
+# --- /schedule/: button colour and badges ---
+
+
+def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None):
+    run_date = run_date or datetime(2100, 1, 1)
+    rule = m.Routine(name, "", [m.Config(MagicMock(), "on", trigger=trigger)])
+    job = MagicMock()
+    job.id = name
+    job.name = name
+    job.next_run_time = run_date
+    job.args = [m.IotJob(rule)]
+    job.trigger.run_date = run_date
+    return job
+
+
+def _get_schedule(client, jobs, present_names=(), weather=False):
+    with (
+        patch.object(api, "jobs_by_type", return_value=jobs),
+        patch.object(api, "current_theme_override", return_value=None),
+        patch.object(api, "present_names", return_value=set(present_names)),
+        patch.object(api, "fetch_durations", return_value=[]),
+        patch.object(api, "matched_weather", return_value=(MagicMock(),) if weather else ()),
+    ):
+        return client.get("/schedule/")
+
+
+def test_schedule_system_rule_is_blue(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.SYSTEM)])
+    assert b"orc-btn-absent" not in response.data
+
+
+def test_schedule_person_absent_is_grey(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger="me")])
+    assert b"orc-btn-absent" in response.data
+
+
+def test_schedule_person_present_is_blue(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger="me")], present_names={"me"})
+    assert b"orc-btn-absent" not in response.data
+
+
+def test_schedule_anyone_with_presence_is_blue(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.ANYONE)], present_names={"me"})
+    assert b"orc-btn-absent" not in response.data
+
+
+def test_schedule_anyone_no_presence_is_grey(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.ANYONE)])
+    assert b"orc-btn-absent" in response.data
+
+
+def test_schedule_person_rule_shows_presence_badge(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger="me")])
+    assert b"orc-presence-badge" in response.data
+
+
+def test_schedule_system_rule_no_presence_badge(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.SYSTEM)])
+    assert b"orc-presence-badge" not in response.data
+
+
+def test_schedule_weather_rule_shows_weather_badge(client):
+    response = _get_schedule(client, [_fake_iot_job(trigger=m.WeatherCondition.SUNNY)], weather=True)
+    assert b"orc-weather-badge" in response.data
