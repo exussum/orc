@@ -109,6 +109,16 @@
                 <div class="orc-config p-4 font-mono overflow-x-auto">{{ html|safe }}</div>
             </details>
         </div>
+        {% for name, plugin_html in plugin_htmls.items() %}
+        <div class="orc-card mb-2">
+            <details>
+                <summary class="orc-accordion-summary">
+                    {{ name }}.md
+                </summary>
+                <div class="orc-config p-4 font-mono overflow-x-auto">{{ plugin_html|safe }}</div>
+            </details>
+        </div>
+        {% endfor %}
     </div>
 {% endblock %}
 {% block tail %}

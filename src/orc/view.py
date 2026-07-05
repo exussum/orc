@@ -61,10 +61,17 @@ class VersionManager:
 def cfg():
     today = date.today()
     tomorrow = today + timedelta(days=1)
+    plugins_dir = Path(config.config_dir) / "plugins"
+    plugin_htmls = {}
+    if plugins_dir.is_dir():
+        for p in sorted(plugins_dir.glob("*.md")):
+            with open(p) as f:
+                plugin_htmls[p.stem] = HtmlRenderer().render(Document(f))
     with open(Path(config.config_dir) / "config.md") as f:
         return render_template(
             "config.html",
             html=HtmlRenderer().render(Document(f)),
+            plugin_htmls=plugin_htmls,
             ctx=app.orc,
             today_theme=api.calculate_theme(today),
             tomorrow_theme=api.calculate_theme(tomorrow),
