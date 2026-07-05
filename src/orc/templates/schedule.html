@@ -2,7 +2,7 @@
 {% from 'macros.html' import day_card %}
 {% block body %}
     {% for day, day_jobs in jobs_grouped %}
-        {% call day_card(day, table_fixed=true) %}
+        {% call day_card(day) %}
             {% if loop.first %}
                 <tr>
                     <th class="px-2 py-1 font-normal w-16">Run</th>

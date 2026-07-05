@@ -25,6 +25,8 @@ async def _power_off(host, client_key):
     try:
         async with _webos_client(host, client_key) as c:
             await c.power_off()
+    except TimeoutError:
+        pass
     except Exception:
         if await _is_port_open(host, 3000, timeout=1.0):
             raise
