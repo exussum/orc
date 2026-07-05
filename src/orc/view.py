@@ -312,7 +312,7 @@ def schedule():
     theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
 
     present_names = api.present_names()
-    absent_by_job = {j.id: not api.matched_presence(j.args[0].rule, present_names) for j in jobs}
+    absent_by_job = {j.id: api.is_absent(j.args[0].rule, present_names) for j in jobs}
     weather_by_job = {j.id: bool(api.matched_weather(j.args[0].rule, j.trigger.run_date)) for j in jobs}
     presence_by_job = {j.id: bool(api.matched_presence(j.args[0].rule)) for j in jobs}
     jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
