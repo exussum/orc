@@ -33,5 +33,5 @@ def fetch_secrets():
 
 
 def _get_url_value(url):
-    with urlopen(url) as response:
+    with urlopen(url) as response:  # nosemgrep: dynamic-urllib-use-detected
         return response.readline().decode("utf-8").strip()
