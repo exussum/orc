@@ -481,6 +481,11 @@ def matched_presence(rule, people=None):
     )
 
 
+def is_absent(rule, present_names):
+    presence = matched_presence(rule)
+    return bool(presence) and not matched_presence(rule, present_names)
+
+
 def matched_weather(rule, now):
     return tuple(c for c in rule.items if c.trigger in _WEATHER_TRIGGERS and c.trigger in feeds.fetch_weather(now, *config.lat_long))
 
