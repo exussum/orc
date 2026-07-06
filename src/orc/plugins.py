@@ -62,7 +62,7 @@ def build_ctx(orc_ctx):
 
 def execute_plugin(orc_ctx, id):
     ctx = build_ctx(orc_ctx)
-    ctx.config.plugins[id](ctx)
+    ctx.config.plugins[id].func(ctx)
 
 
 def light_test(ctx):
@@ -75,6 +75,11 @@ def light_test(ctx):
 def pair_lg_tv(ctx):
     for tv in ctx.orc.LGTV:
         ctx.api.pair_lg_tv(tv)
+
+
+def rebuild_jobs(ctx):
+    ctx.scheduler.remove_all_jobs()
+    ctx.api.rebuild_iot_schedule(ctx=ctx)
 
 
 def reboot(ctx):
@@ -91,6 +96,11 @@ def silence(ctx):
             ctx.model.Config(ctx.orc.Chromecast, ctx.model.STOP),
         )
     )
+
+
+@plugin_config("test_yolink_sensor", schema={"Settings": ("Key", "Value")})
+def test_yolink_sensor(ctx, cfg):
+    ctx.api.test_yolink(cfg.sensor)
 
 
 def sound_test(ctx):
