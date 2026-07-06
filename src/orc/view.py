@@ -159,7 +159,8 @@ def run_routine(id):
             action()
 
     if delay:
-        app.orc.scheduler.add_job(run, DateTrigger(api.local_now() + delay), jobstore=api.JOBSTORE_MEMORY)
+        api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, delay=delay))
+        app.orc.scheduler.add_job(run, DateTrigger(api.local_now() + delay, timezone=config.tz), jobstore=api.JOBSTORE_MEMORY)
     else:
         run()
     return {"version": VersionManager.version}, 200
