@@ -51,7 +51,7 @@
 | Name    | Device     | State | Parameters |
 |---------|------------|-------|------------|
 | Silence | Chromecast | stop  |            |
-| Dog     | Chromecast | stop  | delay=5    |
+| Dog     | Chromecast | stop  | delay=7    |
 
 ---
 

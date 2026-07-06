@@ -153,7 +153,8 @@ def run_routine(id):
     else:
         return {"error": "Unknown routine"}, 404
 
-    def run():
+    @api.requires_ctx
+    def run(ctx):
         api.log(api.local_now(), m.LogSource.MANUAL, id)
         with api.record_duration(id):
             action()
@@ -162,7 +163,7 @@ def run_routine(id):
         api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, delay=delay))
         app.orc.scheduler.add_job(run, DateTrigger(api.local_now() + delay, timezone=config.tz), jobstore=api.JOBSTORE_MEMORY)
     else:
-        run()
+        run(ctx=app.orc)
     return {"version": VersionManager.version}, 200
 
 

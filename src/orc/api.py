@@ -76,7 +76,12 @@ class ContextThreadPoolExecutor(ThreadPoolExecutor):
         self.ctx = ctx
 
     def _do_submit_job(self, job, run_times):
-        dispatch_job = copy.copy(job)
+        dispatch_job = job.__class__.__new__(job.__class__)
+        for slot in job.__slots__:
+            try:
+                setattr(dispatch_job, slot, getattr(job, slot))
+            except AttributeError:
+                pass
         dispatch_job._jobstore_alias = job._jobstore_alias
         dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
         return super()._do_submit_job(dispatch_job, run_times)
