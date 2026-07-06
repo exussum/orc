@@ -205,7 +205,7 @@ def test_build_people_multiple_hosts():
 
 
 def _ad_hoc_md(rows):
-    header = "| Theme | Expression | State | Snapshot |\n|-------|------------|-------|----------|\n"
+    header = "| Theme | Expression | State | Parameters |\n|-------|------------|-------|------------|\n"
     return "##### Ad-Hoc Routines\n\n" + header + "".join(rows) + "\n---\n"
 
 
@@ -219,15 +219,15 @@ def test_build_ad_hoc_routines_no_snapshot():
 def test_build_ad_hoc_routines_with_snapshot():
     from datetime import timedelta
 
-    doc = Document(_ad_hoc_md(["| TV Lights | Light.a | on | 3 |\n"]))
+    doc = Document(_ad_hoc_md(["| TV Lights | Light.a | on | snapshot=180 |\n"]))
     routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
     assert set(routines) == {"TV Lights"}
-    assert routines["TV Lights"].snapshot == timedelta(hours=3)
+    assert routines["TV Lights"].snapshot == timedelta(minutes=180)
 
 
 def test_build_ad_hoc_routines_invalid_snapshot():
-    doc = Document(_ad_hoc_md(["| Foo | Light.a | on | bad |\n"]))
-    with pytest.raises(ValueError, match="Invalid snapshot"):
+    doc = Document(_ad_hoc_md(["| Foo | Light.a | on | snapshot=bad |\n"]))
+    with pytest.raises(ValueError, match="Invalid parameter"):
         m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
 
 

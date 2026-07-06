@@ -69,7 +69,7 @@ def test_versioned_bumps_after_success(client, ctx, good_version):
 
 def test_console_plugin(client, ctx):
     with (
-        patch.object(config, "plugins", {"do-thing": "fn"}),
+        patch.object(config, "plugins", {"do-thing": m.Plugin(func=lambda ctx: None)}),
         patch("orc.view.plugins.execute_plugin") as exec_plugin,
     ):
         response = client.get("/api/run/do-thing")
@@ -108,10 +108,11 @@ def test_console_ad_hoc_snapshot(client, ctx):
         patch.object(config, "plugins", {}),
         patch.object(config, "schedule_routines", {}),
         patch.object(config, "ad_hoc_routines", {"r": routine}),
-        patch.object(api, "replace_config_for") as rcf,
+        patch.object(ctx.snapshot_manager, "replace_config") as rcf,
     ):
         client.get("/api/run/r")
-    rcf.assert_called_once_with(ctx.snapshot_manager, "r")
+    assert rcf.called
+    assert rcf.call_args[0][0] is routine
 
 
 def test_console_unknown_returns_404(client):

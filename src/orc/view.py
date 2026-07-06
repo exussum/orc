@@ -7,6 +7,7 @@ from itertools import chain, groupby
 from pathlib import Path
 from types import SimpleNamespace
 
+from apscheduler.triggers.date import DateTrigger
 from flask import Blueprint
 from flask import current_app as app
 from flask import render_template, request
@@ -16,6 +17,7 @@ import orc
 from orc import api, config
 from orc import model as m
 from orc import plugins
+from orc.collections import where
 from orc.locale import Log
 from orc.security import safe_html
 
@@ -73,6 +75,8 @@ def cfg():
             "config.html",
             html=safe_html(HtmlRenderer().render(Document(f))),
             plugin_htmls=plugin_htmls,
+            plugins=where(config.plugins, section="system"),
+            ad_hoc_routines=where(config.ad_hoc_routines, section="system"),
             ctx=app.orc,
             today_theme=api.calculate_theme(today),
             tomorrow_theme=api.calculate_theme(tomorrow),
@@ -130,23 +134,34 @@ def rebuild_jobs():
 
 @bp.route("/api/run/<id>")
 def run_routine(id):
+    delay = timedelta()
     if id == ORC_RESTORE_SNAPSHOT:
         action = lambda: app.orc.snapshot_manager.resume(config.default_config)
     elif id in config.plugins:
+        plugin = config.plugins[id]
+        delay = plugin.delay
         action = lambda: plugins.execute_plugin(app.orc, id)
     elif id in config.schedule_routines:
         action = lambda: api.execute(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if routine.snapshot:
-            action = lambda: api.replace_config_for(app.orc.snapshot_manager, id)
+            action = lambda: app.orc.snapshot_manager.replace_config(routine, api.local_now() + routine.snapshot)
         else:
+            delay = routine.delay
             action = lambda: api.execute(m.squish_configs(config.reset_config, routine))
     else:
         return {"error": "Unknown routine"}, 404
-    with api.record_duration(id):
-        action()
-    api.log(api.local_now(), m.LogSource.MANUAL, id)
+
+    def run():
+        api.log(api.local_now(), m.LogSource.MANUAL, id)
+        with api.record_duration(id):
+            action()
+
+    if delay:
+        app.orc.scheduler.add_job(run, DateTrigger(api.local_now() + delay), jobstore=api.JOBSTORE_MEMORY)
+    else:
+        run()
     return {"version": VersionManager.version}, 200
 
 
@@ -190,9 +205,9 @@ def index():
         render_template(
             "scene.html",
             highlight_configs=[(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlight_configs],
-            plugins=config.plugins,
+            plugins=where(config.plugins, section="scene"),
             room_configs=config.room_configs,
-            ad_hoc_routines=config.ad_hoc_routines,
+            ad_hoc_routines=where(config.ad_hoc_routines, section="scene"),
             schedule_routines=config.schedule_routines,
             next_routine=next_schedule,
             durations=dict(api.fetch_durations()),

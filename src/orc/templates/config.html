@@ -7,28 +7,12 @@
                 <div class="text-base font-semibold">Setup</div>
             </div>
             <div class="orc-routine-buttons p-4">
-                {{ btn("Light Test", "light-bulb", durations.get('Light Test', 0)) }}
-                {{ btn("Sound Test", "speaker-wave", durations.get('Sound Test', 0)) }}
-                <div class="orc-button">
-                    <div class="orc-button-label">Test Kitchen Leak Sensor</div>
-                    <button class="orc-btn orc-yolink-test" data-name="KITCHEN_LEAK_SENSOR" data-duration="{{ durations.get('KITCHEN_LEAK_SENSOR', 0) }}">
-                        <svg class="w-5 h-5"><use href="/static/icons.svg#beaker"/></svg>
-                    </button>
-                </div>
-                <div class="orc-button">
-                    <div class="orc-button-label">Pair LG TV</div>
-                    <button id="orc-pair-lg-tv" class="orc-btn" data-duration="{{ durations.get('Pair LG TV', 0) }}">
-                        <svg class="w-5 h-5"><use href="/static/icons.svg#tv"/></svg>
-                    </button>
-                </div>
-                <div class="orc-button">
-                    <div class="orc-button-label">Rebuild Jobs</div>
-                    <button id="orc-rebuild-jobs" class="orc-btn" data-duration="{{ durations.get('Rebuild Jobs', 0) }}">
-                        <svg class="w-5 h-5"><use href="/static/icons.svg#calendar"/></svg>
-                    </button>
-                </div>
-                {{ btn("Reboot Orc", "arrow-path", durations.get('Reboot Orc', 0)) }}
-                {{ btn("Reboot Hubitat", "arrow-path", durations.get('Reboot Hubitat', 0)) }}
+                {% for id, plugin in plugins.items() %}
+                    {{ btn(id, plugin.icon, durations.get(id, 0)) }}
+                {% endfor %}
+                {% for id in ad_hoc_routines %}
+                    {{ btn(id, "clipboard-check", durations.get(id, 0)) }}
+                {% endfor %}
             </div>
         </div>
         <div class="orc-card mb-2">
@@ -130,19 +114,11 @@
                 await get(`/api/run/${t.dataset.id}`, t);
             });
         });
-        document.getElementById("orc-rebuild-jobs").addEventListener("click", async (e) => {
-            await get("/api/rebuild_jobs", e.currentTarget);
-        });
-        document.getElementById("orc-pair-lg-tv").addEventListener("click", async (e) => {
+        document.querySelector('.orc-config-runner[data-id="Pair LG TV"]').addEventListener("click", async (e) => {
             const el = e.currentTarget;
             const dismiss = await notifyPairing(parseFloat(el.dataset.duration));
             await get("/api/run/Pair LG TV", el);
             dismiss?.();
-        });
-        document.querySelectorAll(".orc-yolink-test").forEach((el) => {
-            el.addEventListener("click", async (e) => {
-                await get(`/api/yolink/test/${encodeURIComponent(e.currentTarget.dataset.name)}`, e.currentTarget);
-            });
         });
     </script>
 {% endblock %}

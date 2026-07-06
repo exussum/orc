@@ -2,7 +2,7 @@ import importlib
 import re
 from collections import defaultdict, deque
 from collections import namedtuple as nt
-from dataclasses import KW_ONLY, dataclass, replace
+from dataclasses import KW_ONLY, dataclass, field, replace
 from datetime import datetime, time, timedelta
 from enum import Enum, auto
 from itertools import chain
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Tuple
 
 from apscheduler.schedulers.base import BaseScheduler
 
-from orc.collections import doc_to_sub_tables, doc_to_table
+from orc.collections import doc_to_sub_tables, doc_to_table, parse_kv
 from orc.security import safe_eval, safe_import
 
 SnapShot = nt("SnapShot", "routine end")
@@ -37,8 +37,9 @@ AUDIO_FATAL = "FATAL"
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
 _ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
-_ERR_SNAPSHOT = "Invalid snapshot {!r}: expected an integer number of hours"
+_ERR_PARAMS = "Invalid parameter {}={!r}"
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
+_VALID_SECTIONS = frozenset({"scene", "system"})
 _ERR_PLUGIN = "Cannot load plugin {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. Ensure the module exists and the function is defined within it."
 
 _STATE_SORT_STOP = -2
@@ -154,12 +155,26 @@ class Configs:
 
 
 @dataclass
+class Plugin:
+    func: object
+    delay: timedelta = field(default_factory=timedelta)
+    section: str = "scene"
+    icon: str = "rocket-launch"
+
+
+@dataclass
 class AdhocConfig(Configs):
     snapshot: "timedelta | None" = None
+    delay: timedelta = field(default_factory=timedelta)
+    section: str = "scene"
 
-    def __init__(self, *items: Config, snapshot=None) -> None:
+    def __init__(self, *items: Config, snapshot=None, delay=timedelta(), section="scene") -> None:
+        if snapshot and delay:
+            raise ValueError("snapshot and delay cannot both be set")
         super().__init__(*items)
         self.snapshot = snapshot
+        self.delay = delay
+        self.section = section
 
 
 @dataclass
@@ -223,9 +238,9 @@ def build_ad_hoc_routines(doc, section):
     return {
         t: AdhocConfig(
             *[Config(r.device, r.state) for r in rows],
-            snapshot=timedelta(hours=rows[0].snapshot) if rows[0].snapshot else None,
+            **rows[0].parameters,
         )
-        for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State", "Snapshot"))
+        for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State", "Parameters"))
     }
 
 
@@ -287,7 +302,10 @@ def build_people(doc, section):
 
 
 def build_plugins(doc, section):
-    return {t: rows[0].plugin for t, rows in doc_to_sub_tables(doc, section, ("Name", "Plugin"), cast=column_to_value)}
+    return {
+        t: Plugin(func=rows[0].plugin, **rows[0].parameters)
+        for t, rows in doc_to_sub_tables(doc, section, ("Name", "Plugin", "Parameters"), cast=column_to_value)
+    }
 
 
 def build_themes(doc, routine_section, theme_section, people=None):
@@ -316,12 +334,20 @@ def column_to_value(col, val):
         if val in (ON, OFF, STOP, PAUSE, RESUME) or (val and re.match(_YOUTUBE_ID_RE, val)):
             return val
         raise ValueError(_ERR_STATE.format(val))
-    elif col.lower() == "snapshot":
-        if val is None:
-            return None
-        if val.isdigit():
-            return int(val)
-        raise ValueError(_ERR_SNAPSHOT.format(val))
+    elif col.lower() in ("delay", "snapshot"):
+        if not val:
+            return timedelta()
+        elif val.isdigit():
+            return timedelta(minutes=int(val))
+        else:
+            raise ValueError(_ERR_PARAMS.format(col, val))
+    elif col.lower() == "section":
+        if val in _VALID_SECTIONS:
+            return val
+        raise ValueError(_ERR_PARAMS.format(col, val))
+    elif col.lower() == "parameters":
+        parsed = {k: column_to_value(k, v) for k, v in parse_kv(val).items()}
+        return {"section": "scene", "delay": timedelta(), **parsed}
     elif col.lower() == "time":
         if val in (SUNRISE, SUNSET):
             return val
