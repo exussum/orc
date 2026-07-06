@@ -18,17 +18,14 @@ def fetch_secrets():
         )
     )
     c.auth().login_access_token(_get_url_value(os.environ["BWS_ACCESS_TOKEN"]))
-    secrets = c.secrets().list(_get_url_value(os.environ["BWS_ORG_ID"])).data
-
-    def get_secret(secret_name):
-        return next(c.secrets().get(e.id).data.value for e in secrets.data if e.key == secret_name)
-
+    ids = c.secrets().list(_get_url_value(os.environ["BWS_ORG_ID"])).data
+    secrets = {s.key: s.value for s in c.secrets().get_by_ids([e.id for e in ids.data]).data.data}
     return m.Secrets(
-        access_token="?access_token=" + get_secret("HUBITAT_ACCESS_TOKEN"),
-        market_holidays_url=get_secret("MARKET_HOLIDAYS_URL"),
-        ics_url=get_secret("ICS_URL"),
-        yolink_id=get_secret("YOLINK_ID"),
-        yolink_secret=get_secret("YOLINK_SECRET"),
+        access_token="?access_token=" + secrets["HUBITAT_ACCESS_TOKEN"],
+        market_holidays_url=secrets["MARKET_HOLIDAYS_URL"],
+        ics_url=secrets["ICS_URL"],
+        yolink_id=secrets["YOLINK_ID"],
+        yolink_secret=secrets["YOLINK_SECRET"],
     )
 
 
