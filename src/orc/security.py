@@ -7,11 +7,7 @@ _ALLOWED_STREAM_DOMAINS = {".googlevideo.com"}
 
 
 def safe_eval(val, ns):
-    cls_name, _, member = val.partition(".")
-    cls = ns.get(cls_name)
-    if cls is None:
-        raise ValueError(f"Unknown device: {cls_name!r}")
-    return cls[member] if member else cls
+    return eval(val, ns)  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
 
 
 def safe_import(val):

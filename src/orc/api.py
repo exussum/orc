@@ -22,6 +22,7 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config
 from orc import model as m
+from orc import plugins
 from orc._decorators import (
     requires_ctx,
     synchronized,
@@ -342,11 +343,6 @@ def expire_presence(names, force=False):
 
 def delete_all_presence():
     sqlite.delete_all_presence(local_now())
-
-
-def replace_config_for(snapshot_manager, id):
-    routine = config.ad_hoc_routines[id]
-    snapshot_manager.replace_config(routine, local_now() + routine.snapshot)
 
 
 def apply_theme_change(ctx, name, start, end):

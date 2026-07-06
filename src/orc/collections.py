@@ -45,6 +45,14 @@ class LockedDict:
             return dict(self._data)
 
 
+def parse_kv(val):
+    return dict(pair.split("=") for pair in (val or "").split())
+
+
+def where(items, **kwargs):
+    return {k: v for k, v in items.items() if all(getattr(v, attr) == val for attr, val in kwargs.items())}
+
+
 def doc_to_sub_tables(doc, section, columns, *, cast):
     from types import SimpleNamespace
 
