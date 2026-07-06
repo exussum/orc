@@ -17,6 +17,7 @@ class Log:
 
     VERSION_MISMATCH = "Version mismatch: client={client} server={server}"
 
+    TASK_QUEUED = "Queued: {id} (delay {delay})"
     JOB_FORCED = "Force run: {job_name}"
     ROOM_SET = "Room: {id} {state}"
 
