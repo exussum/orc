@@ -48,18 +48,19 @@
 
 ##### Ad-Hoc Routines
 
-| Name    | Device     | State | Snapshot |
-|---------|------------|-------|----------|
-| Silence | Chromecast | stop  |          |
+| Name    | Device     | State | Parameters |
+|---------|------------|-------|------------|
+| Silence | Chromecast | stop  |            |
+| Dog     | Chromecast | stop  | delay=5    |
 
 ---
 
 ##### Plugins
 
-| Name           | Plugin                     |
-|----------------|----------------------------|
-| All Lights On  | orc.plugins.all_lights_on  |
-| All Lights Off | orc.plugins.all_lights_off |
+| Name           | Plugin                     | Parameters |
+|----------------|----------------------------|------------|
+| All Lights On  | orc.plugins.all_lights_on  |            |
+| All Lights Off | orc.plugins.all_lights_off |            |
 
 ---
 
