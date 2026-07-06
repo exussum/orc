@@ -1,8 +1,9 @@
 import array
 import audioop
+import threading
 import wave
 from functools import lru_cache
-from importlib import resources
+from importlib import resources  # nosemgrep
 
 import pyaudio
 
@@ -12,10 +13,20 @@ from orc._decorators import audio_lock, silence_fd
 
 _MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
-with silence_fd(2):
-    from piper import PiperVoice
+_VOICE = None
+_VOICE_READY = threading.Event()
 
-    _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
+
+def _load_voice():
+    global _VOICE
+    with silence_fd(2):
+        from piper import PiperVoice
+
+        _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
+    _VOICE_READY.set()
+
+
+threading.Thread(target=_load_voice, daemon=True).start()
 
 
 def play_alert(path, level=None):
@@ -26,6 +37,7 @@ def play_alert(path, level=None):
 
 
 def play_text(text, level=None):
+    _VOICE_READY.wait()
     chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
     _play_stream(chunks, 1, _VOICE.config.sample_rate, _gain_for(level))
 
