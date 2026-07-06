@@ -37,8 +37,8 @@
         <div class="p-4">
             <div class="text-base font-semibold">Plugin</div>
             <div class="orc-routine-buttons">
-                {% for id in plugins if id not in ["Pair LG TV", "Reboot Orc", "Reboot Hubitat", "Light Test", "Sound Test"] %}
-                    {{ btn_stripe(id, "rocket-launch", durations.get(id, 0)) }}
+                {% for id, plugin in plugins.items() %}
+                    {{ btn_stripe(id, plugin.icon, durations.get(id, 0)) }}
                 {% endfor %}
             </div>
         </div>
