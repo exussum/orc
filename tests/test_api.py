@@ -3,6 +3,8 @@ from enum import Enum
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
 from freezegun import freeze_time
 
 import orc
@@ -368,3 +370,26 @@ class TestExecuteLGTV:
         with patch.object(api.tv, "is_off", return_value=False), patch.object(api.broadlink, "tv_toggle") as tv_toggle:
             api.execute(m.Config(self.lgtv, m.ON))
         tv_toggle.assert_not_called()
+
+
+def test_context_executor_copies_closure_job():
+    """_do_submit_job must not raise for closure callables (Job uses __slots__, not __dict__)."""
+    ctx = object()
+    executor = api.ContextThreadPoolExecutor(ctx)
+
+    def make_closure():
+        def run():
+            pass
+
+        return run
+
+    sched = BackgroundScheduler()
+    sched.start()
+    job = sched.add_job(make_closure(), DateTrigger(FUTURE, timezone=config.tz))
+    sched.shutdown(wait=False)
+
+    captured = []
+    with patch.object(api.ThreadPoolExecutor, "_do_submit_job", lambda s, j, rt: captured.append(j)):
+        executor._do_submit_job(job, [])
+
+    assert captured[0].kwargs["ctx"] is ctx
