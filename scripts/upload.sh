@@ -6,7 +6,9 @@ export TWINE_REPOSITORY_URL=http://registry.example.local
 
 TWINE="uv run --no-sync twine upload"
 
-rm -f src/orc/static/tailwind.min.css
+git checkout src/orc/_build.py
+rm -rf src/orc/static/tailwind.min.css dist
+
 tailwindcss -i src/css/tailwind.src.css -o src/orc/static/tailwind.min.css --minify
 
 if [ -n "$(git status --porcelain)" ]; then
@@ -15,20 +17,15 @@ if [ -n "$(git status --porcelain)" ]; then
     exit 1
 fi
 
-rm -rf data/dist
-uv build --wheel data
-uv pip install data/dist/orc_data-*.whl
-
-rm -rf entrance_sensor/dist
-uv build --wheel entrance_sensor
-
 printf 'SHA = "%s"\nBUILD_TIME = "%s"\n' "$(git rev-parse --short HEAD)" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > src/orc/_build.py
-rm -rf dist
-uv pip install '.[build]'
-uv build --wheel
-$TWINE dist/orc-*.whl
-git checkout src/orc/_build.py
+echo data entrance_sensor . | xargs -n 1 uv build --wheel --out-dir dist
+uv pip install dist/orc_data-*.whl
+
+$TWINE dist/orc-*.whl dist/orc_entrance_sensor-*.whl
+
 
 if [ "$1" = "full" ]; then
-    $TWINE data/dist/orc_data-*.whl entrance_sensor/dist/orc_entrance_sensor-*.whl
+    $TWINE dist/orc_data-*.whl
 fi
+
+git checkout src/orc/_build.py
