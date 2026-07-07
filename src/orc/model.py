@@ -39,7 +39,7 @@ _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 _ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
 _ERR_PARAMS = "Invalid parameter {}={!r}"
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
-_VALID_SECTIONS = frozenset({"scene", "system"})
+_VALID_SECTIONS = frozenset({"scene", "system", "hubitat"})
 _ERR_PLUGIN = "Cannot load plugin {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. Ensure the module exists and the function is defined within it."
 
 _STATE_SORT_STOP = -2
