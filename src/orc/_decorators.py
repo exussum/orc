@@ -3,6 +3,7 @@
 
 import contextlib
 import os
+import sys
 import threading
 from functools import wraps
 from pathlib import Path
@@ -67,7 +68,8 @@ def plugin_config(name, *, schema):
             if cache is _UNSET:
                 try:
                     cache = _load_plugin_config(resolved, ctx.config.config_dir, schema)
-                except Exception:
+                except Exception as exc:
+                    print(f"Failed to load plugin config {resolved!r}: {exc}", file=sys.stderr)
                     cache = _FAILED
             if cache is not _FAILED:
                 return fn(ctx, cache, *args, **kwargs)
