@@ -57,10 +57,11 @@
 
 ##### Plugins
 
-| Name           | Plugin                     | Parameters |
-|----------------|----------------------------|------------|
-| All Lights On  | orc.plugins.all_lights_on  |            |
-| All Lights Off | orc.plugins.all_lights_off |            |
+| Name            | Plugin                                      | Parameters      |
+|-----------------|---------------------------------------------|-----------------|
+| All Lights On   | orc.plugins.all_lights_on                   |                 |
+| All Lights Off  | orc.plugins.all_lights_off                  |                 |
+| Entrance Sensor | orc_entrance_sensor.plugins.trigger_sensor  | section=hubitat |
 
 ---
 
