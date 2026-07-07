@@ -1,0 +1,21 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [
+    "hatchling >= 1.26",
+]
+
+[project]
+name = "orc_entrance_sensor"
+version = "0.0.1"
+requires-python = ">=3.11"
+dependencies = [
+    "orc==0.0.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orc_entrance_sensor"]
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+pythonpath = [ "src" ]
+testpaths = [ "tests" ]

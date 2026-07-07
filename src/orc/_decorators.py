@@ -54,6 +54,11 @@ _FAILED = object()
 
 def plugin_config(name, *, schema):
     def decorator(fn):
+        if fn.__module__.split(".")[0] != "orc" and "/" not in name:
+            package = fn.__module__.split(".")[0]
+            resolved = f"{package}/{name}"
+        else:
+            resolved = name
         cache = _UNSET
 
         @wraps(fn)
@@ -61,13 +66,13 @@ def plugin_config(name, *, schema):
             nonlocal cache
             if cache is _UNSET:
                 try:
-                    cache = _load_plugin_config(name, ctx.config.config_dir, schema)
+                    cache = _load_plugin_config(resolved, ctx.config.config_dir, schema)
                 except Exception:
                     cache = _FAILED
             if cache is not _FAILED:
                 return fn(ctx, cache, *args, **kwargs)
 
-        wrapper._config = name
+        wrapper._config = resolved
         return wrapper
 
     return decorator
