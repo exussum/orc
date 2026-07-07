@@ -194,7 +194,8 @@ def hubitat_callback():
     ctx = plugins.build_ctx(app.orc)
     device_id = request.json["content"]["deviceId"]
     value = request.json["content"]["value"]
-    plugins.trigger_sensor(ctx, device_id, value)
+    for plugin in where(config.plugins, section="hubitat").values():
+        plugin.func(ctx, device_id, value)
     return {}, 200
 
 
