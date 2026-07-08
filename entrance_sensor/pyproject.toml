@@ -17,5 +17,5 @@ packages = ["src/orc_entrance_sensor"]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
-pythonpath = [ "src" ]
+pythonpath = [ "src", "../src", "../data/src" ]
 testpaths = [ "tests" ]
