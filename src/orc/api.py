@@ -11,6 +11,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from enum import Enum
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
+from urllib.parse import urlparse
 
 import icmplib
 from apscheduler.executors.pool import ThreadPoolExecutor
@@ -52,6 +53,8 @@ _YOLINK_BATTERY_LOW_THRESHOLD = 1
 _YOLINK_SIGNAL_WEAK_THRESHOLD = -90
 _ACTIVITY_LOG = m.ActivityLog()
 _WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
+
+_STREAM_DOMAINS = {".googlevideo.com", urlparse(config.internal_url).hostname, "." + config.root_domain}
 
 _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
@@ -207,7 +210,7 @@ def execute(rule):
             else:
                 if rule.state not in stream:
                     stream[rule.state] = (
-                        (safe_domain(rule.state), rule.state)
+                        (safe_domain(rule.state, _STREAM_DOMAINS), rule.state)
                         if "http" in rule.state
                         else chromecast.fetch_youtube_stream_metadata(rule.state)
                     )
