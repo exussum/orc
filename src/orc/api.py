@@ -266,49 +266,61 @@ def device_command(id, state):
 
 # --- State manager ---
 
+ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
+
 
 class SnapshotManager:
     def __init__(self):
         self._lock = threading.RLock()
-        self.snapshot = None
+        self.snapshots = {}
 
     @synchronized
     def replace_config(self, name, target_config, end):
 
-        if not self.snapshot:
-            self.snapshot = m.SnapShot(name, capture_lights(), end)
-            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshot.routine.items if c.state != m.OFF)
+        if name not in self.snapshots:
+            self.snapshots[name] = m.SnapShot(capture_lights(), end)
+            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshots[name].routine.items if c.state != m.OFF)
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         execute(target_config)
 
     @synchronized
-    def resume(self, target_config):
-        if self.snapshot and local_now() <= self.snapshot.end:
-            routine = self.snapshot.routine
-            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=self.snapshot.name))
+    def get(self, name):
+        snapshot = self.snapshots.pop(name, None)
+        if snapshot and local_now() <= snapshot.end:
+            return snapshot
+        return None
+
+    @synchronized
+    def resume(self, name, target_config):
+        snapshot = self.snapshots.pop(name, None)
+
+        if snapshot and local_now() <= snapshot.end:
+            routine = snapshot.routine
+            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=name))
         else:
             routine = target_config
-        self.snapshot = None
         execute(routine)
 
     @synchronized
-    def update_snapshot(self, rule):
+    def update_snapshot(self, name, rule):
+        snapshot = self.snapshots[name]
+
         what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-        items = {e.what: e for e in self.snapshot.routine.items}
+        items = {e.what: e for e in snapshot.routine.items}
 
         # Explode out the rule w/o creating a sub config explicitly
         items.update({e: replace(rule, what=e) for e in what})
-        self.snapshot = self.snapshot._replace(routine=m.Configs(*items.values()))
+        self.snapshots[name] = snapshot._replace(routine=m.Configs(*items.values()))
 
     @synchronized
     @unwrap_rule_container
     def route_rule(self, rule, force):
-        if self.snapshot and rule.trigger == m.Trigger.SYSTEM:
-            self.update_snapshot(rule)
-        elif self.snapshot and local_now() > self.snapshot.end:
-            self.snapshot = None
-        elif self.snapshot and not force:
+        if ORC_SYSTEM_SNAPSHOT in self.snapshots and rule.trigger == m.Trigger.SYSTEM:
+            self.update_snapshot(ORC_SYSTEM_SNAPSHOT, rule)
+        elif ORC_SYSTEM_SNAPSHOT in self.snapshots and local_now() > self.snapshots[ORC_SYSTEM_SNAPSHOT].end:
+            self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
+        elif ORC_SYSTEM_SNAPSHOT in self.snapshots and not force:
             return
         execute(rule)
 
