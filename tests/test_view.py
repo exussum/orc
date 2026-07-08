@@ -102,6 +102,18 @@ def test_console_ad_hoc(client):
     ex.assert_called_once_with(m.squish_configs(reset, routine))
 
 
+def test_console_ad_hoc_no_reset(client):
+    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), reset=False)
+    with (
+        patch.object(config, "plugins", {}),
+        patch.object(config, "schedule_routines", {}),
+        patch.object(config, "ad_hoc_routines", {"r": routine}),
+        patch.object(api, "execute") as ex,
+    ):
+        client.get("/api/run/r")
+    ex.assert_called_once_with(m.squish_configs(routine))
+
+
 def test_console_ad_hoc_snapshot(client, ctx):
     routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
     with (

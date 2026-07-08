@@ -380,10 +380,10 @@ def check_presence(ctx):
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
     mark_present(present, local_now())
     after = present_names()
-    for name in sorted(after - before):
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=name))
-    for name in sorted(before - after):
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=name))
+    if detected := sorted(after - before):
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
+    if lost := sorted(before - after):
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
     return after
 
 
