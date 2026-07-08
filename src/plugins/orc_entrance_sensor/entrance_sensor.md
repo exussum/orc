@@ -8,6 +8,7 @@
 | inactive_event        | inactive |
 | day_start             | 8        |
 | day_end               | 22       |
+| snapshot              | 45       |
 
 ##### Messages
 

@@ -6,6 +6,8 @@ from apscheduler.triggers.date import DateTrigger
 
 from orc.plugins import build_ctx, plugin_config, requires_ctx
 
+SNAPSHOT_NAME = "entrance_sensor"
+
 
 @plugin_config(
     "entrance_sensor",
@@ -25,8 +27,7 @@ def trigger_sensor(ctx, sensor, device_id, event):
     phase = sensor.day if daytime else sensor.night
 
     if event == sensor.active_event:
-        ctx.api.execute(_to_configs(ctx, phase.entrance_light))
-        ctx.api.execute(_to_configs(ctx, phase.entrance_config))
+        ctx.snapshot_manager.resume(_to_configs(ctx, [*phase.entrance_light, *phase.entrance_config]))
     elif event == sensor.inactive_event:
         ctx.api.execute(ctx.model.squish_configs(_to_configs(ctx, phase.entrance_light), state_override=ctx.model.OFF))
         ctx.scheduler.add_job(
@@ -60,7 +61,8 @@ def _run_trigger_sensor_off(sensor, *, ctx):
         plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
         msg = sensor.log_core_hours
     else:
-        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.shutdown))
+        end = plugin_ctx.api.local_now() + timedelta(minutes=sensor.snapshot)
+        plugin_ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(plugin_ctx, phase.shutdown), end)
         plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
         msg = sensor.log_shutdown
     plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)

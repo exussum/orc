@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 from zoneinfo import ZoneInfo
@@ -46,6 +46,7 @@ def sensor():
         day_start=10,
         day_end=22,
         cleanup_delay_minutes=2,
+        snapshot=45,
         log_after_hours="skip (nighttime)",
         log_present="skip (present)",
         log_core_hours="skip (sounds)",
@@ -76,20 +77,21 @@ def test_trigger_sensor_wrong_device_id_is_noop(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "99", "active")
     ctx.api.execute.assert_not_called()
+    ctx.snapshot_manager.resume.assert_not_called()
 
 
-def test_trigger_sensor_active_daytime_executes_day_phase(ctx, sensor):
+def test_trigger_sensor_active_daytime_resumes_with_day_phase(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    assert ctx.api.execute.call_count == 2
-    assert ctx.model.Config.call_args_list[0] == call("day_bulb", "on")
+    ctx.snapshot_manager.resume.assert_called_once()
+    assert ctx.model.Config.call_args_list == [call("day_bulb", "on"), call("day_lamp1", "on"), call("day_lamp2", "on")]
 
 
 def test_trigger_sensor_active_nighttime_uses_night_phase(ctx, sensor):
     ctx.api.local_now.return_value = _NIGHTTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    assert ctx.api.execute.call_count == 2
-    assert ctx.model.Config.call_args_list[0] == call("night_bulb", "on")
+    ctx.snapshot_manager.resume.assert_called_once()
+    assert ctx.model.Config.call_args_list == [call("night_bulb", "on"), call("night_lamp", "on")]
 
 
 def test_trigger_sensor_inactive_squishes_light_off(ctx, sensor):
@@ -111,6 +113,7 @@ def test_trigger_sensor_unknown_event_is_noop(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "other")
     ctx.api.execute.assert_not_called()
+    ctx.snapshot_manager.resume.assert_not_called()
     ctx.scheduler.add_job.assert_not_called()
 
 
@@ -144,11 +147,15 @@ def test_off_daytime_sounds_executes_core_hours(sensor, plugin_ctx):
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, plugin_ctx.model.LogSource.SYSTEM, sensor.log_core_hours)
 
 
-def test_off_daytime_empty_executes_shutdown_then_core_hours(sensor, plugin_ctx):
+def test_off_daytime_empty_snapshots_shutdown_then_executes_core_hours(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
         _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    assert plugin_ctx.api.execute.call_count == 2
+    plugin_ctx.snapshot_manager.replace_config.assert_called_once()
+    name, _, end = plugin_ctx.snapshot_manager.replace_config.call_args[0]
+    assert name == plugins.SNAPSHOT_NAME
+    assert end == _DAYTIME + timedelta(minutes=45)
+    plugin_ctx.api.execute.assert_called_once()
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, plugin_ctx.model.LogSource.SYSTEM, sensor.log_shutdown)
 
 
