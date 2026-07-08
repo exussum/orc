@@ -167,14 +167,18 @@ class AdhocConfig(Configs):
     snapshot: "timedelta | None" = None
     delay: timedelta = field(default_factory=timedelta)
     section: str = "scene"
+    reset: bool = True
 
-    def __init__(self, *items: Config, snapshot=None, delay=timedelta(), section="scene") -> None:
+    def __init__(self, *items: Config, snapshot=None, delay=timedelta(), section="scene", reset=True) -> None:
         if snapshot and delay:
             raise ValueError("snapshot and delay cannot both be set")
+        if snapshot and not reset:
+            raise ValueError("snapshot and reset=false cannot both be set")
         super().__init__(*items)
         self.snapshot = snapshot
         self.delay = delay
         self.section = section
+        self.reset = reset
 
 
 @dataclass
@@ -344,6 +348,10 @@ def column_to_value(col, val):
     elif col.lower() == "section":
         if val in _VALID_SECTIONS:
             return val
+        raise ValueError(_ERR_PARAMS.format(col, val))
+    elif col.lower() == "reset":
+        if val in ("true", "false"):
+            return val == "true"
         raise ValueError(_ERR_PARAMS.format(col, val))
     elif col.lower() == "parameters":
         parsed = {k: column_to_value(k, v) for k, v in parse_kv(val).items()}

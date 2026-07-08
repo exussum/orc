@@ -48,10 +48,12 @@
 
 ##### Ad-Hoc Routines
 
-| Name    | Device     | State | Parameters |
-|---------|------------|-------|------------|
-| Silence | Chromecast | stop  |            |
-| Dog     | Chromecast | stop  | delay=7    |
+| Name           | Device     | State | Parameters  |
+|----------------|------------|-------|-------------|
+| Silence        | Chromecast | stop  | reset=false |
+| Dog            | Chromecast | stop  | delay=7     |
+| All Lights On  | Light      | 100   | reset=false |
+| All Lights Off | Light      | off   | reset=false |
 
 ---
 
@@ -59,8 +61,6 @@
 
 | Name            | Plugin                                      | Parameters      |
 |-----------------|---------------------------------------------|-----------------|
-| All Lights On   | orc.plugins.all_lights_on                   |                 |
-| All Lights Off  | orc.plugins.all_lights_off                  |                 |
 | Entrance Sensor | orc_entrance_sensor.plugins.trigger_sensor  | section=hubitat |
 
 ---

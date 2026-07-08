@@ -231,6 +231,30 @@ def test_build_ad_hoc_routines_invalid_snapshot():
         m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
 
 
+def test_build_ad_hoc_routines_reset_default():
+    doc = Document(_ad_hoc_md(["| Silence | Chromecast.x | stop |  |\n"]))
+    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
+    assert routines["Silence"].reset is True
+
+
+def test_build_ad_hoc_routines_reset_false():
+    doc = Document(_ad_hoc_md(["| Silence | Chromecast.x | stop | reset=false |\n"]))
+    routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
+    assert routines["Silence"].reset is False
+
+
+def test_build_ad_hoc_routines_invalid_reset():
+    doc = Document(_ad_hoc_md(["| Foo | Light.a | on | reset=no |\n"]))
+    with pytest.raises(ValueError, match="Invalid parameter"):
+        m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
+
+
+def test_build_ad_hoc_routines_snapshot_with_reset_false():
+    doc = Document(_ad_hoc_md(["| Foo | Light.a | on | snapshot=180 reset=false |\n"]))
+    with pytest.raises(ValueError, match="snapshot and reset=false"):
+        m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
+
+
 def test_build_config_succeeds_with_required():
     doc = Document(_rooms_md(["| Living Room | Light.a | on |\n", "| Bedroom | Light.b | on |\n"]))
     rooms = m.build_config(doc, "Room Configs", required=("Living Room",))

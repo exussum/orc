@@ -26,17 +26,10 @@
     <div class="orc-card mb-2">
         <div class="p-4">
             <div class="text-base font-semibold">Theme</div>
-            <div class="orc-routine-buttons">
+            <div class="orc-routine-grid">
                 {% for id in ad_hoc_routines %}
                     {{ btn_stripe(id, "clipboard-check", durations.get(id, 0)) }}
                 {% endfor %}
-            </div>
-        </div>
-    </div>
-    <div class="orc-card mb-2">
-        <div class="p-4">
-            <div class="text-base font-semibold">Plugin</div>
-            <div class="orc-routine-buttons">
                 {% for id, plugin in plugins.items() %}
                     {{ btn_stripe(id, plugin.icon, durations.get(id, 0)) }}
                 {% endfor %}
