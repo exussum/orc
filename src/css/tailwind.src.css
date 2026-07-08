@@ -120,6 +120,10 @@
     @apply flex overflow-auto justify-between;
 }
 
+@utility orc-routine-grid {
+    @apply grid grid-cols-5 justify-items-center;
+}
+
 @utility orc-button {
     @apply my-[5px] text-center;
 }
