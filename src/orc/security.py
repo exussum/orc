@@ -3,8 +3,6 @@ from urllib.parse import urlparse
 
 import nh3
 
-_ALLOWED_STREAM_DOMAINS = {".googlevideo.com"}
-
 
 def safe_eval(val, ns):
     return eval(val, ns)  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
@@ -19,8 +17,8 @@ def safe_html(html):
     return nh3.clean(html)
 
 
-def safe_domain(url, allowed=_ALLOWED_STREAM_DOMAINS):
+def safe_domain(url, allowed):
     host = urlparse(url).hostname or ""
-    if not host or not any(host.endswith(s) for s in allowed):
-        raise ValueError(f"Stream URL host must end with one of {allowed}, got: {host!r}")
+    if not host or not any(host.endswith(s) if s.startswith(".") else host == s for s in allowed):
+        raise ValueError(f"Stream URL host must match one of {sorted(allowed)}, got: {host!r}")
     return url
