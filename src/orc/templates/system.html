@@ -23,12 +23,18 @@
                 <ul class="list-disc list-inside">
                     <li>Internal Version: {{ version }}</li>
                     <li>Snapshot State:
-                        {% set snap = ctx.snapshot_manager.snapshot %}
-                        {% if snap %}
-                            until {{ snap.end.strftime('%H:%M') }}
+                        {% if ctx.snapshot_manager.snapshots %}
                             <ul class="list-disc list-inside ml-4">
-                                {% for c in snap.routine.items %}
-                                    <li>{{ c.what.name }}={{ c.state }}</li>
+                                {% for name, snap in ctx.snapshot_manager.snapshots.items() %}
+                                    <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
+                                        <ul class="list-disc list-inside ml-4">
+                                            {% for c in snap.routine.items if c.state != "off" %}
+                                                <li>{{ c.what.name }}={{ c.state }}</li>
+                                            {% else %}
+                                                <li>all off</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </li>
                                 {% endfor %}
                             </ul>
                         {% else %}
