@@ -121,7 +121,7 @@
 }
 
 @utility orc-routine-grid {
-    @apply grid grid-cols-5 justify-items-center;
+    @apply grid grid-cols-5 justify-items-center gap-y-2;
 }
 
 @utility orc-button {
