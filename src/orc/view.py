@@ -149,7 +149,8 @@ def run_routine(id):
             action = lambda: app.orc.snapshot_manager.replace_config(routine, api.local_now() + routine.snapshot)
         else:
             delay = routine.delay
-            action = lambda: api.execute(m.squish_configs(config.reset_config, routine))
+            base = (config.reset_config,) if routine.reset else ()
+            action = lambda: api.execute(m.squish_configs(*base, routine))
     else:
         return {"error": "Unknown routine"}, 404
 
@@ -160,8 +161,9 @@ def run_routine(id):
             action()
 
     if delay:
-        api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, delay=delay))
-        app.orc.scheduler.add_job(run, DateTrigger(api.local_now() + delay, timezone=config.tz), jobstore=api.JOBSTORE_MEMORY)
+        when = api.local_now() + delay
+        api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
+        app.orc.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), jobstore=api.JOBSTORE_MEMORY)
     else:
         run(ctx=app.orc)
     return {"version": VersionManager.version}, 200
