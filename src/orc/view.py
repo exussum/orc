@@ -128,7 +128,7 @@ def device():
 def rebuild_jobs():
     with api.record_duration("Rebuild Jobs"):
         app.orc.scheduler.remove_all_jobs()
-        api.rebuild_iot_schedule(ctx=app.orc)
+        api.setup_scheduler(app.orc)
     return {"version": VersionManager.version}, 200
 
 
