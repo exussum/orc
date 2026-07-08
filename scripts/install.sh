@@ -9,6 +9,7 @@ curl -sSL https://raw.githubusercontent.com/exussum/orc/main/pyproject.toml -o /
 
 supervisorctl stop orc
 
+$UV pip install -r /tmp/pyproject.toml --extra-index-url http://registry.example.local --no-cache
 $UV pip install orc==0.0.1 --reinstall-package orc $INSTALL_OPTS
 $UV pip install orc_entrance_sensor==0.0.1 --reinstall-package orc_entrance_sensor $INSTALL_OPTS
 
