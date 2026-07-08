@@ -49,8 +49,8 @@ Two config surfaces:
    | `ORC_LONG`              | Longitude for sunrise/sunset                                       | `-74.0060`                       |
    | `ORC_HTTP_TIMEOUT`      | Default outbound HTTP timeout (s)                                  | `5`                              |
    | `ORC_HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                                     | `120`                            |
-   | `ORC_ROOT_DOMAIN`       | Trailing domain stripped from hostnames in the presence view       | `""`                             |
-   | `ORC_INTERNAL_URL`      | LAN-reachable base URL Chromecasts use to fetch static audio       | `""` (falls back to request host) |
+   | `ORC_ROOT_DOMAIN`       | Suffix stripped from presence hostnames; allowlisted for streams   | `example.test`                   |
+   | `ORC_INTERNAL_URL`      | LAN-reachable base URL for static audio; its host is allowlisted   | `http://example.test`            |
    | `ORC_AUDIO_DEVICE`      | ALSA device string for local USB audio output                      | `""`                             |
    | `ORC_BROADLINK_CODES`   | Path to BroadLink IR codes JSON                                    | `/etc/orc/broadlink_codes.json`  |
    | `BWS_ACCESS_TOKEN`      | URL whose body is the Bitwarden access token                       | required if `ORC_ENABLED`        |
