@@ -52,7 +52,7 @@ def execute_plugin(orc_ctx, id):
 
 def light_test(ctx):
     end = ctx.api.local_now() + timedelta(minutes=10)
-    ctx.snapshot_manager.replace_config(ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end)
+    ctx.snapshot_manager.replace_config("light_test", ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end)
     ctx.api.light_test()
     ctx.snapshot_manager.resume(ctx.config.default_config)
 
