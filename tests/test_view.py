@@ -7,7 +7,7 @@ from flask import Flask
 import orc
 from orc import api, config
 from orc import model as m
-from orc.view import ORC_RUN_ROUTINE, VersionManager, bp
+from orc.view import VersionManager, bp
 
 
 @pytest.fixture
@@ -116,16 +116,19 @@ def test_console_ad_hoc_no_reset(client):
 
 def test_console_ad_hoc_snapshot(client, ctx):
     routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
+    captured = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
         patch.object(config, "plugins", {}),
         patch.object(config, "schedule_routines", {}),
         patch.object(config, "ad_hoc_routines", {"r": routine}),
-        patch.object(ctx.snapshot_manager, "replace_config") as rcf,
+        patch.object(api, "capture_lights", return_value=captured),
+        patch.object(api, "execute") as ex,
     ):
         client.get("/api/run/r")
-    assert rcf.called
-    assert rcf.call_args[0][0] == ORC_RUN_ROUTINE
-    assert rcf.call_args[0][1] is routine
+    snap = ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT]
+    assert snap.routine is captured
+    assert snap.end > api.local_now()
+    ex.assert_called_once_with(routine)
 
 
 def test_console_unknown_returns_404(client):
