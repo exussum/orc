@@ -23,19 +23,104 @@ calendar events, and a markdown config file.
 - Serves a small Flask UI for manual control, schedule inspection, theme
   override, and an activity log.
 
-## Requirements
+## Quick start — development, no hardware required
 
-- A reachable Hubitat Maker API endpoint (`ORC_BASE_URL`)
-- One or more Chromecast devices on the local network
-- A Bitwarden Secrets Manager account holding the runtime secrets (see below)
+orc runs happily on a laptop with nothing attached: when `ORC_ENABLED` is
+unset, every device and secret integration is stubbed out. Calls that would
+touch hardware are printed to stderr as `[disabled] ...` instead, and the
+whole UI works against the sample config.
+
+You'll need:
+
+- **Python 3.11+** (3.13 is what CI and production use)
+- **git LFS** — the TTS voice model, ephemeris, and compiled CSS are LFS
+  objects; without it you'll get pointer files and confusing failures
+- **PortAudio**, to build the `pyaudio` dependency:
+  `brew install portaudio` (macOS) or
+  `sudo apt-get install portaudio19-dev` (Debian/Ubuntu)
+
+Then:
+
+```sh
+git lfs install
+git clone https://github.com/exussum/orc.git && cd orc
+
+python3 -m venv ~/.venv-orc            # this exact path matters: the helper
+source ~/.venv-orc/bin/activate        # scripts and pre-commit hooks use it
+pip install ./data '.[test]'
+
+sh scripts/run-tests.sh                # or: pytest && pytest entrance_sensor
+
+PYTHONPATH=src:data/src python -c 'from orc.runner import flask; flask()'
+```
+
+Open <http://localhost:8000> — the scene, device, schedule, presence, and
+log views are all live, driven by the sample config in `src/config.md`.
+`PYTHONPATH=src:data/src` makes the dev server run your working tree rather
+than the copy installed in the venv.
+
+Before your first commit, install the git hooks (black, isort, semgrep, and
+the test suite run on every commit):
+
+```sh
+pre-commit install
+```
+
+## Installing it for real
+
+Hardware and services — skip whatever you don't have; devices you leave out
+of `config.md` are never touched:
+
+- a Hubitat hub with the Maker API app enabled (lights)
+- Chromecast speakers on the same LAN
+- an LG webOS TV, plus a BroadLink IR blaster for power-on and AC control
+- a YoLink hub with leak sensors
+- a USB audio output on the machine running orc (spoken announcements)
+- a Bitwarden Secrets Manager account holding the runtime secrets
+
+Steps:
+
+1. **Install** on the target machine (add `./entrance_sensor` if you want
+   that plugin):
+
+   ```sh
+   pip install ./data . ./entrance_sensor
+   ```
+
+2. **Create a config directory** (e.g. `/etc/orc`) and copy `src/config.md`
+   into it as a starting point. Devices, people, routines, themes, room
+   configs, and plugins are all defined there — the sample file demonstrates
+   every table schema. Per-plugin markdown goes in a `plugins/` subdirectory
+   (see `src/plugins/` for examples).
+
+3. **Create the secrets** in Bitwarden Secrets Manager (table below) and put
+   a machine-account access token where the service can read it, e.g.
+   `/etc/orc/bws_access_token`.
+
+4. **Set the environment.** The minimum for a real installation:
+
+   ```sh
+   export ORC_ENABLED=1
+   export ORC_BASE_URL=http://<hubitat-host>/apps/api/<app-id>
+   export ORC_CONFIG_DIR=/etc/orc
+   export ORC_DB=sqlite:////var/lib/orc/jobs.sqlite
+   export BWS_ACCESS_TOKEN=file:///etc/orc/bws_access_token
+   ```
+
+   See [Configuration](#configuration) for the full list (timezone,
+   lat/long, audio device, …).
+
+5. **Run `orc`** — installed as a console script, it starts gunicorn on
+   `0.0.0.0:8000`. Use your process manager of choice to keep it up;
+   production here runs it under supervisor.
 
 ## Configuration
 
 Two config surfaces:
 
-1. **Markdown config** at `src/config.md` (override directory with `ORC_CONFIG_DIR`).
-   Defines devices, routines, themes, room configs, ad-hoc routines, plugins,
-   and button highlights. See the existing file for the table schemas.
+1. **Markdown config** at `ORC_CONFIG_DIR/config.md` (the in-repo sample is
+   `src/config.md`). Defines devices, routines, themes, room configs, ad-hoc
+   routines, plugins, and button highlights.
 2. **Environment variables** (read in `src/orc/__init__.py`):
 
    | Var                     | Purpose                                                            | Default                          |
@@ -51,18 +136,12 @@ Two config surfaces:
    | `ORC_HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                                     | `120`                            |
    | `ORC_ROOT_DOMAIN`       | Suffix stripped from presence hostnames; allowlisted for streams   | `example.test`                   |
    | `ORC_INTERNAL_URL`      | LAN-reachable base URL for static audio; its host is allowlisted   | `http://example.test`            |
-   | `ORC_AUDIO_DEVICE`      | ALSA device string for local USB audio output                      | `""`                             |
+   | `ORC_AUDIO_DEVICE`      | Substring matching the audio output device for TTS/alerts          | `""`                             |
    | `ORC_BROADLINK_CODES`   | Path to BroadLink IR codes JSON                                    | `/etc/orc/broadlink_codes.json`  |
    | `BWS_ACCESS_TOKEN`      | URL whose body is the Bitwarden access token                       | required if `ORC_ENABLED`        |
-   | `BWS_ORG_ID`            | URL whose body is the Bitwarden org ID                             | required if `ORC_ENABLED`        |
 
-   `BWS_ACCESS_TOKEN` and `BWS_ORG_ID` are URLs (e.g. `data:` or `file://`),
-   not the values themselves — the body of the URL is read at startup.
-
-### Minimum for local development
-
-With `ORC_ENABLED` unset, Hubitat/Chromecast/Bitwarden are not contacted
-and no env vars are required — defaults are sufficient.
+   `BWS_ACCESS_TOKEN` is a URL (e.g. `data:` or `file://`), not the value
+   itself — the body of the URL is read at startup.
 
 ## Secrets (Bitwarden)
 
@@ -79,31 +158,16 @@ Manager by name:
 
 ## Running
 
-Two entry points in `src/orc/runner.py`:
+Two entry points in `src/orc/runner.py`, both serving on `0.0.0.0:8000`:
 
-- `web()` — gunicorn, bound to `0.0.0.0:8000` (used in production)
-- `flask()` — Flask's dev server on `0.0.0.0:8000`
-
-`pip install` exposes `web()` as the `orc` console script
-(`[project.scripts]` in `pyproject.toml`).
-
-Local dev (talks to real devices when `ORC_ENABLED` is set):
-
-```sh
-env ORC_ENABLED=1 \
-    ORC_BASE_URL=http://hubitat.local/apps/api/123 \
-    BWS_ACCESS_TOKEN=file:///path/to/bws-token \
-    BWS_ORG_ID=file:///path/to/bws-org-id \
-    python -c 'from orc.runner import flask; flask()'
-```
-
-Tests (pytest's `pythonpath` is set in `pyproject.toml`):
-
-```sh
-pytest
-```
+- `web()` — gunicorn; this is what the `orc` console script runs (production)
+- `flask()` — Flask's dev server (development)
 
 ## Deploy
+
+This is the author's deploy flow — it targets a private package registry, so
+if you're installing elsewhere, use [Installing it for real](#installing-it-for-real)
+instead.
 
 `sh scripts/upload.sh` builds and publishes to the internal package registry.
 Pass `full` to also publish the `orc_data` sub-package:
@@ -113,8 +177,8 @@ sh scripts/upload.sh full
 ```
 
 `sh scripts/build-and-install.sh` runs `upload.sh` then SSHs to the target host and
-runs `install.sh`, which reinstalls from the registry and bounces the `orc`
-supervisor job.
+runs `install.sh`, which syncs dependencies, reinstalls from the registry, and
+bounces the `orc` supervisor job.
 
 ## Layout
 
@@ -132,6 +196,7 @@ supervisor job.
 - `src/orc/plugins.py` — plugin functions (reboot, sensor handler, …)
 - `src/orc/locale.py` — log-message string constants
 - `src/orc/view.py` + `templates/` + `static/` — Flask UI (schedule, device, presence, log, config views)
-- `src/config.md` — device/routine/theme/plugin definitions
+- `src/config.md` — sample device/routine/theme/plugin definitions
 - `src/plugins/` — per-plugin markdown config files
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
+- `entrance_sensor/` — optional `orc_entrance_sensor` plugin package with its own tests
