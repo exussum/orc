@@ -24,6 +24,7 @@ from orc.security import safe_html
 bp = Blueprint("controls", __name__)
 
 ORC_RESTORE_SNAPSHOT = "ORC_RESTORE_SNAPSHOT"
+ORC_RUN_ROUTINE = "ORC_RUN_ROUTINE"
 
 
 @bp.after_request
@@ -146,7 +147,7 @@ def run_routine(id):
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if routine.snapshot:
-            action = lambda: app.orc.snapshot_manager.replace_config(routine, api.local_now() + routine.snapshot)
+            action = lambda: app.orc.snapshot_manager.replace_config(ORC_RUN_ROUTINE, routine, api.local_now() + routine.snapshot)
         else:
             delay = routine.delay
             base = (config.reset_config,) if routine.reset else ()
