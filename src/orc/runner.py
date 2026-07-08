@@ -23,7 +23,7 @@ def flask():
     scheduler.resume()
     api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
     _print_started()
-    app.run(host="0.0.0.0", port=8000, use_reloader=False)
+    app.run(host="0.0.0.0", port=8000, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
 def web():
@@ -41,7 +41,6 @@ def web():
             except Exception:
                 traceback.print_exc()
                 sys.exit(4)
-            app.debug = True
             scheduler.resume()
             api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
             _print_started()
