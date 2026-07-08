@@ -22,9 +22,12 @@ def fetch_holidays(year):
 
 
 @requires_enabled(frozenset())
-@lru_cache(maxsize=10)
 def fetch_weather(now, lat, lon):
-    now = now.replace(minute=0, second=0, microsecond=0)
+    return _fetch_weather(now.replace(minute=0, second=0, microsecond=0), lat, lon)
+
+
+@lru_cache(maxsize=10)
+def _fetch_weather(now, lat, lon):
     date_str = now.strftime("%Y-%m-%d")
     response = requests.get(
         "https://api.open-meteo.com/v1/forecast",
