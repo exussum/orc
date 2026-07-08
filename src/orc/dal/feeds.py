@@ -1,4 +1,3 @@
-import sys
 from datetime import datetime
 from functools import lru_cache
 
@@ -7,25 +6,19 @@ import recurring_ical_events
 import requests
 
 from orc import config
-from orc.collections import LockedDict
 from orc.dal._decorators import requires_enabled
 from orc.model import WeatherCondition
 
 _SUNNY_CODES = {0, 1}  # WMO 0=clear sky, 1=mainly clear
 
-_holidays_cache = LockedDict()
-
 
 @requires_enabled([])
+@lru_cache(maxsize=2)
 def fetch_holidays(year):
-    def fetch():
-        result = requests.get(config.secrets.market_holidays_url, timeout=config.http_timeout).json()
-        if "error" in result:
-            print(result["error"], file=sys.stderr)
-            return []
-        return result
-
-    return _holidays_cache.get_or_set(year, fetch)
+    result = requests.get(config.secrets.market_holidays_url, timeout=config.http_timeout).json()
+    if "error" in result:
+        raise RuntimeError(result["error"])
+    return result
 
 
 @requires_enabled(frozenset())
