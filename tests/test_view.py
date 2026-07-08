@@ -7,7 +7,7 @@ from flask import Flask
 import orc
 from orc import api, config
 from orc import model as m
-from orc.view import VersionManager, bp
+from orc.view import ORC_RUN_ROUTINE, VersionManager, bp
 
 
 @pytest.fixture
@@ -124,7 +124,8 @@ def test_console_ad_hoc_snapshot(client, ctx):
     ):
         client.get("/api/run/r")
     assert rcf.called
-    assert rcf.call_args[0][0] is routine
+    assert rcf.call_args[0][0] == ORC_RUN_ROUTINE
+    assert rcf.call_args[0][1] is routine
 
 
 def test_console_unknown_returns_404(client):
