@@ -2,6 +2,7 @@ class Log:
     BOOT = "Boot"
 
     SNAPSHOT_TAKEN = "Snapshot '{name}' until {end:%H:%M}: {items}"
+    SNAPSHOT_ALL_OFF = "all off"
     SNAPSHOT_RESTORED = "Snapshot '{name}' restored"
 
     THEME_OVERRIDE_CLEARED = "Theme override cleared"

@@ -277,8 +277,8 @@ class SnapshotManager:
 
         if not self.snapshot:
             self.snapshot = m.SnapShot(name, capture_lights(), end)
-            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshot.routine.items)
-            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items))
+            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshot.routine.items if c.state != m.OFF)
+            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         execute(target_config)
 
