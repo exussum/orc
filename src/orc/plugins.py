@@ -27,18 +27,6 @@ class PluginCtx:
     scheduler: BaseScheduler | None = None
 
 
-def all_lights_off(ctx):
-    ctx.api.execute(
-        ctx.model.Configs(
-            ctx.model.Config(ctx.orc.Light, ctx.model.OFF),
-        )
-    )
-
-
-def all_lights_on(ctx):
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.orc.Light, ctx.model.ON), ctx.model.Config(ctx.orc.Light, 100)))
-
-
 def back_on_schedule(ctx):
     ctx.api.replay_day(ctx.api.local_now())
 
@@ -87,14 +75,6 @@ def reboot_hubitat(ctx):
     ctx.api.reboot_hubitat()
 
 
-def silence(ctx):
-    ctx.api.execute(
-        ctx.model.Configs(
-            ctx.model.Config(ctx.orc.Chromecast, ctx.model.STOP),
-        )
-    )
-
-
 @plugin_config("test_yolink_sensor", schema={"Settings": ("Key", "Value")})
 def test_yolink_sensor(ctx, cfg):
     ctx.api.test_yolink(cfg.sensor)
@@ -108,12 +88,3 @@ def sound_test(ctx):
     alert_path = str(Path(__file__).parent / "static" / "alert.wav")
     for level in (ctx.model.AUDIO_INFO, ctx.model.AUDIO_FATAL):
         ctx.api.play_alert(alert_path, level=level)
-
-
-@plugin_config("video_conference", schema={"Lights": ("Trigger", "Device", "State")})
-def video_conference(ctx, vc):
-    ctx.api.execute(_to_configs(ctx, vc.lights.lights))
-
-
-def _to_configs(ctx, rows):
-    return ctx.model.Configs(*[ctx.model.Config(r.device, r.state) for r in rows])
