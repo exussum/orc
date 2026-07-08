@@ -13,7 +13,7 @@ from apscheduler.schedulers.base import BaseScheduler
 from orc.collections import doc_to_sub_tables, doc_to_table, parse_kv
 from orc.security import safe_eval, safe_import
 
-SnapShot = nt("SnapShot", "name routine end")
+SnapShot = nt("SnapShot", "routine end")
 ThemeOverride = nt("ThemeOverride", "name start end")
 
 if TYPE_CHECKING:

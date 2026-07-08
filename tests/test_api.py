@@ -26,21 +26,37 @@ class TestManagingConfig:
         self.target = api.SnapshotManager()
 
     def test_resume_with_snapshot(self, execute, snapshot_config):
-        self.target.snapshot = m.SnapShot(name="test", routine=snapshot_config, end=FUTURE)
-        self.target.resume(None)
+        self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=FUTURE)
+        self.target.resume("test", None)
         assert execute.call_args_list == [call(snapshot_config)]
 
     def test_resume_without_snapshot(self, execute):
         routine = object()
-        self.target.resume(routine)
+        self.target.resume("test", routine)
         assert execute.call_args_list == [call(routine)]
 
     def test_resume_with_old_snapshot(self, execute, snapshot_config):
         routine = object()
-        self.target.snapshot = m.SnapShot(name="test", routine=snapshot_config, end=PAST)
-        self.target.resume(routine)
+        self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=PAST)
+        self.target.resume("test", routine)
         assert execute.call_args_list == [call(routine)]
-        assert not self.target.snapshot
+        assert not self.target.snapshots
+
+    def test_get_with_snapshot(self, execute, snapshot_config):
+        self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=FUTURE)
+        assert self.target.get("test").routine is snapshot_config
+        assert not self.target.snapshots
+        execute.assert_not_called()
+
+    def test_get_without_snapshot(self, execute):
+        assert self.target.get("test") is None
+        execute.assert_not_called()
+
+    def test_get_with_old_snapshot(self, execute, snapshot_config):
+        self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=PAST)
+        assert self.target.get("test") is None
+        assert not self.target.snapshots
+        execute.assert_not_called()
 
 
 @patch("orc.api.hubitat.update_light")
@@ -51,11 +67,11 @@ class TestRouteRule:
     def test_snapshot_update_overwrite_set(self, update_light, snapshot_config):
         rule = m.Config(set((orc.Light.b,)), m.ON, trigger=m.Trigger.SYSTEM)
 
-        self.target.snapshot = m.SnapShot(name="test", routine=snapshot_config, end=FUTURE)
+        self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
         self.target.route_rule(rule, False)
 
-        assert self.target.snapshot.routine.items == (
+        assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
             m.Config(orc.Light.b, m.ON, trigger=m.Trigger.SYSTEM),
         )
@@ -64,10 +80,10 @@ class TestRouteRule:
     def test_snapshot_update_add(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, m.ON, trigger=m.Trigger.SYSTEM)
 
-        self.target.snapshot = m.SnapShot(name="test", routine=snapshot_config, end=FUTURE)
+        self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
-        assert self.target.snapshot.routine.items == (
+        assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
             m.Config(orc.Light.b, m.OFF),
             rule,
@@ -77,10 +93,10 @@ class TestRouteRule:
     def test_rule_ignored(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, m.ON)
 
-        self.target.snapshot = m.SnapShot(name="test", routine=snapshot_config, end=FUTURE)
+        self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.route_rule(rule, False)
 
-        assert self.target.snapshot.routine.items == (
+        assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
             m.Config(orc.Light.b, m.OFF),
         )
@@ -89,20 +105,20 @@ class TestRouteRule:
     def test_rule_old_snapshot(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, m.ON)
 
-        self.target.snapshot = m.SnapShot(name="test", routine=snapshot_config, end=PAST)
+        self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=PAST)
         self.target.route_rule(rule, False)
 
-        assert self.target.snapshot is None
+        assert not self.target.snapshots
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
     def test_snapshot_bypassed(self, update_light, snapshot_config):
         rule = m.Config(orc.Light.c, m.ON)
 
-        self.target.snapshot = m.SnapShot(name="test", routine=snapshot_config, end=FUTURE)
+        self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
 
         self.target.route_rule(rule, True)
 
-        assert self.target.snapshot.routine.items == (
+        assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
             m.Config(orc.Light.b, m.OFF),
         )
