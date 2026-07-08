@@ -9,7 +9,6 @@ from types import ModuleType
 from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.base import BaseScheduler
-from flask import request
 
 from orc._decorators import plugin_config, requires_ctx
 
@@ -102,7 +101,7 @@ def test_yolink_sensor(ctx, cfg):
 
 
 def sound_test(ctx):
-    base = ctx.config.internal_url.rstrip("/") + "/" if ctx.config.internal_url else request.host_url
+    base = ctx.config.internal_url.rstrip("/") + "/"
     url = f"{base}static/alert.mp3"
     ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.orc.Chromecast, url)))
     ctx.api.play_text("audio test")
