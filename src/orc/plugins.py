@@ -77,7 +77,7 @@ def pair_lg_tv(ctx):
 
 def rebuild_jobs(ctx):
     ctx.scheduler.remove_all_jobs()
-    ctx.api.rebuild_iot_schedule(ctx=ctx)
+    ctx.api.setup_scheduler(ctx)
 
 
 def reboot(ctx):
