@@ -261,7 +261,7 @@ def presence():
             "presence.html",
             version=app.orc.version_manager.version,
             rows=rows,
-            strip_suffix=("." + config.root_domain) if config.root_domain else "",
+            strip_suffix="." + config.root_domain,
         ),
         200,
         {"Cache-control": "no-store"},
