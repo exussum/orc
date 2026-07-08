@@ -273,12 +273,12 @@ class SnapshotManager:
         self.snapshot = None
 
     @synchronized
-    def replace_config(self, target_config, end):
+    def replace_config(self, name, target_config, end):
 
         if not self.snapshot:
-            self.snapshot = m.SnapShot(capture_lights(), end)
+            self.snapshot = m.SnapShot(name, capture_lights(), end)
             items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshot.routine.items)
-            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(end=end, items=items))
+            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items))
 
         execute(target_config)
 
@@ -286,7 +286,7 @@ class SnapshotManager:
     def resume(self, target_config):
         if self.snapshot and local_now() <= self.snapshot.end:
             routine = self.snapshot.routine
-            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED)
+            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=self.snapshot.name))
         else:
             routine = target_config
         self.snapshot = None
