@@ -125,8 +125,8 @@ The schema maps `#####` headings in the markdown file to their table columns:
   E.g. `sensor.entrance_id`, `sensor.log_shutdown`.
 - **Wider sections** (`Day`, `Night`) become a namespace per section, with
   one attribute per group of rows, keyed by the first column. E.g.
-  `sensor.day.entrance_light` is the list of rows under the
-  `entrance_light` trigger.
+  `sensor.day.entrance_light_on` is the list of rows under the
+  `entrance_light_on` trigger.
 
 Because this package is outside the `orc` package, the config name is
 automatically namespaced as `<package>/<name>`, so the file lives at:
@@ -149,12 +149,13 @@ The in-repo sample is
 
 ##### Day
 
-| Trigger         | Device     | State  |
-|-----------------|------------|--------|
-| entrance_light  | Light      | 20     |
-| entrance_config | Light      | on     |
-|                 | Chromecast | pause  |
-| after_hours     | Chromecast | stop   |
+| Trigger            | Device     | State  |
+|--------------------|------------|--------|
+| entrance_light_on  | Light      | 20     |
+| entrance_light_off | Light      | off    |
+| entrance_config    | Light      | on     |
+|                    | Chromecast | pause  |
+| after_hours        | Chromecast | stop   |
 ```
 
 The config is loaded lazily on first call and cached; if the file is missing
