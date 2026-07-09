@@ -7,6 +7,7 @@ from apscheduler.triggers.date import DateTrigger
 from orc.plugins import build_ctx, plugin_config, requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
+JOB_ID = "trigger-sensor"
 
 
 @plugin_config(
@@ -27,6 +28,8 @@ def trigger_sensor(ctx, sensor, device_id, event):
     phase = sensor.day if daytime else sensor.night
 
     if event == sensor.active_event:
+        if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
+            ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         snapshot = ctx.snapshot_manager.get(SNAPSHOT_NAME)
         items = (snapshot.routine,) if snapshot else ()
         ctx.api.execute(ctx.model.squish_configs(*items, _to_configs(ctx, [*phase.entrance_light_on, *phase.entrance_config])))
@@ -36,7 +39,7 @@ def trigger_sensor(ctx, sensor, device_id, event):
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
             name="Trigger Sensor",
-            id="trigger-sensor",
+            id=JOB_ID,
             replace_existing=True,
             jobstore=ctx.api.JOBSTORE_MEMORY,
             args=(sensor,),
