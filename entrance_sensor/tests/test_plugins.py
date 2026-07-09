@@ -149,6 +149,20 @@ def test_trigger_sensor_active_discards_expired_snapshot(ctx, sensor):
     assert not ctx.snapshot_manager.snapshots
 
 
+def test_trigger_sensor_active_removes_pending_cleanup_job(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    _trigger_sensor(ctx, sensor, "16", "active")
+    ctx.scheduler.remove_job.assert_called_once_with("trigger-sensor", jobstore=ctx.api.JOBSTORE_MEMORY)
+
+
+def test_trigger_sensor_active_skips_remove_when_no_job_pending(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    ctx.scheduler.get_job.return_value = None
+    _trigger_sensor(ctx, sensor, "16", "active")
+    ctx.scheduler.remove_job.assert_not_called()
+    ctx.api.execute.assert_called_once()
+
+
 def test_trigger_sensor_inactive_executes_light_off_rows(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
