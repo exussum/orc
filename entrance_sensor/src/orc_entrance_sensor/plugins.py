@@ -29,9 +29,9 @@ def trigger_sensor(ctx, sensor, device_id, event):
     if event == sensor.active_event:
         snapshot = ctx.snapshot_manager.get(SNAPSHOT_NAME)
         items = (snapshot.routine,) if snapshot else ()
-        ctx.api.execute(ctx.model.squish_configs(*items, _to_configs(ctx, [*phase.entrance_light, *phase.entrance_config])))
+        ctx.api.execute(ctx.model.squish_configs(*items, _to_configs(ctx, [*phase.entrance_light_on, *phase.entrance_config])))
     elif event == sensor.inactive_event:
-        ctx.api.execute(ctx.model.squish_configs(_to_configs(ctx, phase.entrance_light), state_override=ctx.model.OFF))
+        ctx.api.execute(_to_configs(ctx, phase.entrance_light_off))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),

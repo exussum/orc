@@ -32,8 +32,8 @@ class Light(DeviceEnum):
     saved = 12
 
 
-def _rows(*devices):
-    return [SimpleNamespace(device=d, state=m.ON) for d in devices]
+def _rows(*devices, state=m.ON):
+    return [SimpleNamespace(device=d, state=state) for d in devices]
 
 
 def _snapshot(*configs, end=_FUTURE):
@@ -53,14 +53,16 @@ def ctx():
 @pytest.fixture
 def sensor():
     day = SimpleNamespace(
-        entrance_light=_rows(Light.day_bulb),
+        entrance_light_on=_rows(Light.day_bulb),
+        entrance_light_off=_rows(Light.day_bulb, Light.night_bulb, state=m.OFF),
         entrance_config=_rows(Light.day_lamp1, Light.day_lamp2),
         after_hours=_rows(Light.day_cc),
         core_hours=_rows(Light.day_cc2),
         shutdown=_rows(Light.day_light),
     )
     night = SimpleNamespace(
-        entrance_light=_rows(Light.night_bulb),
+        entrance_light_on=_rows(Light.night_bulb),
+        entrance_light_off=_rows(Light.day_bulb, Light.night_bulb, state=m.OFF),
         entrance_config=_rows(Light.night_lamp),
         after_hours=_rows(Light.night_cc),
         core_hours=_rows(Light.night_cc2),
@@ -147,10 +149,10 @@ def test_trigger_sensor_active_discards_expired_snapshot(ctx, sensor):
     assert not ctx.snapshot_manager.snapshots
 
 
-def test_trigger_sensor_inactive_squishes_light_off(ctx, sensor):
+def test_trigger_sensor_inactive_executes_light_off_rows(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
-    ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.day_bulb, m.OFF)))
+    ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.day_bulb, m.OFF), m.Config(Light.night_bulb, m.OFF)))
 
 
 def test_trigger_sensor_inactive_schedules_cleanup_job(ctx, sensor):
