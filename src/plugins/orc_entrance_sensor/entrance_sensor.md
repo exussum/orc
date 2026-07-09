@@ -21,22 +21,24 @@
 
 ##### Day
 
-| Trigger         | Device     | State  |
-|-----------------|------------|--------|
-| entrance_light  | Light      | 20     |
-| entrance_config | Light      | on     |
-|                 | Chromecast | pause  |
-| after_hours     | Chromecast | stop   |
-| core_hours      | Chromecast | resume |
-| shutdown        | Light      | off    |
+| Trigger            | Device     | State  |
+|--------------------|------------|--------|
+| entrance_light_on  | Light      | 20     |
+| entrance_light_off | Light      | off    |
+| entrance_config    | Light      | on     |
+|                    | Chromecast | pause  |
+| after_hours        | Chromecast | stop   |
+| core_hours         | Chromecast | resume |
+| shutdown           | Light      | off    |
 
 ##### Night
 
-| Trigger         | Expression | State |
-|-----------------|------------|-------|
-| entrance_light  | Light      | 1     |
-| entrance_config | Light      | on    |
-|                 | Chromecast | pause |
-| after_hours     | Chromecast | stop  |
-| core_hours      | Chromecast | stop  |
-| shutdown        | Light      | off   |
+| Trigger            | Device     | State |
+|--------------------|------------|-------|
+| entrance_light_on  | Light      | 1     |
+| entrance_light_off | Light      | off   |
+| entrance_config    | Light      | on    |
+|                    | Chromecast | pause |
+| after_hours        | Chromecast | stop  |
+| core_hours         | Chromecast | stop  |
+| shutdown           | Light      | off   |
