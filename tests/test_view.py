@@ -82,7 +82,7 @@ def test_console_schedule_routine(client):
     with (
         patch.object(config, "schedule_routines", {"r": routine}),
         patch.object(config, "plugins", {}),
-        patch.object(api, "execute") as ex,
+        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
     ex.assert_called_once_with(routine)
@@ -96,7 +96,7 @@ def test_console_ad_hoc(client):
         patch.object(config, "schedule_routines", {}),
         patch.object(config, "ad_hoc_routines", {"r": routine}),
         patch.object(config, "reset_config", reset),
-        patch.object(api, "execute") as ex,
+        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
     ex.assert_called_once_with(m.squish_configs(reset, routine))
@@ -108,7 +108,7 @@ def test_console_ad_hoc_no_reset(client):
         patch.object(config, "plugins", {}),
         patch.object(config, "schedule_routines", {}),
         patch.object(config, "ad_hoc_routines", {"r": routine}),
-        patch.object(api, "execute") as ex,
+        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
     ex.assert_called_once_with(m.squish_configs(routine))
@@ -122,13 +122,13 @@ def test_console_ad_hoc_snapshot(client, ctx):
         patch.object(config, "schedule_routines", {}),
         patch.object(config, "ad_hoc_routines", {"r": routine}),
         patch.object(api, "capture_lights", return_value=captured),
-        patch.object(api, "execute") as ex,
+        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
     snap = ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
-    ex.assert_called_once_with(routine)
+    ex.assert_called_once_with(routine, force=True)
 
 
 def test_console_unknown_returns_404(client):
@@ -148,17 +148,17 @@ def test_room_on(client):
     routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
         patch.object(config, "room_configs", {"Living Room": routine}),
-        patch.object(api, "execute") as ex,
+        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=on")
-    ex.assert_called_once_with(routine)
+    ex.assert_called_once_with(routine, force=True)
 
 
 def test_room_off_replaces_state(client):
     routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
         patch.object(config, "room_configs", {"Living Room": routine}),
-        patch.object(api, "execute") as ex,
+        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=off")
     (args,), _ = ex.call_args
@@ -171,10 +171,10 @@ def test_room_follow(client):
     with (
         patch.object(config, "room_configs", {"Living Room": routine}),
         patch.object(config, "room_configs_off", off),
-        patch.object(api, "execute") as ex,
+        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=follow")
-    ex.assert_called_once_with(m.squish_configs(off, routine))
+    ex.assert_called_once_with(m.squish_configs(off, routine), force=True)
 
 
 def test_room_unknown_state_raises(client):
@@ -184,7 +184,7 @@ def test_room_unknown_state_raises(client):
 
 
 def test_room_unknown_id_returns_404(client):
-    with patch.object(config, "room_configs", {}), patch.object(api, "execute") as ex:
+    with patch.object(config, "room_configs", {}), patch.object(api, "dispatch") as ex:
         response = client.get("/api/room/nope?state=on")
     assert response.status_code == 404
     ex.assert_not_called()

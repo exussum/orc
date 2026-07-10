@@ -9,6 +9,7 @@ class Log:
     THEME_OVERRIDE_SET = "Theme override set: {name} {start}..{end}"
 
     RULE_SKIPPED = "Skipped {rule_name} ({detail})"
+    RULE_SUPPRESSED = "Suppressed by snapshot: {kinds}"
 
     PRESENCE_PING_FAILED = "Presence ping failed for {name}: {exc}"
     PRESENCE_DETECTED = "Presence detected: {name}"

@@ -100,14 +100,14 @@ def _load_plugin_config(name, config_dir, schema):
 
 
 def unwrap_rule_container(f):
-    def wrapper(*args):
+    def wrapper(*args, **kwargs):
         if isinstance(args[0], m.Routine | m.Configs):
             for e in args[0].items:
-                f(e, *args[1:])
+                f(e, *args[1:], **kwargs)
         elif len(args) > 1 and isinstance(args[1], m.Routine | m.Configs):
             for e in args[1].items:
-                f(args[0], e, *args[2:])
+                f(args[0], e, *args[2:], **kwargs)
         else:
-            f(*args)
+            f(*args, **kwargs)
 
     return wrapper
