@@ -60,7 +60,7 @@ def _build_app():
 
     api.init_db()
 
-    snapshot_manager = api.SnapshotManager()
+    snapshot_manager = api.snapshot_manager
     version_manager = VersionManager()
 
     scheduler = BackgroundScheduler(

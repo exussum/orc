@@ -184,7 +184,9 @@ def pair_lg_tv(lgtv):
 
 
 @unwrap_rule_container
-def execute(rule):
+def dispatch(rule, force=False):
+    if not force and snapshot_manager.intercepts(rule):
+        return
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
     stream = {}
@@ -282,7 +284,7 @@ class SnapshotManager:
             items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshots[name].routine.items if c.state != m.OFF)
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
-        execute(target_config)
+        dispatch(target_config, force=True)
 
     @synchronized
     def get(self, name):
@@ -300,7 +302,7 @@ class SnapshotManager:
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=name))
         else:
             routine = target_config
-        execute(routine)
+        dispatch(routine, force=True)
 
     @synchronized
     def update_snapshot(self, name, rule):
@@ -314,15 +316,20 @@ class SnapshotManager:
         self.snapshots[name] = snapshot._replace(routine=m.Configs(*items.values()))
 
     @synchronized
-    @unwrap_rule_container
-    def route_rule(self, rule, force):
+    def intercepts(self, rule):
         if ORC_SYSTEM_SNAPSHOT in self.snapshots and rule.trigger == m.Trigger.SYSTEM:
             self.update_snapshot(ORC_SYSTEM_SNAPSHOT, rule)
         elif ORC_SYSTEM_SNAPSHOT in self.snapshots and local_now() > self.snapshots[ORC_SYSTEM_SNAPSHOT].end:
             self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
-        elif ORC_SYSTEM_SNAPSHOT in self.snapshots and not force:
-            return
-        execute(rule)
+        elif ORC_SYSTEM_SNAPSHOT in self.snapshots:
+            what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+            kinds = ", ".join(sorted({type(e).__name__ for e in what}))
+            log(local_now(), m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
+            return True
+        return False
+
+
+snapshot_manager = SnapshotManager()
 
 
 def current_theme_override():
@@ -467,7 +474,7 @@ def run_iot_job(job, ctx, force=False):
             log(now, m.LogSource.IOT, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
         else:
             log(now, m.LogSource.IOT, rule.name)
-    ctx.snapshot_manager.route_rule(replace(rule, items=matched), force)
+    dispatch(replace(rule, items=matched), force=force)
 
 
 def setup_scheduler(ctx):
@@ -539,7 +546,7 @@ def rebuild_iot_schedule(ctx):
 
 
 def light_test():
-    execute(m.Config(orc.Light, m.ON))
+    dispatch(m.Config(orc.Light, m.ON), force=True)
     time.sleep(10)
 
 
@@ -547,7 +554,7 @@ def replay_day(now):
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
     configs = (replace(cfg, items=matching_items(cfg, False, now, present)) for (when, cfg) in jobs if when <= now)
-    execute(m.squish_configs(*configs))
+    dispatch(m.squish_configs(*configs), force=True)
 
 
 @requires_ctx
