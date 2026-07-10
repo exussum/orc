@@ -32,9 +32,9 @@ def trigger_sensor(ctx, sensor, device_id, event):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         snapshot = ctx.snapshot_manager.get(SNAPSHOT_NAME)
         items = (snapshot.routine,) if snapshot else ()
-        ctx.api.execute(ctx.model.squish_configs(*items, _to_configs(ctx, [*phase.entrance_light_on, *phase.entrance_config])))
+        ctx.api.dispatch(ctx.model.squish_configs(*items, _to_configs(ctx, [*phase.entrance_light_on, *phase.entrance_config])), force=True)
     elif event == sensor.inactive_event:
-        ctx.api.execute(_to_configs(ctx, phase.entrance_light_off))
+        ctx.api.dispatch(_to_configs(ctx, phase.entrance_light_off, trigger=ctx.model.Trigger.SYSTEM))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
@@ -57,21 +57,21 @@ def _run_trigger_sensor_off(sensor, *, ctx):
     present = plugin_ctx.api.check_presence(ctx=ctx)
 
     if not daytime:
-        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.after_hours))
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.after_hours))
         msg = sensor.log_after_hours
     elif present:
-        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.after_hours))
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.after_hours))
         msg = sensor.log_present
     elif any(s.content for s in plugin_ctx.api.capture_sounds().items):
-        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.core_hours))
         msg = sensor.log_core_hours
     else:
         end = plugin_ctx.api.local_now() + timedelta(minutes=sensor.snapshot)
         plugin_ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(plugin_ctx, phase.shutdown), end)
-        plugin_ctx.api.execute(_to_configs(plugin_ctx, phase.core_hours))
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.core_hours))
         msg = sensor.log_shutdown
     plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)
 
 
-def _to_configs(ctx, rows):
-    return ctx.model.Configs(*[ctx.model.Config(r.device, r.state) for r in rows])
+def _to_configs(ctx, rows, trigger=None):
+    return ctx.model.Configs(*[ctx.model.Config(r.device, r.state, trigger=trigger) for r in rows])
