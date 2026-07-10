@@ -83,7 +83,7 @@ def test_yolink_sensor(ctx, cfg):
 def sound_test(ctx):
     base = ctx.config.internal_url.rstrip("/") + "/"
     url = f"{base}static/alert.mp3"
-    ctx.api.execute(ctx.model.Configs(ctx.model.Config(ctx.orc.Chromecast, url)))
+    ctx.api.dispatch(ctx.model.Configs(ctx.model.Config(ctx.orc.Chromecast, url)), force=True)
     ctx.api.play_text("audio test")
     alert_path = str(Path(__file__).parent / "static" / "alert.wav")
     for level in (ctx.model.AUDIO_INFO, ctx.model.AUDIO_FATAL):

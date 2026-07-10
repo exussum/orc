@@ -20,56 +20,59 @@ def snapshot_config():
     return m.Configs(m.Config(orc.Light.a, m.ON), m.Config(orc.Light.b, m.OFF))
 
 
-@patch("orc.api.execute")
+@patch("orc.api.dispatch")
 class TestManagingConfig:
     def setup_method(self):
         self.target = api.SnapshotManager()
 
-    def test_resume_with_snapshot(self, execute, snapshot_config):
+    def test_resume_with_snapshot(self, dispatch, snapshot_config):
         self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=FUTURE)
         self.target.resume("test", None)
-        assert execute.call_args_list == [call(snapshot_config)]
+        assert dispatch.call_args_list == [call(snapshot_config, force=True)]
 
-    def test_resume_without_snapshot(self, execute):
+    def test_resume_without_snapshot(self, dispatch):
         routine = object()
         self.target.resume("test", routine)
-        assert execute.call_args_list == [call(routine)]
+        assert dispatch.call_args_list == [call(routine, force=True)]
 
-    def test_resume_with_old_snapshot(self, execute, snapshot_config):
+    def test_resume_with_old_snapshot(self, dispatch, snapshot_config):
         routine = object()
         self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=PAST)
         self.target.resume("test", routine)
-        assert execute.call_args_list == [call(routine)]
+        assert dispatch.call_args_list == [call(routine, force=True)]
         assert not self.target.snapshots
 
-    def test_get_with_snapshot(self, execute, snapshot_config):
+    def test_get_with_snapshot(self, dispatch, snapshot_config):
         self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=FUTURE)
         assert self.target.get("test").routine is snapshot_config
         assert not self.target.snapshots
-        execute.assert_not_called()
+        dispatch.assert_not_called()
 
-    def test_get_without_snapshot(self, execute):
+    def test_get_without_snapshot(self, dispatch):
         assert self.target.get("test") is None
-        execute.assert_not_called()
+        dispatch.assert_not_called()
 
-    def test_get_with_old_snapshot(self, execute, snapshot_config):
+    def test_get_with_old_snapshot(self, dispatch, snapshot_config):
         self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=PAST)
         assert self.target.get("test") is None
         assert not self.target.snapshots
-        execute.assert_not_called()
+        dispatch.assert_not_called()
 
 
 @patch("orc.api.hubitat.update_light")
-class TestRouteRule:
-    def setup_method(self):
+class TestIntercepts:
+    @pytest.fixture(autouse=True)
+    def _manager(self):
         self.target = api.SnapshotManager()
+        with patch.object(api, "snapshot_manager", self.target):
+            yield
 
     def test_snapshot_update_overwrite_set(self, update_light, snapshot_config):
         rule = m.Config(set((orc.Light.b,)), m.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
-        self.target.route_rule(rule, False)
-        self.target.route_rule(rule, False)
+        api.dispatch(rule)
+        api.dispatch(rule)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
@@ -81,7 +84,7 @@ class TestRouteRule:
         rule = m.Config(orc.Light.c, m.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
-        self.target.route_rule(rule, False)
+        api.dispatch(rule)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
@@ -94,7 +97,7 @@ class TestRouteRule:
         rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
-        self.target.route_rule(rule, False)
+        api.dispatch(rule)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
@@ -106,7 +109,7 @@ class TestRouteRule:
         rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=PAST)
-        self.target.route_rule(rule, False)
+        api.dispatch(rule)
 
         assert not self.target.snapshots
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
@@ -116,13 +119,31 @@ class TestRouteRule:
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
 
-        self.target.route_rule(rule, True)
+        api.dispatch(rule, force=True)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
             m.Config(orc.Light.b, m.OFF),
         )
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
+
+    def test_force_off_is_not_recorded_and_resume_relights(self, update_light, snapshot_config):
+        self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
+
+        api.dispatch(m.Config(orc.Light.a, m.OFF), force=True)  # room control during the scene
+
+        assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
+            m.Config(orc.Light.a, m.ON),  # snapshot still holds the captured ON
+            m.Config(orc.Light.b, m.OFF),
+        )
+
+        self.target.resume(api.ORC_SYSTEM_SNAPSHOT, None)
+
+        assert update_light.call_args_list == [
+            call(orc.Light.a, on=False),  # the deliberate off
+            call(orc.Light.a, on=True),  # resume undoes it
+            call(orc.Light.b, on=False),
+        ]
 
 
 def test_unwrapper_function_single_rule():
@@ -278,63 +299,63 @@ class TestPresence:
 
     def test_run_iot_job_skips_when_presence_absent(self):
         rule = self._routine("partner-r", "Alice")
-        with patch.object(self.target, "route_rule") as route:
+        with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        route.assert_not_called()
+        dispatch.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self):
         api.mark_present(["Alice"], when=api.local_now())
         rule = self._routine("partner-r", "Alice")
-        with patch.object(self.target, "route_rule") as route:
+        with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        route.assert_called_once_with(rule, False)
+        dispatch.assert_called_once_with(rule, force=False)
 
     def test_run_iot_job_runs_when_no_presence_required(self):
         rule = m.Routine("r", time(8, 0), (m.Config(orc.Light.a, m.OFF),))
-        with patch.object(self.target, "route_rule") as route:
+        with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        route.assert_called_once_with(rule, False)
+        dispatch.assert_called_once_with(rule, force=False)
 
     def test_run_iot_job_force_bypasses_presence(self):
         rule = self._routine("partner-r", "Alice")
-        with patch.object(self.target, "route_rule") as route:
+        with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx, force=True)
-        route.assert_called_once_with(rule, True)
+        dispatch.assert_called_once_with(rule, force=True)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self):
         rule = self._routine("reset-r", m.Trigger.SYSTEM)
-        with patch.object(self.target, "route_rule") as route:
+        with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        route.assert_called_once_with(rule, False)
+        dispatch.assert_called_once_with(rule, force=False)
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
         api.mark_present(["Bob"], when=api.local_now())
         rule = self._routine("anyone-r", m.Trigger.ANYONE)
-        with patch.object(self.target, "route_rule") as route:
+        with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        route.assert_called_once_with(rule, False)
+        dispatch.assert_called_once_with(rule, force=False)
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self):
         rule = self._routine("anyone-r", m.Trigger.ANYONE)
-        with patch.object(self.target, "route_rule") as route:
+        with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        route.assert_not_called()
+        dispatch.assert_not_called()
 
     def test_replay_day_skips_routines_for_absent_people(self):
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
         partner = self._routine("partner-r", "Alice")
-        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "execute") as execute:
+        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
             api.replay_day(api.local_now())
-        squished = execute.call_args.args[0]
+        squished = dispatch.call_args.args[0]
         assert squished.items == ()
 
     def test_replay_day_runs_routines_for_present_people(self):
         api.mark_present(["Alice"], when=api.local_now())
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
         partner = self._routine("partner-r", "Alice")
-        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "execute") as execute:
+        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
             api.replay_day(api.local_now())
-        squished = execute.call_args.args[0]
+        squished = dispatch.call_args.args[0]
         assert [c.trigger for c in squished.items] == ["Alice"]
 
     def test_check_presence_continues_when_one_ping_raises(self):
@@ -350,7 +371,7 @@ class TestPresence:
         assert api.present_names() == {"Bob"}
 
 
-class TestExecuteLGTV:
+class TestDispatchLGTV:
     @pytest.fixture(autouse=True)
     def _lgtv_enums(self):
         class LGTV(Enum):
@@ -374,17 +395,17 @@ class TestExecuteLGTV:
 
     def test_off_sends_webos_off(self):
         with patch.object(api.tv, "off") as tv_off:
-            api.execute(m.Config(self.lgtv, m.OFF))
+            api.dispatch(m.Config(self.lgtv, m.OFF))
         tv_off.assert_called_once_with(self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
         with patch.object(api.tv, "is_off", return_value=True), patch.object(api.broadlink, "tv_toggle") as tv_toggle:
-            api.execute(m.Config(self.lgtv, m.ON))
+            api.dispatch(m.Config(self.lgtv, m.ON))
         tv_toggle.assert_called_once_with(self.bl, api._BROADLINK_CODES)
 
     def test_on_skips_toggle_when_tv_already_on(self):
         with patch.object(api.tv, "is_off", return_value=False), patch.object(api.broadlink, "tv_toggle") as tv_toggle:
-            api.execute(m.Config(self.lgtv, m.ON))
+            api.dispatch(m.Config(self.lgtv, m.ON))
         tv_toggle.assert_not_called()
 
 

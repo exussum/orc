@@ -140,7 +140,7 @@ def run_routine(id):
         delay = plugin.delay
         action = lambda: plugins.execute_plugin(app.orc, id)
     elif id in config.schedule_routines:
-        action = lambda: api.execute(config.schedule_routines[id])
+        action = lambda: api.dispatch(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if routine.snapshot:
@@ -148,7 +148,7 @@ def run_routine(id):
         else:
             delay = routine.delay
             base = (config.reset_config,) if routine.reset else ()
-            action = lambda: api.execute(m.squish_configs(*base, routine))
+            action = lambda: api.dispatch(m.squish_configs(*base, routine))
     else:
         return {"error": "Unknown routine"}, 404
 
@@ -298,11 +298,11 @@ def room(id):
         return {"error": "Unknown room"}, 404
     with api.record_duration(id):
         if state == m.ON:
-            api.execute(config.room_configs[id])
+            api.dispatch(config.room_configs[id], force=True)
         elif state == m.OFF:
-            api.execute(m.Configs(*(replace(e, state=m.OFF) for e in config.room_configs[id].items)))
+            api.dispatch(m.Configs(*(replace(e, state=m.OFF) for e in config.room_configs[id].items)), force=True)
         elif state == m.FOLLOW:
-            api.execute(m.squish_configs(config.room_configs_off, config.room_configs[id]))
+            api.dispatch(m.squish_configs(config.room_configs_off, config.room_configs[id]), force=True)
         else:
             raise Exception("Unknown state")
     api.log(api.local_now(), m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))

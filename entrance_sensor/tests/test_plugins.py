@@ -107,29 +107,29 @@ def test_trigger_sensor_wrong_device_id_is_noop(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF))
     _trigger_sensor(ctx, sensor, "99", "active")
-    ctx.api.execute.assert_not_called()
+    ctx.api.dispatch.assert_not_called()
     assert plugins.SNAPSHOT_NAME in ctx.snapshot_manager.snapshots
 
 
 def test_trigger_sensor_active_daytime_executes_day_phase(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.execute.assert_called_once_with(
-        m.Configs(m.Config(Light.day_bulb, m.ON), m.Config(Light.day_lamp1, m.ON), m.Config(Light.day_lamp2, m.ON))
+    ctx.api.dispatch.assert_called_once_with(
+        m.Configs(m.Config(Light.day_bulb, m.ON), m.Config(Light.day_lamp1, m.ON), m.Config(Light.day_lamp2, m.ON)), force=True
     )
 
 
 def test_trigger_sensor_active_nighttime_executes_night_phase(ctx, sensor):
     ctx.api.local_now.return_value = _NIGHTTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.night_bulb, m.ON), m.Config(Light.night_lamp, m.ON)))
+    ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.night_bulb, m.ON), m.Config(Light.night_lamp, m.ON)), force=True)
 
 
 def test_trigger_sensor_active_merges_valid_snapshot(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF), m.Config(Light.day_bulb, m.OFF))
     _trigger_sensor(ctx, sensor, "16", "active")
-    executed = ctx.api.execute.call_args[0][0]
+    executed = ctx.api.dispatch.call_args[0][0]
     assert {c.what: c.state for c in executed.items} == {
         Light.saved: m.OFF,  # restored from snapshot
         Light.day_bulb: m.ON,  # phase config wins over snapshot
@@ -143,8 +143,8 @@ def test_trigger_sensor_active_discards_expired_snapshot(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF), end=_PAST)
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.execute.assert_called_once_with(
-        m.Configs(m.Config(Light.day_bulb, m.ON), m.Config(Light.day_lamp1, m.ON), m.Config(Light.day_lamp2, m.ON))
+    ctx.api.dispatch.assert_called_once_with(
+        m.Configs(m.Config(Light.day_bulb, m.ON), m.Config(Light.day_lamp1, m.ON), m.Config(Light.day_lamp2, m.ON)), force=True
     )
     assert not ctx.snapshot_manager.snapshots
 
@@ -160,13 +160,32 @@ def test_trigger_sensor_active_skips_remove_when_no_job_pending(ctx, sensor):
     ctx.scheduler.get_job.return_value = None
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.scheduler.remove_job.assert_not_called()
-    ctx.api.execute.assert_called_once()
+    ctx.api.dispatch.assert_called_once()
 
 
 def test_trigger_sensor_inactive_executes_light_off_rows(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
-    ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.day_bulb, m.OFF), m.Config(Light.night_bulb, m.OFF)))
+    ctx.api.dispatch.assert_called_once_with(
+        m.Configs(m.Config(Light.day_bulb, m.OFF, trigger=m.Trigger.SYSTEM), m.Config(Light.night_bulb, m.OFF, trigger=m.Trigger.SYSTEM))
+    )
+
+
+def test_trigger_sensor_inactive_updates_system_snapshot(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT] = _snapshot(m.Config(Light.day_bulb, m.ON), m.Config(Light.saved, m.ON))
+
+    _trigger_sensor(ctx, sensor, "16", "inactive")
+
+    (dispatched,), _ = ctx.api.dispatch.call_args
+    for config in dispatched.items:
+        assert not ctx.snapshot_manager.intercepts(config)  # updated, not suppressed
+
+    assert ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
+        m.Config(Light.day_bulb, m.OFF, trigger=m.Trigger.SYSTEM),
+        m.Config(Light.saved, m.ON),
+        m.Config(Light.night_bulb, m.OFF, trigger=m.Trigger.SYSTEM),
+    )
 
 
 def test_trigger_sensor_inactive_schedules_cleanup_job(ctx, sensor):
@@ -182,7 +201,7 @@ def test_trigger_sensor_unknown_event_is_noop(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF))
     _trigger_sensor(ctx, sensor, "16", "other")
-    ctx.api.execute.assert_not_called()
+    ctx.api.dispatch.assert_not_called()
     ctx.scheduler.add_job.assert_not_called()
     assert plugins.SNAPSHOT_NAME in ctx.snapshot_manager.snapshots
 
@@ -194,7 +213,7 @@ def test_off_nighttime_executes_after_hours(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _NIGHTTIME
     with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
         _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.night_cc, m.ON)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.night_cc, m.ON)))
     plugin_ctx.api.log.assert_called_once_with(_NIGHTTIME, m.LogSource.SYSTEM, sensor.log_after_hours)
 
 
@@ -203,7 +222,7 @@ def test_off_daytime_present_executes_after_hours(sensor, plugin_ctx):
     plugin_ctx.api.check_presence.return_value = {"alice"}
     with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
         _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.day_cc, m.ON)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.day_cc, m.ON)))
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_present)
 
 
@@ -212,7 +231,7 @@ def test_off_daytime_sounds_executes_core_hours(sensor, plugin_ctx):
     plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
     with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
         _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.day_cc2, m.ON)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.day_cc2, m.ON)))
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_core_hours)
 
 
@@ -223,7 +242,7 @@ def test_off_daytime_empty_snapshots_shutdown_then_executes_core_hours(sensor, p
     plugin_ctx.snapshot_manager.replace_config.assert_called_once_with(
         plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.day_light, m.ON)), _DAYTIME + timedelta(minutes=45)
     )
-    plugin_ctx.api.execute.assert_called_once_with(m.Configs(m.Config(Light.day_cc2, m.ON)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.day_cc2, m.ON)))
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_shutdown)
 
 
