@@ -6,15 +6,19 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import Enum
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
+from typing import Any
 from urllib.parse import urlparse
 
 import icmplib
 from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.job import Job
+from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from skyfield import almanac
@@ -52,9 +56,9 @@ _PRESENCE_WINDOW = timedelta(hours=9)
 _YOLINK_BATTERY_LOW_THRESHOLD = 1
 _YOLINK_SIGNAL_WEAK_THRESHOLD = -90
 _ACTIVITY_LOG = m.ActivityLog()
-_WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
+_WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 
-_STREAM_DOMAINS = {".googlevideo.com", urlparse(config.internal_url).hostname, "." + config.root_domain}
+_STREAM_DOMAINS: set[str] = {".googlevideo.com", urlparse(config.internal_url).hostname or "", "." + config.root_domain}
 
 _EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
@@ -62,23 +66,23 @@ _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
 _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
 
 
-def fetch_durations():
+def fetch_durations() -> list[tuple[str, int]]:
     return [(name, math.ceil(avg)) for name, avg in _fetch_durations()]
 
 
 @contextlib.contextmanager
-def record_duration(name):
+def record_duration(name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     update_avg(name, time.perf_counter() - start)
 
 
 class ContextThreadPoolExecutor(ThreadPoolExecutor):
-    def __init__(self, ctx: "m.AppContext", max_workers=1):
+    def __init__(self, ctx: m.AppContext, max_workers: int = 1) -> None:
         super().__init__(max_workers=max_workers)
         self.ctx = ctx
 
-    def _do_submit_job(self, job, run_times):
+    def _do_submit_job(self, job: Job, run_times: list[datetime]) -> Any:
         dispatch_job = job.__class__.__new__(job.__class__)
         for slot in job.__slots__:
             try:
@@ -89,43 +93,43 @@ class ContextThreadPoolExecutor(ThreadPoolExecutor):
         dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
         return super()._do_submit_job(dispatch_job, run_times)
 
-    def run_now(self, job, **extra_kwargs):
+    def run_now(self, job: Job, **extra_kwargs: Any) -> Any:
         return job.func(*job.args, ctx=self.ctx, **{**job.kwargs, **extra_kwargs})
 
 
 # --- Utilities ---
 
 
-def jobs_by_type(scheduler, type):
+def jobs_by_type(scheduler: BaseScheduler, type: type) -> list[Job]:
     now = local_now()
     return [e for e in scheduler.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
 
 
-def local_now():
+def local_now() -> datetime:
     return datetime.now(tz=config.tz)
 
 
-def log(when, source, action):
+def log(when: datetime, source: m.LogSource, action: str) -> None:
     _ACTIVITY_LOG.add(when, source, action)
 
 
-def log_entries():
+def log_entries() -> list[m.LogEntry]:
     return list(_ACTIVITY_LOG.entries)
 
 
 # --- YoLink leak sensors ---
 
 
-def test_yolink(name):
+def test_yolink(name: str) -> bool:
     return yolink.simulate_transition(name)
 
 
-def start_yolink():
+def start_yolink() -> None:
     yolink.set_transition_callback(_on_yolink_transition)
     yolink.start()
 
 
-def _on_yolink_transition(name, kind, old, new):
+def _on_yolink_transition(name: str, kind: str, old: Any, new: Any) -> None:
     msg = None
     if kind == "connection" and old is not None:
         msg = (Log.YOLINK_CONNECTED if new == "connected" else Log.YOLINK_DISCONNECTED).format(name=name)
@@ -162,34 +166,34 @@ def _on_yolink_transition(name, kind, old, new):
 # --- Device control ---
 
 
-def capture_lights():
+def capture_lights() -> m.Configs:
     return hubitat.fetch_light_states(tuple(orc.Light))
 
 
-def capture_sounds():
+def capture_sounds() -> m.Configs[m.SoundState]:
     with Pool(max_workers=len(orc.Chromecast)) as ex:
         return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
 
 
-def capture_leak_sensors():
+def capture_leak_sensors() -> list[m.SensorState]:
     return yolink.snapshot()
 
 
-def capture_tv():
+def capture_tv() -> dict[str, str]:
     return {w.name: "off" if tv.is_off(orc.WebOS[w.name]) else "on" for w in orc.LGTV}
 
 
-def pair_lg_tv(lgtv):
+def pair_lg_tv(lgtv: m.DeviceEnum) -> None:
     _pair_lgtv(orc.WebOS[lgtv.name].value)
 
 
 @unwrap_rule_container
-def dispatch(rule, force=False):
+def dispatch(rule: m.Config, force: bool = False) -> None:
     if not force and snapshot_manager.intercepts(rule):
         return
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
     sleep = time.sleep if len(what) > 1 else (lambda _: 1)
-    stream = {}
+    stream: dict[Any, tuple[str, str]] = {}
     for w in what:
         if os.getenv("ORC_ENABLED") and w in config.virtual_devices:
             print("Skipping virtual device:" + w.name, file=sys.stderr)
@@ -211,6 +215,7 @@ def dispatch(rule, force=False):
                 chromecast.resume(w)
             else:
                 if rule.state not in stream:
+                    # rule.state is a stream URL or YouTube id (str) in this branch; Config.state is typed object
                     stream[rule.state] = (
                         (safe_domain(rule.state, _STREAM_DOMAINS), rule.state)
                         if "http" in rule.state
@@ -231,14 +236,16 @@ def dispatch(rule, force=False):
         sleep(0.1)
 
 
-def ac_command(bl_device, state, mode=None, fan=None, temp=None):
+def ac_command(
+    bl_device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None
+) -> None:
     if state == m.OFF:
         broadlink.ac_off(bl_device, _BROADLINK_CODES)
     else:
         broadlink.set_ac(bl_device, _BROADLINK_CODES, mode or "cool", fan or "low", temp or 75)
 
 
-def device_command(id, state):
+def device_command(id: str, state: str | None) -> None:
     for enum_cls in (orc.Light, orc.LGTV, orc.Chromecast):
         try:
             device = enum_cls[id]
@@ -272,29 +279,29 @@ ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
 
 
 class SnapshotManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.RLock()
-        self.snapshots = {}
+        self.snapshots: dict[str, m.SnapShot] = {}
 
     @synchronized
-    def replace_config(self, name, target_config, end):
+    def replace_config(self, name: str, target_config: m.Configs, end: datetime) -> None:
 
         if name not in self.snapshots:
             self.snapshots[name] = m.SnapShot(capture_lights(), end)
-            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshots[name].routine.items if c.state != m.OFF)
+            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshots[name].routine.items if c.state != m.OFF)  # type: ignore[union-attr]  # captured light states are always enum members, not the class/set arm
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         dispatch(target_config, force=True)
 
     @synchronized
-    def get(self, name):
+    def get(self, name: str) -> m.SnapShot | None:
         snapshot = self.snapshots.pop(name, None)
         if snapshot and local_now() <= snapshot.end:
             return snapshot
         return None
 
     @synchronized
-    def resume(self, name, target_config):
+    def resume(self, name: str, target_config: m.Configs) -> None:
         snapshot = self.snapshots.pop(name, None)
 
         if snapshot and local_now() <= snapshot.end:
@@ -305,7 +312,7 @@ class SnapshotManager:
         dispatch(routine, force=True)
 
     @synchronized
-    def update_snapshot(self, name, rule):
+    def update_snapshot(self, name: str, rule: m.Config) -> None:
         snapshot = self.snapshots[name]
 
         what = [rule.what] if isinstance(rule.what, Enum) else rule.what
@@ -316,7 +323,7 @@ class SnapshotManager:
         self.snapshots[name] = snapshot._replace(routine=m.Configs(*items.values()))
 
     @synchronized
-    def intercepts(self, rule):
+    def intercepts(self, rule: m.Config) -> bool:
         if ORC_SYSTEM_SNAPSHOT in self.snapshots and rule.trigger == m.Trigger.SYSTEM:
             self.update_snapshot(ORC_SYSTEM_SNAPSHOT, rule)
         elif ORC_SYSTEM_SNAPSHOT in self.snapshots and local_now() > self.snapshots[ORC_SYSTEM_SNAPSHOT].end:
@@ -332,7 +339,7 @@ class SnapshotManager:
 snapshot_manager = SnapshotManager()
 
 
-def current_theme_override():
+def current_theme_override() -> m.ThemeOverride | None:
     row = sqlite.fetch_theme_override()
     if not row:
         return None
@@ -340,12 +347,12 @@ def current_theme_override():
     return override if override.end >= local_now().date() else None
 
 
-def active_theme_override(today):
+def active_theme_override(today: date) -> m.ThemeOverride | None:
     cur = current_theme_override()
     return cur if cur and cur.start <= today <= cur.end else None
 
 
-def calculate_theme(today):
+def calculate_theme(today: date) -> str:
     if override := active_theme_override(today):
         return override.name
     if today.weekday() in (5, 6):
@@ -355,24 +362,24 @@ def calculate_theme(today):
     return m.THEME_DAY_OFF if is_holiday else m.THEME_WORK_DAY
 
 
-def set_theme_override(name, start, end):
+def set_theme_override(name: str, start: date, end: date) -> None:
     sqlite.insert_theme_override(m.ThemeOverride(name, start, end))
 
 
-def present_names():
+def present_names() -> set[str]:
     cutoff = local_now() - _PRESENCE_WINDOW
     return {name for name, ts in sqlite.fetch_presence().items() if ts >= cutoff}
 
 
-def expire_presence(names, force=False):
+def expire_presence(names: list[str], force: bool = False) -> None:
     sqlite.delete_presence(names, local_now(), force)
 
 
-def delete_all_presence():
+def delete_all_presence() -> None:
     sqlite.delete_all_presence(local_now())
 
 
-def apply_theme_change(ctx, name, start, end):
+def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None) -> None:
     now = local_now()
     today = now.date()
     before = calculate_theme(today)
@@ -380,6 +387,7 @@ def apply_theme_change(ctx, name, start, end):
         log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
         clear_theme_override()
     else:
+        assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
         log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
     after = calculate_theme(today)
@@ -390,7 +398,7 @@ def apply_theme_change(ctx, name, start, end):
 
 
 @requires_ctx
-def check_presence(ctx):
+def check_presence(ctx: m.AppContext) -> set[str]:
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
     if not pairs:
         return present_names()
@@ -406,8 +414,8 @@ def check_presence(ctx):
     return after
 
 
-def get_schedule():
-    result = []
+def get_schedule() -> list[tuple[datetime, m.Routine]]:
+    result: list[tuple[datetime, m.Routine]] = []
     for x in range(2):
         now = local_now() + timedelta(days=x)
         today = now.date()
@@ -433,20 +441,21 @@ def get_schedule():
         else:
             cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(calculate_theme(today))
 
+        assert cfg is not None  # the resolved theme is always present in config
         for e in cfg.configs:
             if e.when == m.SUNRISE:
                 time = sunrise
             elif e.when == m.SUNSET:
                 time = sunset
             else:
-                time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
+                time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)  # type: ignore[attr-defined]  # e.when is a datetime.time here (normalized in __post_init__), not the SUNRISE/SUNSET str
             if time is None:
                 continue
             result.append((time.astimezone(config.tz), e))
     return result
 
 
-def next_iot_job(scheduler, present_names):
+def next_iot_job(scheduler: BaseScheduler, present_names: set[str]) -> Job | None:
     jobs = sorted(jobs_by_type(scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
     return next(
         (
@@ -461,7 +470,7 @@ def next_iot_job(scheduler, present_names):
 
 
 @requires_ctx
-def run_iot_job(job, ctx, force=False):
+def run_iot_job(job: m.IotJob, ctx: m.AppContext, force: bool = False) -> None:
     rule = job.rule
     now = local_now()
     if not (matched := matching_items(rule, force, now, present_names())):
@@ -477,7 +486,7 @@ def run_iot_job(job, ctx, force=False):
     dispatch(replace(rule, items=matched), force=force)
 
 
-def setup_scheduler(ctx):
+def setup_scheduler(ctx: m.AppContext) -> None:
     if not jobs_by_type(ctx.scheduler, m.IotJob):
         rebuild_iot_schedule(ctx=ctx)
     crons = (
@@ -496,7 +505,7 @@ def setup_scheduler(ctx):
         )
 
 
-def matched_presence(rule, people=None):
+def matched_presence(rule: m.Routine, people: set[str] | None = None) -> tuple[m.Config, ...]:
     return tuple(
         c
         for c in rule.items
@@ -507,16 +516,16 @@ def matched_presence(rule, people=None):
     )
 
 
-def is_absent(rule, present_names):
+def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
     presence = matched_presence(rule)
     return bool(presence) and not matched_presence(rule, present_names)
 
 
-def matched_weather(rule, now):
+def matched_weather(rule: m.Routine, now: datetime) -> tuple[m.Config, ...]:
     return tuple(c for c in rule.items if c.trigger in _WEATHER_TRIGGERS and c.trigger in feeds.fetch_weather(now, *config.lat_long))
 
 
-def matching_items(rule, force, now, pnames):
+def matching_items(rule: m.Routine, force: bool, now: datetime, pnames: set[str]) -> Sequence[m.Config]:
     if force:
         return rule.items
     system = tuple(c for c in rule.items if not c.trigger or c.trigger == m.Trigger.SYSTEM)
@@ -526,12 +535,12 @@ def matching_items(rule, force, now, pnames):
 
 
 @requires_ctx
-def rebuild_cal_schedule(ctx):
+def rebuild_cal_schedule(ctx: m.AppContext) -> None:
     _schedule_cal_tasks(ctx.scheduler)
 
 
 @requires_ctx
-def rebuild_iot_schedule(ctx):
+def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
     for time, rule in get_schedule():
         if now <= time:
@@ -545,20 +554,21 @@ def rebuild_iot_schedule(ctx):
             )
 
 
-def light_test():
+def light_test() -> None:
     dispatch(m.Config(orc.Light, m.ON), force=True)
     time.sleep(10)
 
 
-def replay_day(now):
+def replay_day(now: datetime) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
+    # replace() keeps Routine type; squish_configs only reads .items, which Routine and Configs share
     configs = (replace(cfg, items=matching_items(cfg, False, now, present)) for (when, cfg) in jobs if when <= now)
     dispatch(m.squish_configs(*configs), force=True)
 
 
 @requires_ctx
-def _run_cal_job(job, ctx):
+def _run_cal_job(job: m.CalendarJob, ctx: m.AppContext) -> None:
     if job.event_type == m.CalendarEvent.WARNING:
         play_alert(ctx.sound_path)
     else:
@@ -566,7 +576,7 @@ def _run_cal_job(job, ctx):
         play_text(job.summary)
 
 
-def _safe_ping(name, host):
+def _safe_ping(name: str, host: str) -> tuple[str, bool]:
     try:
         return name, icmplib.ping(host, count=2, interval=0.1, timeout=1, privileged=True).is_alive
     except Exception as exc:
@@ -574,11 +584,12 @@ def _safe_ping(name, host):
         return name, False
 
 
-def _schedule_cal_tasks(scheduler):
+def _schedule_cal_tasks(scheduler: BaseScheduler) -> None:
     now = local_now()
     if calculate_theme(now.date()) != m.THEME_WORK_DAY:
         return
 
+    # fetch_ical's `end` is typed as datetime, but recurring_ical_events.between accepts a timedelta window at runtime
     events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))
     warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
     alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)

@@ -1,15 +1,18 @@
 import sqlite3
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
+from enum import Enum
+from typing import Any
 
 from sqlalchemy.engine.url import make_url
 
 from orc import config
 
-_ALPHA = 0.3
+_ALPHA: float = 0.3
 
 
-def delete_presence(names, before, force):
+def delete_presence(names: Iterable[str], before: datetime, force: bool) -> None:
     with _theme_override_conn() as conn:
         conn.executemany(
             "DELETE FROM orc_presence WHERE name = ? AND (last_seen < ? or TRUE = ?)",
@@ -17,24 +20,24 @@ def delete_presence(names, before, force):
         )
 
 
-def delete_theme_override():
+def delete_theme_override() -> None:
     with _theme_override_conn() as conn:
         conn.execute("DELETE FROM orc_theme_override WHERE id = 0")
 
 
-def fetch_presence():
+def fetch_presence() -> dict[str, datetime]:
     with _theme_override_conn() as conn:
         rows = conn.execute("SELECT name, last_seen FROM orc_presence").fetchall()
     return {name: datetime.fromisoformat(last_seen) for name, last_seen in rows}
 
 
-def fetch_lg_tv_client_key(hostname):
+def fetch_lg_tv_client_key(hostname: str) -> str | None:
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT client_key FROM orc_lg_tv WHERE hostname = ?", (hostname,)).fetchone()
     return row[0] if row else None
 
 
-def fetch_theme_override():
+def fetch_theme_override() -> tuple[str, date, date] | None:
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT name, start, end FROM orc_theme_override WHERE id = 0").fetchone()
     if not row:
@@ -42,7 +45,7 @@ def fetch_theme_override():
     return (row[0], date.fromisoformat(row[1]), date.fromisoformat(row[2]))
 
 
-def init_db():
+def init_db() -> None:
     with _theme_override_conn() as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS orc_theme_override "
@@ -54,7 +57,7 @@ def init_db():
         conn.execute("CREATE TABLE IF NOT EXISTS orc_durations (name TEXT PRIMARY KEY, samples INTEGER NOT NULL, avg REAL NOT NULL)")
 
 
-def insert_lg_tv_client_key(hostname, client_key):
+def insert_lg_tv_client_key(hostname: str, client_key: str) -> None:
     with _theme_override_conn() as conn:
         conn.execute(
             "INSERT INTO orc_lg_tv (hostname, client_key) VALUES (?, ?) "
@@ -63,7 +66,7 @@ def insert_lg_tv_client_key(hostname, client_key):
         )
 
 
-def insert_presence(names, when):
+def insert_presence(names: Iterable[str], when: datetime) -> None:
     with _theme_override_conn() as conn:
         conn.executemany(
             "INSERT INTO orc_presence (name, last_seen) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET last_seen=excluded.last_seen",
@@ -71,7 +74,7 @@ def insert_presence(names, when):
         )
 
 
-def insert_theme_override(override):
+def insert_theme_override(override: tuple[str, date, date]) -> None:
     with _theme_override_conn() as conn:
         conn.execute(
             "INSERT INTO orc_theme_override (id, name, start, end) VALUES (0, ?, ?, ?) "
@@ -80,23 +83,23 @@ def insert_theme_override(override):
         )
 
 
-def delete_all_presence(before):
+def delete_all_presence(before: datetime) -> None:
     with _theme_override_conn() as conn:
         conn.execute("DELETE FROM orc_presence WHERE last_seen < ?", (before.isoformat(),))
 
 
-def read_light(light):
+def read_light(light: Enum) -> tuple[Any, Any]:
     with _theme_override_conn() as conn:
         row = conn.execute("SELECT type, state FROM orc_light WHERE device_id = ?", (light.value,)).fetchone()
     return row if row else (None, None)
 
 
-def read_lights():
+def read_lights() -> list[Any]:
     with _theme_override_conn() as conn:
         return conn.execute("SELECT device_id, state FROM orc_light WHERE state IS NOT NULL").fetchall()
 
 
-def update_avg(name, duration):
+def update_avg(name: str, duration: float) -> None:
     sql = """
     INSERT INTO orc_durations (name, samples, avg) VALUES (?, 1, ?)
     ON CONFLICT(name) DO UPDATE SET samples = samples + 1, avg = ? * ? + (1 - ?) * avg WHERE name = ?;
@@ -105,12 +108,12 @@ def update_avg(name, duration):
         conn.execute(sql, (name, duration, duration, _ALPHA, _ALPHA, name))
 
 
-def fetch_durations():
+def fetch_durations() -> list[Any]:
     with _theme_override_conn() as conn:
         return conn.execute("SELECT name, avg FROM orc_durations").fetchall()
 
 
-def write_light(light, *, type=None, state=None):
+def write_light(light: Enum, *, type: str | None = None, state: Any = None) -> None:
     with _theme_override_conn() as conn:
         conn.execute(
             "INSERT INTO orc_light (device_id, type, state) VALUES (?, ?, ?) "
@@ -122,8 +125,10 @@ def write_light(light, *, type=None, state=None):
 
 
 @contextmanager
-def _theme_override_conn():
-    conn = sqlite3.connect(make_url(config.jobs_db).database)
+def _theme_override_conn() -> Iterator[sqlite3.Connection]:
+    db_path = make_url(config.jobs_db).database
+    assert db_path is not None  # a configured sqlite URL always includes a path
+    conn = sqlite3.connect(db_path)
     try:
         with conn:
             yield conn

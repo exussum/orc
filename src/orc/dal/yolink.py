@@ -6,7 +6,9 @@ import signal
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 import paho.mqtt.client as mqtt
 import requests
@@ -14,6 +16,9 @@ import requests
 import orc as config
 from orc.collections import LockedDict
 from orc.model import SensorState
+
+# callback (name, kind, old, new); kind in {"connection", "leak"}; old/new are arbitrary field values
+type TransitionCallback = Callable[[str, str, Any, Any], None]
 
 STATE_DRY = "normal"
 STATE_WET = "alert"
@@ -25,8 +30,8 @@ _MQTT_PORT = 8003
 
 _log = logging.getLogger(__name__)
 
-_states = LockedDict()  # device_id -> SensorState
-_on_transition = None  # callback (name, kind, old, new); kind in {"connection", "leak"}
+_states: LockedDict[str, SensorState] = LockedDict()  # device_id -> SensorState
+_on_transition: TransitionCallback | None = None
 
 # Flap suppression: paho auto-reconnects transient drops, so only treat the
 # connection as down once we've seen several disconnects in a short window.
@@ -34,7 +39,7 @@ _FLAP_WINDOW_SEC = 60
 _FLAP_THRESHOLD = 3
 _disconnect_times: list[float] = []
 
-_TRACKED_FIELDS = (
+_TRACKED_FIELDS: tuple[tuple[str, str], ...] = (
     ("state", "leak"),
     ("battery", "battery"),
     ("signal", "signal"),
@@ -43,17 +48,17 @@ _TRACKED_FIELDS = (
 )
 
 
-def set_transition_callback(fn):
+def set_transition_callback(fn: TransitionCallback) -> None:
     global _on_transition
     _on_transition = fn
 
 
-def snapshot():
+def snapshot() -> list[SensorState]:
     sensors = _states.copy()
     return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in config.Leak]
 
 
-def simulate_transition(name: str):
+def simulate_transition(name: str) -> bool:
     sensor = next((s for s in _states.copy().values() if s.name == name), None)
     if sensor is None:
         return False
@@ -64,7 +69,7 @@ def simulate_transition(name: str):
         return False
     _fire("leak", name, prev, STATE_WET)
 
-    def _revert():
+    def _revert() -> None:
         time.sleep(5)
         if _states.update(device_id, _transition_to(STATE_DRY, require=STATE_WET)) is not None:
             _fire("leak", name, STATE_WET, STATE_DRY)
@@ -73,7 +78,7 @@ def simulate_transition(name: str):
     return True
 
 
-def start():
+def start() -> None:
     if not len(config.Leak):
         _log.info("yolink: no Leak devices in config.md, skipping")
         return
@@ -87,8 +92,8 @@ def start():
     threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()
 
 
-def _transition_to(new_state, require=None):
-    def fn(current):
+def _transition_to(new_state: str, require: str | None = None) -> Callable[[SensorState | None], SensorState | None]:
+    def fn(current: SensorState | None) -> SensorState | None:
         if current is None or (require is not None and current.state != require):
             return None
         return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=config.config.tz))
@@ -96,7 +101,7 @@ def _transition_to(new_state, require=None):
     return fn
 
 
-def _fire(kind, name, old, new):
+def _fire(kind: str, name: str, old: Any, new: Any) -> None:
     if _on_transition and old != new:
         try:
             _on_transition(name, kind, old, new)
@@ -104,7 +109,7 @@ def _fire(kind, name, old, new):
             _log.exception("yolink transition callback failed")
 
 
-def _authenticate():
+def _authenticate() -> tuple[str, int]:
     response = requests.post(
         _AUTH_URL,
         data={
@@ -119,7 +124,7 @@ def _authenticate():
     return body["access_token"], int(body.get("expires_in", 7200))
 
 
-def _fetch_home_id(access_token):
+def _fetch_home_id(access_token: str) -> Any:
     response = requests.post(
         _API_URL,
         json={"method": "Home.getGeneralInfo"},
@@ -130,7 +135,7 @@ def _fetch_home_id(access_token):
     return response.json()["data"]["id"]
 
 
-def _fetch_device_tokens(access_token):
+def _fetch_device_tokens(access_token: str) -> dict[Any, Any]:
     response = requests.post(
         _API_URL,
         json={"method": "Home.getDeviceList"},
@@ -141,7 +146,7 @@ def _fetch_device_tokens(access_token):
     return {d["deviceId"]: d["token"] for d in response.json()["data"]["devices"]}
 
 
-def _fetch_leak_state(access_token, device_id, device_token):
+def _fetch_leak_state(access_token: str, device_id: str, device_token: str) -> Any:
     response = requests.post(
         _API_URL,
         json={"method": "LeakSensor.getState", "targetDevice": device_id, "token": device_token},
@@ -152,11 +157,11 @@ def _fetch_leak_state(access_token, device_id, device_token):
     return response.json()["data"]
 
 
-def _update_sensor(device_id, **fields):
+def _update_sensor(device_id: str, **fields: Any) -> None:
     _states.update(device_id, lambda current: dataclasses.replace(current, **fields) if current else None)
 
 
-def _hydrate_states(access_token):
+def _hydrate_states(access_token: str) -> None:
     tokens = _fetch_device_tokens(access_token)
     for device in config.Leak:
         device_token = tokens.get(device.value)
@@ -178,7 +183,7 @@ def _hydrate_states(access_token):
         )
 
 
-def _on_message(client, userdata, msg):
+def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
     parts = msg.topic.split("/")
     if len(parts) < 4 or parts[3] != "report":
         return
@@ -191,9 +196,9 @@ def _on_message(client, userdata, msg):
     data = payload.get("data") or {}
 
     # collect transitions inside the atomic update, fire after releasing the lock
-    captured = {"name": None, "transitions": []}
+    captured: dict[str, Any] = {"name": None, "transitions": []}
 
-    def apply(current):
+    def apply(current: SensorState | None) -> SensorState | None:
         if current is None:
             return None
         changes = {}
@@ -216,11 +221,11 @@ def _on_message(client, userdata, msg):
         _fire(kind, captured["name"], old, new)
 
 
-def _set_connected(connected):
+def _set_connected(connected: bool) -> None:
     # collect names inside the atomic update, fire after releasing the lock
-    fired_names = []
+    fired_names: list[str] = []
 
-    def apply(current):
+    def apply(current: SensorState | None) -> SensorState | None:
         if current is None or current.connected == connected:
             return None
         fired_names.append(current.name)
@@ -232,7 +237,7 @@ def _set_connected(connected):
         _fire("connection", name, None, "connected" if connected else "disconnected")
 
 
-def _on_connect(client, userdata, flags, rc, *args):
+def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
     if rc != 0:
         _log.warning("yolink: mqtt connect rc=%s", rc)
         return
@@ -241,7 +246,7 @@ def _on_connect(client, userdata, flags, rc, *args):
     _set_connected(True)
 
 
-def _on_disconnect(client, userdata, *args):
+def _on_disconnect(client: mqtt.Client, userdata: Any, *args: Any) -> None:
     now = time.time()
     cutoff = now - _FLAP_WINDOW_SEC
     _disconnect_times[:] = [t for t in _disconnect_times if t >= cutoff]
@@ -250,7 +255,7 @@ def _on_disconnect(client, userdata, *args):
         _set_connected(False)
 
 
-def _auth_and_connect():
+def _auth_and_connect() -> tuple[mqtt.Client, int]:
     try:
         access_token, expires_in = _authenticate()
         home_id = _fetch_home_id(access_token)
@@ -281,7 +286,7 @@ def _auth_and_connect():
     return client, expires_in
 
 
-def _run():
+def _run() -> None:
     try:
         while True:
             try:

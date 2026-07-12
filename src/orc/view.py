@@ -6,11 +6,13 @@ from functools import wraps
 from itertools import chain, groupby
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 from apscheduler.triggers.date import DateTrigger
-from flask import Blueprint
-from flask import current_app as app
+from flask import Blueprint, Flask
+from flask import current_app as _current_app
 from flask import render_template, request
+from flask.wrappers import Response
 from mistletoe import Document, HtmlRenderer
 
 import orc
@@ -21,11 +23,18 @@ from orc.collections import where
 from orc.locale import Log
 from orc.security import safe_html
 
+
+class OrcFlask(Flask):
+    orc: m.AppContext
+
+
+app = cast(OrcFlask, _current_app)
+
 bp = Blueprint("controls", __name__)
 
 
 @bp.after_request
-def no_cache(response):
+def no_cache(response: Response) -> Response:
     if request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -35,13 +44,13 @@ class VersionManager:
     version = str(random.random())
 
     @classmethod
-    def bump_version(cls):
+    def bump_version(cls) -> None:
         cls.version = str(random.random())
 
     @staticmethod
-    def versioned(func: Callable[..., None]) -> Callable:
+    def versioned(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not request.args.get("ignore-version") and not request.headers.get("orc-version") == VersionManager.version:
                 api.log(
                     api.local_now(),
@@ -59,11 +68,11 @@ class VersionManager:
 
 
 @bp.route("/system/")
-def cfg():
+def cfg() -> str:
     today = date.today()
     tomorrow = today + timedelta(days=1)
     plugins_dir = Path(config.config_dir) / "plugins"
-    plugin_htmls = {}
+    plugin_htmls: dict[str, str] = {}
     if plugins_dir.is_dir():
         for p in sorted(plugins_dir.glob("**/*.md")):
             with open(p) as f:
@@ -88,7 +97,7 @@ def cfg():
         )
 
 
-def _to_level(state):
+def _to_level(state: object) -> int:
     if isinstance(state, int):
         return state
     return 100 if state == m.ON else 0
@@ -98,12 +107,12 @@ _DEVICE_TYPE_ORDER = {"Light": 0, "LGTV": 1, "Chromecast": 2, "AC": 3}
 
 
 @bp.route("/device/")
-def device():
-    light_states = {c.what.name: c.state for c in api.capture_lights().items}
+def device() -> str:
+    light_states = {c.what.name: c.state for c in api.capture_lights().items}  # type: ignore[union-attr]  # captured lights are always enum members, not the class/set arm
     sound_states = {c.what.name: c.volume for c in api.capture_sounds().items}
     all_devices = list(chain.from_iterable((orc.Light, orc.Chromecast, orc.LGTV, orc.AC)))
 
-    def make_device(d):
+    def make_device(d: Any) -> SimpleNamespace:
         return SimpleNamespace(
             name=d.name.replace("_", " ").title(),
             id=d.name,
@@ -113,17 +122,17 @@ def device():
             volume=sound_states.get(d.name, 0),
         )
 
-    def sort_key(d):
+    def sort_key(d: Any) -> tuple[int, bool, str]:
         has_level = "change_level" in {c.name for c in d.capabilities}
         return (_DEVICE_TYPE_ORDER.get(type(d).__name__, 99), has_level, d.name)
 
-    rooms = sorted({d.room for d in all_devices})
+    rooms = sorted({d.room for d in all_devices}, key=lambda r: r or "")
     devices_grouped = {room: [make_device(d) for d in sorted((d for d in all_devices if d.room == room), key=sort_key)] for room in rooms}
     return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped)
 
 
 @bp.route("/api/rebuild_jobs")
-def rebuild_jobs():
+def rebuild_jobs() -> tuple[dict[str, Any], int]:
     with api.record_duration("Rebuild Jobs"):
         app.orc.scheduler.remove_all_jobs()
         api.setup_scheduler(app.orc)
@@ -131,7 +140,7 @@ def rebuild_jobs():
 
 
 @bp.route("/api/run/<id>")
-def run_routine(id):
+def run_routine(id: str) -> tuple[dict[str, Any], int]:
     delay = timedelta()
     if id == api.ORC_SYSTEM_SNAPSHOT:
         action = lambda: app.orc.snapshot_manager.resume(api.ORC_SYSTEM_SNAPSHOT, config.default_config)
@@ -144,7 +153,8 @@ def run_routine(id):
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if routine.snapshot:
-            action = lambda: app.orc.snapshot_manager.replace_config(api.ORC_SYSTEM_SNAPSHOT, routine, api.local_now() + routine.snapshot)
+            snap = routine.snapshot
+            action = lambda: app.orc.snapshot_manager.replace_config(api.ORC_SYSTEM_SNAPSHOT, routine, api.local_now() + snap)
         else:
             delay = routine.delay
             base = (config.reset_config,) if routine.reset else ()
@@ -153,7 +163,7 @@ def run_routine(id):
         return {"error": "Unknown routine"}, 404
 
     @api.requires_ctx
-    def run(ctx):
+    def run(ctx: m.AppContext) -> None:
         api.log(api.local_now(), m.LogSource.MANUAL, id)
         with api.record_duration(id):
             action()
@@ -168,7 +178,7 @@ def run_routine(id):
 
 
 @bp.route("/api/yolink/test/<name>")
-def yolink_test(name):
+def yolink_test(name: str) -> tuple[dict[str, Any], int]:
     with api.record_duration(name):
         if not api.test_yolink(name):
             return {"error": "Unknown leak sensor"}, 404
@@ -177,20 +187,20 @@ def yolink_test(name):
 
 @bp.route("/api/presence/<name>/checkin")
 @VersionManager.versioned
-def checkin_presence(name):
+def checkin_presence(name: str) -> None:
     api.mark_present([name], when=api.local_now() + timedelta(hours=1))
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
 
 
 @bp.route("/api/presence/<name>/expire")
 @VersionManager.versioned
-def expire_presence(name):
+def expire_presence(name: str) -> None:
     api.expire_presence([name], force=True)
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
 
 
 @bp.route("/api/hubitat/callback", methods=["POST"])
-def hubitat_callback():
+def hubitat_callback() -> tuple[dict[str, Any], int]:
     ctx = plugins.build_ctx(app.orc)
     device_id = request.json["content"]["deviceId"]
     value = request.json["content"]["value"]
@@ -200,7 +210,7 @@ def hubitat_callback():
 
 
 @bp.route("/")
-def index():
+def index() -> tuple[str, int, dict[str, str]]:
     present_names = api.present_names()
     next_schedule = api.next_iot_job(app.orc.scheduler, present_names)
 
@@ -222,7 +232,7 @@ def index():
 
 
 @bp.route("/log/")
-def log():
+def log() -> tuple[str, int, dict[str, str]]:
     entries_grouped = [(day, list(es)) for day, es in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
     return (
         render_template("log.html", version=app.orc.version_manager.version, entries_grouped=entries_grouped),
@@ -233,7 +243,7 @@ def log():
 
 @bp.route("/api/schedule/<id>/pause")
 @VersionManager.versioned
-def pause(id):
+def pause(id: str) -> tuple[dict[str, Any], int] | None:
     job = app.orc.scheduler.get_job(id)
     if job is None:
         return {"error": "Unknown job"}, 404
@@ -241,10 +251,11 @@ def pause(id):
         job.pause()
     else:
         job.resume()
+    return None
 
 
 @bp.route("/presence/")
-def presence():
+def presence() -> tuple[str, int, dict[str, str]]:
     last_seen = api.last_seen()
     present = api.present_names()
     rows = [
@@ -269,13 +280,13 @@ def presence():
 
 
 @bp.route("/api/device/<id>")
-def device_api(id):
+def device_api(id: str) -> tuple[dict[str, Any], int]:
     api.device_command(id, request.args.get("state"))
     return {"version": VersionManager.version}, 200
 
 
 @bp.route("/api/device/ac/<id>")
-def ac(id):
+def ac(id: str) -> tuple[dict[str, Any], int]:
     state = request.args.get("state")
     try:
         bl_device = orc.AC[id]
@@ -292,7 +303,7 @@ def ac(id):
 
 
 @bp.route("/api/room/<id>")
-def room(id):
+def room(id: str) -> tuple[dict[str, Any], int]:
     state = request.args.get("state")
     if id not in config.room_configs:
         return {"error": "Unknown room"}, 404
@@ -311,31 +322,37 @@ def room(id):
 
 @bp.route("/api/schedule/<id>/run")
 @VersionManager.versioned
-def run(id):
+def run(id: str) -> tuple[dict[str, Any], int] | None:
     job = app.orc.scheduler.get_job(id)
     if job is None:
         return {"error": "Unknown job"}, 404
     api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
     job.func(*job.args, ctx=app.orc, force=True)
+    return None
 
 
 @bp.route("/api/presence/run")
 @VersionManager.versioned
-def run_presence_check():
+def run_presence_check() -> tuple[dict[str, Any], int] | None:
     job = app.orc.scheduler.get_job("presence-cron")
     if job is None:
         return {"error": "Unknown job"}, 404
     api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
     api.delete_all_presence()
     job.func(ctx=app.orc)
+    return None
 
 
 @bp.route("/schedule/")
-def schedule():
+def schedule() -> tuple[str, int, dict[str, str]]:
     jobs = sorted(api.jobs_by_type(app.orc.scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
     theme_override = api.current_theme_override()
 
-    theme = theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat()) if theme_override else None
+    theme = (
+        theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat())  # type: ignore[arg-type]  # dates rendered to ISO strings for the template
+        if theme_override
+        else None
+    )
 
     present_names = api.present_names()
     absent_by_job = {j.id: api.is_absent(j.args[0].rule, present_names) for j in jobs}
@@ -361,7 +378,7 @@ def schedule():
 
 @bp.route("/api/schedule/set_theme", methods=["POST"])
 @VersionManager.versioned
-def set_theme():
+def set_theme() -> None:
     name = request.form["theme"]
     start = date.fromisoformat(request.form["start"]) if name else None
     end = date.fromisoformat(request.form["end"]) if name else None
@@ -369,10 +386,10 @@ def set_theme():
 
 
 @bp.route("/api/version")
-def version():
+def version() -> tuple[dict[str, Any], int]:
     return {"version": app.orc.version_manager.version}, 200
 
 
 @bp.route("/api/durations")
-def durations():
+def durations() -> tuple[dict[str, Any], int]:
     return dict(api.fetch_durations()), 200

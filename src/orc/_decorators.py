@@ -5,9 +5,11 @@ import contextlib
 import os
 import sys
 import threading
+from collections.abc import Callable, Iterator
 from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from mistletoe import Document
 
@@ -19,7 +21,7 @@ audio_lock = threading.Lock()
 
 
 @contextlib.contextmanager
-def silence_fd(fd):
+def silence_fd(fd: int) -> Iterator[None]:
     saved = os.dup(fd)
     with open(os.devnull, "w") as devnull:
         os.dup2(devnull.fileno(), fd)
@@ -30,9 +32,9 @@ def silence_fd(fd):
             os.close(saved)
 
 
-def requires_ctx(f):
+def requires_ctx[**P, R](f: Callable[P, R]) -> Callable[P, R]:
     @wraps(f)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         if kwargs.get("ctx") is None:
             raise ValueError("ctx must be injected by the executor")
         return f(*args, **kwargs)
@@ -40,9 +42,9 @@ def requires_ctx(f):
     return wrapper
 
 
-def synchronized(method):
+def synchronized[R](method: Callable[..., R]) -> Callable[..., R]:
     @wraps(method)
-    def wrapper(self, *args, **kwargs):
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> R:
         with self._lock:
             return method(self, *args, **kwargs)
 
@@ -53,17 +55,17 @@ _UNSET = object()
 _FAILED = object()
 
 
-def plugin_config(name, *, schema):
-    def decorator(fn):
+def plugin_config[R](name: str, *, schema: dict[str, tuple[str, ...]]) -> Callable[[Callable[..., R]], Callable[..., R | None]]:
+    def decorator(fn: Callable[..., R]) -> Callable[..., R | None]:
         if fn.__module__.split(".")[0] != "orc" and "/" not in name:
             package = fn.__module__.split(".")[0]
             resolved = f"{package}/{name}"
         else:
             resolved = name
-        cache = _UNSET
+        cache: Any = _UNSET
 
         @wraps(fn)
-        def wrapper(ctx, *args, **kwargs):
+        def wrapper(ctx: Any, *args: Any, **kwargs: Any) -> R | None:
             nonlocal cache
             if cache is _UNSET:
                 try:
@@ -73,19 +75,20 @@ def plugin_config(name, *, schema):
                     cache = _FAILED
             if cache is not _FAILED:
                 return fn(ctx, cache, *args, **kwargs)
+            return None
 
-        wrapper._config = resolved
+        wrapper._config = resolved  # type: ignore[attr-defined]  # attach resolved config name onto the wrapper
         return wrapper
 
     return decorator
 
 
-def _load_plugin_config(name, config_dir, schema):
+def _load_plugin_config(name: str, config_dir: str, schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
     path = Path(config_dir) / "plugins" / f"{name}.md"
     with open(path) as fh:
         doc = Document(fh)
 
-    attrs = {}
+    attrs: dict[str, Any] = {}
     for section, columns in schema.items():
         if len(columns) == 2:
             col_attr = columns[1].lower()
@@ -99,8 +102,8 @@ def _load_plugin_config(name, config_dir, schema):
     return SimpleNamespace(**attrs)
 
 
-def unwrap_rule_container(f):
-    def wrapper(*args, **kwargs):
+def unwrap_rule_container[R](f: Callable[..., R]) -> Callable[..., None]:
+    def wrapper(*args: Any, **kwargs: Any) -> None:
         if isinstance(args[0], m.Routine | m.Configs):
             for e in args[0].items:
                 f(e, *args[1:], **kwargs)

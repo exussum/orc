@@ -1,13 +1,17 @@
 import base64
 import json
+from typing import TYPE_CHECKING, Any
 
 import broadlink as bl
 
 from orc.dal._decorators import requires_enabled
 
+if TYPE_CHECKING:
+    from orc.model import DeviceEnum
+
 
 @requires_enabled(None)
-def set_ac(device, codes_file, mode, fan, temp):
+def set_ac(device: DeviceEnum, codes_file: str, mode: str, fan: str, temp: int) -> None:
     cmds = _codes(codes_file)["ac"]["commands"][mode]
     if mode == "fan_only":
         code = cmds[fan]
@@ -19,16 +23,16 @@ def set_ac(device, codes_file, mode, fan, temp):
 
 
 @requires_enabled(None)
-def tv_toggle(device, codes_file):
+def tv_toggle(device: DeviceEnum, codes_file: str) -> None:
     _send(_connect(device), _codes(codes_file)["tv"]["commands"]["toggle"])
 
 
 @requires_enabled(None)
-def ac_off(device, codes_file):
+def ac_off(device: DeviceEnum, codes_file: str) -> None:
     _send(_connect(device), _codes(codes_file)["ac"]["commands"]["off"])
 
 
-def _connect(device):
+def _connect(device: DeviceEnum) -> Any:
     dev = bl.hello(device.value)
     for attempt in range(4):
         if dev.auth():
@@ -38,12 +42,12 @@ def _connect(device):
     return dev
 
 
-def _codes(path):
+def _codes(path: str) -> Any:
     with open(path) as f:
         return json.load(f)
 
 
-def _send(dev, code_b64):
+def _send(dev: Any, code_b64: str) -> None:
     data = bytearray(base64.b64decode(code_b64))
     data[1] = 2  # repeat 2 more times = 3 total
     dev.send_data(bytes(data))
