@@ -114,11 +114,7 @@
 {% block tail %}
     <script>
         document.querySelectorAll(".orc-config-runner").forEach((el) => {
-            el.addEventListener("click", async (e) => {
-                const t = e.currentTarget;
-                if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${t.dataset.id}?`)) return;
-                await get(`/api/run/${t.dataset.id}`, t);
-            });
+            el.addEventListener("click", (e) => run_config(e.currentTarget));
         });
         document.querySelector('.orc-config-runner[data-id="Pair LG TV"]').addEventListener("click", async (e) => {
             const el = e.currentTarget;
