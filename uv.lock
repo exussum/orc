@@ -1488,7 +1488,7 @@ requires-dist = [
     { name = "isort", marker = "extra == 'lint'", specifier = "==8.0.1" },
     { name = "mistletoe", specifier = "==1.5.1" },
     { name = "nh3", specifier = "==0.3.6" },
-    { name = "orc-data", editable = "data" },
+    { name = "orc-data", directory = "data" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "piper-tts", specifier = "==1.4.2" },
     { name = "pyaudio", specifier = "==0.2.14" },
@@ -1507,7 +1507,7 @@ provides-extras = ["test", "lint", "build"]
 [[package]]
 name = "orc-data"
 version = "0.0.1"
-source = { editable = "data" }
+source = { directory = "data" }
 
 [[package]]
 name = "packaging"
