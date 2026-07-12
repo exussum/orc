@@ -28,7 +28,9 @@ def trigger_sensor(ctx, sensor, device_id, event):
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         snapshot = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
-        ctx.api.dispatch(ctx.model.squish_configs(snapshot, _to_configs(ctx, [*sensor.rules.enter, *_timed_rows(ctx, sensor)])), force=True)
+        timed_name, timed_rows = _timed_rows(ctx, sensor)
+        ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.SYSTEM, f"Entrance triggered: {timed_name}")
+        ctx.api.dispatch(ctx.model.squish_configs(snapshot, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
     elif event == sensor.inactive_event:
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
         ctx.scheduler.add_job(
@@ -72,7 +74,7 @@ def _timed_rows(ctx, sensor):
             return row.start <= t < row.stop
         return t >= row.start or t < row.stop  # window wraps midnight
 
-    return next((rows for rows in vars(sensor.timed).values() if in_window(rows[0])), ())
+    return next(((name, rows) for (name, rows) in vars(sensor.timed).items() if in_window(rows[0])), ("(non window found)", ()))
 
 
 def _restorable(ctx, sensor, snapshot):
