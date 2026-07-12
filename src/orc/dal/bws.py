@@ -3,6 +3,7 @@ import hashlib
 import hmac as _hmac
 import json
 import os
+from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -18,7 +19,7 @@ _IDENTITY_URL = "https://identity.bitwarden.com"
 _API_URL = "https://api.bitwarden.com"
 
 
-def fetch_secrets():
+def fetch_secrets() -> m.Secrets:
     raw_token = _get_url_value(os.environ["BWS_ACCESS_TOKEN"])
 
     access_token_id, client_secret, enc_key_raw = _parse_access_token(raw_token)
@@ -62,20 +63,20 @@ def fetch_secrets():
     )
 
 
-def _parse_access_token(token):
+def _parse_access_token(token: str) -> tuple[str, str, bytes]:
     # Format: 0.<access_token_id>.<client_secret>:<b64_enc_key>
     token_part, enc_key_b64 = token.rsplit(":", 1)
     parts = token_part.split(".")
     return parts[1], parts[2], base64.b64decode(enc_key_b64)
 
 
-def _derive_key(enc_key_raw):
+def _derive_key(enc_key_raw: bytes) -> bytes:
     # HKDF: extract with "bitwarden-accesstoken" as salt, expand with "sm-access-token" as info
     prk = _hmac.new(b"bitwarden-accesstoken", enc_key_raw, hashlib.sha256).digest()
     return HKDFExpand(algorithm=hashes.SHA256(), length=64, info=b"sm-access-token").derive(prk)
 
 
-def _decrypt_enc_string(enc_string, key_64):
+def _decrypt_enc_string(enc_string: str, key_64: bytes) -> str:
     # EncString type 2: "2.<iv_b64>|<ct_b64>|<mac_b64>"
     _, rest = enc_string.split(".", 1)
     iv_b64, ct_b64, mac_b64 = rest.split("|")
@@ -95,12 +96,12 @@ def _decrypt_enc_string(enc_string, key_64):
     return (unpadder.update(padded) + unpadder.finalize()).decode("utf-8")
 
 
-def _api_get(url, token):
+def _api_get(url: str, token: str) -> Any:
     with urlopen(Request(url, headers={"Authorization": f"Bearer {token}"})) as r:  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read())
 
 
-def _api_post(url, token, body):
+def _api_post(url: str, token: str, body: dict[str, Any]) -> Any:
     data = json.dumps(body).encode()
     req = Request(
         url,
@@ -114,6 +115,6 @@ def _api_post(url, token, body):
         return json.loads(r.read())
 
 
-def _get_url_value(url):
+def _get_url_value(url: str) -> str:
     with urlopen(url) as response:  # nosemgrep: dynamic-urllib-use-detected
         return response.readline().decode("utf-8").strip()

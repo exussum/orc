@@ -8,7 +8,7 @@ from orc.dal.sqlite import insert_lg_tv_client_key
 
 
 @requires_enabled(None)
-def pair(hostname):
+def pair(hostname: str) -> str | None:
     key = asyncio.run(_pair(hostname))
     if key is None:
         print(f"LG TV pairing not completed for {hostname}", file=sys.stderr)
@@ -17,7 +17,7 @@ def pair(hostname):
     return key
 
 
-async def _pair(hostname):
+async def _pair(hostname: str) -> str | None:
     client = WebOsClient(hostname, None)
     try:
         await client.connect()

@@ -1,2 +1,2 @@
-SHA = "dev"
-BUILD_TIME = "dev"
+SHA: str = "dev"
+BUILD_TIME: str = "dev"

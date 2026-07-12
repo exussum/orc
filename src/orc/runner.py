@@ -7,7 +7,6 @@ from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask
 from gunicorn.app.base import BaseApplication
 
 import orc as config
@@ -15,10 +14,10 @@ from orc import _build, api
 from orc import model as m
 from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY, ContextThreadPoolExecutor
 from orc.locale import Log
-from orc.view import VersionManager, bp
+from orc.view import OrcFlask, VersionManager, bp
 
 
-def flask():
+def flask() -> None:
     app, scheduler = _build_app()
     scheduler.resume()
     api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
@@ -26,16 +25,16 @@ def flask():
     app.run(host="0.0.0.0", port=8000, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
-def web():
+def web() -> None:
     class GunicornApp(BaseApplication):
-        def load_config(self):
+        def load_config(self) -> None:
             self.cfg.set("workers", 1)
             self.cfg.set("threads", 1)
             self.cfg.set("timeout", 120)
             self.cfg.set("loglevel", "warning")
             self.cfg.set("bind", "0.0.0.0:8000")
 
-        def load(self):
+        def load(self) -> OrcFlask:
             try:
                 app, scheduler = _build_app()
             except Exception:
@@ -49,11 +48,11 @@ def web():
     GunicornApp().run()
 
 
-def _print_started():
+def _print_started() -> None:
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
-def _build_app():
+def _build_app() -> tuple[OrcFlask, BackgroundScheduler]:
     if os.getenv("ORC_ENABLED"):
         secrets = api.fetch_secrets()
         config.config.load(secrets, api.fetch_hubitat_config(secrets))
@@ -82,7 +81,7 @@ def _build_app():
     api.setup_scheduler(ctx)
     api.start_yolink()
 
-    app = Flask(__name__)
+    app = OrcFlask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
     app.orc = ctx

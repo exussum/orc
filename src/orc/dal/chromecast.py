@@ -1,6 +1,8 @@
 import socket
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import pychromecast
@@ -9,18 +11,18 @@ import yt_dlp
 from orc import model as m
 from orc.dal._decorators import requires_enabled
 
-_YDL_OPTS = {
+_YDL_OPTS: dict[str, Any] = {
     "format": "bestaudio/best",  # Request the highest quality audio stream
     "quiet": True,
     "no_warnings": True,
 }
 
 
-_PLAYING_STATES = ("PLAYING", "BUFFERING", "PAUSED")
+_PLAYING_STATES: tuple[str, ...] = ("PLAYING", "BUFFERING", "PAUSED")
 
 
 @requires_enabled(lambda device: m.SoundState(what=device, content=None, volume=0))
-def fetch_state(device):
+def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     with _cast(device, timeout=5, tries=1) as cast:
         time.sleep(0.5)
         ms = cast.media_controller.status
@@ -33,14 +35,14 @@ def fetch_state(device):
 
 
 @requires_enabled(lambda *_: ("", "Audio Stream"))
-def fetch_youtube_stream_metadata(id):
+def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
     with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
         info = ydl.extract_info(id, download=False)
         return info["url"], info.get("title", "Audio Stream")
 
 
 @requires_enabled(None)
-def pause(device):
+def pause(device: m.DeviceEnum) -> None:
     with _cast(device) as cast:
         cast.media_controller.update_status()
         time.sleep(1)
@@ -49,7 +51,7 @@ def pause(device):
 
 
 @requires_enabled(None)
-def play(device, stream_url, title):
+def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
     with _cast(device) as cast:
         if cast.status.app_id:
             cast.quit_app()
@@ -59,7 +61,7 @@ def play(device, stream_url, title):
 
 
 @requires_enabled(None)
-def resume(device):
+def resume(device: m.DeviceEnum) -> None:
     with _cast(device) as cast:
         cast.media_controller.update_status()
         time.sleep(1)
@@ -68,23 +70,24 @@ def resume(device):
 
 
 @requires_enabled(None)
-def stop(device):
+def stop(device: m.DeviceEnum) -> None:
     with _cast(device) as cast:
         cast.quit_app()
         time.sleep(1)
 
 
 @requires_enabled(None)
-def set_volume(device, lvl):
+def set_volume(device: m.DeviceEnum, lvl: int) -> None:
     with _cast(device) as cast:
         cast.set_volume(lvl / 100)
         time.sleep(1)
 
 
 @contextmanager
-def _cast(device, **kwargs):
+def _cast(device: m.DeviceEnum, **kwargs: Any) -> Iterator[Any]:
     ip = socket.gethostbyname(device.value)
-    cast = pychromecast.get_chromecast_from_host((ip, 8009, None, None, None), **kwargs)
+    # pychromecast accepts None for uuid/model/name at runtime; its stub declares stricter tuple types
+    cast = pychromecast.get_chromecast_from_host((ip, 8009, None, None, None), **kwargs)  # type: ignore[arg-type]
     try:
         cast.wait(timeout=kwargs.get("timeout"))
         yield cast
@@ -92,7 +95,7 @@ def _cast(device, **kwargs):
         cast.disconnect(timeout=2)
 
 
-def _strip_googlevideo_params(url):
+def _strip_googlevideo_params(url: str) -> str:
     parsed = urlparse(url)
     if not parsed.hostname or not parsed.hostname.endswith("googlevideo.com"):
         return url
