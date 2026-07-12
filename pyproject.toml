@@ -68,6 +68,6 @@ testpaths = [ "tests" ]
 packages = ["src/orc"]
 
 [tool.uv.sources]
-orc_data = { path = "data", editable = true }
+orc_data = { path = "data" }
 
 
