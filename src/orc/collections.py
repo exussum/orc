@@ -1,30 +1,32 @@
 import threading
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any
 
 from mistletoe.block_token import Heading, Table
 
 
-class LockedDict:
-    def __init__(self, initial=None):
+class LockedDict[K, V]:
+    def __init__(self, initial: Mapping[K, V] | None = None) -> None:
         self._lock = threading.Lock()
-        self._data = dict(initial) if initial else {}
+        self._data: dict[K, V] = dict(initial) if initial else {}
 
-    def __contains__(self, key):
+    def __contains__(self, key: K) -> bool:
         with self._lock:
             return key in self._data
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: K) -> V:
         with self._lock:
             return self._data[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: K, value: V) -> None:
         with self._lock:
             self._data[key] = value
 
-    def get(self, key, default=None):
+    def get(self, key: K, default: V | None = None) -> V | None:
         with self._lock:
             return self._data.get(key, default)
 
-    def get_or_set(self, key, factory):
+    def get_or_set(self, key: K, factory: Callable[[], V]) -> V:
         with self._lock:
             if key in self._data:
                 return self._data[key]
@@ -32,7 +34,7 @@ class LockedDict:
             self._data[key] = value
             return value
 
-    def update(self, key, fn):
+    def update(self, key: K, fn: Callable[[V | None], V | None]) -> V | None:
         with self._lock:
             new = fn(self._data.get(key))
             if new is None:
@@ -40,25 +42,32 @@ class LockedDict:
             self._data[key] = new
             return new
 
-    def copy(self):
+    def copy(self) -> dict[K, V]:
         with self._lock:
             return dict(self._data)
 
 
-def parse_kv(val):
+def parse_kv(val: str | None) -> dict[str, str]:
     return dict(pair.split("=") for pair in (val or "").split())
 
 
-def where(items, **kwargs):
+def where[V](items: Mapping[str, V], **kwargs: Any) -> dict[str, V]:
     return {k: v for k, v in items.items() if all(getattr(v, attr) == val for attr, val in kwargs.items())}
 
 
-def doc_to_sub_tables(doc, section, columns, *, cast):
+def doc_to_sub_tables(
+    doc: Any,
+    section: str,
+    columns: tuple[str, ...] | int,
+    *,
+    cast: Callable[[str, Any], Any] | None,
+) -> Iterator[tuple[Any, list[Any]]]:
     from types import SimpleNamespace
 
     col_names = columns if isinstance(columns, tuple) else None
-    n_cols = len(columns) if col_names else columns
-    type, result = None, None
+    n_cols = len(columns) if isinstance(columns, tuple) else columns
+    type: Any = None
+    result: list[Any] | None = None
     for e in doc_to_table(doc, section, n_cols):
         if e[0] != type and e[0]:
             if result:
@@ -69,17 +78,17 @@ def doc_to_sub_tables(doc, section, columns, *, cast):
             if col_names and cast
             else e
         )
-        result.append(row)
+        result.append(row)  # type: ignore[union-attr]  # result is a list once the first non-empty type row is seen
 
     if result:
         yield type, result
 
 
-def doc_to_table(doc, section, columns):
+def doc_to_table(doc: Any, section: str, columns: int) -> tuple[tuple[Any, ...], ...]:
     # Heading store their contents in a subsequent child element
     # https://github.com/miyuchina/mistletoe/issues/99
     idx = next(
-        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),
+        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),  # type: ignore[index]  # mistletoe Heading.children is Iterable | None but always populated here
         None,
     )
     if idx is None:
@@ -89,11 +98,12 @@ def doc_to_table(doc, section, columns):
     if markdown_table is None:
         raise ValueError(f"No table found under section '{section}'")
 
-    rows = list(markdown_table.children)
-    if invalid := [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]:
+    rows = list(markdown_table.children)  # type: ignore[arg-type]  # mistletoe Table.children is Iterable | None but always populated here
+    if invalid := [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]:  # type: ignore[arg-type]  # TableRow.children always populated
         bad_rows = ", ".join(str(i) for i, _ in invalid)
         raise ValueError(f"Expected {columns} columns in section '{section}', but rows {bad_rows} have the wrong number")
 
     return tuple(
-        tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children)) for e in rows
+        tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children))  # type: ignore[index,union-attr,arg-type]  # mistletoe TableCell/TableRow children populated at runtime
+        for e in rows
     )

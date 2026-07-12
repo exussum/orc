@@ -1,16 +1,18 @@
 import asyncio
 import os
 import sys
+from collections.abc import Awaitable, Callable
 from functools import wraps
+from typing import Any
 
 
-def retry_async(deadline_secs):
-    def deco(fn):
+def retry_async[**P, R](deadline_secs: float) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+    def deco(fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         @wraps(fn)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             loop = asyncio.get_running_loop()
             deadline = loop.time() + deadline_secs
-            last_err = None
+            last_err: Exception | None = None
             while loop.time() < deadline:
                 try:
                     return await fn(*args, **kwargs)
@@ -26,10 +28,10 @@ def retry_async(deadline_secs):
     return deco
 
 
-def requires_enabled(stub):
-    def deco(fn):
+def requires_enabled[**P, R](stub: Any) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def deco(fn: Callable[P, R]) -> Callable[P, R]:
         @wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             if not os.getenv("ORC_ENABLED"):
                 print(f"[disabled] {fn.__name__} args={args} kwargs={kwargs}", file=sys.stderr)
                 return stub(*args, **kwargs) if callable(stub) else stub

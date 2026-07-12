@@ -1,14 +1,26 @@
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from mistletoe import Document
 
 from orc import model as m
 
+if TYPE_CHECKING:
+    # Device enums are built at runtime in Config.load and attached to this package's
+    # globals(). Declare them here so `orc.Light` etc. type-check across the codebase.
+    Light: type[m.DeviceEnum]
+    Chromecast: type[m.DeviceEnum]
+    BroadLink: type[m.DeviceEnum]
+    WebOS: type[m.DeviceEnum]
+    LGTV: type[m.DeviceEnum]
+    Leak: type[m.DeviceEnum]
+    AC: type[m.DeviceEnum]
+
 
 class Config:
-    def __init__(self):
+    def __init__(self) -> None:
         self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
         self.jobs_db = os.getenv("ORC_DB", "sqlite:////tmp/jobs.sqlite")
         self.base_url = os.getenv("ORC_BASE_URL")
@@ -21,7 +33,7 @@ class Config:
         self.audio_device = os.getenv("ORC_AUDIO_DEVICE", "")
         self.load(m.Secrets("", "", "", "", ""), {})
 
-    def load(self, secrets, hubitat_config):
+    def load(self, secrets: m.Secrets, hubitat_config: dict[Any, tuple[Any, ...]]) -> None:
         self.secrets = secrets
 
         with open(Path(self.config_dir) / "config.md") as fh:

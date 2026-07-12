@@ -1,8 +1,11 @@
 import array
 import audioop
 import wave
+from collections.abc import Iterable
 from functools import lru_cache
 from importlib import resources  # nosemgrep
+from importlib.resources.abc import Traversable  # nosemgrep
+from typing import Any
 
 import pyaudio
 
@@ -10,27 +13,28 @@ from orc import config
 from orc import model as m
 from orc._decorators import audio_lock, silence_fd
 
-_MODEL_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx"
-_CONFIG_PATH = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
+_MODEL_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx"
+_CONFIG_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
 with silence_fd(2):
     from piper import PiperVoice
 
-    _VOICE = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)
+    # resources.files() yields a concrete Path here; piper's stub only accepts str | Path, not the broader Traversable
+    _VOICE: Any = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
 
 
-def play_alert(path, level=None):
+def play_alert(path: str, level: str | None = None) -> None:
     with wave.open(path, "rb") as wf:
         channels, rate = wf.getnchannels(), wf.getframerate()
         chunks = iter(lambda: wf.readframes(4096), b"")
         _play_stream(chunks, channels, rate, _gain_for(level))
 
 
-def play_text(text, level=None):
+def play_text(text: str, level: str | None = None) -> None:
     chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
     _play_stream(chunks, 1, _VOICE.config.sample_rate, _gain_for(level))
 
 
-def _scale_int16(frames, gain):
+def _scale_int16(frames: bytes, gain: float) -> bytes:
     if gain == 1.0:
         return frames
     samples = array.array("h", frames)
@@ -41,7 +45,7 @@ def _scale_int16(frames, gain):
 
 
 @lru_cache(maxsize=1)
-def _find_output_device(name):
+def _find_output_device(name: str) -> tuple[int, Any]:
     with silence_fd(2):
         pa = pyaudio.PyAudio()
     try:
@@ -54,7 +58,7 @@ def _find_output_device(name):
     raise RuntimeError(f"No audio output device matching ORC_AUDIO_DEVICE={name!r}")
 
 
-def _play_stream(chunks, channels, src_rate, gain):
+def _play_stream(chunks: Iterable[bytes], channels: int, src_rate: int, gain: float) -> None:
     idx, info = _find_output_device(config.audio_device)
     dst_rate = int(info["defaultSampleRate"])
     with audio_lock, silence_fd(2):
@@ -75,5 +79,5 @@ def _play_stream(chunks, channels, src_rate, gain):
             pa.terminate()
 
 
-def _gain_for(level):
+def _gain_for(level: str | None) -> float:
     return config.audio_volumes[level or m.AUDIO_INFO] / 100.0
