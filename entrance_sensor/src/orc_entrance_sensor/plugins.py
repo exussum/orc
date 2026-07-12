@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from enum import Enum
 
 from apscheduler.triggers.date import DateTrigger
 
@@ -15,26 +16,21 @@ JOB_ID = "trigger-sensor"
     schema={
         "Settings": ("Key", "Value"),
         "Messages": ("Log", "Message"),
-        "Day": ("Trigger", "Device", "State"),
-        "Night": ("Trigger", "Device", "State"),
+        "Rules": ("Trigger", "Device", "State"),
+        "Timed": ("Name", "Start", "Stop", "Device", "State"),
     },
 )
 def trigger_sensor(ctx, sensor, device_id, event):
     if int(device_id) != sensor.entrance_id:
         return
 
-    hour = ctx.api.local_now().hour
-    daytime = sensor.day_start <= hour < sensor.day_end
-    phase = sensor.day if daytime else sensor.night
-
     if event == sensor.active_event:
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
-        snapshot = ctx.snapshot_manager.get(SNAPSHOT_NAME)
-        items = (snapshot.routine,) if snapshot else ()
-        ctx.api.dispatch(ctx.model.squish_configs(*items, _to_configs(ctx, [*phase.entrance_light_on, *phase.entrance_config])), force=True)
+        snapshot = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
+        ctx.api.dispatch(ctx.model.squish_configs(snapshot, _to_configs(ctx, [*sensor.rules.enter, *_timed_rows(ctx, sensor)])), force=True)
     elif event == sensor.inactive_event:
-        ctx.api.dispatch(_to_configs(ctx, phase.entrance_light_off, trigger=ctx.model.Trigger.SYSTEM))
+        ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
@@ -49,28 +45,43 @@ def trigger_sensor(ctx, sensor, device_id, event):
 @requires_ctx
 def _run_trigger_sensor_off(sensor, *, ctx):
     plugin_ctx = build_ctx(ctx)
-    hour = plugin_ctx.api.local_now().hour
-    daytime = sensor.day_start <= hour < sensor.day_end
-    phase = sensor.day if daytime else sensor.night
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
     present = plugin_ctx.api.check_presence(ctx=ctx)
 
-    if not daytime:
-        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.after_hours))
-        msg = sensor.log_after_hours
-    elif present:
-        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.after_hours))
+    if present:
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.present))
         msg = sensor.log_present
     elif any(s.content for s in plugin_ctx.api.capture_sounds().items):
-        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.core_hours))
-        msg = sensor.log_core_hours
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.absent))
+        msg = sensor.log_absent
     else:
         end = plugin_ctx.api.local_now() + timedelta(minutes=sensor.snapshot)
-        plugin_ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(plugin_ctx, phase.shutdown), end)
-        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, phase.core_hours))
+        plugin_ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(plugin_ctx, sensor.rules.shutdown), end)
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.absent))
         msg = sensor.log_shutdown
     plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)
+
+
+def _timed_rows(ctx, sensor):
+    # First group whose window contains now wins; a group's window is its first row.
+    t = ctx.api.local_now().time()
+
+    def in_window(row):
+        if row.start <= row.stop:
+            return row.start <= t < row.stop
+        return t >= row.start or t < row.stop  # window wraps midnight
+
+    return next((rows for rows in vars(sensor.timed).values() if in_window(rows[0])), ())
+
+
+def _restorable(ctx, sensor, snapshot):
+    # The snapshot is captured after the inside rule ran, so its state for those
+    # lights is plugin-caused, not household state - don't replay it.
+    if snapshot is None:
+        return ctx.model.Configs()
+    inside = {d for r in sensor.rules.inside for d in ((r.device,) if isinstance(r.device, Enum) else r.device)}
+    return ctx.model.Configs(*[c for c in snapshot.routine.items if c.what not in inside])
 
 
 def _to_configs(ctx, rows, trigger=None):
