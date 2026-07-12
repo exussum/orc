@@ -356,6 +356,8 @@ def column_to_value(col, val):
     elif col.lower() == "parameters":
         parsed = {k: column_to_value(k, v) for k, v in parse_kv(val).items()}
         return {"section": "scene", "delay": timedelta(), **parsed}
+    elif col.lower() in ("start", "stop"):  # blank on continuation rows: a group's window lives on its first row
+        return val and column_to_value("time", val)
     elif col.lower() == "time":
         if val in (SUNRISE, SUNSET):
             return val

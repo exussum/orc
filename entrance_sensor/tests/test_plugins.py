@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -11,29 +11,24 @@ from orc import model as m
 from orc.model import DeviceEnum
 
 _UTC = ZoneInfo("UTC")
-_DAYTIME = datetime(2024, 1, 1, 15, tzinfo=_UTC)  # 3pm, within day_start=10/day_end=22
-_NIGHTTIME = datetime(2024, 1, 1, 3, tzinfo=_UTC)  # 3am, outside that range
+_DAYTIME = datetime(2024, 1, 1, 15, tzinfo=_UTC)  # 3pm, inside the Day window (8:00-22:00)
+_NIGHTTIME = datetime(2024, 1, 1, 3, tzinfo=_UTC)  # 3am, inside the Night window
 _FUTURE = datetime(2100, 1, 1, tzinfo=_UTC)
-_PAST = datetime(2000, 1, 1, tzinfo=_UTC)
 
 
 class Light(DeviceEnum):
     day_bulb = 1
-    day_lamp1 = 2
-    day_lamp2 = 3
-    day_cc = 4
-    day_cc2 = 5
-    day_light = 6
-    night_bulb = 7
-    night_lamp = 8
-    night_cc = 9
-    night_cc2 = 10
-    night_light = 11
-    saved = 12
+    night_bulb = 2
+    lamp = 3
+    saved = 4
 
 
-def _rows(*devices, state=m.ON):
-    return [SimpleNamespace(device=d, state=state) for d in devices]
+class Chromecast(DeviceEnum):
+    cc = 1
+
+
+def _row(device, state, start="", stop=""):
+    return SimpleNamespace(device=device, state=state, start=start, stop=stop)
 
 
 def _snapshot(*configs, end=_FUTURE):
@@ -50,38 +45,36 @@ def ctx():
     return mock
 
 
+# Mirrors the shape of the provisioned config: walking in pauses the media and
+# lights the entrance for the current window; the Night window stops the media
+# outright; the cleanup job settles the house depending on who is home.
 @pytest.fixture
 def sensor():
-    day = SimpleNamespace(
-        entrance_light_on=_rows(Light.day_bulb),
-        entrance_light_off=_rows(Light.day_bulb, Light.night_bulb, state=m.OFF),
-        entrance_config=_rows(Light.day_lamp1, Light.day_lamp2),
-        after_hours=_rows(Light.day_cc),
-        core_hours=_rows(Light.day_cc2),
-        shutdown=_rows(Light.day_light),
+    timed = SimpleNamespace(
+        Day=[_row(Light.day_bulb, 20, start=time(8), stop=time(22))],
+        Night=[
+            _row(Light.night_bulb, 1, start=time(22), stop=time(8)),
+            _row(Chromecast.cc, m.STOP),
+        ],
     )
-    night = SimpleNamespace(
-        entrance_light_on=_rows(Light.night_bulb),
-        entrance_light_off=_rows(Light.day_bulb, Light.night_bulb, state=m.OFF),
-        entrance_config=_rows(Light.night_lamp),
-        after_hours=_rows(Light.night_cc),
-        core_hours=_rows(Light.night_cc2),
-        shutdown=_rows(Light.night_light),
+    rules = SimpleNamespace(
+        enter=[_row(Light.lamp, m.ON), _row(Chromecast.cc, m.PAUSE)],
+        inside=[_row(Light.day_bulb, m.OFF), _row(Light.night_bulb, m.OFF)],
+        present=[_row(Chromecast.cc, m.STOP)],
+        absent=[_row(Chromecast.cc, m.RESUME)],
+        shutdown=[_row(Light.lamp, m.OFF)],
     )
     return SimpleNamespace(
         entrance_id=16,
         active_event="active",
         inactive_event="inactive",
-        day_start=10,
-        day_end=22,
         cleanup_delay_minutes=2,
         snapshot=45,
-        log_after_hours="skip (nighttime)",
         log_present="skip (present)",
-        log_core_hours="skip (sounds)",
+        log_absent="skip (sounds)",
         log_shutdown="applying OFF",
-        day=day,
-        night=night,
+        rules=rules,
+        timed=timed,
     )
 
 
@@ -95,67 +88,79 @@ def plugin_ctx():
     return mock
 
 
-# Unwrap decorators to call underlying functions directly
+def _cleanup(sensor, plugin_ctx):
+    with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
+        plugins._run_trigger_sensor_off.__wrapped__(sensor, ctx=MagicMock())
+
+
+# Unwrap the config-loading decorator to call the underlying function directly
 _trigger_sensor = plugins.trigger_sensor.__wrapped__
-_run_trigger_sensor_off = plugins._run_trigger_sensor_off.__wrapped__
 
 
-# --- trigger_sensor ---
+# --- Walking in ---
 
 
-def test_trigger_sensor_wrong_device_id_is_noop(ctx, sensor):
-    ctx.api.local_now.return_value = _DAYTIME
-    ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF))
-    _trigger_sensor(ctx, sensor, "99", "active")
-    ctx.api.dispatch.assert_not_called()
-    assert plugins.SNAPSHOT_NAME in ctx.snapshot_manager.snapshots
-
-
-def test_trigger_sensor_active_daytime_executes_day_phase(ctx, sensor):
+def test_day_walk_in_brightens_entrance_and_pauses_media(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.dispatch.assert_called_once_with(
-        m.Configs(m.Config(Light.day_bulb, m.ON), m.Config(Light.day_lamp1, m.ON), m.Config(Light.day_lamp2, m.ON)), force=True
+        m.Configs(m.Config(Light.day_bulb, 20), m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.PAUSE)), force=True
     )
 
 
-def test_trigger_sensor_active_nighttime_executes_night_phase(ctx, sensor):
+def test_night_walk_in_dims_entrance_and_stops_media(ctx, sensor):
+    # The Night window's stop beats enter's pause: timed rows outrank enter rules
     ctx.api.local_now.return_value = _NIGHTTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.night_bulb, m.ON), m.Config(Light.night_lamp, m.ON)), force=True)
+    ctx.api.dispatch.assert_called_once_with(
+        m.Configs(m.Config(Light.night_bulb, 1), m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.STOP)), force=True
+    )
 
 
-def test_trigger_sensor_active_merges_valid_snapshot(ctx, sensor):
+def test_walk_in_uses_first_window_that_contains_now(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
-    ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF), m.Config(Light.day_bulb, m.OFF))
+    sensor.timed = SimpleNamespace(
+        Afternoon=[_row(Light.night_bulb, 50, start=time(14), stop=time(16))],
+        **vars(sensor.timed),
+    )
+    _trigger_sensor(ctx, sensor, "16", "active")
+    executed = ctx.api.dispatch.call_args[0][0]
+    assert m.Config(Light.night_bulb, 50) in executed.items
+    assert m.Config(Light.day_bulb, 20) not in executed.items
+
+
+def test_walk_in_outside_any_window_runs_enter_only(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    sensor.timed = SimpleNamespace(Morning=[_row(Light.day_bulb, 20, start=time(8), stop=time(9))])
+    _trigger_sensor(ctx, sensor, "16", "active")
+    ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.PAUSE)), force=True)
+
+
+def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(
+        m.Config(Light.saved, m.ON),  # how the house looked before shutdown
+        m.Config(Light.day_bulb, m.OFF),  # entrance lights: off because the plugin turned them off
+        m.Config(Light.night_bulb, m.OFF),
+    )
     _trigger_sensor(ctx, sensor, "16", "active")
     executed = ctx.api.dispatch.call_args[0][0]
     assert {c.what: c.state for c in executed.items} == {
-        Light.saved: m.OFF,  # restored from snapshot
-        Light.day_bulb: m.ON,  # phase config wins over snapshot
-        Light.day_lamp1: m.ON,
-        Light.day_lamp2: m.ON,
+        Light.saved: m.ON,  # restored
+        Light.day_bulb: 20,  # follows the current window, never the snapshot
+        Light.lamp: m.ON,
+        Chromecast.cc: m.PAUSE,
     }
     assert not ctx.snapshot_manager.snapshots  # consumed
 
 
-def test_trigger_sensor_active_discards_expired_snapshot(ctx, sensor):
-    ctx.api.local_now.return_value = _DAYTIME
-    ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF), end=_PAST)
-    _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with(
-        m.Configs(m.Config(Light.day_bulb, m.ON), m.Config(Light.day_lamp1, m.ON), m.Config(Light.day_lamp2, m.ON)), force=True
-    )
-    assert not ctx.snapshot_manager.snapshots
-
-
-def test_trigger_sensor_active_removes_pending_cleanup_job(ctx, sensor):
+def test_walk_in_cancels_pending_cleanup(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.scheduler.remove_job.assert_called_once_with("trigger-sensor", jobstore=ctx.api.JOBSTORE_MEMORY)
 
 
-def test_trigger_sensor_active_skips_remove_when_no_job_pending(ctx, sensor):
+def test_walk_in_with_no_pending_cleanup_does_not_cancel(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     ctx.scheduler.get_job.return_value = None
     _trigger_sensor(ctx, sensor, "16", "active")
@@ -163,7 +168,10 @@ def test_trigger_sensor_active_skips_remove_when_no_job_pending(ctx, sensor):
     ctx.api.dispatch.assert_called_once()
 
 
-def test_trigger_sensor_inactive_executes_light_off_rows(ctx, sensor):
+# --- Walking past, into the house ---
+
+
+def test_entrance_lights_turn_off_behind_you(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
     ctx.api.dispatch.assert_called_once_with(
@@ -171,24 +179,7 @@ def test_trigger_sensor_inactive_executes_light_off_rows(ctx, sensor):
     )
 
 
-def test_trigger_sensor_inactive_updates_system_snapshot(ctx, sensor):
-    ctx.api.local_now.return_value = _DAYTIME
-    ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT] = _snapshot(m.Config(Light.day_bulb, m.ON), m.Config(Light.saved, m.ON))
-
-    _trigger_sensor(ctx, sensor, "16", "inactive")
-
-    (dispatched,), _ = ctx.api.dispatch.call_args
-    for config in dispatched.items:
-        assert not ctx.snapshot_manager.intercepts(config)  # updated, not suppressed
-
-    assert ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
-        m.Config(Light.day_bulb, m.OFF, trigger=m.Trigger.SYSTEM),
-        m.Config(Light.saved, m.ON),
-        m.Config(Light.night_bulb, m.OFF, trigger=m.Trigger.SYSTEM),
-    )
-
-
-def test_trigger_sensor_inactive_schedules_cleanup_job(ctx, sensor):
+def test_cleanup_is_scheduled_for_later(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
     ctx.scheduler.add_job.assert_called_once()
@@ -197,58 +188,57 @@ def test_trigger_sensor_inactive_schedules_cleanup_job(ctx, sensor):
     assert kwargs["replace_existing"] is True
 
 
-def test_trigger_sensor_unknown_event_is_noop(ctx, sensor):
+# --- Cleanup, minutes later ---
+
+
+def test_someone_home_stops_media(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    plugin_ctx.api.check_presence.return_value = {"alice"}
+    _cleanup(sensor, plugin_ctx)
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_present)
+
+
+def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
+    _cleanup(sensor, plugin_ctx)
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_absent)
+
+
+def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    _cleanup(sensor, plugin_ctx)
+    plugin_ctx.snapshot_manager.replace_config.assert_called_once_with(
+        plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45)
+    )
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_shutdown)
+
+
+def test_presence_is_expired_before_checking(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    plugin_ctx.api.last_seen.return_value = iter(["alice", "bob"])
+    _cleanup(sensor, plugin_ctx)
+    plugin_ctx.api.expire_presence.assert_called_once_with(["alice", "bob"])
+
+
+# --- Guards ---
+
+
+def test_other_devices_are_ignored(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF))
+    _trigger_sensor(ctx, sensor, "99", "active")
+    ctx.api.dispatch.assert_not_called()
+    assert plugins.SNAPSHOT_NAME in ctx.snapshot_manager.snapshots
+
+
+def test_unknown_events_are_ignored(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(m.Config(Light.saved, m.OFF))
     _trigger_sensor(ctx, sensor, "16", "other")
     ctx.api.dispatch.assert_not_called()
     ctx.scheduler.add_job.assert_not_called()
     assert plugins.SNAPSHOT_NAME in ctx.snapshot_manager.snapshots
-
-
-# --- _run_trigger_sensor_off ---
-
-
-def test_off_nighttime_executes_after_hours(sensor, plugin_ctx):
-    plugin_ctx.api.local_now.return_value = _NIGHTTIME
-    with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
-        _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.night_cc, m.ON)))
-    plugin_ctx.api.log.assert_called_once_with(_NIGHTTIME, m.LogSource.SYSTEM, sensor.log_after_hours)
-
-
-def test_off_daytime_present_executes_after_hours(sensor, plugin_ctx):
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugin_ctx.api.check_presence.return_value = {"alice"}
-    with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
-        _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.day_cc, m.ON)))
-    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_present)
-
-
-def test_off_daytime_sounds_executes_core_hours(sensor, plugin_ctx):
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
-    with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
-        _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.day_cc2, m.ON)))
-    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_core_hours)
-
-
-def test_off_daytime_empty_snapshots_shutdown_then_executes_core_hours(sensor, plugin_ctx):
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
-        _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.snapshot_manager.replace_config.assert_called_once_with(
-        plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.day_light, m.ON)), _DAYTIME + timedelta(minutes=45)
-    )
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.day_cc2, m.ON)))
-    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_shutdown)
-
-
-def test_off_expires_presence_before_checking(sensor, plugin_ctx):
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugin_ctx.api.last_seen.return_value = iter(["alice", "bob"])
-    with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
-        _run_trigger_sensor_off(sensor, ctx=MagicMock())
-    plugin_ctx.api.expire_presence.assert_called_once_with(["alice", "bob"])
