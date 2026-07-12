@@ -15,6 +15,11 @@ repos:
       - id: semgrep
         args: ["--config", "auto", "--error", "--skip-unknown-extensions"]
 
+  - repo: https://github.com/betterleaks/betterleaks
+    rev: v1.6.1
+    hooks:
+      - id: betterleaks
+
   - repo: local
     hooks:
       - id: pytest
