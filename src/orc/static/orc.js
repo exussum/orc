@@ -94,6 +94,11 @@ async function run_with_confirm(el) {
     await run(el);
 }
 
+async function run_config(el) {
+    if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${el.dataset.id}?`)) return;
+    await get(`/api/run/${el.dataset.id}`, el);
+}
+
 document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {
     const menu = document.getElementById("admin-navbar-collapse");
     const open = menu.classList.toggle("hidden");
