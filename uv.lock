@@ -1488,7 +1488,7 @@ requires-dist = [
     { name = "isort", marker = "extra == 'lint'", specifier = "==8.0.1" },
     { name = "mistletoe", specifier = "==1.5.1" },
     { name = "nh3", specifier = "==0.3.6" },
-    { name = "orc-data", specifier = "==0.0.1", index = "http://registry.example.local/" },
+    { name = "orc-data", editable = "data" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "piper-tts", specifier = "==1.4.2" },
     { name = "pyaudio", specifier = "==0.2.14" },
@@ -1507,10 +1507,7 @@ provides-extras = ["test", "lint", "build"]
 [[package]]
 name = "orc-data"
 version = "0.0.1"
-source = { registry = "http://registry.example.local/" }
-wheels = [
-    { url = "http://registry.example.local/packages/orc_data-0.0.1-py2.py3-none-any.whl", hash = "sha256:59a9158585413dbd22d9fe67409518bf110a245f617c5b4838d0c2c69ef7396d" },
-]
+source = { editable = "data" }
 
 [[package]]
 name = "packaging"

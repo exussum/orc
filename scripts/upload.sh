@@ -1,8 +1,14 @@
 #!/bin/sh
 
+if [ ! -f scripts/deploy.env ]; then
+    echo "scripts/deploy.env missing — copy scripts/deploy.env.example and set your hosts" >&2
+    exit 1
+fi
+. scripts/deploy.env
+
 export TWINE_USERNAME=a
 export TWINE_PASSWORD=a
-export TWINE_REPOSITORY_URL=http://registry.example.local
+export TWINE_REPOSITORY_URL="$ORC_REGISTRY_URL"
 
 TWINE="uv run --no-sync twine upload"
 
