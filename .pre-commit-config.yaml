@@ -9,11 +9,14 @@ repos:
     hooks:
       - id: isort
 
-  - repo: https://github.com/returntocorp/semgrep
-    rev: v1.168.0
+  - repo: local
     hooks:
-      - id: semgrep
+      - id: opengrep
+        name: opengrep
+        entry: opengrep scan
+        language: system
         args: ["--config", "auto", "--error", "--skip-unknown-extensions"]
+        require_serial: true
 
   - repo: https://github.com/betterleaks/betterleaks
     rev: v1.6.1
