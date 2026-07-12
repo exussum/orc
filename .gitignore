@@ -8,3 +8,4 @@ dist/
 *.prof
 dev.sh
 src/config.md
+pylock.toml
