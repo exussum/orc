@@ -110,8 +110,8 @@ from orc.plugins import build_ctx, plugin_config, requires_ctx
     schema={
         "Settings": ("Key", "Value"),
         "Messages": ("Log", "Message"),
-        "Day": ("Trigger", "Device", "State"),
-        "Night": ("Trigger", "Device", "State"),
+        "Rules": ("Trigger", "Device", "State"),
+        "Timed": ("Name", "Start", "Stop", "Device", "State"),
     },
 )
 def trigger_sensor(ctx, sensor, device_id, event):
@@ -123,10 +123,19 @@ The schema maps `#####` headings in the markdown file to their table columns:
 - **Two-column sections** (`Settings`, `Messages`) flatten into attributes:
   each row's first column becomes the attribute name, the second its value.
   E.g. `sensor.entrance_id`, `sensor.log_shutdown`.
-- **Wider sections** (`Day`, `Night`) become a namespace per section, with
+- **Wider sections** (`Rules`, `Timed`) become a namespace per section, with
   one attribute per group of rows, keyed by the first column. E.g.
-  `sensor.day.entrance_light_on` is the list of rows under the
-  `entrance_light_on` trigger.
+  `sensor.rules.enter` is the list of rows under the
+  `enter` trigger.
+
+This plugin's `Timed` section holds named groups of device rows, one group
+per time window. `Start`/`Stop` sit on a group's first row (blank on
+continuation rows); the groups are scanned in document order and the first
+one whose window contains the current time wins, so an overlapping group
+placed higher up overrides the ones below it. The winning group is
+dispatched when the sensor goes active, together with the `enter`
+rules; the cleanup job dispatches only `Rules` rows (`present`,
+`absent`, `shutdown`).
 
 Because this package is outside the `orc` package, the config name is
 automatically namespaced as `<package>/<name>`, so the file lives at:
@@ -147,15 +156,20 @@ The in-repo sample is
 | entrance_id           | 1        |
 | ...                   | ...      |
 
-##### Day
+##### Rules
 
-| Trigger            | Device     | State  |
-|--------------------|------------|--------|
-| entrance_light_on  | Light      | 20     |
-| entrance_light_off | Light      | off    |
-| entrance_config    | Light      | on     |
-|                    | Chromecast | pause  |
-| after_hours        | Chromecast | stop   |
+| Trigger | Device     | State |
+|---------|------------|-------|
+| enter   | Light      | on    |
+|         | Chromecast | pause |
+| inside  | Light      | off   |
+
+##### Timed
+
+| Name  | Start | Stop  | Device | State |
+|-------|-------|-------|--------|-------|
+| Day   | 8:00  | 22:00 | Light  | 20    |
+| Night | 22:00 | 8:00  | Light  | 1     |
 ```
 
 The config is loaded lazily on first call and cached; if the file is missing
