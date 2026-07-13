@@ -62,7 +62,8 @@ known_third_party = ["apscheduler"]
 
 [tool.mypy]
 python_version = "3.14"
-files = ["src/orc"]
+files = ["src/orc", "entrance_sensor/src/orc_entrance_sensor"]
+mypy_path = ["entrance_sensor/src"]
 ignore_missing_imports = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
