@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from datetime import timedelta
 from enum import Enum
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, Sequence
 
 from apscheduler.triggers.date import DateTrigger
 
-from orc.plugins import build_ctx, plugin_config, requires_ctx
+from orc.plugins import PluginCtx, build_ctx, plugin_config, requires_ctx
+
+if TYPE_CHECKING:
+    from orc import model as m
 
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
@@ -20,7 +25,7 @@ JOB_ID = "trigger-sensor"
         "Timed": ("Name", "Start", "Stop", "Device", "State"),
     },
 )
-def trigger_sensor(ctx, sensor, device_id, event):
+def trigger_sensor(ctx: PluginCtx, sensor: SimpleNamespace, device_id: str, event: int) -> None:
     if int(device_id) != sensor.entrance_id:
         return
 
@@ -45,7 +50,7 @@ def trigger_sensor(ctx, sensor, device_id, event):
 
 
 @requires_ctx
-def _run_trigger_sensor_off(sensor, *, ctx):
+def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> None:
     plugin_ctx = build_ctx(ctx)
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
@@ -65,11 +70,11 @@ def _run_trigger_sensor_off(sensor, *, ctx):
     plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)
 
 
-def _timed_rows(ctx, sensor):
+def _timed_rows(ctx: PluginCtx, sensor: SimpleNamespace) -> tuple[str, Sequence[Any]]:
     # First group whose window contains now wins; a group's window is its first row.
     t = ctx.api.local_now().time()
 
-    def in_window(row):
+    def in_window(row: Any) -> bool:
         if row.start <= row.stop:
             return row.start <= t < row.stop
         return t >= row.start or t < row.stop  # window wraps midnight
@@ -77,7 +82,7 @@ def _timed_rows(ctx, sensor):
     return next(((name, rows) for (name, rows) in vars(sensor.timed).items() if in_window(rows[0])), ("(non window found)", ()))
 
 
-def _restorable(ctx, sensor, snapshot):
+def _restorable(ctx: PluginCtx, sensor: SimpleNamespace, snapshot: m.SnapShot | None) -> m.Configs:
     # The snapshot is captured after the inside rule ran, so its state for those
     # lights is plugin-caused, not household state - don't replay it.
     if snapshot is None:
@@ -86,5 +91,5 @@ def _restorable(ctx, sensor, snapshot):
     return ctx.model.Configs(*[c for c in snapshot.routine.items if c.what not in inside])
 
 
-def _to_configs(ctx, rows, trigger=None):
+def _to_configs(ctx: PluginCtx, rows: Sequence[Any], trigger: m.Trigger | None = None) -> m.Configs:
     return ctx.model.Configs(*[ctx.model.Config(r.device, r.state, trigger=trigger) for r in rows])
