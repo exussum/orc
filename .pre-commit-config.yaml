@@ -53,8 +53,6 @@ repos:
         pass_filenames: false
         always_run: true
 
-  - repo: local
-    hooks:
       - id: pytest
         name: pytest
         entry: scripts/run-tests.sh

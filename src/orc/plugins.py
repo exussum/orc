@@ -23,7 +23,7 @@ class PluginCtx:
     api: ModuleType
     model: ModuleType
     orc: ModuleType
-    scheduler: BaseScheduler | None = None
+    scheduler: BaseScheduler
 
 
 def back_on_schedule(ctx: PluginCtx) -> None:
@@ -62,7 +62,6 @@ def pair_lg_tv(ctx: PluginCtx) -> None:
 
 
 def rebuild_jobs(ctx: PluginCtx) -> None:
-    assert ctx.scheduler is not None  # scheduler is always set when a plugin runs
     ctx.scheduler.remove_all_jobs()
     ctx.api.setup_scheduler(ctx)
 
