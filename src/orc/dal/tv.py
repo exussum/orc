@@ -54,5 +54,5 @@ async def _is_port_open(host: str, port: int, timeout: float) -> bool:
         writer.close()
         await writer.wait_closed()
         return True
-    except (OSError, asyncio.TimeoutError):
+    except OSError, asyncio.TimeoutError:
         return False
