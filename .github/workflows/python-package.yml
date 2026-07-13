@@ -46,6 +46,10 @@ jobs:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
       with:
         lfs: true
+    - name: Set up Python 3.14
+      uses: actions/setup-python@3542bca2639a428e1796aaa6a2ffef0c0f575566  # v3
+      with:
+        python-version: "3.14"
     - name: Install system dependencies
       run: sudo apt-get install -y portaudio19-dev
     - name: Install uv
