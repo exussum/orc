@@ -96,7 +96,8 @@ async function run_with_confirm(el) {
 
 async function run_config(el) {
     if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${el.dataset.id}?`)) return;
-    await get(`/api/run/${el.dataset.id}`, el);
+    const q = el.dataset.device ? `?device=${encodeURIComponent(el.dataset.device)}` : "";
+    await get(`/api/run/${el.dataset.id}${q}`, el);
 }
 
 document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {

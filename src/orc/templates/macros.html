@@ -1,7 +1,7 @@
-{% macro btn(label, icon, duration) -%}
+{% macro btn(label, id, icon, duration, device="") -%}
 <div class="orc-button">
     <div class="orc-button-label">{{ label }}</div>
-    <button class="orc-btn orc-config-runner" data-id="{{ label }}" data-duration="{{ duration }}">
+    <button class="orc-btn orc-config-runner" data-id="{{ id }}" data-duration="{{ duration }}"{% if device %} data-device="{{ device }}"{% endif %}>
         <svg class="w-5 h-5"><use href="/static/icons.svg#{{ icon }}"/></svg>
     </button>
 </div>
