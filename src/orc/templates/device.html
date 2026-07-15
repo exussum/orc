@@ -50,10 +50,10 @@
                             {% else %}
                                 <div class="grid grid-cols-2 gap-2">
                                     <button class="orc-runner orc-btn" data-state="off" data-type="device" data-id="{{ device.id }}">
-                                        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ 'tv-outline' if device.type == 'LGTV' else 'light-bulb-outline' }}"/></svg>
+                                        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ device.icon }}-outline"/></svg>
                                     </button>
                                     <button class="orc-runner orc-btn" data-state="on" data-type="device" data-id="{{ device.id }}">
-                                        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ 'tv' if device.type == 'LGTV' else 'light-bulb' }}"/></svg>
+                                        <svg class="w-5 h-5"><use href="/static/icons.svg#{{ device.icon }}"/></svg>
                                     </button>
                                 </div>
                             {% endif %}

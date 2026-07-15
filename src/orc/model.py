@@ -1,3 +1,4 @@
+import importlib
 import re
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -10,7 +11,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Self
 from apscheduler.schedulers.base import BaseScheduler
 
 from orc.collections import doc_to_sub_tables, doc_to_table, parse_kv
-from orc.security import safe_eval, safe_import
+from orc.security import safe_eval
 
 if TYPE_CHECKING:
     from orc.api import SnapshotManager
@@ -47,7 +48,9 @@ _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 _ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
 _ERR_PARAMS = "Invalid parameter {}={!r}"
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
-_VALID_SECTIONS = frozenset({"scene", "system", "hubitat"})
+# "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
+# they render no button and are not auto-invoked, unlike the other sections.
+_VALID_SECTIONS = frozenset({"scene", "system", "hubitat", "device"})
 _ERR_PLUGIN = "Cannot load plugin {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. Ensure the module exists and the function is defined within it."
 
 _STATE_SORT_STOP = -2
@@ -55,7 +58,7 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
-_CLASS_SORT = {"LGTV": 0, "Light": 1, "Chromecast": 2, "AC": 3}
+_CLASS_SORT = {"Light": 1, "Chromecast": 2, "AC": 3}
 
 
 class Capability(Enum):
@@ -124,19 +127,6 @@ class CalendarJob:
 @dataclass
 class IotJob:
     rule: Routine
-
-
-@dataclass(frozen=True)
-class SensorState:
-    name: str
-    device_id: str
-    connected: bool = False
-    state: str | None = None
-    battery: int | None = None
-    signal: int | None = None
-    interval: int | None = None
-    online: bool | None = None
-    last_change: datetime | None = None
 
 
 @dataclass
@@ -217,8 +207,12 @@ class Secrets:
     access_token: str
     market_holidays_url: str
     ics_url: str
-    yolink_id: str
-    yolink_secret: str
+    # Every secret fetched from the store, so plugins can read their own keys
+    # (e.g. secrets.get("SOME_TOKEN")) without core declaring a typed field for each.
+    _raw: dict[str, str] = field(default_factory=dict)
+
+    def get(self, key: str) -> str:
+        return self._raw.get(key, "")
 
 
 @dataclass
@@ -249,6 +243,37 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
             obj.capabilities = capabilities
             obj.room = room
         return obj
+
+
+@dataclass(frozen=True)
+class DeviceType:
+    """A registered device type with everything plugins declared about it, so
+    consumers iterate whole devices rather than parallel per-attribute maps.
+    ``cls`` is the runtime-built enum class, so callers reach members via
+    ``cls[name]``."""
+
+    cls: type[DeviceEnum]
+    icon: str
+    controllable: bool
+    reset_excluded: bool
+    dispatch: Callable[..., None] | None
+
+
+@dataclass(frozen=True)
+class Registry:
+    """Immutable snapshot of what plugins registered, built once per config load and
+    exposed as ``orc.config.registry``.
+
+    ``click_hooks`` and ``button_labels`` are keyed by button/action id, not device
+    type, so they sit alongside ``devices`` rather than folding into a DeviceType.
+    ``state_providers`` are stored as functions and called fresh by consumers on each
+    request, so the returned rows reflect live device state."""
+
+    devices: dict[str, DeviceType]
+    click_hooks: dict[str, str]
+    button_labels: dict[str, str]
+    state_providers: dict[str, Callable[[], Any]]
+    startup_hooks: list[Callable[[], None]]
 
 
 def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:
@@ -284,9 +309,11 @@ def build_config(doc: Any, section: str, required: Iterable[str] = ()) -> dict[A
     return result
 
 
-def build_enum(doc: Any, section: str, sub_section: str, id_lookup: dict[Any, tuple[Any, ...]] | None = None) -> type[DeviceEnum]:
-    if sub_section not in ("LGTV", "Light", "Chromecast", "BroadLink", "WebOS", "Leak", "AC"):
-        raise ValueError(f"sub_section must be 'LGTV', 'Light', 'Chromecast', 'BroadLink', 'WebOS', 'Leak', or 'AC', got '{sub_section}'")
+def build_enum(
+    doc: Any, section: str, sub_section: str, id_lookup: dict[Any, tuple[Any, ...]] | None = None, *, device_types: Iterable[str]
+) -> type[DeviceEnum]:
+    if sub_section not in device_types:
+        raise ValueError(f"sub_section must be one of {list(device_types)}, got '{sub_section}'")
 
     rows = next((rows for (type, rows) in _typed_sub_tables(doc, section, ("Type", "Name", "Room", "Host")) if type == sub_section), None)
     if rows is None:
@@ -346,9 +373,9 @@ def column_to_value(col: str, val: Any) -> Any:
     if col.lower() == "value":
         return int(val) if val and val.isdigit() else val
     elif col.lower() == "device":
-        # device enums are attached to the orc package at runtime by build_enum
-        _ns = {cls.__name__: cls for cls in (orc.Light, orc.Chromecast, orc.BroadLink, orc.WebOS, orc.Leak, orc.AC, orc.LGTV)}
-        return safe_eval(val, _ns)
+        # device enums are populated on the orc package at runtime by Config.load; build
+        # the eval namespace keyed by class name (== the device-type name).
+        return safe_eval(val, {e.__name__: e for e in orc.device_enums})
     elif col.lower() == "state":
         if val and val.isdigit():
             return int(val)
@@ -387,7 +414,8 @@ def column_to_value(col: str, val: Any) -> Any:
         return time(hour, minute)
     elif col.lower() == "plugin":
         try:
-            return safe_import(val)
+            module_path, fn_name = val.rsplit(".", 1)
+            return getattr(importlib.import_module(module_path), fn_name)  # nosemgrep: non-literal-import
         except Exception as exc:
             raise ValueError(_ERR_PLUGIN.format(val, exc)) from exc
     return val
@@ -422,7 +450,8 @@ def _fmt(pairs: Iterable[tuple[Any, Any]]) -> str:
 
 
 def _op_cmp(k: Config) -> tuple[int, int]:
-    class_sort = _CLASS_SORT[k.what.__class__.__name__]
+    # plugin-owned device types aren't in _CLASS_SORT; they default past the core types
+    class_sort = _CLASS_SORT.get(k.what.__class__.__name__, 10)
 
     if k.state == STOP:
         sub_sort = _STATE_SORT_STOP

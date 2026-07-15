@@ -8,10 +8,13 @@
             </div>
             <div class="orc-routine-buttons p-4">
                 {% for id, plugin in plugins.items() %}
-                    {{ btn(id, plugin.icon, durations.get(id, 0)) }}
+                    {{ btn(id, id, plugin.icon, durations.get(id, 0)) }}
                 {% endfor %}
                 {% for id in ad_hoc_routines %}
-                    {{ btn(id, "clipboard-check", durations.get(id, 0)) }}
+                    {{ btn(id, id, "clipboard-check", durations.get(id, 0)) }}
+                {% endfor %}
+                {% for row in device_buttons %}
+                    {{ btn(registry.button_labels.get(row.action, "{device}").format(device=row.name), row.action, device_plugins[row.action].icon, durations.get(row.action, 0), device=row.name) }}
                 {% endfor %}
             </div>
         </div>
@@ -65,29 +68,26 @@
                             <li>{{ c.what.name }}: {{ c.content or '—' }} @ {{ c.volume }}%</li>
                         {% endfor %}
                     </ul>
-                    <div class="font-semibold mb-1">TV</div>
-                    <ul class="list-disc list-inside mb-3">
-                        {% for name, state in tv_states.items() %}
-                            <li>{{ name }}: {{ state }}</li>
-                        {% endfor %}
-                    </ul>
-                    <div class="font-semibold mb-1">Leak Sensors</div>
-                    <ul class="list-disc list-inside">
-                        {% for s in leak_sensors %}
-                            <li>
-                                {{ s.name }}
-                                <ul class="list-disc list-inside ml-4">
-                                    <li>state: {{ s.state or '—' }}</li>
-                                    <li>connected: {{ s.connected }}</li>
-                                    <li>online: {{ s.online if s.online is not none else '—' }}</li>
-                                    <li>battery: {{ s.battery if s.battery is not none else '—' }}</li>
-                                    <li>signal: {{ s.signal if s.signal is not none else '—' }}</li>
-                                    <li>interval: {{ s.interval if s.interval is not none else '—' }}</li>
-                                    <li>last_change: {{ s.last_change or '—' }}</li>
-                                </ul>
-                            </li>
-                        {% endfor %}
-                    </ul>
+                    {% for title, rows in plugin_states %}
+                        <div class="font-semibold mb-1">{{ title }}</div>
+                        <ul class="list-disc list-inside mb-3">
+                            {% for row in rows %}
+                                <li>
+                                    {% if row.action %}
+                                        <a class="orc-config-runner cursor-pointer underline"
+                                           data-id="{{ row.action }}" data-device="{{ row.name }}">{{ row.name }}</a>
+                                    {% else %}
+                                        {{ row.name }}
+                                    {% endif %}
+                                    <ul class="list-disc list-inside ml-4">
+                                        {% for k, v in row.items() if k not in ('name', 'action') %}
+                                            <li>{{ k }}: {{ v if v is not none else '—' }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endfor %}
                 </div>
             </details>
         </div>
@@ -113,14 +113,19 @@
 {% endblock %}
 {% block tail %}
     <script>
+        // Elements with a custom click hook are owned by that hook (which issues its
+        // own request); the generic runner skips them so the click fires exactly once.
+        const hooked = new Set([{% for button_id in registry.click_hooks %}{{ button_id | tojson }},{% endfor %}]);
         document.querySelectorAll(".orc-config-runner").forEach((el) => {
+            if (hooked.has(el.dataset.id)) return;
             el.addEventListener("click", (e) => run_config(e.currentTarget));
         });
-        document.querySelector('.orc-config-runner[data-id="Pair LG TV"]').addEventListener("click", async (e) => {
-            const el = e.currentTarget;
-            const dismiss = await notifyPairing(parseFloat(el.dataset.duration));
-            await get("/api/run/Pair LG TV", el);
-            dismiss?.();
-        });
+        {% for button_id, js in registry.click_hooks.items() %}
+        document.querySelectorAll('.orc-config-runner[data-id="{{ button_id }}"]').forEach((btn) =>
+            btn.addEventListener("click", async (e) => {
+                const el = e.currentTarget;
+                {{ js|safe }}
+            }));
+        {% endfor %}
     </script>
 {% endblock %}
