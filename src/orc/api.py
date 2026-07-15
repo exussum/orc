@@ -1,5 +1,4 @@
 import contextlib
-import copy
 import itertools
 import math
 import os
@@ -25,19 +24,17 @@ from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
 import orc
-from orc import config
+from orc import config, device_registry
 from orc import model as m
-from orc import plugins
 from orc._decorators import (
     requires_ctx,
     synchronized,
     unwrap_rule_container,
 )
-from orc.dal import broadlink, chromecast, feeds, hubitat, sqlite, tv, usb, yolink
+from orc.dal import broadlink, chromecast, feeds, hubitat, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
-from orc.dal.lgtv import pair as _pair_lgtv
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
 from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
@@ -53,8 +50,6 @@ JOBSTORE_MEMORY = "memory"
 
 _BROADLINK_CODES = os.getenv("ORC_BROADLINK_CODES", "/etc/orc/broadlink_codes.json")
 _PRESENCE_WINDOW = timedelta(hours=9)
-_YOLINK_BATTERY_LOW_THRESHOLD = 1
-_YOLINK_SIGNAL_WEAK_THRESHOLD = -90
 _ACTIVITY_LOG = m.ActivityLog()
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 
@@ -117,52 +112,6 @@ def log_entries() -> list[m.LogEntry]:
     return list(_ACTIVITY_LOG.entries)
 
 
-# --- YoLink leak sensors ---
-
-
-def test_yolink(name: str) -> bool:
-    return yolink.simulate_transition(name)
-
-
-def start_yolink() -> None:
-    yolink.set_transition_callback(_on_yolink_transition)
-    yolink.start()
-
-
-def _on_yolink_transition(name: str, kind: str, old: Any, new: Any) -> None:
-    msg = None
-    if kind == "connection" and old is not None:
-        msg = (Log.YOLINK_CONNECTED if new == "connected" else Log.YOLINK_DISCONNECTED).format(name=name)
-    elif kind == "leak" and new in (yolink.STATE_WET, yolink.STATE_DRY):
-        msg = (Log.YOLINK_WATER_DETECTED if new == yolink.STATE_WET else Log.YOLINK_WATER_CLEARED).format(name=name)
-        if new == yolink.STATE_WET:
-            log(local_now(), m.LogSource.IOT, msg)
-            play_text(msg, level=m.AUDIO_FATAL)
-            return
-    elif kind == "battery":
-        old_low = old is not None and old <= _YOLINK_BATTERY_LOW_THRESHOLD
-        new_low = new <= _YOLINK_BATTERY_LOW_THRESHOLD
-        if new_low and not old_low:
-            msg = Log.YOLINK_LOW_BATTERY.format(name=name, battery=new)
-        elif old_low and not new_low:
-            msg = Log.YOLINK_BATTERY_RESTORED.format(name=name, battery=new)
-    elif kind == "signal":
-        old_weak = old is not None and old <= _YOLINK_SIGNAL_WEAK_THRESHOLD
-        new_weak = new <= _YOLINK_SIGNAL_WEAK_THRESHOLD
-        if new_weak and not old_weak:
-            msg = Log.YOLINK_WEAK_SIGNAL.format(name=name, signal=new)
-        elif old_weak and not new_weak:
-            msg = Log.YOLINK_SIGNAL_RESTORED.format(name=name, signal=new)
-    elif kind == "interval" and old is not None:
-        msg = Log.YOLINK_INTERVAL_CHANGED.format(name=name, interval=new)
-    elif kind == "online" and old is not None:
-        msg = (Log.YOLINK_ONLINE if new else Log.YOLINK_OFFLINE).format(name=name)
-
-    if msg:
-        log(local_now(), m.LogSource.IOT, msg)
-        play_text(msg)
-
-
 # --- Device control ---
 
 
@@ -175,16 +124,43 @@ def capture_sounds() -> m.Configs[m.SoundState]:
         return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
 
 
-def capture_leak_sensors() -> list[m.SensorState]:
-    return yolink.snapshot()
+# Dispatch handlers keyed by device-type name in orc.device_registry. Each takes
+# the device, the rule, and a per-dispatch `stream` cache (shared across the
+# devices in one dispatch call so a stream's metadata is fetched only once).
+# Plugins register their own handlers the same way.
+def _dispatch_light(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, int):
+        hubitat.update_light(w, brightness=rule.state)
+    else:
+        hubitat.update_light(w, on=rule.state == m.ON)
 
 
-def capture_tv() -> dict[str, str]:
-    return {w.name: "off" if tv.is_off(orc.WebOS[w.name]) else "on" for w in orc.LGTV}
+def _dispatch_chromecast(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, int):
+        chromecast.set_volume(w, rule.state)
+    elif rule.state == m.STOP:
+        chromecast.stop(w)
+    elif rule.state == m.PAUSE:
+        chromecast.pause(w)
+    elif rule.state == m.RESUME:
+        chromecast.resume(w)
+    else:
+        if rule.state not in stream:
+            # rule.state is a stream URL or YouTube id (str) in this branch; Config.state is typed object
+            stream[rule.state] = (
+                (safe_domain(rule.state, _STREAM_DOMAINS), rule.state)
+                if "http" in rule.state
+                else chromecast.fetch_youtube_stream_metadata(rule.state)
+            )
+        chromecast.play(w, *stream[rule.state])
 
 
-def pair_lg_tv(lgtv: m.DeviceEnum) -> None:
-    _pair_lgtv(orc.WebOS[lgtv.name].value)
+def register_core(core: device_registry.RegistryBuilder) -> None:
+    """Register core's own dispatch handlers into the given registry state. Called
+    from ``Config.load`` (not at import) so all registration happens on config load,
+    like plugins."""
+    core.register_dispatch("Light", _dispatch_light)
+    core.register_dispatch("Chromecast", _dispatch_chromecast)
 
 
 @unwrap_rule_container
@@ -199,40 +175,10 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
             print("Skipping virtual device:" + w.name, file=sys.stderr)
             continue
 
-        if isinstance(w, orc.Light):
-            if isinstance(rule.state, int):
-                hubitat.update_light(w, brightness=rule.state)
-            else:
-                hubitat.update_light(w, on=rule.state == m.ON)
-        elif isinstance(w, orc.Chromecast):
-            if isinstance(rule.state, int):
-                chromecast.set_volume(w, rule.state)
-            elif rule.state == m.STOP:
-                chromecast.stop(w)
-            elif rule.state == m.PAUSE:
-                chromecast.pause(w)
-            elif rule.state == m.RESUME:
-                chromecast.resume(w)
-            else:
-                if rule.state not in stream:
-                    # rule.state is a stream URL or YouTube id (str) in this branch; Config.state is typed object
-                    stream[rule.state] = (
-                        (safe_domain(rule.state, _STREAM_DOMAINS), rule.state)
-                        if "http" in rule.state
-                        else chromecast.fetch_youtube_stream_metadata(rule.state)
-                    )
-                chromecast.play(w, *stream[rule.state])
-        elif isinstance(w, orc.LGTV):
-            webos_device, bl_device = orc.WebOS[w.name], orc.BroadLink[w.name]
-            if rule.state == m.OFF:
-                tv.off(webos_device)
-            elif rule.state == m.ON:
-                if tv.is_off(webos_device):
-                    broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
-            else:
-                raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
-        else:
+        device_type = config.registry.devices.get(type(w).__name__)
+        if device_type is None or device_type.dispatch is None:
             raise Exception("Unknown type")
+        device_type.dispatch(w, rule, stream)
         sleep(0.1)
 
 
@@ -246,30 +192,18 @@ def ac_command(
 
 
 def device_command(id: str, state: str | None) -> None:
-    for enum_cls in (orc.Light, orc.LGTV, orc.Chromecast):
+    # Find the device across dispatch-handled types and run its registered handler
+    # directly (no snapshot interception), so plugin device types work without core
+    # knowing them. state is an int level (brightness/volume) or an ON/OFF/STOP string.
+    parsed: Any = int(state) if state and state.isdigit() else state
+    for device_type in config.registry.devices.values():
+        if device_type.dispatch is None:
+            continue
         try:
-            device = enum_cls[id]
+            member = device_type.cls[id]
         except KeyError:
             continue
-
-        level = int(state) if state and state.isdigit() else None
-
-        if isinstance(device, orc.Light):
-            if level is not None:
-                hubitat.update_light(device, brightness=level)
-            else:
-                hubitat.update_light(device, on=state == m.ON)
-        elif isinstance(device, orc.LGTV):
-            webos_device, bl_device = orc.WebOS[device.name], orc.BroadLink[device.name]
-            if state == m.OFF:
-                tv.off(webos_device)
-            elif state == m.ON and tv.is_off(webos_device):
-                broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
-        elif isinstance(device, orc.Chromecast):
-            if level is not None:
-                chromecast.set_volume(device, level)
-            elif state == m.STOP:
-                chromecast.stop(device)
+        device_type.dispatch(member, m.Config(member, parsed), {})
         return
 
 

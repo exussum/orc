@@ -3,13 +3,16 @@ import signal
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
-from typing import TYPE_CHECKING
+from types import ModuleType
+from typing import TYPE_CHECKING, Any
 
 from apscheduler.schedulers.base import BaseScheduler
 
 from orc import model as m
-from orc._decorators import plugin_config, requires_ctx
+
+# Re-exported for plugin authors: the documented import path is ``from orc.plugins
+# import plugin_config, requires_ctx`` (see plugins/README.md).
+from orc._decorators import plugin_config, requires_ctx  # noqa: F401
 
 if TYPE_CHECKING:
     from orc import Config as OrcConfig
@@ -44,9 +47,11 @@ def build_ctx(orc_ctx: m.AppContext) -> PluginCtx:
     )
 
 
-def execute_plugin(orc_ctx: m.AppContext, id: str) -> None:
+def execute_plugin(orc_ctx: m.AppContext, id: str, **params: Any) -> None:
+    # params are optional request-supplied kwargs (e.g. the clicked device); only
+    # forwarded when present, so plugins that take just (ctx) are unaffected.
     ctx = build_ctx(orc_ctx)
-    ctx.config.plugins[id].func(ctx)
+    ctx.config.plugins[id].func(ctx, **params)
 
 
 def light_test(ctx: PluginCtx) -> None:
@@ -54,11 +59,6 @@ def light_test(ctx: PluginCtx) -> None:
     ctx.snapshot_manager.replace_config("light_test", ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end)
     ctx.api.light_test()
     ctx.snapshot_manager.resume("light_test", ctx.config.default_config)
-
-
-def pair_lg_tv(ctx: PluginCtx) -> None:
-    for tv in ctx.orc.LGTV:
-        ctx.api.pair_lg_tv(tv)
 
 
 def rebuild_jobs(ctx: PluginCtx) -> None:
@@ -72,11 +72,6 @@ def reboot(ctx: PluginCtx) -> None:
 
 def reboot_hubitat(ctx: PluginCtx) -> None:
     ctx.api.reboot_hubitat()
-
-
-@plugin_config("test_yolink_sensor", schema={"Settings": ("Key", "Value")})
-def test_yolink_sensor(ctx: PluginCtx, cfg: SimpleNamespace) -> None:
-    ctx.api.test_yolink(cfg.sensor)
 
 
 def sound_test(ctx: PluginCtx) -> None:
