@@ -58,8 +58,7 @@ def fetch_secrets() -> m.Secrets:
         access_token="?access_token=" + secrets["HUBITAT_ACCESS_TOKEN"],
         market_holidays_url=secrets["MARKET_HOLIDAYS_URL"],
         ics_url=secrets["ICS_URL"],
-        yolink_id=secrets["YOLINK_ID"],
-        yolink_secret=secrets["YOLINK_SECRET"],
+        _raw=secrets,
     )
 
 
