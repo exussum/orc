@@ -78,23 +78,32 @@ def cfg() -> str:
             with open(p) as f:
                 plugin_htmls[p.stem] = safe_html(HtmlRenderer().render(Document(f)))
     with open(Path(config.config_dir) / "config.md") as f:
-        return render_template(
-            "system.html",
-            html=safe_html(HtmlRenderer().render(Document(f))),
-            plugin_htmls=plugin_htmls,
-            plugins=where(config.plugins, section="system"),
-            ad_hoc_routines=where(config.ad_hoc_routines, section="system"),
-            ctx=app.orc,
-            today_theme=api.calculate_theme(today),
-            tomorrow_theme=api.calculate_theme(tomorrow),
-            theme_override=api.current_theme_override(),
-            lights=api.capture_lights(),
-            sounds=api.capture_sounds(),
-            durations=dict(api.fetch_durations()),
-            leak_sensors=api.capture_leak_sensors(),
-            tv_states=api.capture_tv(),
-            version=app.orc.version_manager.version,
-        )
+        html = safe_html(HtmlRenderer().render(Document(f)))
+
+    states = [(title, fn()) for title, fn in config.registry.state_providers.items()]
+    # One button per device: each actionable state row whose action is a
+    # device-section plugin (row "action" -> plugin id, "name" -> device).
+    device_buttons = [row for title, rows in states for row in rows if row.get("action") in where(config.plugins, section="device")]
+
+    return render_template(
+        "system.html",
+        html=html,
+        plugin_htmls=plugin_htmls,
+        plugins=where(config.plugins, section="system"),
+        ad_hoc_routines=where(config.ad_hoc_routines, section="system"),
+        ctx=app.orc,
+        today_theme=api.calculate_theme(today),
+        tomorrow_theme=api.calculate_theme(tomorrow),
+        theme_override=api.current_theme_override(),
+        lights=api.capture_lights(),
+        sounds=api.capture_sounds(),
+        durations=dict(api.fetch_durations()),
+        plugin_states=states,
+        device_buttons=device_buttons,
+        device_plugins=where(config.plugins, section="device"),
+        registry=config.registry,
+        version=app.orc.version_manager.version,
+    )
 
 
 def _to_level(state: object) -> int:
@@ -103,20 +112,21 @@ def _to_level(state: object) -> int:
     return 100 if state == m.ON else 0
 
 
-_DEVICE_TYPE_ORDER = {"Light": 0, "LGTV": 1, "Chromecast": 2, "AC": 3}
+_DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
 
 
 @bp.route("/device/")
 def device() -> str:
     light_states = {c.what.name: c.state for c in api.capture_lights().items}  # type: ignore[union-attr]  # captured lights are always enum members, not the class/set arm
     sound_states = {c.what.name: c.volume for c in api.capture_sounds().items}
-    all_devices = list(chain.from_iterable((orc.Light, orc.Chromecast, orc.LGTV, orc.AC)))
+    all_devices = list(chain.from_iterable(dt.cls for dt in config.registry.devices.values() if dt.controllable))
 
     def make_device(d: Any) -> SimpleNamespace:
         return SimpleNamespace(
             name=d.name.replace("_", " ").title(),
             id=d.name,
             type=type(d).__name__,
+            icon=config.registry.devices[type(d).__name__].icon,
             capabilities={c.name for c in d.capabilities},
             level=_to_level(light_states.get(d.name)),
             volume=sound_states.get(d.name, 0),
@@ -147,7 +157,11 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
     elif id in config.plugins:
         plugin = config.plugins[id]
         delay = plugin.delay
-        action = lambda: plugins.execute_plugin(app.orc, id)
+        # Captured now (not inside the possibly-deferred lambda) — request is gone by
+        # the time a delayed job runs. Only passed on when set, so param-less plugins
+        # keep their (ctx)-only signature.
+        params = {"device": device} if (device := request.args.get("device")) else {}
+        action = lambda: plugins.execute_plugin(app.orc, id, **params)
     elif id in config.schedule_routines:
         action = lambda: api.dispatch(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
@@ -174,14 +188,6 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
         app.orc.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), jobstore=api.JOBSTORE_MEMORY)
     else:
         run(ctx=app.orc)
-    return {"version": VersionManager.version}, 200
-
-
-@bp.route("/api/yolink/test/<name>")
-def yolink_test(name: str) -> tuple[dict[str, Any], int]:
-    with api.record_duration(name):
-        if not api.test_yolink(name):
-            return {"error": "Unknown leak sensor"}, 404
     return {"version": VersionManager.version}, 200
 
 

@@ -79,7 +79,8 @@ def _build_app() -> tuple[OrcFlask, BackgroundScheduler]:
     scheduler.start(paused=True)
 
     api.setup_scheduler(ctx)
-    api.start_yolink()
+    for hook in config.config.registry.startup_hooks:
+        hook()
 
     app = OrcFlask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
