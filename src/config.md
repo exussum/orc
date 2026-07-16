@@ -59,9 +59,11 @@
 
 ##### Plugins
 
-| Name            | Plugin                                      | Parameters      |
-|-----------------|---------------------------------------------|-----------------|
-| Entrance Sensor | orc_entrance_sensor.plugins.trigger_sensor  | section=hubitat |
+| Name             | Plugin                                             | Parameters      |
+|------------------|----------------------------------------------------|-----------------|
+| Entrance Sensor  | orc_plugins.entrance_sensor.plugins.trigger_sensor | section=hubitat |
+| Pair LG TV       | orc_plugins.lgtv.plugins.pair_tv                   | section=device  |
+| Test Leak Sensor | orc_plugins.yolink.plugins.test_sensor             | section=device  |
 
 ---
 

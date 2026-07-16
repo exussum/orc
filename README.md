@@ -199,4 +199,4 @@ bounces the `orc` supervisor job.
 - `src/config.md` — sample device/routine/theme/plugin definitions
 - `src/plugins/` — per-plugin markdown config files
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
-- `entrance_sensor/` — optional `orc_entrance_sensor` plugin package with its own tests
+- `plugins/` — optional `orc_plugins` plugin package (e.g. `entrance_sensor`) with its own tests

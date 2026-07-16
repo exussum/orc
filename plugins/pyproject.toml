@@ -5,7 +5,7 @@ requires = [
 ]
 
 [project]
-name = "orc_entrance_sensor"
+name = "orc_plugins"
 version = "0.0.1"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/orc_entrance_sensor"]
+packages = ["src/orc_plugins"]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
