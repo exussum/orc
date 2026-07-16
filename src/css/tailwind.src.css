@@ -129,7 +129,7 @@
 }
 
 @utility orc-button-label {
-    @apply h-[2lh] text-[10px] w-[70px] mb-[5px] flex flex-col-reverse;
+    @apply h-[2lh] text-[10px] w-[70px] mb-[5px] flex flex-col-reverse items-center;
 }
 
 @utility orc-theme-form-date-input {
