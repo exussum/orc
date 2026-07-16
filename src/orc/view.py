@@ -179,15 +179,15 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
     @api.requires_ctx
     def run(ctx: m.AppContext) -> None:
         api.log(api.local_now(), m.LogSource.MANUAL, id)
-        with api.record_duration(id):
-            action()
+        action()
 
     if delay:
         when = api.local_now() + delay
         api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
         app.orc.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), jobstore=api.JOBSTORE_MEMORY)
     else:
-        run(ctx=app.orc)
+        with api.record_duration(id):
+            run(ctx=app.orc)
     return {"version": VersionManager.version}, 200
 
 
