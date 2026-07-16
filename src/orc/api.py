@@ -332,7 +332,7 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
 
 
 @requires_ctx
-def check_presence(ctx: m.AppContext) -> set[str]:
+def check_presence(ctx: m.AppContext, silent: bool = False) -> set[str]:
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
     if not pairs:
         return present_names()
@@ -341,10 +341,12 @@ def check_presence(ctx: m.AppContext) -> set[str]:
         present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
     mark_present(present, local_now())
     after = present_names()
-    if detected := sorted(after - before):
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
-    if lost := sorted(before - after):
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
+
+    if not silent:
+        if detected := sorted(after - before):
+            log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
+        if lost := sorted(before - after):
+            log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
     return after
 
 
