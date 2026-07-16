@@ -1,16 +1,23 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import day_card %}
 {% block body %}
-    {% for day, entries in entries_grouped %}
+    {% for day, runs in entries_grouped %}
         {% call day_card(day) %}
             <tr>
-                <th class="px-2 py-1 font-normal w-32">Time</th>
+                <th class="px-2 py-1 font-normal w-56">Time</th>
                 <th class="px-2 py-1 font-normal w-32">Source</th>
                 <th class="px-2 py-1 font-normal">Action</th>
             </tr>
-            {% for entry in entries %}
+            {% for run in runs %}
+                {% set entry = run|first %}
                 <tr>
-                    <td class="px-2 py-1 whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</td>
+                    <td class="px-2 py-1 whitespace-nowrap">
+                        {% if run|length > 1 %}
+                            {{ (run|last).timestamp.strftime("%I:%M:%S %p") }} – {{ entry.timestamp.strftime("%I:%M:%S %p") }}
+                        {% else %}
+                            {{ entry.timestamp.strftime("%I:%M:%S %p") }}
+                        {% endif %}
+                    </td>
                     <td class="px-2 py-1">
                         {% if entry.source == "calendar" %}
                             <span class="orc-badge-calendar">calendar</span>
@@ -24,7 +31,7 @@
                             <span class="orc-badge-manual">manual</span>
                         {% endif %}
                     </td>
-                    <td class="px-2 py-1">{{ entry.action }}</td>
+                    <td class="px-2 py-1">{{ entry.action }}{% if run|length > 1 %} <span class="text-gray-400">×{{ run|length }}</span>{% endif %}</td>
                 </tr>
             {% endfor %}
         {% endcall %}
