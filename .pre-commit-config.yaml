@@ -40,7 +40,7 @@ repos:
         entry: uv export --frozen --format pylock.toml -o pylock.toml
         language: system
         pass_filenames: false
-        always_run: true
+        files: ^(pyproject\.toml|uv\.lock|pylock\.toml)$
 
       - id: pip-audit
         name: pip-audit
