@@ -24,10 +24,10 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 printf 'SHA = "%s"\nBUILD_TIME = "%s"\n' "$(git rev-parse --short HEAD)" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > src/orc/_build.py
-echo data entrance_sensor . | xargs -n 1 uv build --wheel --out-dir dist
+echo data plugins . | xargs -n 1 uv build --wheel --out-dir dist
 uv pip install dist/orc_data-*.whl
 
-$TWINE dist/orc-*.whl dist/orc_entrance_sensor-*.whl
+$TWINE dist/orc-*.whl dist/orc_plugins-*.whl
 
 
 if [ "$1" = "full" ]; then
