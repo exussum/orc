@@ -15,10 +15,27 @@ import requests
 
 import orc as config
 from orc.collections import LockedDict
-from orc.model import SensorState
+
+# orc.Leak is attached to the orc package at runtime once this plugin registers the
+# "Leak" device type; mypy can't see the dynamic attribute, so iterate it via an Any view.
+_orc: Any = config
 
 # callback (name, kind, old, new); kind in {"connection", "leak"}; old/new are arbitrary field values
 type TransitionCallback = Callable[[str, str, Any, Any], None]
+
+
+@dataclasses.dataclass(frozen=True)
+class SensorState:
+    name: str
+    device_id: str
+    connected: bool = False
+    state: str | None = None
+    battery: int | None = None
+    signal: int | None = None
+    interval: int | None = None
+    online: bool | None = None
+    last_change: datetime | None = None
+
 
 STATE_DRY = "normal"
 STATE_WET = "alert"
@@ -55,7 +72,7 @@ def set_transition_callback(fn: TransitionCallback) -> None:
 
 def snapshot() -> list[SensorState]:
     sensors = _states.copy()
-    return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in config.Leak]
+    return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in _orc.Leak]
 
 
 def simulate_transition(name: str) -> bool:
@@ -79,16 +96,16 @@ def simulate_transition(name: str) -> bool:
 
 
 def start() -> None:
-    if not len(config.Leak):
+    if not len(_orc.Leak):
         _log.info("yolink: no Leak devices in config.md, skipping")
         return
 
-    if not (config.config.secrets.yolink_id and config.config.secrets.yolink_secret):
+    if not (config.config.secrets.get("YOLINK_ID") and config.config.secrets.get("YOLINK_SECRET")):
         _log.info("yolink: secrets not set, skipping")
         return
 
     global _states
-    _states = LockedDict({device.value: SensorState(name=device.name, device_id=device.value) for device in config.Leak})
+    _states = LockedDict({device.value: SensorState(name=device.name, device_id=device.value) for device in _orc.Leak})
     threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()
 
 
@@ -114,8 +131,8 @@ def _authenticate() -> tuple[str, int]:
         _AUTH_URL,
         data={
             "grant_type": "client_credentials",
-            "client_id": config.config.secrets.yolink_id,
-            "client_secret": config.config.secrets.yolink_secret,
+            "client_id": config.config.secrets.get("YOLINK_ID"),
+            "client_secret": config.config.secrets.get("YOLINK_SECRET"),
         },
         timeout=config.config.http_timeout,
     )
@@ -163,7 +180,7 @@ def _update_sensor(device_id: str, **fields: Any) -> None:
 
 def _hydrate_states(access_token: str) -> None:
     tokens = _fetch_device_tokens(access_token)
-    for device in config.Leak:
+    for device in _orc.Leak:
         device_token = tokens.get(device.value)
         if device_token is None:
             continue

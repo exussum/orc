@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from orc_entrance_sensor import plugins
+from orc_plugins.entrance_sensor import plugins
 
 from orc import api
 from orc import model as m
