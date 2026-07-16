@@ -8,6 +8,7 @@ def pytest_sessionstart(session):
     from enum import Enum
 
     import orc
+    from orc import api, device_registry
 
     class Light(DeviceEnum):
         a = (1, frozenset([m.Capability.change_level]))
@@ -21,6 +22,12 @@ def pytest_sessionstart(session):
         t = 1
 
     orc.Light, orc.Chromecast, orc.TV = Light, Chromecast, TV
+    orc.device_enums = [Light, Chromecast, TV]
+    # Register core dispatch into a fresh builder, then build the registry from the test
+    # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.
+    builder = device_registry.RegistryBuilder()
+    api.register_core(builder)
+    orc.config.registry = builder.build({"Light": Light, "Chromecast": Chromecast, "TV": TV})
 
 
 @pytest.fixture(autouse=True)

@@ -1,7 +1,7 @@
-# orc_entrance_sensor
+# orc_plugins
 
-An out-of-tree orc plugin. This README walks through how a plugin is set up,
-using this package as the working example. For everything else (running orc,
+An out-of-tree orc plugin package. This README walks through how a plugin is set
+up, using the `entrance_sensor` plugin in this package as the working example. For everything else (running orc,
 devices, secrets, environment), see the [main README](../README.md).
 
 ## What a plugin is
@@ -11,12 +11,13 @@ exposes one or more plain functions. orc discovers them by dotted path from
 the `Plugins` table in `config.md` — there is no entry-point registration.
 
 ```
-entrance_sensor/
-├── pyproject.toml                    # package named orc_entrance_sensor, depends on orc
+plugins/
+├── pyproject.toml                    # package named orc_plugins, depends on orc
 ├── src/
-│   └── orc_entrance_sensor/
-│       ├── __init__.py
-│       └── plugins.py                # the plugin functions live here
+│   └── orc_plugins/
+│       └── entrance_sensor/
+│           ├── __init__.py
+│           └── plugins.py            # the plugin functions live here
 └── tests/
 ```
 
@@ -24,7 +25,7 @@ entrance_sensor/
 
 ```toml
 [project]
-name = "orc_entrance_sensor"
+name = "orc_plugins"
 version = "0.0.1"
 requires-python = ">=3.11"
 dependencies = [
@@ -44,7 +45,7 @@ arguments depend on which section the plugin is registered under (step 2):
 | `hubitat` | `fn(ctx, device_id, value)`    | every Hubitat Maker API callback            |
 
 This plugin is a `hubitat` plugin — `trigger_sensor` in
-[`src/orc_entrance_sensor/plugins.py`](src/orc_entrance_sensor/plugins.py)
+[`src/orc_plugins/entrance_sensor/plugins.py`](src/orc_plugins/entrance_sensor/plugins.py)
 receives every device event and returns early unless `device_id` matches the
 sensor it cares about.
 
@@ -79,7 +80,7 @@ Add a row to the `Plugins` table in `$ORC_CONFIG_DIR/config.md`. The
 
 | Name            | Plugin                                     | Parameters      |
 |-----------------|--------------------------------------------|-----------------|
-| Entrance Sensor | orc_entrance_sensor.plugins.trigger_sensor | section=hubitat |
+| Entrance Sensor | orc_plugins.entrance_sensor.plugins.trigger_sensor | section=hubitat |
 ```
 
 ## 3. Install it
@@ -87,10 +88,10 @@ Add a row to the `Plugins` table in `$ORC_CONFIG_DIR/config.md`. The
 Install the plugin package into the same environment as orc:
 
 ```sh
-pip install ./entrance_sensor          # alongside: pip install ./data .
+pip install ./plugins          # alongside: pip install ./data .
 ```
 
-(For development, `pip install -e ./entrance_sensor`.)
+(For development, `pip install -e ./plugins`.)
 
 Restart orc; the function is imported when `config.md` is parsed at startup.
 A bad dotted path fails fast with a config error at that point, not at
@@ -141,11 +142,11 @@ Because this package is outside the `orc` package, the config name is
 automatically namespaced as `<package>/<name>`, so the file lives at:
 
 ```
-$ORC_CONFIG_DIR/plugins/orc_entrance_sensor/entrance_sensor.md
+$ORC_CONFIG_DIR/plugins/orc_plugins/entrance_sensor.md
 ```
 
 The in-repo sample is
-[`../src/plugins/orc_entrance_sensor/entrance_sensor.md`](../src/plugins/orc_entrance_sensor/entrance_sensor.md):
+[`../src/plugins/orc_plugins/entrance_sensor.md`](../src/plugins/orc_plugins/entrance_sensor.md):
 
 ```markdown
 ##### Settings
@@ -182,6 +183,6 @@ Tests run standalone from this directory — `pyproject.toml` puts the parent
 `orc` sources on `pythonpath`, so no install is needed:
 
 ```sh
-cd entrance_sensor
+cd plugins
 pytest
 ```
