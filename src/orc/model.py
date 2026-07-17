@@ -67,7 +67,7 @@ class Capability(Enum):
 
 class LogSource(str, Enum):
     CALENDAR = "calendar"
-    IOT = "iot"
+    ROUTINE = "routine"
     REMOTE = "remote"
     MANUAL = "manual"
     SYSTEM = "system"
