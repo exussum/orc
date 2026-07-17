@@ -412,13 +412,13 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext, force: bool = False) -> None:
     if not (matched := matching_items(rule, force, now, present_names())):
         unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
         detail = ", ".join(unmet) if unmet else "no conditions met"
-        log(now, m.LogSource.IOT, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
+        log(now, m.LogSource.ROUTINE, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     elif not force:
         if weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
-            log(now, m.LogSource.IOT, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
+            log(now, m.LogSource.ROUTINE, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
         else:
-            log(now, m.LogSource.IOT, rule.name)
+            log(now, m.LogSource.ROUTINE, rule.name)
     dispatch(replace(rule, items=matched), force=force)
 
 
