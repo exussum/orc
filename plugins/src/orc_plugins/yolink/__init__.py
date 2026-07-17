@@ -38,7 +38,7 @@ def _on_transition(name: str, kind: str, old: Any, new: Any) -> None:
     elif kind == "leak" and new in (dal.STATE_WET, dal.STATE_DRY):
         msg = (Msg.WATER_DETECTED if new == dal.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         if new == dal.STATE_WET:
-            api.log(api.local_now(), m.LogSource.IOT, msg)
+            api.log(api.local_now(), m.LogSource.SYSTEM, msg)
             api.play_text(msg, level=m.AUDIO_FATAL)
             return
     elif kind == "battery":
@@ -61,7 +61,7 @@ def _on_transition(name: str, kind: str, old: Any, new: Any) -> None:
         msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
 
     if msg:
-        api.log(api.local_now(), m.LogSource.IOT, msg)
+        api.log(api.local_now(), m.LogSource.SYSTEM, msg)
         api.play_text(msg)
 
 
