@@ -73,12 +73,7 @@
                         <ul class="list-disc list-inside mb-3">
                             {% for row in rows %}
                                 <li>
-                                    {% if row.action %}
-                                        <a class="orc-config-runner cursor-pointer underline"
-                                           data-id="{{ row.action }}" data-device="{{ row.name }}">{{ row.name }}</a>
-                                    {% else %}
-                                        {{ row.name }}
-                                    {% endif %}
+                                    {{ row.name }}
                                     <ul class="list-disc list-inside ml-4">
                                         {% for k, v in row.items() if k not in ('name', 'action') %}
                                             <li>{{ k }}: {{ v if v is not none else '—' }}</li>
