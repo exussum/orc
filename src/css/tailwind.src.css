@@ -18,7 +18,7 @@
     --color-orc-secondary-active-border: #353535;
     --color-orc-remote: #9933cc;
     --color-orc-system: #5f9d3f;
-    --color-orc-iot: #b5604a;
+    --color-orc-routine: #b5604a;
     --color-orc-ac-selected: #fbbf24;
 }
 
@@ -82,8 +82,8 @@
     @apply orc-badge bg-orc-secondary;
 }
 
-@utility orc-badge-iot {
-    @apply orc-badge bg-orc-iot;
+@utility orc-badge-routine {
+    @apply orc-badge bg-orc-routine;
 }
 
 @utility orc-badge-remote {
