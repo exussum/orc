@@ -1,7 +1,7 @@
 import socket
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -9,6 +9,7 @@ import pychromecast
 import yt_dlp
 
 from orc import model as m
+from orc._decorators import silence_fd
 from orc.dal._decorators import requires_enabled
 
 _YDL_OPTS: dict[str, Any] = {
@@ -53,11 +54,16 @@ def pause(device: m.DeviceEnum) -> None:
 @requires_enabled(None)
 def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
     with _cast(device) as cast:
+        mc = cast.media_controller
+        # Reset so play_media loads into a fresh receiver. silence_fd(2) swallows
+        # pychromecast's "no session is active" warning when nothing is playing.
+        with silence_fd(2), suppress(Exception):
+            mc.stop()
         if cast.status.app_id:
             cast.quit_app()
             time.sleep(1)
-        cast.media_controller.play_media(stream_url, "audio/mp3", title=title)
-        cast.media_controller.block_until_active(timeout=10)
+        mc.play_media(stream_url, "audio/mp3", title=title)
+        mc.block_until_active(timeout=10)
 
 
 @requires_enabled(None)

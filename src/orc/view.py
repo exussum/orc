@@ -181,12 +181,13 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
         api.log(api.local_now(), m.LogSource.MANUAL, id)
         action()
 
-    if delay:
-        when = api.local_now() + delay
-        api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
-        app.orc.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), jobstore=api.JOBSTORE_MEMORY)
-    else:
-        with api.record_duration(id):
+    with api.record_duration(id):
+        if delay:
+            when = api.local_now() + delay
+            api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
+            job_id = f"run-{id}-{when.isoformat()}"
+            app.orc.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), id=job_id, jobstore=api.JOBSTORE_MEMORY)
+        else:
             run(ctx=app.orc)
     return {"version": VersionManager.version}, 200
 
