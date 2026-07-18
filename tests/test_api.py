@@ -367,7 +367,7 @@ class TestPresence:
                 return True
 
             with patch.object(api.icmplib, "ping", side_effect=lambda host, **_: MagicMock(is_alive=ping(host))):
-                api.check_presence(ctx=self.ctx)
+                api.check_presence()
         assert api.present_names() == {"Bob"}
 
 
