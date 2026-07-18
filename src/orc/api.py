@@ -331,8 +331,7 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
         replay_day(now)
 
 
-@requires_ctx
-def check_presence(ctx: m.AppContext, silent: bool = False) -> set[str]:
+def check_presence(silent: bool = False) -> set[str]:
     pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
     if not pairs:
         return present_names()
@@ -428,7 +427,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
     crons = (
         (rebuild_iot_schedule, "10 0 * * *", "iot-cron", "Iot Cron"),
         (rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "cal-cron", "Calendar Cron"),
-        (check_presence, "5 * * * *", "presence-cron", "Presence Cron"),
+        (_check_presence_job, "5 * * * *", "presence-cron", "Presence Cron"),
     )
     for func, crontab, job_id, name in crons:
         ctx.scheduler.add_job(
@@ -510,6 +509,11 @@ def _run_cal_job(job: m.CalendarJob, ctx: m.AppContext) -> None:
     else:
         log(local_now(), m.LogSource.CALENDAR, job.summary)
         play_text(job.summary)
+
+
+@requires_ctx
+def _check_presence_job(ctx: m.AppContext) -> set[str]:
+    return check_presence()
 
 
 def _safe_ping(name: str, host: str) -> tuple[str, bool]:
