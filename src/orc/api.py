@@ -178,7 +178,12 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
         device_type = config.registry.devices.get(type(w).__name__)
         if device_type is None or device_type.dispatch is None:
             raise Exception("Unknown type")
-        device_type.dispatch(w, rule, stream)
+        # Isolate per-device failures: one wedged/unreachable device must not abort the
+        # rest of the routine (and thereby skip duration recording). Log and carry on.
+        try:
+            device_type.dispatch(w, rule, stream)
+        except Exception as exc:
+            log(local_now(), m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
         sleep(0.1)
 
 
