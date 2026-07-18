@@ -30,6 +30,7 @@ class PluginCtx:
 
 
 def back_on_schedule(ctx: PluginCtx) -> None:
+    ctx.api.check_presence(silent=True)
     ctx.api.replay_day(ctx.api.local_now())
 
 

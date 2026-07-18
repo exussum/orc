@@ -54,7 +54,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
     plugin_ctx = build_ctx(ctx)
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
-    present = plugin_ctx.api.check_presence(ctx=ctx, silent=True)
+    present = plugin_ctx.api.check_presence(silent=True)
 
     if present:
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.present))
