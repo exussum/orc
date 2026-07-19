@@ -31,7 +31,12 @@ def fetch_light_states(lights: Iterable[m.DeviceEnum]) -> m.Configs:
     stored = dict(read_lights())
     configs: list[m.Config] = []
     for light in lights:
-        body = bodies[light.value]
+        body = bodies.get(light.value)
+        if body is None:
+            # Virtual devices (negative synthetic id) and devices removed upstream aren't in
+            # Hubitat's device list; dispatch skips them, so report them as off rather than KeyError.
+            configs.append(m.Config(what=light, state=m.OFF))
+            continue
         is_truth = body["type"] in _DB_TRUTH_DEVICE_TYPES
         if is_truth and light.value not in stored:
             write_light(light, type=body["type"], state=m.OFF)
