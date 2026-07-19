@@ -17,11 +17,11 @@
 </div>
 {%- endmacro %}
 
-{% macro day_card(day, table_fixed=false) %}
+{% macro day_card(day, table_fixed=false, table_class="") %}
 <div class="orc-card mb-2">
     <div class="px-4 pt-3 pb-0 text-sm font-semibold">{{ day.strftime("%A, %B %-d") }}</div>
     <div class="p-4 overflow-x-auto">
-        <table class="w-full{% if table_fixed %} table-fixed{% endif %} text-left">
+        <table class="w-full{% if table_fixed %} table-fixed{% endif %} text-left{% if table_class %} {{ table_class }}{% endif %}">
             {{ caller() }}
         </table>
     </div>
