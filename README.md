@@ -38,6 +38,8 @@ You'll need:
 - **PortAudio**, to build the `pyaudio` dependency:
   `brew install portaudio` (macOS) or
   `sudo apt-get install portaudio19-dev` (Debian/Ubuntu)
+- **libpcap**, for packet capture (Debian/Ubuntu):
+  `sudo apt-get install libpcap-dev`
 
 Then:
 
