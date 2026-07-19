@@ -10,6 +10,7 @@ from freezegun import freeze_time
 import orc
 from orc import api, config
 from orc import model as m
+from orc.dal import net
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.tz)
 PAST = datetime(2000, 1, 1, tzinfo=config.tz)
@@ -368,15 +369,15 @@ class TestPresence:
 
             class FakeSniffer:
                 def __init__(self, *a, **k):
-                    self.results = [api.Ether() / api.ARP(op=2, psrc="10.0.0.2")]
+                    self.results = [net.Ether() / net.ARP(op=2, psrc="10.0.0.2")]
 
                 def start(self): ...
                 def join(self, *a, **k): ...
 
             with (
-                patch.object(api.socket, "gethostbyname", side_effect=resolve),
-                patch.object(api, "AsyncSniffer", FakeSniffer),
-                patch.object(api, "sendp"),
+                patch.object(net.socket, "gethostbyname", side_effect=resolve),
+                patch.object(net, "AsyncSniffer", FakeSniffer),
+                patch.object(net, "sendp"),
             ):
                 api.check_presence()
         assert api.present_names() == {"Bob"}
