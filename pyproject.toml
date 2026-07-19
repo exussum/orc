@@ -15,7 +15,7 @@ dependencies = [
     "skyfield==1.54",
     "gunicorn==26.0.0",
     "icalendar==7.2.0",
-    "icmplib==3.0.4",
+    "scapy==2.7.0",
     "mistletoe==1.5.1",
     "nh3==0.3.6",
     "orc_data==0.0.1",
