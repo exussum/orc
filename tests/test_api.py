@@ -359,7 +359,7 @@ class TestPresence:
         assert [c.trigger for c in squished.items] == ["Alice"]
 
     def test_check_presence_continues_when_one_host_fails_to_resolve(self):
-        with patch.object(config, "people", {"Alice": {("alice.local", None)}, "Bob": {("bob.local", None)}}):
+        with patch.object(config, "people", {"Alice": {("alice.local", "aa:aa:aa:aa:aa:aa")}, "Bob": {("bob.local", "bb:bb:bb:bb:bb:bb")}}):
 
             def resolve(host):
                 if host == "alice.local":
