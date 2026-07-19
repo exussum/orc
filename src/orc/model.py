@@ -344,6 +344,8 @@ def build_highlights(doc: Any, section: str) -> list[tuple[Any, Any, Any]]:
 def build_people(doc: Any, section: str) -> defaultdict[Any, set[Any]]:
     people: defaultdict[Any, set[Any]] = defaultdict(set)
     for name, host, mac in doc_to_table(doc, section, 3):
+        if not mac:
+            raise ValueError(f"Person '{name}' host '{host}' is missing a MAC address")
         people[name].add((host, mac))
     return people
 
