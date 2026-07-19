@@ -538,10 +538,12 @@ def _arp_scan(pairs: list[tuple[str, str, str]]) -> set[str]:
         return set()
     # Unicast the who-has at each device's MAC: a unicast frame makes the AP wake
     # a Wi-Fi power-save phone that ignores broadcast ARP. Sniff passively too, to
-    # catch any ARP the device emits.
+    # catch any ARP the device emits. Re-send once a second across a 5s window: a
+    # single probe or reply is easily dropped, so repeat until the window closes.
+    probes = [Ether(dst=macs[ip]) / ARP(pdst=ip, hwdst=macs[ip]) for ip in targets]
     sniffer = AsyncSniffer(filter="arp", store=True, timeout=3)
     sniffer.start()
-    sendp([Ether(dst=macs[ip]) / ARP(pdst=ip, hwdst=macs[ip]) for ip in targets], verbose=False)
+    sendp(probes, inter=1, count=3, verbose=False)
     sniffer.join()
     responded = {p[ARP].psrc for p in (sniffer.results or []) if ARP in p and p[ARP].op == 2}
     return {name for ip, name in targets.items() if ip in responded}
