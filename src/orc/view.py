@@ -271,11 +271,11 @@ def presence() -> tuple[str, int, dict[str, str]]:
     rows = [
         {
             "name": name,
-            "hostnames": sorted(hostnames),
+            "hostnames": sorted(host for host, _ in entries),
             "last_seen": last_seen.get(name),
             "present": name in present,
         }
-        for name, hostnames in config.people.items()
+        for name, entries in config.people.items()
     ]
     return (
         render_template(

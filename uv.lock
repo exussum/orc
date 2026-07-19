@@ -578,15 +578,6 @@ wheels = [
 ]
 
 [[package]]
-name = "icmplib"
-version = "3.0.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/6d/78/ca07444be85ec718d4a7617f43fdb5b4eaae40bc15a04a5c888b64f3e35f/icmplib-3.0.4.tar.gz", hash = "sha256:57868f2cdb011418c0e1d5586b16d1fabd206569fe9652654c27b6b2d6a316de", size = 26744, upload-time = "2023-10-10T17:05:12.902Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/ab/a47a2fdcf930e986914c642242ce2823753d7b08fda485f52323132f1240/icmplib-3.0.4-py3-none-any.whl", hash = "sha256:336b75c6c23c5ce99ddec33f718fab09661f6ad698e35b6f1fc7cc0ecf809398", size = 30561, upload-time = "2023-10-10T17:05:10.092Z" },
-]
-
-[[package]]
 name = "id"
 version = "1.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1011,7 +1002,6 @@ dependencies = [
     { name = "flask" },
     { name = "gunicorn" },
     { name = "icalendar" },
-    { name = "icmplib" },
     { name = "mistletoe" },
     { name = "nh3" },
     { name = "orc-data" },
@@ -1021,6 +1011,7 @@ dependencies = [
     { name = "pychromecast" },
     { name = "recurring-ical-events" },
     { name = "requests" },
+    { name = "scapy" },
     { name = "skyfield" },
     { name = "sqlalchemy" },
     { name = "yt-dlp" },
@@ -1055,7 +1046,6 @@ requires-dist = [
     { name = "freezegun", marker = "extra == 'test'", specifier = "==1.5.5" },
     { name = "gunicorn", specifier = "==26.0.0" },
     { name = "icalendar", specifier = "==7.2.0" },
-    { name = "icmplib", specifier = "==3.0.4" },
     { name = "isort", marker = "extra == 'lint'", specifier = "==8.0.1" },
     { name = "mistletoe", specifier = "==1.5.1" },
     { name = "mypy", marker = "extra == 'lint'", specifier = "==2.2.0" },
@@ -1069,6 +1059,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = "==9.1.1" },
     { name = "recurring-ical-events", specifier = "==3.8.2" },
     { name = "requests", specifier = "==2.34.2" },
+    { name = "scapy", specifier = "==2.7.0" },
     { name = "skyfield", specifier = "==1.54" },
     { name = "sqlalchemy", specifier = "==2.0.51" },
     { name = "twine", marker = "extra == 'build'", specifier = "==6.2.0" },
@@ -1398,6 +1389,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+]
+
+[[package]]
+name = "scapy"
+version = "2.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/97/7caec64f05eae3d305d83e7cce1ef2f337710513b89efb334f7278202e79/scapy-2.7.0.tar.gz", hash = "sha256:bfc1ef1b93280aea1ddee53be7f74232aa28ac3d891244d41ee85200d24aa446", size = 2412897, upload-time = "2025-12-26T22:10:53.359Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/6f/bd32e5e8adc391063858da17271bb444e4b009842cffa593bca8b2b78af7/scapy-2.7.0-py3-none-any.whl", hash = "sha256:eb22786da92be6fd8e5c694ae5595e4f5b9ac1f4364c9c45986844f3e3063561", size = 2590982, upload-time = "2025-12-26T22:07:48.941Z" },
 ]
 
 [[package]]

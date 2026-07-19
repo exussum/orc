@@ -32,7 +32,7 @@ def _themes_md(rows):
 
 
 def _people_md(rows):
-    header = "| Name | Hostname |\n|------|----------|\n"
+    header = "| Name | Hostname | MAC |\n|------|----------|-----|\n"
     return "##### People\n\n" + header + "".join(rows) + "\n---\n"
 
 
@@ -195,13 +195,13 @@ def test_build_themes_unknown_trigger_name():
 
 
 def test_build_people():
-    doc = Document(_people_md(["| Alice | alice.local |\n", "| Bob | bob.local |\n"]))
-    assert m.build_people(doc, "People") == {"Alice": {"alice.local"}, "Bob": {"bob.local"}}
+    doc = Document(_people_md(["| Alice | alice.local | aa:bb:cc:dd:ee:ff |\n", "| Bob | bob.local | |\n"]))
+    assert m.build_people(doc, "People") == {"Alice": {("alice.local", "aa:bb:cc:dd:ee:ff")}, "Bob": {("bob.local", None)}}
 
 
 def test_build_people_multiple_hosts():
-    doc = Document(_people_md(["| Alice | phone.local |\n", "| Alice | laptop.local |\n"]))
-    assert m.build_people(doc, "People") == {"Alice": {"phone.local", "laptop.local"}}
+    doc = Document(_people_md(["| Alice | phone.local | aa:bb:cc:dd:ee:ff |\n", "| Alice | laptop.local | |\n"]))
+    assert m.build_people(doc, "People") == {"Alice": {("phone.local", "aa:bb:cc:dd:ee:ff"), ("laptop.local", None)}}
 
 
 def _ad_hoc_md(rows):
