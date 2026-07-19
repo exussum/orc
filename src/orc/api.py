@@ -2,7 +2,6 @@ import contextlib
 import itertools
 import math
 import os
-import socket
 import sys
 import threading
 import time
@@ -20,8 +19,6 @@ from apscheduler.job import Job
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from scapy.layers.l2 import ARP, Ether
-from scapy.sendrecv import AsyncSniffer, sendp
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -33,7 +30,7 @@ from orc._decorators import (
     synchronized,
     unwrap_rule_container,
 )
-from orc.dal import broadlink, chromecast, feeds, hubitat, sqlite
+from orc.dal import broadlink, chromecast, feeds, hubitat, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
@@ -345,7 +342,9 @@ def check_presence(silent: bool = False) -> set[str]:
     if not pairs:
         return present_names()
     before = present_names()
-    present = _arp_scan(pairs)
+    present, errors = net.scan_presence(pairs)
+    for name, exc in errors:
+        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
     mark_present(present, local_now())
     after = present_names()
 
@@ -522,31 +521,6 @@ def _run_cal_job(job: m.CalendarJob, ctx: m.AppContext) -> None:
 @requires_ctx
 def _check_presence_job(ctx: m.AppContext) -> set[str]:
     return check_presence()
-
-
-def _arp_scan(pairs: list[tuple[str, str, str]]) -> set[str]:
-    targets: dict[str, str] = {}  # resolved IP -> person name
-    macs: dict[str, str] = {}  # resolved IP -> MAC
-    for name, host, mac in pairs:
-        try:
-            ip = socket.gethostbyname(host)
-        except Exception as exc:
-            log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
-            continue
-        targets[ip], macs[ip] = name, mac
-    if not targets:
-        return set()
-    # Unicast the who-has at each device's MAC: a unicast frame makes the AP wake
-    # a Wi-Fi power-save phone that ignores broadcast ARP. Sniff passively too, to
-    # catch any ARP the device emits. Re-send once a second across a 5s window: a
-    # single probe or reply is easily dropped, so repeat until the window closes.
-    probes = [Ether(dst=macs[ip]) / ARP(pdst=ip, hwdst=macs[ip]) for ip in targets]
-    sniffer = AsyncSniffer(filter="arp", store=True, timeout=3)
-    sniffer.start()
-    sendp(probes, inter=1, count=3, verbose=False)
-    sniffer.join()
-    responded = {p[ARP].psrc for p in (sniffer.results or []) if ARP in p and p[ARP].op == 2}
-    return {name for ip, name in targets.items() if ip in responded}
 
 
 def _schedule_cal_tasks(scheduler: BaseScheduler) -> None:
