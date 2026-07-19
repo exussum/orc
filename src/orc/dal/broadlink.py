@@ -34,12 +34,10 @@ def ac_off(device: DeviceEnum, codes_file: str) -> None:
 
 def _connect(device: DeviceEnum) -> Any:
     dev = bl.hello(device.value)
-    for attempt in range(4):
+    for _ in range(4):
         if dev.auth():
             return dev
-        if attempt == 3:
-            raise ConnectionError(f"Broadlink auth failed for {device.value}")
-    return dev
+    raise ConnectionError(f"Broadlink auth failed for {device.value}")
 
 
 def _codes(path: str) -> Any:
