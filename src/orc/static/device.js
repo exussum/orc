@@ -11,14 +11,14 @@ function acQuery(group, id) {
 }
 
 function selectOne(group, id, el) {
-    acQuery(group, id).forEach(btn => btn.classList.remove('orc-ac-selected'));
-    el.classList.add('orc-ac-selected');
+    acQuery(group, id).forEach(btn => btn.classList.remove('orc-selected'));
+    el.classList.add('orc-selected');
 }
 
 function resetGroup(group, id, disabled) {
     acQuery(group, id).forEach(btn => {
         btn.disabled = disabled;
-        btn.classList.remove('orc-ac-selected');
+        btn.classList.remove('orc-selected');
     });
 }
 
@@ -27,7 +27,7 @@ function setAcOff(id) {
     resetGroup('fan', id, true);
     acQuery('set', id).forEach(btn => { btn.disabled = true; });
     const temp = document.querySelector(`input[data-ac-ctrl="${id}"]`);
-    if (temp) { temp.disabled = true; temp.classList.remove('orc-ac-selected'); }
+    if (temp) { temp.disabled = true; temp.classList.remove('orc-selected'); }
 }
 
 function startAcWizard(id) {
@@ -84,14 +84,23 @@ document.querySelectorAll('[data-ac-set]').forEach(el => {
         const temp = document.querySelector(`input[data-ac-ctrl="${id}"]`)?.value;
         const { fan, mode } = acSelections[id] || {};
         send(`/api/device/ac/${id}?state=on&mode=${mode}&fan=${fan}&temp=${temp}`, el);
-        ['power', 'fan', 'mode'].forEach(g => acQuery(g, id).forEach(btn => btn.classList.remove('orc-ac-selected')));
+        ['power', 'fan', 'mode'].forEach(g => acQuery(g, id).forEach(btn => btn.classList.remove('orc-selected')));
     });
 });
 
 document.querySelectorAll("[data-ac-power][data-state='off']").forEach(el => setAcOff(el.dataset.acPower));
 
+function selectRunner(btn) {
+    if (!btn.classList.contains("orc-toggle")) return;
+    btn.parentElement.querySelectorAll(".orc-toggle").forEach((sib) => sib.classList.remove("orc-selected"));
+    btn.classList.add("orc-selected");
+}
+
 document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => run(e.currentTarget));
+    el.addEventListener("click", (e) => {
+        selectRunner(e.currentTarget);
+        run(e.currentTarget);
+    });
 });
 
 document.querySelectorAll('[data-device-input]').forEach(slider => {
