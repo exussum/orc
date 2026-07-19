@@ -71,6 +71,7 @@ class LogSource(str, Enum):
     REMOTE = "remote"
     MANUAL = "manual"
     SYSTEM = "system"
+    PLUGIN = "plugin"
 
 
 class Trigger(str, Enum):

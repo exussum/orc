@@ -2,20 +2,21 @@
 {% from 'macros.html' import day_card %}
 {% block body %}
     {% for day, runs in entries_grouped %}
-        {% call day_card(day) %}
+        {% call day_card(day, table_class="text-sm") %}
             <tr>
-                <th class="px-2 py-1 font-normal w-56">Time</th>
+                <th class="px-2 py-1 font-normal w-32">Time</th>
                 <th class="px-2 py-1 font-normal w-32">Source</th>
                 <th class="px-2 py-1 font-normal">Action</th>
             </tr>
             {% for run in runs %}
                 {% set entry = run|first %}
                 <tr>
-                    <td class="px-2 py-1 whitespace-nowrap">
+                    <td class="px-2 py-1">
                         {% if run|length > 1 %}
-                            {{ (run|last).timestamp.strftime("%I:%M:%S %p") }} – {{ entry.timestamp.strftime("%I:%M:%S %p") }}
+                            <span class="whitespace-nowrap">{{ (run|last).timestamp.strftime("%I:%M:%S %p") }}</span> –
+                            <span class="whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</span>
                         {% else %}
-                            {{ entry.timestamp.strftime("%I:%M:%S %p") }}
+                            <span class="whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</span>
                         {% endif %}
                     </td>
                     <td class="px-2 py-1">
@@ -27,6 +28,8 @@
                             <span class="orc-badge-remote">remote</span>
                         {% elif entry.source == "system" %}
                             <span class="orc-badge-system">system</span>
+                        {% elif entry.source == "plugin" %}
+                            <span class="orc-badge-plugin">plugin</span>
                         {% else %}
                             <span class="orc-badge-manual">manual</span>
                         {% endif %}

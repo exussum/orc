@@ -34,7 +34,7 @@ def trigger_sensor(ctx: PluginCtx, sensor: SimpleNamespace, device_id: str, even
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         snapshot = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(ctx, sensor)
-        ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.SYSTEM, f"Entrance triggered: {timed_name}")
+        ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
         ctx.api.dispatch(ctx.model.squish_configs(snapshot, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
     elif event == sensor.inactive_event:
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
@@ -67,7 +67,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
         plugin_ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(plugin_ctx, sensor.rules.shutdown), end)
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.absent))
         msg = sensor.log_shutdown
-    plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.SYSTEM, msg)
+    plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.PLUGIN, msg)
 
 
 def _timed_rows(ctx: PluginCtx, sensor: SimpleNamespace) -> tuple[str, Sequence[Any]]:
