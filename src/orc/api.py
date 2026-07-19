@@ -524,9 +524,9 @@ def _check_presence_job(ctx: m.AppContext) -> set[str]:
     return check_presence()
 
 
-def _arp_scan(pairs: list[tuple[str, str, str | None]]) -> set[str]:
+def _arp_scan(pairs: list[tuple[str, str, str]]) -> set[str]:
     targets: dict[str, str] = {}  # resolved IP -> person name
-    macs: dict[str, str | None] = {}  # resolved IP -> MAC (None => broadcast)
+    macs: dict[str, str] = {}  # resolved IP -> MAC
     for name, host, mac in pairs:
         try:
             ip = socket.gethostbyname(host)
@@ -536,13 +536,12 @@ def _arp_scan(pairs: list[tuple[str, str, str | None]]) -> set[str]:
         targets[ip], macs[ip] = name, mac
     if not targets:
         return set()
-    # Unicast the who-has at each known MAC: a unicast frame makes the AP wake a
-    # Wi-Fi power-save phone that ignores broadcast ARP. Hosts without a MAC fall
-    # back to broadcast. Sniff passively too, to catch any ARP the device emits.
+    # Unicast the who-has at each device's MAC: a unicast frame makes the AP wake
+    # a Wi-Fi power-save phone that ignores broadcast ARP. Sniff passively too, to
+    # catch any ARP the device emits.
     sniffer = AsyncSniffer(filter="arp", store=True, timeout=3)
     sniffer.start()
-    pkts = [Ether(dst=mac) / ARP(pdst=ip, hwdst=mac) if mac else Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=ip) for ip, mac in macs.items()]
-    sendp(pkts, verbose=False)
+    sendp([Ether(dst=macs[ip]) / ARP(pdst=ip, hwdst=macs[ip]) for ip in targets], verbose=False)
     sniffer.join()
     responded = {p[ARP].psrc for p in (sniffer.results or []) if ARP in p and p[ARP].op == 2}
     return {name for ip, name in targets.items() if ip in responded}
