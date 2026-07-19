@@ -120,6 +120,8 @@ def capture_lights() -> m.Configs:
 
 
 def capture_sounds() -> m.Configs[m.SoundState]:
+    if not len(orc.Chromecast):
+        return m.Configs()
     with Pool(max_workers=len(orc.Chromecast)) as ex:
         return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
 
