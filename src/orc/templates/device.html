@@ -49,10 +49,10 @@
                                 <div class="flex gap-4"><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span><input type="range" min="0" max="100" value="{{ device.level }}" data-id="{{ device.id }}" class="w-full" data-device-input="{{ device.id }}"/></div>
                             {% else %}
                                 <div class="grid grid-cols-2 gap-2">
-                                    <button class="orc-runner orc-btn" data-state="off" data-type="device" data-id="{{ device.id }}">
+                                    <button class="orc-runner orc-toggle orc-btn{% if not device.on %} orc-selected{% endif %}" data-state="off" data-type="device" data-id="{{ device.id }}">
                                         <svg class="w-5 h-5"><use href="/static/icons.svg#{{ device.icon }}-outline"/></svg>
                                     </button>
-                                    <button class="orc-runner orc-btn" data-state="on" data-type="device" data-id="{{ device.id }}">
+                                    <button class="orc-runner orc-toggle orc-btn{% if device.on %} orc-selected{% endif %}" data-state="on" data-type="device" data-id="{{ device.id }}">
                                         <svg class="w-5 h-5"><use href="/static/icons.svg#{{ device.icon }}"/></svg>
                                     </button>
                                 </div>
