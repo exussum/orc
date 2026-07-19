@@ -195,13 +195,19 @@ def test_build_themes_unknown_trigger_name():
 
 
 def test_build_people():
-    doc = Document(_people_md(["| Alice | alice.local | aa:bb:cc:dd:ee:ff |\n", "| Bob | bob.local | |\n"]))
-    assert m.build_people(doc, "People") == {"Alice": {("alice.local", "aa:bb:cc:dd:ee:ff")}, "Bob": {("bob.local", None)}}
+    doc = Document(_people_md(["| Alice | alice.local | aa:bb:cc:dd:ee:ff |\n", "| Bob | bob.local | 11:22:33:44:55:66 |\n"]))
+    assert m.build_people(doc, "People") == {"Alice": {("alice.local", "aa:bb:cc:dd:ee:ff")}, "Bob": {("bob.local", "11:22:33:44:55:66")}}
 
 
 def test_build_people_multiple_hosts():
-    doc = Document(_people_md(["| Alice | phone.local | aa:bb:cc:dd:ee:ff |\n", "| Alice | laptop.local | |\n"]))
-    assert m.build_people(doc, "People") == {"Alice": {("phone.local", "aa:bb:cc:dd:ee:ff"), ("laptop.local", None)}}
+    doc = Document(_people_md(["| Alice | phone.local | aa:bb:cc:dd:ee:ff |\n", "| Alice | laptop.local | 11:22:33:44:55:66 |\n"]))
+    assert m.build_people(doc, "People") == {"Alice": {("phone.local", "aa:bb:cc:dd:ee:ff"), ("laptop.local", "11:22:33:44:55:66")}}
+
+
+def test_build_people_requires_mac():
+    doc = Document(_people_md(["| Alice | alice.local | |\n"]))
+    with pytest.raises(ValueError, match="missing a MAC address"):
+        m.build_people(doc, "People")
 
 
 def _ad_hoc_md(rows):
