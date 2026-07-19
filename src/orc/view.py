@@ -122,13 +122,15 @@ def device() -> str:
     all_devices = list(chain.from_iterable(dt.cls for dt in config.registry.devices.values() if dt.controllable))
 
     def make_device(d: Any) -> SimpleNamespace:
+        level = _to_level(light_states.get(d.name))
         return SimpleNamespace(
             name=d.name.replace("_", " ").title(),
             id=d.name,
             type=type(d).__name__,
             icon=config.registry.devices[type(d).__name__].icon,
             capabilities={c.name for c in d.capabilities},
-            level=_to_level(light_states.get(d.name)),
+            level=level,
+            on=level > 0,
             volume=sound_states.get(d.name, 0),
         )
 
