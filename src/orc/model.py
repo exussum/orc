@@ -343,8 +343,8 @@ def build_highlights(doc: Any, section: str) -> list[tuple[Any, Any, Any]]:
 
 def build_people(doc: Any, section: str) -> defaultdict[Any, set[Any]]:
     people: defaultdict[Any, set[Any]] = defaultdict(set)
-    for name, host in doc_to_table(doc, section, 2):
-        people[name].add(host)
+    for name, host, mac in doc_to_table(doc, section, 3):
+        people[name].add((host, mac))
     return people
 
 

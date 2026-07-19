@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta
 from enum import Enum
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import call, patch
 
 import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -358,15 +358,26 @@ class TestPresence:
         squished = dispatch.call_args.args[0]
         assert [c.trigger for c in squished.items] == ["Alice"]
 
-    def test_check_presence_continues_when_one_ping_raises(self):
-        with patch.object(config, "people", {"Alice": {"alice.local"}, "Bob": {"bob.local"}}):
+    def test_check_presence_continues_when_one_host_fails_to_resolve(self):
+        with patch.object(config, "people", {"Alice": {("alice.local", None)}, "Bob": {("bob.local", None)}}):
 
-            def ping(host):
+            def resolve(host):
                 if host == "alice.local":
                     raise RuntimeError("dns boom")
-                return True
+                return "10.0.0.2"
 
-            with patch.object(api.icmplib, "ping", side_effect=lambda host, **_: MagicMock(is_alive=ping(host))):
+            class FakeSniffer:
+                def __init__(self, *a, **k):
+                    self.results = [api.Ether() / api.ARP(op=2, psrc="10.0.0.2")]
+
+                def start(self): ...
+                def join(self, *a, **k): ...
+
+            with (
+                patch.object(api.socket, "gethostbyname", side_effect=resolve),
+                patch.object(api, "AsyncSniffer", FakeSniffer),
+                patch.object(api, "sendp"),
+            ):
                 api.check_presence()
         assert api.present_names() == {"Bob"}
 
