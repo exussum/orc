@@ -1,4 +1,5 @@
 import socket
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from scapy.layers.dns import DNS, DNSQR
@@ -60,7 +61,12 @@ def _probe_lan(targets: dict[str, str], macs: dict[str, str]) -> set[str]:
     )
     sniffer = AsyncSniffer(filter="arp or udp port 5353", store=True, timeout=3)
     sniffer.start()
-    sendp(probes, inter=1, count=3, verbose=False)
+    # Burst the whole probe list at once, repeat 3x a second apart. sendp's `inter`
+    # spaces *every* packet, so it would scale with the target count; a manual loop
+    # keeps the window fixed regardless of how many devices we track.
+    for _ in range(3):
+        sendp(probes, verbose=False)
+        time.sleep(1)
     sniffer.join()
     responded: set[str] = set()
     for p in sniffer.results or []:
