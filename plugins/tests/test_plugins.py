@@ -196,7 +196,7 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     plugin_ctx.api.check_presence.return_value = {"alice"}
     _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
-    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_present)
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_present)
 
 
 def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
@@ -204,7 +204,7 @@ def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
     plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
     _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
-    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_absent)
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_absent)
 
 
 def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
@@ -214,7 +214,7 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
         plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45)
     )
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
-    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.SYSTEM, sensor.log_shutdown)
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_shutdown)
 
 
 def test_presence_is_expired_before_checking(sensor, plugin_ctx):
