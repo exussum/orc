@@ -2,6 +2,7 @@ import contextlib
 import itertools
 import math
 import os
+import socket
 import sys
 import threading
 import time
@@ -14,12 +15,13 @@ from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from typing import Any
 from urllib.parse import urlparse
 
-import icmplib
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.job import Job
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from scapy.layers.l2 import ARP, Ether
+from scapy.sendrecv import AsyncSniffer, sendp
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -339,12 +341,11 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
 
 
 def check_presence(silent: bool = False) -> set[str]:
-    pairs = [(name, host) for name, hosts in config.people.items() for host in hosts]
+    pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
     if not pairs:
         return present_names()
     before = present_names()
-    with Pool(max_workers=len(pairs)) as ex:
-        present = {name for name, ok in ex.map(lambda nh: _safe_ping(*nh), pairs) if ok}
+    present = _arp_scan(pairs)
     mark_present(present, local_now())
     after = present_names()
 
@@ -523,12 +524,28 @@ def _check_presence_job(ctx: m.AppContext) -> set[str]:
     return check_presence()
 
 
-def _safe_ping(name: str, host: str) -> tuple[str, bool]:
-    try:
-        return name, icmplib.ping(host, count=2, interval=0.1, timeout=1, privileged=True).is_alive
-    except Exception as exc:
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
-        return name, False
+def _arp_scan(pairs: list[tuple[str, str, str | None]]) -> set[str]:
+    targets: dict[str, str] = {}  # resolved IP -> person name
+    macs: dict[str, str | None] = {}  # resolved IP -> MAC (None => broadcast)
+    for name, host, mac in pairs:
+        try:
+            ip = socket.gethostbyname(host)
+        except Exception as exc:
+            log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
+            continue
+        targets[ip], macs[ip] = name, mac
+    if not targets:
+        return set()
+    # Unicast the who-has at each known MAC: a unicast frame makes the AP wake a
+    # Wi-Fi power-save phone that ignores broadcast ARP. Hosts without a MAC fall
+    # back to broadcast. Sniff passively too, to catch any ARP the device emits.
+    sniffer = AsyncSniffer(filter="arp", store=True, timeout=3)
+    sniffer.start()
+    pkts = [Ether(dst=mac) / ARP(pdst=ip, hwdst=mac) if mac else Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=ip) for ip, mac in macs.items()]
+    sendp(pkts, verbose=False)
+    sniffer.join()
+    responded = {p[ARP].psrc for p in (sniffer.results or []) if ARP in p and p[ARP].op == 2}
+    return {name for ip, name in targets.items() if ip in responded}
 
 
 def _schedule_cal_tasks(scheduler: BaseScheduler) -> None:
