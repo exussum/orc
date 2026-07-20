@@ -24,7 +24,9 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install system dependencies
-      run: sudo apt-get install -y portaudio19-dev
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y portaudio19-dev
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -51,7 +53,9 @@ jobs:
       with:
         python-version: "3.14"
     - name: Install system dependencies
-      run: sudo apt-get install -y portaudio19-dev
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y portaudio19-dev
     - name: Install uv
       run: |
         curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh
