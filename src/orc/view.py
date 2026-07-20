@@ -32,6 +32,8 @@ app = cast(OrcFlask, _current_app)
 
 bp = Blueprint("controls", __name__)
 
+_DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
+
 
 @bp.after_request
 def no_cache(response: Response) -> Response:
@@ -106,15 +108,6 @@ def cfg() -> str:
     )
 
 
-def _to_level(state: object) -> int:
-    if isinstance(state, int):
-        return state
-    return 100 if state == m.ON else 0
-
-
-_DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
-
-
 @bp.route("/device/")
 def device() -> str:
     light_states = {c.what.name: c.state for c in api.capture_lights().items}  # type: ignore[union-attr]  # captured lights are always enum members, not the class/set arm
@@ -153,29 +146,10 @@ def rebuild_jobs() -> tuple[dict[str, Any], int]:
 
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> tuple[dict[str, Any], int]:
-    delay = timedelta()
-    if id == api.ORC_SYSTEM_SNAPSHOT:
-        action = lambda: app.orc.snapshot_manager.resume(api.ORC_SYSTEM_SNAPSHOT, config.default_config)
-    elif id in config.plugins:
-        plugin = config.plugins[id]
-        delay = plugin.delay
-        params = {"device": device} if (device := request.args.get("device")) else {}
-        action = lambda: plugins.execute_plugin(app.orc, id, **params)
-    elif id in config.schedule_routines:
-        action = lambda: api.dispatch(config.schedule_routines[id])
-    elif id in config.ad_hoc_routines:
-        routine = config.ad_hoc_routines[id]
-
-        if routine.snapshot and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT):
-            # Don't stack snapshots
-            snap = routine.snapshot
-            action = lambda: app.orc.snapshot_manager.replace_config(api.ORC_SYSTEM_SNAPSHOT, routine, api.local_now() + snap)
-        else:
-            delay = routine.delay
-            base = (config.reset_config,) if routine.reset else ()
-            action = lambda: api.dispatch(m.squish_configs(*base, routine))
-    else:
+    resolved = _resolve_run_action(id)
+    if resolved is None:
         return {"error": "Unknown routine"}, 404
+    action, delay = resolved
 
     @api.requires_ctx
     def run(ctx: m.AppContext) -> None:
@@ -404,3 +378,29 @@ def version() -> tuple[dict[str, Any], int]:
 @bp.route("/api/durations")
 def durations() -> tuple[dict[str, Any], int]:
     return dict(api.fetch_durations()), 200
+
+
+def _to_level(state: object) -> int:
+    if isinstance(state, int):
+        return state
+    return 100 if state == m.ON else 0
+
+
+def _resolve_run_action(id: str) -> tuple[Callable[[], None], timedelta] | None:
+    """Resolve a run id to (action, delay), or None if the id is unknown."""
+    if id == api.ORC_SYSTEM_SNAPSHOT:
+        return lambda: app.orc.snapshot_manager.resume(api.ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
+    if id in config.plugins:
+        params = {"device": device} if (device := request.args.get("device")) else {}
+        return lambda: plugins.execute_plugin(app.orc, id, **params), config.plugins[id].delay
+    if id in config.schedule_routines:
+        return lambda: api.dispatch(config.schedule_routines[id]), timedelta()
+    if id in config.ad_hoc_routines:
+        routine = config.ad_hoc_routines[id]
+        if routine.snapshot and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT):
+            # Don't stack snapshots
+            snap = routine.snapshot
+            return lambda: app.orc.snapshot_manager.replace_config(api.ORC_SYSTEM_SNAPSHOT, routine, api.local_now() + snap), timedelta()
+        base = (config.reset_config,) if routine.reset else ()
+        return lambda: api.dispatch(m.squish_configs(*base, routine)), routine.delay
+    return None
