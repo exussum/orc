@@ -379,12 +379,12 @@ def _resolve_run_action(id: str) -> tuple[Callable[[], None], timedelta] | None:
     """Resolve a run id to (action, delay), or None if the id is unknown."""
     if id == api.ORC_SYSTEM_SNAPSHOT:
         return lambda: app.orc.snapshot_manager.resume(api.ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
-    if id in config.plugins:
+    elif id in config.plugins:
         params = {"device": device} if (device := request.args.get("device")) else {}
         return lambda: plugins.execute_plugin(app.orc, id, **params), config.plugins[id].delay
-    if id in config.schedule_routines:
+    elif id in config.schedule_routines:
         return lambda: api.dispatch(config.schedule_routines[id], force=True), timedelta()
-    if id in config.ad_hoc_routines:
+    elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if routine.snapshot and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT):
             # Don't stack snapshots
