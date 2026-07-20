@@ -17,9 +17,9 @@ class Log:
     PRESENCE_LOST: str = "Presence lost: {name}"
     PRESENCE_EXPIRED: str = "Presence expired: {name}"
     PRESENCE_CHECKED_IN: str = "Presence checked in: {name}"
+    PRESENCE_RESCAN: str = "Presence rescan"
 
     VERSION_MISMATCH: str = "Version mismatch: client={client} server={server}"
 
     TASK_QUEUED: str = "Queued: {id} (until {when:%I:%M})"
-    JOB_FORCED: str = "Force run: {job_name}"
     ROOM_SET: str = "Room: {id} {state}"

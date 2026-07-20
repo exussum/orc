@@ -17,7 +17,7 @@ async function set_theme() {
 }
 
 async function run(el) {
-    await get(`/api/schedule/${el.dataset.id}/run`, el);
+    await get(`/api/run/${el.dataset.id}`, el);
 }
 
 async function pause(el) {

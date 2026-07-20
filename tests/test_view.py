@@ -85,7 +85,7 @@ def test_console_schedule_routine(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(routine)
+    ex.assert_called_once_with(routine, force=True)
 
 
 def test_console_ad_hoc(client):
@@ -261,12 +261,6 @@ def test_pause_when_paused_resumes(client, scheduler, good_version):
 def test_pause_unknown_job_returns_404(client, scheduler, good_version):
     scheduler.get_job.return_value = None
     response = client.get("/api/schedule/nope/pause", headers=good_version)
-    assert response.status_code == 404
-
-
-def test_run_unknown_job_returns_404(client, scheduler, good_version):
-    scheduler.get_job.return_value = None
-    response = client.get("/api/schedule/nope/run", headers=good_version)
     assert response.status_code == 404
 
 
