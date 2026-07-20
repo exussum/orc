@@ -1,5 +1,4 @@
 from datetime import date, datetime, time, timedelta
-from enum import Enum
 from unittest.mock import call, patch
 
 import pytest
