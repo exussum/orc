@@ -159,16 +159,15 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
     elif id in config.plugins:
         plugin = config.plugins[id]
         delay = plugin.delay
-        # Captured now (not inside the possibly-deferred lambda) — request is gone by
-        # the time a delayed job runs. Only passed on when set, so param-less plugins
-        # keep their (ctx)-only signature.
         params = {"device": device} if (device := request.args.get("device")) else {}
         action = lambda: plugins.execute_plugin(app.orc, id, **params)
     elif id in config.schedule_routines:
         action = lambda: api.dispatch(config.schedule_routines[id])
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
-        if routine.snapshot:
+
+        if routine.snapshot and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT):
+            # Don't stack snapshots
             snap = routine.snapshot
             action = lambda: app.orc.snapshot_manager.replace_config(api.ORC_SYSTEM_SNAPSHOT, routine, api.local_now() + snap)
         else:

@@ -233,18 +233,24 @@ class SnapshotManager:
 
         dispatch(target_config, force=True)
 
+    @staticmethod
+    def _live(snapshot: m.SnapShot | None) -> bool:
+        return bool(snapshot and local_now() <= snapshot.end)
+
     @synchronized
     def get(self, name: str) -> m.SnapShot | None:
         snapshot = self.snapshots.pop(name, None)
-        if snapshot and local_now() <= snapshot.end:
-            return snapshot
-        return None
+        return snapshot if self._live(snapshot) else None
+
+    @synchronized
+    def active(self, name: str) -> bool:
+        return self._live(self.snapshots.get(name))
 
     @synchronized
     def resume(self, name: str, target_config: m.Configs) -> None:
         snapshot = self.snapshots.pop(name, None)
 
-        if snapshot and local_now() <= snapshot.end:
+        if snapshot and self._live(snapshot):
             routine = snapshot.routine
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=name))
         else:
