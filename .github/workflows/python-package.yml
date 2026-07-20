@@ -21,15 +21,40 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y portaudio19-dev
+    - name: Compute cache week
+      id: week
+      run: echo "week=$(date +%Y-%U)" >> "$GITHUB_OUTPUT"
+    - name: Cache tool installs
+      id: cache-tools
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+      with:
+        path: |
+          ~/.local
+          ~/.opengrep
+        key: tools-${{ runner.os }}-${{ steps.week.outputs.week }}-${{ hashFiles('.github/workflows/python-package.yml') }}
+    - name: Add local bin to PATH
+      run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
     - name: Install uv
+      if: steps.cache-tools.outputs.cache-hit != 'true'
       run: |
         curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh
         sh /tmp/uv-install.sh
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
     - name: Install opengrep and pip-audit
+      if: steps.cache-tools.outputs.cache-hit != 'true'
       run: |
         curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh -o /tmp/opengrep-install.sh
         bash /tmp/opengrep-install.sh
         uv tool install pip-audit
+    - name: Install tailwindcss
+      if: steps.cache-tools.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSL https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.1/tailwindcss-linux-x64 -o "$HOME/.local/bin/tailwindcss"
+        chmod +x "$HOME/.local/bin/tailwindcss"
+    - name: Cache pre-commit hooks
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
     - name: Run pre-commit
       run: uvx pre-commit run --all-files --show-diff-on-failure
