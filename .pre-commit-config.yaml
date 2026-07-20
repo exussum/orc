@@ -61,11 +61,11 @@ repos:
         entry: uv run --extra lint mypy
         language: system
         pass_filenames: false
-        always_run: true
+        files: \.py$
 
       - id: pytest
         name: pytest
         entry: sh -c 'uv run --extra test pytest && uv run --extra test pytest plugins'
         language: system
         pass_filenames: false
-        always_run: true
+        files: \.py$
