@@ -305,24 +305,13 @@ def room(id: str) -> tuple[dict[str, Any], int]:
     return {"version": VersionManager.version}, 200
 
 
-@bp.route("/api/schedule/<id>/run")
-@VersionManager.versioned
-def run(id: str) -> tuple[dict[str, Any], int] | None:
-    job = app.orc.scheduler.get_job(id)
-    if job is None:
-        return {"error": "Unknown job"}, 404
-    api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
-    job.func(*job.args, ctx=app.orc, force=True)
-    return None
-
-
 @bp.route("/api/presence/run")
 @VersionManager.versioned
 def run_presence_check() -> tuple[dict[str, Any], int] | None:
     job = app.orc.scheduler.get_job("presence-cron")
     if job is None:
         return {"error": "Unknown job"}, 404
-    api.log(api.local_now(), m.LogSource.MANUAL, Log.JOB_FORCED.format(job_name=job.name))
+    api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_RESCAN)
     api.delete_all_presence()
     job.func(ctx=app.orc)
     return None
@@ -394,7 +383,7 @@ def _resolve_run_action(id: str) -> tuple[Callable[[], None], timedelta] | None:
         params = {"device": device} if (device := request.args.get("device")) else {}
         return lambda: plugins.execute_plugin(app.orc, id, **params), config.plugins[id].delay
     if id in config.schedule_routines:
-        return lambda: api.dispatch(config.schedule_routines[id]), timedelta()
+        return lambda: api.dispatch(config.schedule_routines[id], force=True), timedelta()
     if id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if routine.snapshot and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT):
