@@ -3,7 +3,6 @@ from enum import Enum
 import pytest
 from mistletoe import Document
 
-from orc import config
 from orc import model as m
 
 
