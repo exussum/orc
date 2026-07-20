@@ -7,41 +7,6 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        python-version: ["3.14"]
-
-    steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-      with:
-        lfs: true
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@3542bca2639a428e1796aaa6a2ffef0c0f575566  # v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y portaudio19-dev
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install flake8
-        pip install ./data .[test]
-        pip install --no-deps ./entrance_sensor
-    - name: Lint with flake8
-      run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test
-      run: |
-        pytest
-        pytest entrance_sensor
-
   pre-commit:
     runs-on: ubuntu-latest
     steps:

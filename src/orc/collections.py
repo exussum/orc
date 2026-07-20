@@ -88,7 +88,8 @@ def doc_to_table(doc: Any, section: str, columns: int) -> tuple[tuple[Any, ...],
     # Heading store their contents in a subsequent child element
     # https://github.com/miyuchina/mistletoe/issues/99
     idx = next(
-        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),  # type: ignore[index]  # mistletoe Heading.children is Iterable | None but always populated here
+        # mistletoe Heading.children is Iterable | None but always populated here
+        (i for (i, e) in enumerate(doc.children) if isinstance(e, Heading) and e.children[0].content == section),  # type: ignore[index]
         None,
     )
     if idx is None:
@@ -99,11 +100,14 @@ def doc_to_table(doc: Any, section: str, columns: int) -> tuple[tuple[Any, ...],
         raise ValueError(f"No table found under section '{section}'")
 
     rows = list(markdown_table.children)  # type: ignore[arg-type]  # mistletoe Table.children is Iterable | None but always populated here
-    if invalid := [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]:  # type: ignore[arg-type]  # TableRow.children always populated
+    # TableRow.children always populated
+    if invalid := [(i, len(row.children)) for i, row in enumerate(rows) if len(row.children) != columns]:  # type: ignore[arg-type]
         bad_rows = ", ".join(str(i) for i, _ in invalid)
         raise ValueError(f"Expected {columns} columns in section '{section}', but rows {bad_rows} have the wrong number")
 
+    # mistletoe TableCell/TableRow children populated at runtime
     return tuple(
-        tuple(c.children[0].content if c.children else None for c in e.children) + (None,) * (columns - len(e.children))  # type: ignore[index,union-attr,arg-type]  # mistletoe TableCell/TableRow children populated at runtime
+        tuple(c.children[0].content if c.children else None for c in e.children)  # type: ignore[index,union-attr]
+        + (None,) * (columns - len(e.children))  # type: ignore[arg-type]
         for e in rows
     )
