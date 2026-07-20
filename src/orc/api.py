@@ -228,7 +228,9 @@ class SnapshotManager:
 
         if name not in self.snapshots:
             self.snapshots[name] = m.SnapShot(capture_lights(), end)
-            items = ", ".join(f"{c.what.name}={c.state}" for c in self.snapshots[name].routine.items if c.state != m.OFF)  # type: ignore[union-attr]  # captured light states are always enum members, not the class/set arm
+            # captured light states are always enum members, not the class/set arm
+            routine_items = self.snapshots[name].routine.items
+            items = ", ".join(f"{c.what.name}={c.state}" for c in routine_items if c.state != m.OFF)  # type: ignore[union-attr]
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         dispatch(target_config, force=True)
@@ -396,7 +398,8 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
             elif e.when == m.SUNSET:
                 time = sunset
             else:
-                time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)  # type: ignore[attr-defined]  # e.when is a datetime.time here (normalized in __post_init__), not the SUNRISE/SUNSET str
+                # e.when is a datetime.time here (normalized in __post_init__), not the SUNRISE/SUNSET str
+                time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)  # type: ignore[attr-defined]
             if time is None:
                 continue
             result.append((time.astimezone(config.tz), e))
@@ -490,14 +493,14 @@ def rebuild_cal_schedule(ctx: m.AppContext) -> None:
 @requires_ctx
 def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
-    for time, rule in get_schedule():
-        if now <= time:
+    for run_at, rule in get_schedule():
+        if now <= run_at:
             ctx.scheduler.add_job(
                 run_iot_job,
-                DateTrigger(time, timezone=config.tz),
+                DateTrigger(run_at, timezone=config.tz),
                 args=[m.IotJob(rule)],
                 name=rule.name,
-                id=f"iot-{rule.name}-{time.date().isoformat()}",
+                id=f"iot-{rule.name}-{run_at.date().isoformat()}",
                 replace_existing=True,
             )
 
