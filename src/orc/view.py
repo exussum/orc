@@ -110,7 +110,8 @@ def cfg() -> str:
 
 @bp.route("/device/")
 def device() -> str:
-    light_states = {c.what.name: c.state for c in api.capture_lights().items}  # type: ignore[union-attr]  # captured lights are always enum members, not the class/set arm
+    # captured lights are always enum members, not the class/set arm
+    light_states = {c.what.name: c.state for c in api.capture_lights().items}  # type: ignore[union-attr]
     sound_states = {c.what.name: c.volume for c in api.capture_sounds().items}
     all_devices = list(chain.from_iterable(dt.cls for dt in config.registry.devices.values() if dt.controllable))
 
@@ -323,7 +324,8 @@ def schedule() -> tuple[str, int, dict[str, str]]:
     theme_override = api.current_theme_override()
 
     theme = (
-        theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat())  # type: ignore[arg-type]  # dates rendered to ISO strings for the template
+        # dates rendered to ISO strings for the template
+        theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat())  # type: ignore[arg-type]
         if theme_override
         else None
     )
