@@ -48,7 +48,7 @@ class LockedDict[K, V]:
 
 
 def parse_kv(val: str | None) -> dict[str, str]:
-    return dict(pair.split("=") for pair in (val or "").split())
+    return dict(pair.split("=", 1) for pair in (val or "").split())
 
 
 def where[V](items: Mapping[str, V], **kwargs: Any) -> dict[str, V]:
