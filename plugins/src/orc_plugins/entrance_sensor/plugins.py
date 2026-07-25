@@ -32,10 +32,19 @@ def trigger_sensor(ctx: PluginCtx, sensor: SimpleNamespace, device_id: str, even
     if event == sensor.active_event:
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
-        snapshot = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
-        timed_name, timed_rows = _timed_rows(ctx, sensor)
-        ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
-        ctx.api.dispatch(ctx.model.squish_configs(snapshot, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
+        present = ctx.api.check_presence(silent=True)
+        snapshot = ctx.snapshot_manager.get(SNAPSHOT_NAME)
+        if present or snapshot:
+            restore = _restorable(ctx, sensor, snapshot)
+            timed_name, timed_rows = _timed_rows(ctx, sensor)
+            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
+            ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
+        else:
+            # Empty house: snapshot the pre-visit state, then catch up to the schedule
+            end = ctx.api.local_now() + timedelta(minutes=sensor.snapshot)
+            ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, ctx.model.Configs(), end)
+            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, "Entrance triggered: Replay Day")
+            ctx.api.replay_day(ctx.api.local_now())
     elif event == sensor.inactive_event:
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
         ctx.scheduler.add_job(
@@ -57,9 +66,13 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
     present = plugin_ctx.api.check_presence(silent=True)
 
     if present:
+        # Visitor stayed: drop the trip snapshot, the house follows the schedule now
+        plugin_ctx.snapshot_manager.get(SNAPSHOT_NAME)
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.present))
         msg = sensor.log_present
     elif any(s.content for s in plugin_ctx.api.capture_sounds().items):
+        # Visitor left, pet still listening: restore the pre-visit state
+        plugin_ctx.snapshot_manager.resume(SNAPSHOT_NAME, plugin_ctx.model.Configs())
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.absent))
         msg = sensor.log_absent
     else:
@@ -79,7 +92,10 @@ def _timed_rows(ctx: PluginCtx, sensor: SimpleNamespace) -> tuple[str, Sequence[
             return row.start <= t < row.stop
         return t >= row.start or t < row.stop  # window wraps midnight
 
-    return next(((name, rows) for (name, rows) in vars(sensor.timed).items() if in_window(rows[0])), ("(non window found)", ()))
+    return next(
+        ((name, rows) for (name, rows) in vars(sensor.timed).items() if rows and in_window(rows[0])),
+        ("(non window found)", ()),
+    )
 
 
 def _restorable(ctx: PluginCtx, sensor: SimpleNamespace, snapshot: m.SnapShot | None) -> m.Configs:
