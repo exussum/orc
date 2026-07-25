@@ -81,4 +81,5 @@ def _fetch_hubitat_devices() -> dict[int, Any]:
 
 def _hubitat_body_to_state(body: Any) -> int | str:
     attrs = body["attributes"]
-    return int(attrs["level"]) if ("level" in attrs and attrs["switch"] == m.ON) else attrs["switch"]
+    switch = attrs.get("switch", m.OFF)
+    return int(attrs["level"]) if ("level" in attrs and switch == m.ON) else switch
