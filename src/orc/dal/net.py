@@ -29,7 +29,7 @@ def _resolve_targets(
     targets: dict[str, str] = {}  # resolved IP -> person name
     macs: dict[str, str] = {}  # resolved IP -> MAC
     errors: list[tuple[str, Exception]] = []
-    with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, len(pairs))) as pool:
         for name, mac, ip, exc in pool.map(resolve, pairs):
             if exc is not None:
                 errors.append((name, exc))
