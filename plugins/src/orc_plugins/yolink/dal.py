@@ -239,19 +239,19 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
 
 
 def _set_connected(connected: bool) -> None:
-    # collect names inside the atomic update, fire after releasing the lock
-    fired_names: list[str] = []
+    # collect (name, prior state) inside the atomic update, fire after releasing the lock
+    fired: list[tuple[str, str]] = []
 
     def apply(current: SensorState | None) -> SensorState | None:
         if current is None or current.connected == connected:
             return None
-        fired_names.append(current.name)
+        fired.append((current.name, "connected" if current.connected else "disconnected"))
         return dataclasses.replace(current, connected=connected)
 
     for device_id in _states.copy().keys():
         _states.update(device_id, apply)
-    for name in fired_names:
-        _fire("connection", name, None, "connected" if connected else "disconnected")
+    for name, old in fired:
+        _fire("connection", name, old, "connected" if connected else "disconnected")
 
 
 def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
