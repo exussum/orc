@@ -41,6 +41,7 @@ def ctx():
     mock.model = m
     mock.snapshot_manager = api.SnapshotManager()
     mock.api.JOBSTORE_MEMORY = "memory"
+    mock.api.check_presence.return_value = {"alice"}  # someone home: the welcome path
     mock.config.tz = _UTC
     return mock
 
@@ -137,7 +138,9 @@ def test_walk_in_outside_any_window_runs_enter_only(ctx, sensor):
 
 
 def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
+    # Even with nobody detected yet: the snapshot alone is enough to welcome
     ctx.api.local_now.return_value = _DAYTIME
+    ctx.api.check_presence.return_value = set()
     ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(
         m.Config(Light.saved, m.ON),  # how the house looked before shutdown
         m.Config(Light.day_bulb, m.OFF),  # entrance lights: off because the plugin turned them off
@@ -152,6 +155,19 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
         Chromecast.cc: m.PAUSE,
     }
     assert not ctx.snapshot_manager.snapshots  # consumed
+
+
+def test_walk_in_empty_house_without_snapshot_replays_day(ctx, sensor):
+    # Saves the pre-visit state, then catches the house up to the schedule
+    ctx.api.local_now.return_value = _DAYTIME
+    ctx.api.check_presence.return_value = set()
+    ctx.snapshot_manager = MagicMock()
+    ctx.snapshot_manager.get.return_value = None
+    _trigger_sensor(ctx, sensor, "16", "active")
+    ctx.snapshot_manager.replace_config.assert_called_once_with(plugins.SNAPSHOT_NAME, m.Configs(), _DAYTIME + timedelta(minutes=45))
+    ctx.api.replay_day.assert_called_once_with(_DAYTIME)
+    ctx.api.dispatch.assert_not_called()
+    ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, "Entrance triggered: Replay Day")
 
 
 def test_walk_in_cancels_pending_cleanup(ctx, sensor):
@@ -199,12 +215,29 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_present)
 
 
+def test_someone_home_drops_the_trip_snapshot(sensor, plugin_ctx):
+    # The walk-in stuck: pre-visit state must not resurface on a later walk-in
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    plugin_ctx.api.check_presence.return_value = {"alice"}
+    _cleanup(sensor, plugin_ctx)
+    plugin_ctx.snapshot_manager.get.assert_called_once_with(plugins.SNAPSHOT_NAME)
+    plugin_ctx.snapshot_manager.resume.assert_not_called()
+
+
 def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
     _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_absent)
+
+
+def test_pet_home_alone_restores_pre_visit_state(sensor, plugin_ctx):
+    # An undetected visitor left: put the lights back how the dog had them
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
+    _cleanup(sensor, plugin_ctx)
+    plugin_ctx.snapshot_manager.resume.assert_called_once_with(plugins.SNAPSHOT_NAME, m.Configs())
 
 
 def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
