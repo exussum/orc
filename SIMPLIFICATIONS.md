@@ -53,8 +53,15 @@ Simplify: remove `force` from `run_iot_job` and `matching_items`; delete
 (same as today — `force` is always False there); delete the
 `test_run_iot_job_force_bypasses_presence` test. Pure deletion, no behavior change.
 
-### 2. Collapse the six-branch log badge chain
+### 2. ✅ DONE — Collapse the six-branch log badge chain
 `src/orc/templates/log.html:22-36` (flagged independently by two review passes)
+
+Applied 2026-07-25: replaced the if/elif chain with
+`<span class="orc-badge-{{ entry.source.value }}">{{ entry.source.value }}</span>`,
+added the `@source inline(...)` safelist to tailwind.src.css, recompiled — all six
+`orc-badge-*` classes verified present in the rebuilt tailwind.min.css. Confirmed
+`entry.source` is always a `LogSource` enum (in-memory deque, never rehydrated from
+sqlite as a plain string), so `.value` is safe including the manual fallback case.
 
 All six branches render `<span class="orc-badge-{source}">{source}</span>`;
 `LogSource` values (`model.py:71-77`) are exactly
