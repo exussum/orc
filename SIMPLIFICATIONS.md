@@ -135,8 +135,17 @@ Related, same function: the inner `resolve()` (`net.py:22-27`) returns
 Return `(name, mac, ip_or_exception)` and branch on `isinstance(res, Exception)` —
 removes the assert and a tuple slot.
 
-### 5. Replace hand-rolled conftest save/restore with `monkeypatch`
+### 5. ✅ DONE — Replace hand-rolled conftest save/restore with `monkeypatch`
 `tests/conftest.py:33-48` (from `6e80b54`)
+
+Applied 2026-07-25: the `_core_registry` fixture now takes `monkeypatch` and uses
+`setattr(..., raising=False)` for the four `orc` attributes and `config.registry`;
+`saved_attrs`, `saved_registry`, and the try/finally are gone. The save/restore
+PURPOSE is unchanged — core tests still get the lightweight test enums and the
+plugin suite still sees the real registry afterward — only the mechanism moved to
+pytest's built-in undo (which also correctly deletes, rather than None-ing, an
+attribute that didn't exist before). Verified both suites pass as the pre-commit
+hook runs them (126 core + 26 plugin).
 
 The fixture manually builds `saved_attrs` via `getattr(orc, name, None)`, saves
 `orc.config.registry`, and restores in try/finally. `monkeypatch.setattr(...,
