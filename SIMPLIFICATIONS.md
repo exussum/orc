@@ -107,8 +107,14 @@ non-None snapshot). Same branch order and outcomes. 126 tests pass.
   `if snap is None: return False` / SYSTEM-trigger branch / `if not self._live(snap):
   pop and return False` / else log and return True. Same branch order and outcomes.
 
-### 4. Merge the parallel dicts in the presence scan
+### 4. ✅ DONE — Merge the parallel dicts in the presence scan
 `src/orc/dal/net.py:29-77`
+
+Applied 2026-07-25: `_resolve_targets` now returns one `{ip: (name, mac)}` dict
+(plus errors); `_probe_lan` takes a single parameter; the inner `resolve()` returns
+`(name, mac, ip_or_exception)` with an `isinstance(res, Exception)` branch, removing
+the None sentinels and the `assert`. 126 tests pass (they mock at the
+gethostbyname/AsyncSniffer/sendp level, so no test changes needed).
 
 `_resolve_targets` returns `targets: {ip: name}` and `macs: {ip: mac}` with identical
 key sets, always built and consumed in lockstep (`net.py:55`, `net.py:77`). One
