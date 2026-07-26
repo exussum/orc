@@ -99,7 +99,7 @@ def test_console_ad_hoc(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish_configs(reset, routine))
+    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True)
 
 
 def test_console_ad_hoc_no_reset(client):
@@ -111,7 +111,7 @@ def test_console_ad_hoc_no_reset(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish_configs(routine))
+    ex.assert_called_once_with(m.squish_configs(routine), force=True)
 
 
 def test_console_ad_hoc_snapshot(client, ctx):
@@ -124,7 +124,7 @@ def test_console_ad_hoc_snapshot(client, ctx):
         patch.object(api, "capture_lights", return_value=captured),
         patch.object(api, "dispatch") as ex,
     ):
-        client.get("/api/run/r")
+        client.get("/api/run/r", headers={"User-Agent": "Apache-HttpClient/4.5.14"})
     snap = ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
@@ -144,11 +144,28 @@ def test_console_ad_hoc_snapshot_does_not_stack(client, ctx):
         patch.object(api, "capture_lights") as capture,
         patch.object(api, "dispatch") as ex,
     ):
-        client.get("/api/run/r")
+        client.get("/api/run/r", headers={"User-Agent": "Apache-HttpClient/4.5.14"})
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
-    ex.assert_called_once_with(m.squish_configs(reset, routine))
+    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True)
+
+
+def test_console_ad_hoc_snapshot_skipped_for_other_user_agents(client, ctx):
+    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
+    reset = m.Configs(m.Config(orc.Light.a, m.OFF))
+    with (
+        patch.object(config, "plugins", {}),
+        patch.object(config, "schedule_routines", {}),
+        patch.object(config, "ad_hoc_routines", {"r": routine}),
+        patch.object(config, "reset_config", reset),
+        patch.object(api, "capture_lights") as capture,
+        patch.object(api, "dispatch") as ex,
+    ):
+        client.get("/api/run/r")
+    assert api.ORC_SYSTEM_SNAPSHOT not in ctx.snapshot_manager.snapshots
+    capture.assert_not_called()
+    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True)
 
 
 def test_console_unknown_returns_404(client):
