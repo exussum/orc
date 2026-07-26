@@ -83,8 +83,16 @@ CSS rebuild purges them. Add one safelist line to `tailwind.src.css`:
 
 (supported in the pinned v4.3.1). Net: −12 template lines, +1 CSS line.
 
-### 3. Snapshot manager should use its own helpers
+### 3. ✅ DONE — Snapshot manager should use its own helpers
 `src/orc/api.py` (from `8a8e0d1`, which added `_live` and `get` but didn't reuse them)
+
+Applied 2026-07-25: `resume` now calls `self.get(name)` (which subsumed the
+redundant `snapshot and self._live(...)` check — `get` pops and live-checks in one
+step; safe because `_lock` is an RLock so the nested `@synchronized` is re-entrant),
+and `intercepts` is an if/elif/else over a single
+`snapshot = self.snapshots.get(ORC_SYSTEM_SNAPSHOT)` with `not self._live(snapshot)`
+replacing the hand-inverted expiry check (`local_now() > end` ≡ `not _live` for a
+non-None snapshot). Same branch order and outcomes. 126 tests pass.
 
 - `api.py:255` — `if snapshot and self._live(snapshot):` — `_live` already handles
   None (`bool(snapshot and local_now() <= snapshot.end)`), drop the `snapshot and`.
