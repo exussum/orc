@@ -154,7 +154,7 @@ current code restores a previously-missing attribute as `None`; monkeypatch dele
 it on undo. Preserves exactly what `6e80b54` was for (plugin suites see the real
 registry afterwards).
 
-### 6. One registration path in the device registry
+### 6. ⏭ SKIPPED (2026-07-25, user decision) — One registration path in the device registry
 `src/orc/device_registry.py:36-41` + `src/orc/api.py:159-164`
 
 `register_dispatch` is called only by `api.register_core`; `register_device_type` is
@@ -165,19 +165,20 @@ _dispatch_chromecast})` and delete both methods (inline the dedup:
 no other callers across src/, plugins/, tests/ (conftest goes through
 `register_core`). Leaves exactly one registration path for core and plugins.
 
-### 7. Finish what two commits started (arguably regressions)
+### 7. Finish what two commits started
 
-- `src/orc/view.py:160-167` — `record_duration` is wrapped around the whole
-  `if delay:` block, undoing `41ba1b6` ("Stop timing background tasks"): queuing a
-  delayed job records the ~microsecond `scheduler.add_job` call into the id's rolling
-  average (`update_avg`, `api.py:68-71`) while the actual delayed execution stays
-  untimed. Dedent the delay branch out of the `with`; keep
-  `with api.record_duration(id): run(ctx=app.orc)` in the else.
-- `.pre-commit-config.yaml:58-63` — `e959de3` ("Stop auditing if the lock file
-  hasn't changed") gated `pylock` but left `pip-audit` on `always_run: true`.
-  `pip-audit --locked .` reads pylock.toml, so `files: ^pylock\.toml$` finishes the
-  intent. CI still runs it every build (`pre-commit run --all-files` passes every
-  tracked file).
+- **7a. ❌ NOT A FINDING (2026-07-25, user: intentional)** —
+  `src/orc/view.py:160-167` — `record_duration` wrapping the whole `if delay:`
+  block looked like it undid `41ba1b6` ("Stop timing background tasks"), since
+  queuing a delayed job records the ~microsecond `scheduler.add_job` call into the
+  id's rolling average while the delayed execution stays untimed. The user confirmed
+  the current wrapping is intentional — do not re-flag or "fix" this.
+- **7b. ✅ DONE (2026-07-25)** — `.pre-commit-config.yaml:58-63` — `e959de3`
+  ("Stop auditing if the lock file hasn't changed") gated `pylock` but left
+  `pip-audit` on `always_run: true`. Changed to `files: ^pylock\.toml$` —
+  `pip-audit --locked .` reads pylock.toml, so it now skips exactly when pylock
+  skips. CI still audits every build (`pre-commit run --all-files` passes every
+  tracked file, and pylock.toml is tracked).
 
 ## Smaller cleanups
 
