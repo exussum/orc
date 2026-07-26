@@ -414,27 +414,26 @@ def next_iot_job(scheduler: BaseScheduler, present_names: set[str]) -> Job | Non
             for j in jobs
             if j.next_run_time
             and not any(cfg.trigger == m.Trigger.SYSTEM for cfg in j.args[0].rule.items)
-            and matching_items(j.args[0].rule, False, j.next_run_time, present_names)
+            and matching_items(j.args[0].rule, j.next_run_time, present_names)
         ),
         None,
     )
 
 
 @requires_ctx
-def run_iot_job(job: m.IotJob, ctx: m.AppContext, force: bool = False) -> None:
+def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
     rule = job.rule
     now = local_now()
-    if not (matched := matching_items(rule, force, now, present_names())):
+    if not (matched := matching_items(rule, now, present_names())):
         unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
         detail = ", ".join(unmet) if unmet else "no conditions met"
         log(now, m.LogSource.ROUTINE, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
-    elif not force:
-        if weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
-            log(now, m.LogSource.ROUTINE, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
-        else:
-            log(now, m.LogSource.ROUTINE, rule.name)
-    dispatch(replace(rule, items=matched), force=force)
+    elif weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
+        log(now, m.LogSource.ROUTINE, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
+    else:
+        log(now, m.LogSource.ROUTINE, rule.name)
+    dispatch(replace(rule, items=matched))
 
 
 def setup_scheduler(ctx: m.AppContext) -> None:
@@ -476,9 +475,7 @@ def matched_weather(rule: m.Routine, now: datetime) -> tuple[m.Config, ...]:
     return tuple(c for c in rule.items if c.trigger in _WEATHER_TRIGGERS and c.trigger in feeds.fetch_weather(now, *config.lat_long))
 
 
-def matching_items(rule: m.Routine, force: bool, now: datetime, pnames: set[str]) -> Sequence[m.Config]:
-    if force:
-        return rule.items
+def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> Sequence[m.Config]:
     system = tuple(c for c in rule.items if not c.trigger or c.trigger == m.Trigger.SYSTEM)
     presence = matched_presence(rule, pnames)
     weather = matched_weather(rule, now) if pnames else ()
@@ -514,7 +511,7 @@ def replay_day(now: datetime) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
     # replace() keeps Routine type; squish_configs only reads .items, which Routine and Configs share
-    configs = (replace(cfg, items=matching_items(cfg, False, now, present)) for (when, cfg) in jobs if when <= now)
+    configs = (replace(cfg, items=matching_items(cfg, now, present)) for (when, cfg) in jobs if when <= now)
     dispatch(m.squish_configs(*configs), force=True)
 
 
