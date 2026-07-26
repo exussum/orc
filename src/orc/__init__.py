@@ -43,6 +43,11 @@ class Config:
         with open(Path(self.config_dir) / "config.md") as fh:
             doc = Document("".join(fh.readlines()))
 
+        registry = self._load_devices(doc, hubitat_config)  # installs the device enums the parsers below need
+        routines = self._load_routines(doc)
+        self._load_configs(doc, registry, routines)
+
+    def _load_devices(self, doc: Document, hubitat_config: dict[Any, tuple[Any, ...]]) -> m.Registry:
         # Build plugins first so their register() hooks can append device types
         # (into the fresh registry state) before the enums below are built.
         self.plugins = m.build_plugins(doc, "Plugins")
@@ -57,19 +62,25 @@ class Config:
         globals().update(enums)
         globals()["device_enums"] = list(enums.values())
         self.registry = builder.build(enums)
-
         self.virtual_devices = {e for e in enums["Light"] if isinstance(e.value, int) and e.value < 0}
+        return self.registry
+
+    def _load_routines(self, doc: Document) -> dict[str, m.Routine]:
         self.people = m.build_people(doc, "People")
         self.themes = m.build_themes(doc, "Routines", "Themes", self.people)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
-        self.room_configs = m.build_config(doc, "Room Configs", required=("Living Room",))
-        self.ad_hoc_routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
+        self.default_config = m.build_routines(doc, "Routines", required=("Welcome",))["Welcome"]
+        return self.schedule_routines
+
+    def _load_configs(self, doc: Document, registry: m.Registry, routines: dict[str, m.Routine]) -> None:
+        self.room_configs = m.build_config(doc, "Room Configs")
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=m.OFF)
+        self.ad_hoc_routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
         self.button_highlight_configs = m.build_highlights(doc, "Button Highlights")
         self.audio_volumes = m.build_audio_volumes(doc, "Audio Volumes", required=(m.AUDIO_INFO, m.AUDIO_FATAL))
-        self.default_config = self.room_configs["Living Room"]
-        excluded = {name for name, d in self.registry.devices.items() if d.reset_excluded}
-        reset_items = self.schedule_routines["Reset"].items
+
+        excluded = {name for name, d in registry.devices.items() if d.reset_excluded}
+        reset_items = routines["Reset"].items
         self.reset_config = m.squish_configs(
             m.Configs(*(i for i in reset_items if (i.what if isinstance(i.what, type) else type(i.what)).__name__ not in excluded))
         )
