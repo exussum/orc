@@ -250,9 +250,9 @@ class SnapshotManager:
 
     @synchronized
     def resume(self, name: str, target_config: m.Configs) -> None:
-        snapshot = self.snapshots.pop(name, None)
+        snapshot = self.get(name)
 
-        if snapshot and self._live(snapshot):
+        if snapshot:
             routine = snapshot.routine
             log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=name))
         else:
@@ -272,11 +272,14 @@ class SnapshotManager:
 
     @synchronized
     def intercepts(self, rule: m.Config) -> bool:
-        if ORC_SYSTEM_SNAPSHOT in self.snapshots and rule.trigger == m.Trigger.SYSTEM:
+        snapshot = self.snapshots.get(ORC_SYSTEM_SNAPSHOT)
+        if snapshot is None:
+            return False
+        elif rule.trigger == m.Trigger.SYSTEM:
             self.update_snapshot(ORC_SYSTEM_SNAPSHOT, rule)
-        elif ORC_SYSTEM_SNAPSHOT in self.snapshots and local_now() > self.snapshots[ORC_SYSTEM_SNAPSHOT].end:
+        elif not self._live(snapshot):
             self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
-        elif ORC_SYSTEM_SNAPSHOT in self.snapshots:
+        else:
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             kinds = ", ".join(sorted({type(e).__name__ for e in what}))
             log(local_now(), m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
