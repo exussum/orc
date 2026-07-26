@@ -100,6 +100,10 @@ async function run_config(el) {
     await get(`/api/run/${el.dataset.id}${q}`, el);
 }
 
+document.addEventListener("click", (e) => {
+    e.target.closest(".orc-log-action")?.classList.toggle("truncate");
+});
+
 document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {
     const menu = document.getElementById("admin-navbar-collapse");
     const open = menu.classList.toggle("hidden");
