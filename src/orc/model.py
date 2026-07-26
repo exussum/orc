@@ -373,6 +373,16 @@ def build_themes(doc: Any, routine_section: str, theme_section: str, people: Ite
     return {t: Theme(t, *[replace(routines[r.routine], when=r.time) for r in rows]) for t, rows in theme_tables}
 
 
+def build_routines(doc: Any, section: str, required: Iterable[str] = ()) -> dict[str, Routine]:
+    result = {
+        rows[0].name: Routine(rows[0].name, "", [Config(r.device, r.state, trigger=r.trigger or None) for r in rows])
+        for _, rows in _typed_sub_tables(doc, section, ("Type", "Name", "Device", "State", "Trigger"))
+    }
+    if missing := set(required) - result.keys():
+        raise ValueError(f"Missing required routines in section '{section}': {', '.join(sorted(missing))}")
+    return result
+
+
 def column_to_value(col: str, val: Any) -> Any:
     import orc
 
