@@ -308,32 +308,26 @@ class TestPresence:
         rule = self._routine("partner-r", "Alice")
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(rule, force=False)
+        dispatch.assert_called_once_with(rule)
 
     def test_run_iot_job_runs_when_no_presence_required(self):
         rule = m.Routine("r", time(8, 0), (m.Config(orc.Light.a, m.OFF),))
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(rule, force=False)
-
-    def test_run_iot_job_force_bypasses_presence(self):
-        rule = self._routine("partner-r", "Alice")
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx, force=True)
-        dispatch.assert_called_once_with(rule, force=True)
+        dispatch.assert_called_once_with(rule)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self):
         rule = self._routine("reset-r", m.Trigger.SYSTEM)
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(rule, force=False)
+        dispatch.assert_called_once_with(rule)
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
         api.mark_present(["Bob"], when=api.local_now())
         rule = self._routine("anyone-r", m.Trigger.ANYONE)
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(rule, force=False)
+        dispatch.assert_called_once_with(rule)
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self):
         rule = self._routine("anyone-r", m.Trigger.ANYONE)
