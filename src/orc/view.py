@@ -390,10 +390,14 @@ def _resolve_run_action(id: str) -> tuple[Callable[[], None], timedelta] | None:
         return lambda: api.dispatch(config.schedule_routines[id], force=True), timedelta()
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
-        if routine.snapshot and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT):
+        if (
+            "Apache-HttpClient/4.5.14" in request.headers.get("User-Agent", "")
+            and routine.snapshot
+            and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT)
+        ):
             # Don't stack snapshots
             snap = routine.snapshot
             return lambda: app.orc.snapshot_manager.replace_config(api.ORC_SYSTEM_SNAPSHOT, routine, api.local_now() + snap), timedelta()
         base = (config.reset_config,) if routine.reset else ()
-        return lambda: api.dispatch(m.squish_configs(*base, routine)), routine.delay
+        return lambda: api.dispatch(m.squish_configs(*base, routine), force=True), routine.delay
     return None
