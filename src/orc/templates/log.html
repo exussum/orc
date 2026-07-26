@@ -20,19 +20,7 @@
                         {% endif %}
                     </td>
                     <td class="px-2 py-1">
-                        {% if entry.source == "calendar" %}
-                            <span class="orc-badge-calendar">calendar</span>
-                        {% elif entry.source == "routine" %}
-                            <span class="orc-badge-routine">routine</span>
-                        {% elif entry.source == "remote" %}
-                            <span class="orc-badge-remote">remote</span>
-                        {% elif entry.source == "system" %}
-                            <span class="orc-badge-system">system</span>
-                        {% elif entry.source == "plugin" %}
-                            <span class="orc-badge-plugin">plugin</span>
-                        {% else %}
-                            <span class="orc-badge-manual">manual</span>
-                        {% endif %}
+                        <span class="orc-badge-{{ entry.source.value }}">{{ entry.source.value }}</span>
                     </td>
                     <td class="px-2 py-1 max-w-0 w-full">
                         <div class="orc-log-action truncate cursor-pointer">{{ entry.action }}{% if run|length > 1 %} <span class="text-gray-400">×{{ run|length }}</span>{% endif %}</div>
