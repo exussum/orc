@@ -34,7 +34,9 @@
                             <span class="orc-badge-manual">manual</span>
                         {% endif %}
                     </td>
-                    <td class="px-2 py-1">{{ entry.action }}{% if run|length > 1 %} <span class="text-gray-400">×{{ run|length }}</span>{% endif %}</td>
+                    <td class="px-2 py-1 max-w-0 w-full">
+                        <div class="orc-log-action truncate cursor-pointer">{{ entry.action }}{% if run|length > 1 %} <span class="text-gray-400">×{{ run|length }}</span>{% endif %}</div>
+                    </td>
                 </tr>
             {% endfor %}
         {% endcall %}
