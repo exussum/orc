@@ -2,6 +2,8 @@
 
 @source "../templates";
 @source "./*.js";
+/* badge classes are built dynamically in log.html (orc-badge-{{ source }}) */
+@source inline("orc-badge-{calendar,routine,remote,system,plugin,manual}");
 
 @theme {
     --color-orc-bg: #1a1a1a;
