@@ -7,9 +7,9 @@ from orc.model import DeviceEnum
 
 
 @pytest.fixture(autouse=True)
-def _core_registry():
+def _core_registry(monkeypatch):
     """Install a registry built from lightweight test enums for the duration of each
-    core test, then restore what was there before.
+    core test; monkeypatch restores what was there before at teardown.
 
     ``orc.config`` is a process-wide singleton whose ``registry`` is populated with the
     real, plugin-inclusive device set at import. The core suite needs a small fixed set
@@ -30,22 +30,16 @@ def _core_registry():
     class TV(Enum):
         t = 1
 
-    saved_attrs = {name: getattr(orc, name, None) for name in ("Light", "Chromecast", "TV", "device_enums")}
-    saved_registry = orc.config.registry
-
     # Register core dispatch into a fresh builder, then build the registry from the test
     # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.
     builder = device_registry.RegistryBuilder()
     api.register_core(builder)
-    orc.Light, orc.Chromecast, orc.TV = Light, Chromecast, TV
-    orc.device_enums = [Light, Chromecast, TV]
-    orc.config.registry = builder.build({"Light": Light, "Chromecast": Chromecast, "TV": TV})
-    try:
-        yield
-    finally:
-        for name, val in saved_attrs.items():
-            setattr(orc, name, val)
-        orc.config.registry = saved_registry
+    monkeypatch.setattr(orc, "Light", Light, raising=False)
+    monkeypatch.setattr(orc, "Chromecast", Chromecast, raising=False)
+    monkeypatch.setattr(orc, "TV", TV, raising=False)
+    monkeypatch.setattr(orc, "device_enums", [Light, Chromecast, TV], raising=False)
+    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast, "TV": TV}))
+    yield
 
 
 @pytest.fixture(autouse=True)
