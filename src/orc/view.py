@@ -1,4 +1,5 @@
 import random
+import sys
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
@@ -147,6 +148,7 @@ def rebuild_jobs() -> tuple[dict[str, Any], int]:
 
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> tuple[dict[str, Any], int]:
+    print(f"/api/run/{id} user-agent: {request.headers.get('User-Agent')}", file=sys.stderr)
     resolved = _resolve_run_action(id)
     if resolved is None:
         return {"error": "Unknown routine"}, 404
