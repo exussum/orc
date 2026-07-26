@@ -157,17 +157,16 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
     assert not ctx.snapshot_manager.snapshots  # consumed
 
 
-def test_walk_in_empty_house_without_snapshot_replays_day(ctx, sensor):
-    # Saves the pre-visit state, then catches the house up to the schedule
+def test_walk_in_empty_house_without_snapshot_applies_default_config(ctx, sensor):
+    # Saves the pre-visit state, then applies the default config
     ctx.api.local_now.return_value = _DAYTIME
     ctx.api.check_presence.return_value = set()
     ctx.snapshot_manager = MagicMock()
     ctx.snapshot_manager.get.return_value = None
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.snapshot_manager.replace_config.assert_called_once_with(plugins.SNAPSHOT_NAME, m.Configs(), _DAYTIME + timedelta(minutes=45))
-    ctx.api.replay_day.assert_called_once_with(_DAYTIME)
-    ctx.api.dispatch.assert_not_called()
-    ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, "Entrance triggered: Replay Day")
+    ctx.api.dispatch.assert_called_once_with(ctx.config.default_config, force=True)
+    ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, "Entrance triggered: Default Config")
 
 
 def test_walk_in_cancels_pending_cleanup(ctx, sensor):
