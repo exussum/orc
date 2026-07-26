@@ -60,7 +60,7 @@ repos:
         entry: pip-audit --locked .
         language: system
         pass_filenames: false
-        always_run: true
+        files: ^pylock\.toml$
 
       - id: mypy
         name: mypy
