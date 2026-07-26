@@ -40,11 +40,11 @@ def trigger_sensor(ctx: PluginCtx, sensor: SimpleNamespace, device_id: str, even
             ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
             ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
         else:
-            # Empty house: snapshot the pre-visit state, then catch up to the schedule
+            # Empty house: snapshot the pre-visit state, then apply the default config
             end = ctx.api.local_now() + timedelta(minutes=sensor.snapshot)
             ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, ctx.model.Configs(), end)
-            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, "Entrance triggered: Replay Day")
-            ctx.api.replay_day(ctx.api.local_now())
+            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, "Entrance triggered: Default Config")
+            ctx.api.dispatch(ctx.config.default_config, force=True)
     elif event == sensor.inactive_event:
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
         ctx.scheduler.add_job(
