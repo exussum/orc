@@ -4,6 +4,7 @@
 |-----------------------|----------|
 | cleanup_delay_minutes | 2        |
 | entrance_id           | 1        |
+| patio_door_id         | 56       |
 | active_event          | active   |
 | inactive_event        | inactive |
 | snapshot              | 45       |

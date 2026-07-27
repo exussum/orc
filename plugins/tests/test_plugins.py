@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -67,6 +68,7 @@ def sensor():
     )
     return SimpleNamespace(
         entrance_id=16,
+        patio_door_id=56,
         active_event="active",
         inactive_event="inactive",
         cleanup_delay_minutes=2,
@@ -225,6 +227,37 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
         plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45)
     )
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_shutdown)
+
+
+def _door(state):
+    resp = MagicMock()
+    resp.json.return_value = {"attributes": [{"name": "contact", "currentValue": state}, {"name": "battery", "currentValue": 98}]}
+    return resp
+
+
+def test_open_door_counts_as_present(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    with patch.dict(os.environ, {"ORC_ENABLED": "1"}), patch.object(plugins.requests, "get", return_value=_door("open")):
+        _cleanup(sensor, plugin_ctx)
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_present)
+
+
+def test_closed_door_still_shuts_down(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    with patch.dict(os.environ, {"ORC_ENABLED": "1"}), patch.object(plugins.requests, "get", return_value=_door("closed")):
+        _cleanup(sensor, plugin_ctx)
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_shutdown)
+
+
+def test_unreachable_hub_still_shuts_down(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    with (
+        patch.dict(os.environ, {"ORC_ENABLED": "1"}),
+        patch.object(plugins.requests, "get", side_effect=plugins.requests.ConnectionError),
+    ):
+        _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_shutdown)
 
 
