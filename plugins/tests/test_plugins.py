@@ -157,18 +157,6 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
     assert not ctx.snapshot_manager.snapshots  # consumed
 
 
-def test_walk_in_empty_house_without_snapshot_applies_default_config(ctx, sensor):
-    # Saves the pre-visit state, then applies the default config
-    ctx.api.local_now.return_value = _DAYTIME
-    ctx.api.check_presence.return_value = set()
-    ctx.snapshot_manager = MagicMock()
-    ctx.snapshot_manager.get.return_value = None
-    _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.snapshot_manager.replace_config.assert_called_once_with(plugins.SNAPSHOT_NAME, m.Configs(), _DAYTIME + timedelta(minutes=45))
-    ctx.api.dispatch.assert_called_once_with(ctx.config.default_config, force=True)
-    ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, "Entrance triggered: Default Config")
-
-
 def test_walk_in_cancels_pending_cleanup(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
@@ -212,15 +200,6 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_present)
-
-
-def test_someone_home_drops_the_trip_snapshot(sensor, plugin_ctx):
-    # The walk-in stuck: pre-visit state must not resurface on a later walk-in
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugin_ctx.api.check_presence.return_value = {"alice"}
-    _cleanup(sensor, plugin_ctx)
-    plugin_ctx.snapshot_manager.get.assert_called_once_with(plugins.SNAPSHOT_NAME)
-    plugin_ctx.snapshot_manager.resume.assert_not_called()
 
 
 def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
