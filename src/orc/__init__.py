@@ -69,7 +69,7 @@ class Config:
         self.people = m.build_people(doc, "People")
         self.themes = m.build_themes(doc, "Routines", "Themes", self.people)
         self.schedule_routines = {r.name: r for e in self.themes.values() for r in e.configs}
-        self.default_config = m.build_routines(doc, "Routines", required=("Welcome",))["Welcome"]
+        self.default_config = m.build_routines(doc, "Routines", required=("ROUTINE_DEFAULT",))["ROUTINE_DEFAULT"]
         return self.schedule_routines
 
     def _load_configs(self, doc: Document, registry: m.Registry, routines: dict[str, m.Routine]) -> None:
