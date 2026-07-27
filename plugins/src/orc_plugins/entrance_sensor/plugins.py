@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from datetime import timedelta
 from enum import Enum
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Sequence
 
+import requests
 from apscheduler.triggers.date import DateTrigger
 
 from orc.plugins import PluginCtx, build_ctx, plugin_config, requires_ctx
@@ -54,7 +56,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
     plugin_ctx = build_ctx(ctx)
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
-    present = plugin_ctx.api.check_presence(silent=True)
+    present = plugin_ctx.api.check_presence(silent=True) or _door_open(plugin_ctx, sensor)
 
     if present:
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.present))
@@ -70,6 +72,20 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.absent))
         msg = sensor.log_shutdown
     plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.PLUGIN, msg)
+
+
+def _door_open(ctx: PluginCtx, sensor: SimpleNamespace) -> bool:
+    # An open entrance door means someone is around even if presence hasn't seen them.
+    if not os.getenv("ORC_ENABLED"):
+        return False
+    try:
+        resp = requests.get(
+            f"{ctx.config.hubitat_url}/devices/{sensor.patio_door_id}{ctx.config.secrets.access_token}", timeout=ctx.config.http_timeout
+        )
+        resp.raise_for_status()
+    except requests.RequestException:
+        return False  # hub unreachable: fall back to the presence-only decision
+    return any(a["name"] == "contact" and a["currentValue"] == "open" for a in resp.json()["attributes"])
 
 
 def _timed_rows(ctx: PluginCtx, sensor: SimpleNamespace) -> tuple[str, Sequence[Any]]:
