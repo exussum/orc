@@ -103,7 +103,7 @@ Steps:
 
    ```sh
    export ORC_ENABLED=1
-   export ORC_BASE_URL=http://<hubitat-host>/apps/api/<app-id>
+   export ORC_HUBITAT_URL=http://<hubitat-host>/apps/api/<app-id>
    export ORC_CONFIG_DIR=/etc/orc
    export ORC_DB=sqlite:////var/lib/orc/jobs.sqlite
    export BWS_ACCESS_TOKEN=file:///etc/orc/bws_access_token
@@ -128,7 +128,7 @@ Two config surfaces:
    | Var                     | Purpose                                                            | Default                          |
    |-------------------------|--------------------------------------------------------------------|----------------------------------|
    | `ORC_ENABLED`           | Opt-in: talk to real devices/secrets; unset = offline/dry-run      | unset                            |
-   | `ORC_BASE_URL`          | Hubitat Maker API base URL                                         | unset                            |
+   | `ORC_HUBITAT_URL`       | Hubitat Maker API base URL                                         | unset                            |
    | `ORC_CONFIG_DIR`        | Directory containing `config.md`                                   | `src`                            |
    | `ORC_DB`                | SQLAlchemy URL for the APScheduler / orc state DB                  | `sqlite:////tmp/jobs.sqlite`     |
    | `ORC_TZ`                | IANA timezone                                                      | `America/New_York`               |
