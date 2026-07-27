@@ -17,7 +17,7 @@ _CAPABILITY_MAP: dict[str, m.Capability] = {
 
 @requires_enabled({})
 def fetch_hubitat_config(secrets: m.Secrets) -> dict[str, tuple[int, frozenset[m.Capability]]]:
-    resp = requests.get(f"{config.base_url}/devices/all{secrets.access_token}", timeout=config.http_timeout)
+    resp = requests.get(f"{config.hubitat_url}/devices/all{secrets.access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
     return {
         e["label"]: (int(e["id"]), frozenset(_CAPABILITY_MAP[c] for c in e.get("capabilities", []) if c in _CAPABILITY_MAP))
@@ -49,7 +49,7 @@ def fetch_light_states(lights: Iterable[m.DeviceEnum]) -> m.Configs:
 @requires_enabled(None)
 def update_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
     if brightness is not None and m.Capability.change_level in light.capabilities:
-        url = f"{config.base_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}"
+        url = f"{config.hubitat_url}/devices/{light.value}/setLevel/{brightness}{config.secrets.access_token}"
         new_state: int | str = brightness
     else:
         if brightness == 0:
@@ -58,7 +58,7 @@ def update_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | 
             on = True
         elif brightness is not None:
             raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
-        url = f"{config.base_url}/devices/{light.value}/{m.ON if on else m.OFF}{config.secrets.access_token}"
+        url = f"{config.hubitat_url}/devices/{light.value}/{m.ON if on else m.OFF}{config.secrets.access_token}"
         new_state = m.ON if on else m.OFF
     resp = requests.get(url, timeout=config.http_timeout)
     resp.raise_for_status()
@@ -69,12 +69,12 @@ def update_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | 
 
 @requires_enabled(None)
 def reboot() -> None:
-    resp = requests.post(f"{config.base_url}/hub/reboot{config.secrets.access_token}", timeout=config.http_timeout)
+    resp = requests.post(f"{config.hubitat_url}/hub/reboot{config.secrets.access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
 
 
 def _fetch_hubitat_devices() -> dict[int, Any]:
-    resp = requests.get(f"{config.base_url}/devices/all{config.secrets.access_token}", timeout=config.http_timeout)
+    resp = requests.get(f"{config.hubitat_url}/devices/all{config.secrets.access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
     return {int(d["id"]): d for d in resp.json()}
 
