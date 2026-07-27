@@ -56,11 +56,12 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
     plugin_ctx = build_ctx(ctx)
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
-    present = plugin_ctx.api.check_presence(silent=True) or _door_open(plugin_ctx, sensor)
+    present = plugin_ctx.api.check_presence(silent=True)
+    door_open = not present and _door_open(plugin_ctx, sensor)
 
-    if present:
+    if present or door_open:
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.present))
-        msg = sensor.log_present
+        msg = sensor.log_door_open if door_open else sensor.log_present
     elif any(s.content for s in plugin_ctx.api.capture_sounds().items):
         # Visitor left, pet still listening: restore the pre-visit state
         plugin_ctx.snapshot_manager.resume(SNAPSHOT_NAME, plugin_ctx.model.Configs())

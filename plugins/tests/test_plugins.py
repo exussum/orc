@@ -74,6 +74,7 @@ def sensor():
         cleanup_delay_minutes=2,
         snapshot=45,
         log_present="skip (present)",
+        log_door_open="skip (door open)",
         log_absent="skip (sounds)",
         log_shutdown="applying OFF",
         rules=rules,
@@ -241,7 +242,7 @@ def test_open_door_counts_as_present(sensor, plugin_ctx):
     with patch.dict(os.environ, {"ORC_ENABLED": "1"}), patch.object(plugins.requests, "get", return_value=_door("open")):
         _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
-    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_present)
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_door_open)
 
 
 def test_closed_door_still_shuts_down(sensor, plugin_ctx):
