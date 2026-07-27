@@ -11,11 +11,12 @@
 
 ##### Messages
 
-| Log            | Message                                   |
-|----------------|-------------------------------------------|
-| log_present    | Trigger sensor off: skip (people present) |
-| log_absent     | Trigger sensor off: skip (sounds playing) |
-| log_shutdown   | Trigger sensor off: applying OFF          |
+| Log            | Message                                     |
+|----------------|---------------------------------------------|
+| log_present    | Trigger sensor off: skip (people present)   |
+| log_door_open  | Trigger sensor off: skip (patio door open)  |
+| log_absent     | Trigger sensor off: skip (sounds playing)   |
+| log_shutdown   | Trigger sensor off: applying OFF            |
 
 ##### Rules
 
