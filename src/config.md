@@ -16,7 +16,7 @@
 | ROUTINE_LIGHTS_ON  | Lights On  | Light      | on    | SYSTEM  |
 | ROUTINE_LIGHTS_OFF | Lights Off | Light      | off   | SYSTEM  |
 | ROUTINE_QUIET      | Quiet      | Chromecast | stop  | SYSTEM  |
-| ROUTINE_WELCOME    | Welcome    | Light      | on    | SYSTEM  |
+| ROUTINE_DEFAULT    | Welcome    | Light      | on    | SYSTEM  |
 
 ---
 
