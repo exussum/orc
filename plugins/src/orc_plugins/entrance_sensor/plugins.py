@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Sequence
 
 import requests
 from apscheduler.triggers.date import DateTrigger
+from orc_plugins.entrance_sensor import dal
 
+from orc.collections import LockedDict
 from orc.plugins import PluginCtx, build_ctx, plugin_config, requires_ctx
 
 if TYPE_CHECKING:
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
 
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
+
+_battery: LockedDict[str, tuple[dal.SensorState, datetime]] = LockedDict()  # name -> (last nightly reading, when fetched)
 
 
 @plugin_config(
@@ -75,18 +78,38 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
     plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.PLUGIN, msg)
 
 
+@requires_ctx
+def _run_poll_battery(*, ctx: m.AppContext) -> None:
+    _poll_battery(build_ctx(ctx))
+
+
+@plugin_config("entrance_sensor", schema={"Settings": ("Key", "Value")})
+def _poll_battery(ctx: PluginCtx, sensor: SimpleNamespace) -> None:
+    for name, device_id in (("front door", sensor.entrance_id), ("balcony door", sensor.patio_door_id)):
+        try:
+            state = dal.fetch_state(name, device_id)
+        except requests.RequestException:
+            continue
+        _battery[name] = (state, ctx.api.local_now())
+        if state.battery is not None and state.battery.is_critical:
+            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Low battery on {name} ({state.battery.value})")
+
+
+def battery_state() -> list[dict[str, Any]]:
+    """Per-sensor battery rows for core's generic state renderer (needs a "name" key)."""
+    return [
+        {"name": s.name, "battery": s.battery.value if s.battery is not None else None, "checked": checked}
+        for s, checked in _battery.values()
+    ]
+
+
 def _door_open(ctx: PluginCtx, sensor: SimpleNamespace) -> bool:
     # An open entrance door means someone is around even if presence hasn't seen them.
-    if not os.getenv("ORC_ENABLED"):
-        return False
     try:
-        resp = requests.get(
-            f"{ctx.config.hubitat_url}/devices/{sensor.patio_door_id}{ctx.config.secrets.access_token}", timeout=ctx.config.http_timeout
-        )
-        resp.raise_for_status()
+        state = dal.fetch_state("patio door", sensor.patio_door_id)
     except requests.RequestException:
         return False  # hub unreachable: fall back to the presence-only decision
-    return any(a["name"] == "contact" and a["currentValue"] == "open" for a in resp.json()["attributes"])
+    return state.attributes.get("contact") == "open"
 
 
 def _timed_rows(ctx: PluginCtx, sensor: SimpleNamespace) -> tuple[str, Sequence[Any]]:
