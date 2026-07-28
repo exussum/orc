@@ -87,6 +87,29 @@ class WeatherCondition(str, Enum):
     CLOUDY = "CLOUDY"
 
 
+class BatteryLevel(str, Enum):
+    CRITICAL = "CRITICAL"
+    LOW = "LOW"
+    MID = "MID"
+    HIGH = "HIGH"
+
+    @property
+    def is_critical(self) -> bool:
+        return self is BatteryLevel.CRITICAL
+
+    @classmethod
+    def from_fraction(cls, value: Any, out_of: int) -> "BatteryLevel":
+        pct = int(value) * 100 // out_of
+        if pct <= 10:
+            return cls.CRITICAL
+        elif pct <= 25:
+            return cls.LOW
+        elif pct <= 75:
+            return cls.MID
+        else:
+            return cls.HIGH
+
+
 @dataclass
 class LogEntry:
     timestamp: datetime
