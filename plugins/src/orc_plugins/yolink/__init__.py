@@ -10,7 +10,8 @@ from typing import Any
 
 from orc_plugins.yolink import dal
 
-_BATTERY_LOW_THRESHOLD = 1
+from orc import model as m
+
 _SIGNAL_WEAK_THRESHOLD = -90
 
 
@@ -19,8 +20,8 @@ class Msg:
     DISCONNECTED = "YoLink {name} disconnected"
     WATER_DETECTED = "Water detected in {name}"
     WATER_CLEARED = "Water cleared in {name}"
-    LOW_BATTERY = "Low battery on {name} ({battery}/4)"
-    BATTERY_RESTORED = "Battery restored on {name} ({battery}/4)"
+    LOW_BATTERY = "Low battery on {name} ({battery})"
+    BATTERY_RESTORED = "Battery restored on {name} ({battery})"
     WEAK_SIGNAL = "Weak signal on {name} ({signal} dBm)"
     SIGNAL_RESTORED = "Signal restored on {name} ({signal} dBm)"
     INTERVAL_CHANGED = "Report interval for {name} changed to {interval}s"
@@ -30,7 +31,6 @@ class Msg:
 
 def _on_transition(name: str, kind: str, old: Any, new: Any) -> None:
     from orc import api
-    from orc import model as m
 
     msg = None
     if kind == "connection" and old is not None:
@@ -42,12 +42,11 @@ def _on_transition(name: str, kind: str, old: Any, new: Any) -> None:
             api.play_text(msg, level=m.AUDIO_FATAL)
             return
     elif kind == "battery":
-        old_low = old is not None and old <= _BATTERY_LOW_THRESHOLD
-        new_low = new <= _BATTERY_LOW_THRESHOLD
-        if new_low and not old_low:
-            msg = Msg.LOW_BATTERY.format(name=name, battery=new)
-        elif old_low and not new_low:
-            msg = Msg.BATTERY_RESTORED.format(name=name, battery=new)
+        old_critical = old is not None and old.is_critical
+        if new.is_critical and not old_critical:
+            msg = Msg.LOW_BATTERY.format(name=name, battery=new.value)
+        elif old_critical and not new.is_critical:
+            msg = Msg.BATTERY_RESTORED.format(name=name, battery=new.value)
     elif kind == "signal":
         old_weak = old is not None and old <= _SIGNAL_WEAK_THRESHOLD
         new_weak = new <= _SIGNAL_WEAK_THRESHOLD
@@ -83,7 +82,7 @@ def leak_state() -> list[dict[str, Any]]:
             "state": s.state,
             "connected": s.connected,
             "online": s.online,
-            "battery": s.battery,
+            "battery": s.battery.value if s.battery is not None else None,
             "signal": s.signal,
             "interval": s.interval,
             "last_change": s.last_change,
