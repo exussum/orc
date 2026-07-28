@@ -42,6 +42,10 @@ class LockedDict[K, V]:
             self._data[key] = new
             return new
 
+    def values(self) -> list[V]:
+        with self._lock:
+            return list(self._data.values())
+
     def copy(self) -> dict[K, V]:
         with self._lock:
             return dict(self._data)
