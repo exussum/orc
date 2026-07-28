@@ -442,18 +442,18 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
 def setup_scheduler(ctx: m.AppContext) -> None:
     if not jobs_by_type(ctx.scheduler, m.IotJob):
         rebuild_iot_schedule(ctx=ctx)
-    crons = (
-        (rebuild_iot_schedule, "10 0 * * *", "iot-cron", "Iot Cron"),
-        (rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "cal-cron", "Calendar Cron"),
-        (_check_presence_job, "5 * * * *", "presence-cron", "Presence Cron"),
-    )
-    for func, crontab, job_id, name in (*crons, *config.registry.cron_jobs):
+    crons = {
+        "iot-cron": m.CronJob(rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
+        "cal-cron": m.CronJob(rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "Calendar Cron"),
+        "presence-cron": m.CronJob(_check_presence_job, "5 * * * *", "Presence Cron"),
+    }
+    for job_id, job in {**crons, **config.registry.cron_jobs}.items():
         ctx.scheduler.add_job(
-            func,
-            CronTrigger.from_crontab(crontab, timezone=config.tz),
+            job.func,
+            CronTrigger.from_crontab(job.crontab, timezone=config.tz),
             replace_existing=True,
             id=job_id,
-            name=name,
+            name=job.name,
             jobstore=JOBSTORE_MEMORY,
         )
 
