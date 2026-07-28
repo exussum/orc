@@ -14,6 +14,7 @@ import paho.mqtt.client as mqtt
 import requests
 
 import orc as config
+from orc import model as m
 from orc.collections import LockedDict
 
 # orc.Leak is attached to the orc package at runtime once this plugin registers the
@@ -30,7 +31,7 @@ class SensorState:
     device_id: str
     connected: bool = False
     state: str | None = None
-    battery: int | None = None
+    battery: m.BatteryLevel | None = None
     signal: int | None = None
     interval: int | None = None
     online: bool | None = None
@@ -189,12 +190,12 @@ def _hydrate_states(access_token: str) -> None:
         except Exception:
             _log.exception("yolink: getState failed for %s", device.name)
             continue
-        state = data.get("state") or {}
+        state = data["state"]
         _update_sensor(
             device.value,
             online=data.get("online"),
             state=state.get("state"),
-            battery=state.get("battery"),
+            battery=m.BatteryLevel.from_fraction(state["battery"], 4),
             interval=state.get("interval"),
             signal=(state.get("loraInfo") or {}).get("signal"),
         )
@@ -211,6 +212,7 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
         _log.exception("yolink: bad payload on %s", msg.topic)
         return
     data = payload.get("data") or {}
+    data["battery"] = m.BatteryLevel.from_fraction(data["battery"], 4)
 
     # collect transitions inside the atomic update, fire after releasing the lock
     captured: dict[str, Any] = {"name": None, "transitions": []}
