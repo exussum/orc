@@ -7,7 +7,8 @@ def register(core: Any) -> None:
     Imports are deferred so importing this package (which happens during orc's own
     config load) doesn't pull the integrations in until registration actually runs.
     """
-    from orc_plugins import lgtv, yolink
+    from orc_plugins import entrance_sensor, lgtv, yolink
 
     yolink.register(core)
     lgtv.register(core)
+    entrance_sensor.register(core)
