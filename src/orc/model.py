@@ -29,6 +29,12 @@ class ThemeOverride(NamedTuple):
     end: date
 
 
+class CronJob(NamedTuple):
+    func: Callable[..., Any]
+    crontab: str
+    name: str
+
+
 SUNRISE = "sunrise"
 SUNSET = "sunset"
 
@@ -294,16 +300,15 @@ class Registry:
     ``click_hooks`` and ``button_labels`` are keyed by button/action id, not device
     type, so they sit alongside ``devices`` rather than folding into a DeviceType.
     ``state_providers`` are stored as functions and called fresh by consumers on each
-    request, so the returned rows reflect live device state. ``cron_jobs`` entries are
-    ``(func, crontab, job_id, name)``, scheduled by ``api.setup_scheduler`` alongside
-    core's own crons."""
+    request, so the returned rows reflect live device state. ``cron_jobs`` is keyed by
+    job id and scheduled by ``api.setup_scheduler`` alongside core's own crons."""
 
     devices: dict[str, DeviceType]
     click_hooks: dict[str, str]
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]
     startup_hooks: list[Callable[[], None]]
-    cron_jobs: list[tuple[Callable[..., None], str, str, str]] = field(default_factory=list)
+    cron_jobs: dict[str, CronJob] = field(default_factory=dict)
 
 
 def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:
