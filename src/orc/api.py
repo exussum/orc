@@ -169,7 +169,6 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
     if not force and snapshot_manager.intercepts(rule):
         return
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-    sleep = time.sleep if len(what) > 1 else (lambda _: 1)
     stream: dict[Any, tuple[str, str]] = {}
     for w in what:
         if os.getenv("ORC_ENABLED") and w in config.virtual_devices:
@@ -185,7 +184,6 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
             device_type.dispatch(w, rule, stream)
         except Exception as exc:
             log(local_now(), m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
-        sleep(0.1)
 
 
 def ac_command(

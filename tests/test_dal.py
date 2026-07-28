@@ -83,27 +83,27 @@ class TestFetchLightStates:
     def _state_of(self, configs, light):
         return next(c for c in configs.items if c.what is light).state
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_on_with_level_returns_level(self, get):
         get.return_value = self._resp(200, [self._device(orc.Light.a, {"switch": "on", "level": 50})])
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == 50
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_on_with_string_level_returns_int(self, get):
         get.return_value = self._resp(200, [self._device(orc.Light.a, {"switch": "on", "level": "50"})])
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == 50
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_on_without_level_returns_on(self, get):
         get.return_value = self._resp(200, [self._device(orc.Light.a, {"switch": "on"})])
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == "on"
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_off_returns_off_even_with_level(self, get):
         get.return_value = self._resp(200, [self._device(orc.Light.a, {"switch": "off", "level": 50})])
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == "off"
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_returns_only_requested_subset(self, get):
         get.return_value = self._resp(
             200,
@@ -116,7 +116,7 @@ class TestFetchLightStates:
         configs = hubitat.fetch_light_states((orc.Light.a, orc.Light.c))
         assert tuple(c.what for c in configs.items) == (orc.Light.a, orc.Light.c)
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_db_truth_type_returns_off_without_trusting_hubitat(self, get):
         get.return_value = self._resp(200, [self._device(orc.Light.a, {"switch": "on", "power": 0}, type="Generic Zigbee Outlet")])
         assert self._state_of(hubitat.fetch_light_states((orc.Light.a,)), orc.Light.a) == "off"
@@ -124,7 +124,7 @@ class TestFetchLightStates:
 
 @pytest.mark.usefixtures("enabled")
 class TestDbTruthLight:
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_cached_truth_type_returns_stored_state(self, get):
         get.return_value = MagicMock(
             status_code=200,
@@ -134,7 +134,7 @@ class TestDbTruthLight:
         configs = hubitat.fetch_light_states((orc.Light.a,))
         assert configs.items[0] == m.Config(what=orc.Light.a, state="on")
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_cached_truth_type_no_row_returns_off(self, get):
         get.return_value = MagicMock(
             status_code=200,
@@ -144,19 +144,19 @@ class TestDbTruthLight:
         configs = hubitat.fetch_light_states((orc.Light.a,))
         assert configs.items[0] == m.Config(what=orc.Light.a, state="off")
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_update_light_writes_state_for_truth_type(self, get):
         get.return_value = MagicMock(json=lambda: {"type": "Generic Zigbee Outlet"})
         hubitat.update_light(orc.Light.a, on=True)
         assert read_light(orc.Light.a) == ("Generic Zigbee Outlet", "on")
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_update_light_does_not_write_for_reliable_type(self, get):
         get.return_value = MagicMock(json=lambda: {"type": "Hue Bulb"})
         hubitat.update_light(orc.Light.a, on=True)
         assert read_light(orc.Light.a) == (None, None)
 
-    @patch("requests.get")
+    @patch("requests.Session.get")
     def test_update_light_brightness_writes_level_for_truth_type(self, get):
         get.return_value = MagicMock(json=lambda: {"type": "Generic Zigbee Outlet"})
         hubitat.update_light(orc.Light.a, brightness=42)
