@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 import broadlink as bl
 
-from orc.dal._decorators import requires_enabled
+from orc.dal.decorators import requires_enabled
 
 if TYPE_CHECKING:
     from orc.model import DeviceEnum

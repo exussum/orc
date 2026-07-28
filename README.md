@@ -193,7 +193,7 @@ bounces the `orc` supervisor job.
   lights), `chromecast.py`, `tv.py` (LG webOS power control), `feeds.py` (iCal /
   market holidays / open-meteo weather), `bws.py` (Bitwarden), `usb.py`
   (pyaudio + piper TTS), `yolink.py`, `broadlink.py`, `lgtv.py`, `sqlite.py`,
-  `_decorators.py` (`requires_enabled`, `retry_async`)
+  `decorators.py` (`requires_enabled`, `retry_async`)
 - `src/orc/_decorators.py` — shared decorators and locks: `requires_ctx`, `plugin_config`, `synchronized`, `audio_lock`, `silence_fd`
 - `src/orc/plugins.py` — plugin functions (reboot, sensor handler, …)
 - `src/orc/locale.py` — log-message string constants
