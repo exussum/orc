@@ -32,6 +32,7 @@ class RegistryBuilder:
     startup_hooks: list[Callable[[], None]] = field(default_factory=list)
     click_hooks: dict[str, str] = field(default_factory=dict)
     button_labels: dict[str, str] = field(default_factory=dict)
+    cron_jobs: list[tuple[Callable[..., None], str, str, str]] = field(default_factory=list)
 
     def register_device_type(self, name: str) -> None:
         if name not in self.device_types:
@@ -52,6 +53,7 @@ class RegistryBuilder:
         startup: Iterable[Callable[[], None]] = (),
         on_click: dict[str, str] | None = None,
         button_labels: dict[str, str] | None = None,
+        crons: Iterable[tuple[Callable[..., None], str, str, str]] = (),
     ) -> None:
         """One entry point for a plugin to register everything it contributes; all
         pieces are optional."""
@@ -61,6 +63,7 @@ class RegistryBuilder:
         self.state_providers.update(state_providers or {})
         self.click_hooks.update(on_click or {})
         self.button_labels.update(button_labels or {})
+        self.cron_jobs.extend(crons)
 
         for name in device_types:
             self.register_device_type(name)
@@ -88,6 +91,7 @@ class RegistryBuilder:
             button_labels=dict(self.button_labels),
             state_providers=dict(self.state_providers),
             startup_hooks=list(self.startup_hooks),
+            cron_jobs=list(self.cron_jobs),
         )
 
 
