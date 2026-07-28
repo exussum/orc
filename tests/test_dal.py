@@ -5,8 +5,8 @@ import pytest
 import orc
 from orc import model as m
 from orc.dal import hubitat
-from orc.dal._decorators import requires_enabled
 from orc.dal.chromecast import _strip_googlevideo_params
+from orc.dal.decorators import requires_enabled
 from orc.dal.sqlite import read_light, write_light
 
 
