@@ -5,7 +5,7 @@ import requests
 
 from orc import config
 from orc import model as m
-from orc.dal._decorators import requires_enabled
+from orc.dal.decorators import requires_enabled
 from orc.dal.sqlite import read_lights, write_light
 
 _DB_TRUTH_DEVICE_TYPES: set[str] = {"Generic Zigbee Outlet"}
