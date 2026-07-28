@@ -447,7 +447,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         (rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "cal-cron", "Calendar Cron"),
         (_check_presence_job, "5 * * * *", "presence-cron", "Presence Cron"),
     )
-    for func, crontab, job_id, name in crons:
+    for func, crontab, job_id, name in (*crons, *config.registry.cron_jobs):
         ctx.scheduler.add_job(
             func,
             CronTrigger.from_crontab(crontab, timezone=config.tz),
