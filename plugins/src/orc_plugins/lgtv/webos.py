@@ -1,6 +1,6 @@
 """LG WebOS TV control, pairing, and client-key storage (aiowebostv).
 
-Owns its own ``orc_lg_tv`` table via core's public ``sqlite.connection()`` helper;
+Owns its own ``orc_lg_tv`` table via core's ``api.connection()`` helper;
 ``init_db`` is registered as a boot hook so the table exists before use.
 """
 
@@ -17,19 +17,19 @@ from orc.decorators import requires_enabled
 if TYPE_CHECKING:
     from orc.model import DeviceEnum
 
-# orc.dal.sqlite imports orc.config at module top, which isn't ready while this plugin
+# orc.api imports orc.config at module top, which isn't ready while this plugin
 # is imported during orc's config load — so import connection lazily, inside the DB calls.
 
 
 def init_db() -> None:
-    from orc.dal.sqlite import connection
+    from orc.api import connection
 
     with connection() as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS orc_lg_tv (hostname TEXT PRIMARY KEY, client_key TEXT NOT NULL)")
 
 
 def _fetch_client_key(hostname: str) -> str | None:
-    from orc.dal.sqlite import connection
+    from orc.api import connection
 
     with connection() as conn:
         row = conn.execute("SELECT client_key FROM orc_lg_tv WHERE hostname = ?", (hostname,)).fetchone()
@@ -37,7 +37,7 @@ def _fetch_client_key(hostname: str) -> str | None:
 
 
 def _insert_client_key(hostname: str, client_key: str) -> None:
-    from orc.dal.sqlite import connection
+    from orc.api import connection
 
     with connection() as conn:
         conn.execute(

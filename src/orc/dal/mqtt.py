@@ -6,13 +6,12 @@ events come from here in later parts; commands and discovery stay on Maker API.
 The hub uuid is captured from the first message rather than configured.
 """
 
-import dataclasses
 import json
 import logging
 import os
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
@@ -29,17 +28,22 @@ _log = logging.getLogger(__name__)
 _MQTT_PORT = 1883
 
 
-@dataclasses.dataclass(frozen=True)
-class DeviceState:
-    id: int
-    name: str
-    attributes: dict[str, Any]
-    last_activity: str | None
-    received: datetime
-
-
-_devices: LockedDict[int, DeviceState] = LockedDict()
+_devices: LockedDict[int, m.DeviceState] = LockedDict()
 _hub_id: str | None = None  # written only by the mqtt thread
+
+# Central event listeners: fired as (device, attribute, old, new) for every attribute
+# of every received document — battery levels, motion active/inactive, contact
+# open/close, switch state, all attributes alike. No dedup: the hub republishes the
+# whole document when anything changes, so unchanged attributes fire too (old == new),
+# and the initial retained flood fires with old=None. Consumers filter for what they
+# care about. Callbacks run on the mqtt thread; keep them fast and don't block.
+type Listener = Callable[[m.DeviceState, str, Any, Any], None]
+_listeners: list[Listener] = []
+
+
+def add_listener(fn: Listener) -> None:
+    if fn not in _listeners:
+        _listeners.append(fn)
 
 
 def new_client() -> tuple[mqtt.Client, str, int] | None:
@@ -67,7 +71,7 @@ def hub_id() -> str | None:
     return _hub_id
 
 
-def snapshot() -> list[DeviceState]:
+def snapshot() -> list[m.DeviceState]:
     return sorted(_devices.values(), key=lambda d: d.id)
 
 
@@ -84,48 +88,13 @@ def state_rows() -> list[dict[str, Any]]:
     ]
 
 
-@requires_enabled(lambda lights, timeout=2.0: m.Configs(*(m.Config(what=light, state=m.OFF) for light in lights)))
-def fetch_light_states(lights: Sequence[m.DeviceEnum], timeout: float = 2.0) -> m.Configs:
-    """One-shot read of the retained device documents: subscribe, collect until every
-    requested id is seen (or timeout — e.g. a device missing from the export), disconnect.
-    Virtual devices (negative synthetic id), devices not selected in the MQTT Export app,
-    and a dead broker all report off, matching the old poll's missing-device rule."""
-    wanted = {light.value for light in lights if light.value > 0}  # virtual ids never publish
-    found: dict[int, dict[str, Any]] = {}
-    done = threading.Event()
-
-    def on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
-        if rc != 0:
-            done.set()
-        else:
-            client.subscribe("hubitat/#", qos=0)
-
-    def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-        parts = msg.topic.split("/")
-        if len(parts) != 4 or parts[2] != "devices":
-            return
-        try:
-            doc = json.loads(msg.payload)
-            found[int(doc["id"])] = {a["name"]: a["value"] for a in doc["attributes"]}
-        except ValueError, KeyError, TypeError:
-            return
-        if wanted <= found.keys():
-            done.set()
-
-    connected = new_client()
-    if connected is not None:
-        client, host, port = connected
-        client.on_connect = on_connect
-        client.on_message = on_message
-        try:
-            client.connect(host, port, keepalive=30)
-        except OSError:
-            pass
-        else:
-            client.loop_start()
-            done.wait(timeout)
-            client.loop_stop()
-            client.disconnect()
+@requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=m.OFF) for light in lights)))
+def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
+    """Light states from the standing subscriber's device documents (updated on every
+    device event, whatever channel commanded it). Virtual devices (negative synthetic
+    id), devices not selected in the MQTT Export app, and an unpopulated cache (broker
+    down / just booted) report off, matching the old poll's missing-device rule."""
+    found = {d.id: d.attributes for d in snapshot()}
 
     def state(light: m.DeviceEnum) -> int | str:
         attrs = found.get(light.value)
@@ -158,7 +127,7 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
     _hub_id = parts[1]
     try:
         doc = json.loads(msg.payload)
-        device = DeviceState(
+        device = m.DeviceState(
             id=int(doc["id"]),
             name=doc["name"],
             attributes={a["name"]: a["value"] for a in doc["attributes"]},
@@ -168,7 +137,15 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
     except ValueError, KeyError, TypeError:
         _log.exception("mqtt: bad device document on %s", msg.topic)
         return
+    old = _devices.get(device.id)
     _devices[device.id] = device
+    for attribute, new_value in device.attributes.items():
+        old_value = old.attributes.get(attribute) if old is not None else None
+        for listener in list(_listeners):
+            try:
+                listener(device, attribute, old_value, new_value)
+            except Exception:
+                _log.exception("mqtt: listener failed for %s.%s", device.name, attribute)
 
 
 def _run(client: mqtt.Client, host: str, port: int) -> None:

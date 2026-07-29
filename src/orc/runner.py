@@ -12,6 +12,7 @@ from gunicorn.app.base import BaseApplication
 import orc as config
 from orc import _build, api
 from orc import model as m
+from orc import plugins
 from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY, ContextThreadPoolExecutor
 from orc.locale import Log
 from orc.view import OrcFlask, VersionManager, bp
@@ -79,8 +80,9 @@ def _build_app() -> tuple[OrcFlask, BackgroundScheduler]:
     scheduler.start(paused=True)
 
     api.setup_scheduler(ctx)
+    plugin_ctx = plugins.build_ctx(ctx)
     for hook in config.config.registry.startup_hooks:
-        hook()
+        hook(plugin_ctx)
 
     app = OrcFlask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
