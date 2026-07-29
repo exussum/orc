@@ -5,12 +5,14 @@ BroadLink IR toggle to power on), a "TV" state row set, the pairing action's on-
 notification, a boot hook to create its DB table, and marks WebOS reset-excluded.
 """
 
+from functools import partial
 from typing import Any
 
-from orc_plugins.lgtv import webos
+from orc_plugins.lgtv import plugins
 
 import orc
 from orc import model as m
+from orc.plugins import PluginCtx
 
 # orc.LGTV/WebOS/BroadLink are built at runtime from the registered device types; read
 # them through an Any view since mypy can't see the dynamic package attributes.
@@ -25,27 +27,26 @@ dismiss?.();
 """
 
 
-def _dispatch(w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
-    from orc import api  # deferred: this package is imported during orc's config load
+def setup(ctx: PluginCtx) -> None:
+    plugins.init_db(ctx.api.connection)
+    ctx.api.add_dispatch_handler("LGTV", partial(_dispatch, ctx))
+    ctx.api.add_state_provider("TV", tv_state)
 
+
+def _dispatch(ctx: PluginCtx, w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
     webos_device, bl_device = _orc.WebOS[w.name], _orc.BroadLink[w.name]
     if rule.state == m.OFF:
-        webos.off(webos_device)
+        plugins.off(ctx.api.connection, webos_device)
     elif rule.state == m.ON:
-        if webos.is_off(webos_device):
-            api.tv_toggle(bl_device)
+        if plugins.is_off(webos_device):
+            ctx.api.tv_toggle(bl_device)
     else:
         raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
 
 
 def tv_state() -> list[dict[str, Any]]:
     # ``action`` makes each row a clickable runner -> /api/run/Pair LG TV?device=<name>.
-    return [{"name": w.name, "action": "Pair LG TV", "state": "off" if webos.is_off(_orc.WebOS[w.name]) else "on"} for w in _orc.LGTV]
-
-
-def setup(ctx: Any) -> None:
-    webos.init_db()
-    ctx.api.add_state_provider("TV", tv_state)
+    return [{"name": w.name, "action": "Pair LG TV", "state": "off" if plugins.is_off(_orc.WebOS[w.name]) else "on"} for w in _orc.LGTV]
 
 
 def declare(declarations: Any) -> None:
@@ -54,7 +55,6 @@ def declare(declarations: Any) -> None:
         controllable=["LGTV"],
         reset_excluded=["WebOS"],
         icons={"LGTV": "tv"},
-        dispatch={"LGTV": _dispatch},
         setup=[setup],
         on_click={"Pair LG TV": PAIRING_JS},
         button_labels={"Pair LG TV": "Pair {device}"},
