@@ -43,15 +43,19 @@ def tv_state() -> list[dict[str, Any]]:
     return [{"name": w.name, "action": "Pair LG TV", "state": "off" if webos.is_off(_orc.WebOS[w.name]) else "on"} for w in _orc.LGTV]
 
 
-def register(core: Any) -> None:
-    core.register_plugin(
+def setup(ctx: Any) -> None:
+    webos.init_db()
+    ctx.api.add_state_provider("TV", tv_state)
+
+
+def declare(declarations: Any) -> None:
+    declarations.declare(
         device_types=["LGTV", "WebOS"],
         controllable=["LGTV"],
         reset_excluded=["WebOS"],
         icons={"LGTV": "tv"},
         dispatch={"LGTV": _dispatch},
-        state_providers={"TV": tv_state},
-        startup=[lambda ctx: webos.init_db()],  # startup hooks receive a PluginCtx; the db init doesn't need it
+        setup=[setup],
         on_click={"Pair LG TV": PAIRING_JS},
         button_labels={"Pair LG TV": "Pair {device}"},
     )
