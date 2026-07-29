@@ -115,19 +115,6 @@ def snapshot() -> list[m.DeviceState]:
     return sorted(_devices.values(), key=lambda d: d.id)
 
 
-def state_rows() -> list[dict[str, Any]]:
-    """Per-device rows for core's generic state renderer (needs a "name" key)."""
-    return [
-        {
-            "name": d.name,
-            "id": d.id,
-            "attributes": ", ".join(f"{k}={v}" for k, v in sorted(d.attributes.items())),
-            "last_activity": d.last_activity,
-        }
-        for d in snapshot()
-    ]
-
-
 @requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=m.OFF) for light in lights)))
 def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
     """Light states from the standing subscriber's device documents (updated on every

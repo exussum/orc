@@ -83,15 +83,6 @@ class TestOnMessage:
         assert [d.id for d in mqtt.snapshot()] == [1, 54]
 
 
-class TestStateRows:
-    def test_rows_shape(self):
-        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
-        (row,) = mqtt.state_rows()
-        assert row["name"] == "entrance bulb 1"
-        assert row["id"] == 17
-        assert row["attributes"] == "level=20, switch=off"
-
-
 @pytest.mark.usefixtures("enabled")
 class TestFetchLightStates:
     def _state_of(self, configs, light):
