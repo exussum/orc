@@ -115,7 +115,7 @@ def log_entries() -> list[m.LogEntry]:
 
 
 def capture_lights() -> m.Configs:
-    return hubitat.fetch_light_states(tuple(orc.Light))
+    return mqtt.fetch_light_states(tuple(orc.Light))
 
 
 def capture_sounds() -> m.Configs[m.SoundState]:
