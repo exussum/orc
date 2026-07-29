@@ -2,7 +2,6 @@ import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
-from enum import Enum
 from typing import Any
 
 from sqlalchemy.engine.url import make_url
@@ -46,7 +45,6 @@ def init_db() -> None:
             "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
         )
         conn.execute("CREATE TABLE IF NOT EXISTS orc_presence (name TEXT PRIMARY KEY, last_seen TEXT NOT NULL)")
-        conn.execute("CREATE TABLE IF NOT EXISTS orc_light (device_id INTEGER PRIMARY KEY, type TEXT, state TEXT)")
         conn.execute("CREATE TABLE IF NOT EXISTS orc_durations (name TEXT PRIMARY KEY, samples INTEGER NOT NULL, avg REAL NOT NULL)")
 
 
@@ -72,17 +70,6 @@ def delete_all_presence(before: datetime) -> None:
         conn.execute("DELETE FROM orc_presence WHERE last_seen < ?", (before.isoformat(),))
 
 
-def read_light(light: Enum) -> tuple[Any, Any]:
-    with connection() as conn:
-        row = conn.execute("SELECT type, state FROM orc_light WHERE device_id = ?", (light.value,)).fetchone()
-    return row if row else (None, None)
-
-
-def read_lights() -> list[Any]:
-    with connection() as conn:
-        return conn.execute("SELECT device_id, state FROM orc_light WHERE state IS NOT NULL").fetchall()
-
-
 def update_avg(name: str, duration: float) -> None:
     sql = """
     INSERT INTO orc_durations (name, samples, avg) VALUES (?, 1, ?)
@@ -95,17 +82,6 @@ def update_avg(name: str, duration: float) -> None:
 def fetch_durations() -> list[Any]:
     with connection() as conn:
         return conn.execute("SELECT name, avg FROM orc_durations").fetchall()
-
-
-def write_light(light: Enum, *, type: str | None = None, state: Any = None) -> None:
-    with connection() as conn:
-        conn.execute(
-            "INSERT INTO orc_light (device_id, type, state) VALUES (?, ?, ?) "
-            "ON CONFLICT(device_id) DO UPDATE SET "
-            "type = COALESCE(excluded.type, orc_light.type), "
-            "state = COALESCE(excluded.state, orc_light.state)",
-            (light.value, type, str(state) if state is not None else None),
-        )
 
 
 @contextmanager
