@@ -9,8 +9,7 @@ import pychromecast
 import yt_dlp
 
 from orc import model as m
-from orc._decorators import silence_fd
-from orc.dal.decorators import requires_enabled
+from orc.decorators import requires_enabled, silence_fd
 
 _YDL_OPTS: dict[str, Any] = {
     "format": "bestaudio/best",  # Request the highest quality audio stream

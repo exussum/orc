@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiowebostv import WebOsClient
 
-from orc.dal.decorators import requires_enabled
+from orc.decorators import requires_enabled
 
 if TYPE_CHECKING:
     from orc.model import DeviceEnum
