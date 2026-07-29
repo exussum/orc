@@ -86,7 +86,6 @@ def _run_setup(ctx: m.AppContext) -> None:
     plugin_ctx = plugins.build_ctx(ctx)
     for hook in config.config.registry.setup_hooks:
         hook(plugin_ctx)
-    api.add_state_provider("Hubitat MQTT", api.mqtt_state_rows)
 
 
 def _build_flask(ctx: m.AppContext) -> OrcFlask:
