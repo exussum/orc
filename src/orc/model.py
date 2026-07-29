@@ -95,7 +95,6 @@ class DeviceState:
     name: str
     attributes: dict[str, Any]
     last_activity: str | None
-    received: datetime
 
 
 class BatteryLevel(str, Enum):

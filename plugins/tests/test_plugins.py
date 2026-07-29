@@ -261,7 +261,7 @@ def test_unseen_door_still_shuts_down(sensor, plugin_ctx, monkeypatch):
 def _device(id=16, name="front door motion sensor", battery="100"):
     from orc.model import DeviceState
 
-    return DeviceState(id=id, name=name, attributes={"battery": battery}, last_activity=None, received=_DAYTIME)
+    return DeviceState(id=id, name=name, attributes={"battery": battery}, last_activity=None)
 
 
 @pytest.fixture
