@@ -67,7 +67,8 @@ def _on_transition(name: str, kind: str, old: Any, new: Any) -> None:
         api.play_text(msg)
 
 
-def start(ctx: "PluginCtx") -> None:
+def setup(ctx: "PluginCtx") -> None:
+    ctx.api.add_state_provider("Leak Sensors", leak_state)
     dal.set_transition_callback(_on_transition)
     dal.start()
 
@@ -94,10 +95,9 @@ def leak_state() -> list[dict[str, Any]]:
     ]
 
 
-def register(core: Any) -> None:
-    core.register_plugin(
+def declare(declarations: Any) -> None:
+    declarations.declare(
         device_types=["Leak"],
-        state_providers={"Leak Sensors": leak_state},
-        startup=[start],
+        setup=[setup],
         button_labels={"Test Leak Sensor": "Test {device}"},
     )

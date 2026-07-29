@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 
 from mistletoe import Document
 
-from orc import device_registry
 from orc import model as m
+from orc.declarations import collect_declarations
 
 if TYPE_CHECKING:
     # Device enums are built at runtime in Config.load and attached to this package's
@@ -61,20 +61,20 @@ class Config:
         self._load_configs(doc, registry, routines)
 
     def _load_devices(self, doc: Document, hubitat_config: dict[Any, tuple[Any, ...]]) -> m.Registry:
-        # Build plugins first so their register() hooks can append device types
+        # Build plugins first so their declare() hooks can append device types
         # (into the fresh registry state) before the enums below are built.
         self.plugins = m.build_plugins(doc, "Plugins")
-        builder = device_registry.run_registration(p.func.__module__ for p in self.plugins.values())
+        declarations = collect_declarations(p.func.__module__ for p in self.plugins.values())
         if "orc.api" in sys.modules:  # bootstrap load runs during `import orc`, before api is importable — and needs no dispatch
-            sys.modules["orc.api"].register_core(builder)
+            sys.modules["orc.api"].declare_core(declarations)
         # Only Light carries a hubitat id_lookup; every other device type ignores it.
         enums = {
-            name: m.build_enum(doc, "Devices", name, hubitat_config if name == "Light" else None, device_types=builder.device_types)
-            for name in builder.device_types
+            name: m.build_enum(doc, "Devices", name, hubitat_config if name == "Light" else None, device_types=declarations.device_types)
+            for name in declarations.device_types
         }
         globals().update(enums)
         globals()["device_enums"] = list(enums.values())
-        self.registry = builder.build(enums)
+        self.registry = declarations.build(enums)
         self.virtual_devices = {e for e in enums["Light"] if isinstance(e.value, int) and e.value < 0}
         return self.registry
 

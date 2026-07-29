@@ -298,19 +298,21 @@ class DeviceType:
 
 @dataclass(frozen=True)
 class Registry:
-    """Immutable snapshot of what plugins registered, built once per config load and
-    exposed as ``orc.config.registry``.
+    """What plugins registered, built per config load and exposed as
+    ``orc.config.registry``.
 
     ``click_hooks`` and ``button_labels`` are keyed by button/action id, not device
     type, so they sit alongside ``devices`` rather than folding into a DeviceType.
-    ``state_providers`` are stored as functions and called fresh by consumers on each
-    request, so the returned rows reflect live device state."""
+    ``state_providers`` are registered by setup hooks (``api.add_state_provider``)
+    and called fresh by consumers on each request, so the returned rows reflect live
+    device state; ctx-bound dispatch handlers arrive the same way
+    (``api.add_dispatch_handler``)."""
 
     devices: dict[str, DeviceType]
     click_hooks: dict[str, str]
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]
-    startup_hooks: list[Callable[[Any], None]]  # arg is a PluginCtx; typed loosely to keep the plugin layer out of core
+    setup_hooks: list[Callable[[Any], None]]  # arg is a PluginCtx; typed loosely to keep the plugin layer out of core
 
 
 def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:
