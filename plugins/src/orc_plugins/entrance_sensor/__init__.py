@@ -11,4 +11,4 @@ from typing import Any
 def declare(declarations: Any) -> None:
     from orc_plugins.entrance_sensor import plugins
 
-    declarations.declare(setup=[plugins.start])
+    declarations.declare(setup=[plugins.setup])
