@@ -5,7 +5,7 @@ import requests
 
 import orc as config
 from orc import model as m
-from orc.dal.decorators import requires_enabled
+from orc.decorators import requires_enabled
 
 
 @dataclasses.dataclass(frozen=True)

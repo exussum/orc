@@ -12,7 +12,7 @@ from orc import model as m
 
 # Re-exported for plugin authors: the documented import path is ``from orc.plugins
 # import plugin_config, requires_ctx`` (see plugins/README.md).
-from orc._decorators import plugin_config, requires_ctx  # noqa: F401
+from orc.decorators import plugin_config, requires_ctx  # noqa: F401
 
 if TYPE_CHECKING:
     from orc import Config as OrcConfig

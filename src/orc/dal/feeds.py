@@ -8,7 +8,7 @@ import recurring_ical_events
 import requests
 
 from orc import config
-from orc.dal.decorators import requires_enabled
+from orc.decorators import requires_enabled
 from orc.model import WeatherCondition
 
 _SUNNY_CODES: set[int] = {0, 1}  # WMO 0=clear sky, 1=mainly clear
