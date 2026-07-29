@@ -182,16 +182,6 @@ def expire_presence(name: str) -> None:
     api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
 
 
-@bp.route("/api/hubitat/callback", methods=["POST"])
-def hubitat_callback() -> tuple[dict[str, Any], int]:
-    ctx = plugins.build_ctx(app.orc)
-    device_id = request.json["content"]["deviceId"]
-    value = request.json["content"]["value"]
-    for plugin in where(config.plugins, section="hubitat").values():
-        plugin.func(ctx, device_id, value)
-    return {}, 200
-
-
 @bp.route("/")
 def index() -> tuple[str, int, dict[str, str]]:
     present_names = api.present_names()

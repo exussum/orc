@@ -50,7 +50,7 @@ _ERR_PARAMS = "Invalid parameter {}={!r}"
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
 # "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
 # they render no button and are not auto-invoked, unlike the other sections.
-_VALID_SECTIONS = frozenset({"scene", "system", "hubitat", "device"})
+_VALID_SECTIONS = frozenset({"scene", "system", "device"})
 _ERR_PLUGIN = (
     "Cannot load plugin {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. "
     "Ensure the module exists and the function is defined within it."
