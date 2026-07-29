@@ -1,5 +1,6 @@
 import threading
 from collections.abc import Callable, Iterator, Mapping
+from types import SimpleNamespace
 from typing import Any
 
 from mistletoe.block_token import Heading, Table
@@ -66,8 +67,6 @@ def doc_to_sub_tables(
     *,
     cast: Callable[[str, Any], Any] | None,
 ) -> Iterator[tuple[Any, list[Any]]]:
-    from types import SimpleNamespace
-
     col_names = columns if isinstance(columns, tuple) else None
     n_cols = len(columns) if isinstance(columns, tuple) else columns
     type: Any = None

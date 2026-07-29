@@ -80,6 +80,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
 def start(ctx: PluginCtx, sensor: SimpleNamespace) -> None:
     _sensor_ids.update((sensor.entrance_id, sensor.patio_door_id))
     ctx.api.add_listener(_on_sensor_event)
+    ctx.api.add_state_provider("Entrance Sensors", battery_state)
 
 
 def _on_sensor_event(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
