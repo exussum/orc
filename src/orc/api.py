@@ -29,11 +29,13 @@ from orc.dal import broadlink, chromecast, feeds, hubitat, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
+from orc.dal.mqtt import add_listener  # noqa: F401
+from orc.dal.sqlite import connection  # noqa: F401
+from orc.dal.sqlite import init_db  # noqa: F401
+from orc.dal.sqlite import update_avg  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
 from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
-from orc.dal.sqlite import init_db  # noqa: F401
-from orc.dal.sqlite import update_avg  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.usb import play_alert, play_text
 from orc.decorators import (
@@ -162,7 +164,8 @@ def register_core(core: device_registry.RegistryBuilder) -> None:
     like plugins."""
     core.register_dispatch("Light", _dispatch_light)
     core.register_dispatch("Chromecast", _dispatch_chromecast)
-    core.register_plugin(state_providers={"Hubitat MQTT": mqtt.state_rows}, startup=[mqtt.start])
+    # Startup hooks receive a PluginCtx; the dal's start takes no arguments, so adapt here.
+    core.register_plugin(state_providers={"Hubitat MQTT": mqtt.state_rows}, startup=[lambda ctx: mqtt.start()])
 
 
 @unwrap_rule_container
@@ -185,6 +188,10 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
             device_type.dispatch(w, rule, stream)
         except Exception as exc:
             log(local_now(), m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
+
+
+def tv_toggle(bl_device: m.DeviceEnum) -> None:
+    broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
 
 
 def ac_command(
@@ -441,18 +448,17 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
 def setup_scheduler(ctx: m.AppContext) -> None:
     if not jobs_by_type(ctx.scheduler, m.IotJob):
         rebuild_iot_schedule(ctx=ctx)
-    crons = {
-        "iot-cron": m.CronJob(rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
-        "cal-cron": m.CronJob(rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "Calendar Cron"),
-        "presence-cron": m.CronJob(_check_presence_job, "5 * * * *", "Presence Cron"),
-    }
-    for job_id, job in {**crons, **config.registry.cron_jobs}.items():
+    for job_id, func, crontab, name in (
+        ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
+        ("cal-cron", rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "Calendar Cron"),
+        ("presence-cron", _check_presence_job, "5 * * * *", "Presence Cron"),
+    ):
         ctx.scheduler.add_job(
-            job.func,
-            CronTrigger.from_crontab(job.crontab, timezone=config.tz),
+            func,
+            CronTrigger.from_crontab(crontab, timezone=config.tz),
             replace_existing=True,
             id=job_id,
-            name=job.name,
+            name=name,
             jobstore=JOBSTORE_MEMORY,
         )
 

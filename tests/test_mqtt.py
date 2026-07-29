@@ -29,6 +29,7 @@ HUB = "05bd449a-6f6d-45a6-b2e6-7ecb91105f7e"
 def clean_state(monkeypatch):
     monkeypatch.setattr(mqtt, "_devices", LockedDict())
     monkeypatch.setattr(mqtt, "_hub_id", None)
+    monkeypatch.setattr(mqtt, "_listeners", [])
 
 
 @pytest.fixture
@@ -36,25 +37,10 @@ def enabled(monkeypatch):
     monkeypatch.setenv("ORC_ENABLED", "1")
 
 
-class FakeClient:
-    """Stands in for a paho client: loop_start replays the given docs through the
-    on_message callback fetch_light_states installed, like retained delivery would."""
-
-    def __init__(self, docs):
-        self._docs = docs
-
-    def connect(self, host, port, keepalive):
-        pass
-
-    def loop_start(self):
-        for doc in self._docs:
-            self.on_message(self, None, _msg(f"hubitat/{HUB}/devices/{doc['id']}", doc))
-
-    def loop_stop(self):
-        pass
-
-    def disconnect(self):
-        pass
+def _receive(docs):
+    """Deliver device documents through _on_message as if the broker pushed them."""
+    for doc in docs:
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/{doc['id']}", doc))
 
 
 class TestOnMessage:
@@ -104,39 +90,60 @@ class TestStateRows:
 
 @pytest.mark.usefixtures("enabled")
 class TestFetchLightStates:
-    def _fetch(self, monkeypatch, docs, lights, timeout=1.0):
-        monkeypatch.setattr(mqtt, "new_client", lambda: (FakeClient(docs), "host", 1883))
-        return mqtt.fetch_light_states(lights, timeout=timeout)
-
     def _state_of(self, configs, light):
         return next(c for c in configs.items if c.what is light).state
 
-    def test_on_with_level_returns_int_level(self, monkeypatch):
-        docs = [_doc(id=1, attributes={"switch": "on", "level": "50"})]
-        configs = self._fetch(monkeypatch, docs, (orc.Light.a,))
-        assert self._state_of(configs, orc.Light.a) == 50
+    def test_on_with_level_returns_int_level(self):
+        _receive([_doc(id=1, attributes={"switch": "on", "level": "50"})])
+        assert self._state_of(mqtt.fetch_light_states((orc.Light.a,)), orc.Light.a) == 50
 
-    def test_on_without_level_returns_on(self, monkeypatch):
-        docs = [_doc(id=1, attributes={"switch": "on"})]
-        configs = self._fetch(monkeypatch, docs, (orc.Light.a,))
-        assert self._state_of(configs, orc.Light.a) == "on"
+    def test_on_without_level_returns_on(self):
+        _receive([_doc(id=1, attributes={"switch": "on"})])
+        assert self._state_of(mqtt.fetch_light_states((orc.Light.a,)), orc.Light.a) == "on"
 
-    def test_off_returns_off_even_with_level(self, monkeypatch):
-        docs = [_doc(id=1, attributes={"switch": "off", "level": "50"})]
-        configs = self._fetch(monkeypatch, docs, (orc.Light.a,))
-        assert self._state_of(configs, orc.Light.a) == "off"
+    def test_off_returns_off_even_with_level(self):
+        _receive([_doc(id=1, attributes={"switch": "off", "level": "50"})])
+        assert self._state_of(mqtt.fetch_light_states((orc.Light.a,)), orc.Light.a) == "off"
 
-    def test_device_missing_from_export_returns_off(self, monkeypatch):
-        docs = [_doc(id=1, attributes={"switch": "on"})]
-        configs = self._fetch(monkeypatch, docs, (orc.Light.a, orc.Light.b), timeout=0.01)
-        assert self._state_of(configs, orc.Light.b) == "off"
+    def test_device_missing_from_export_returns_off(self):
+        _receive([_doc(id=1, attributes={"switch": "on"})])
+        assert self._state_of(mqtt.fetch_light_states((orc.Light.a, orc.Light.b)), orc.Light.b) == "off"
 
-    def test_unconfigured_broker_returns_all_off(self, monkeypatch):
-        monkeypatch.setattr(mqtt, "new_client", lambda: None)
+    def test_empty_cache_returns_all_off(self):
         configs = mqtt.fetch_light_states((orc.Light.a, orc.Light.b))
         assert all(c.state == "off" for c in configs.items)
 
-    def test_returns_only_requested_subset(self, monkeypatch):
-        docs = [_doc(id=light.value, attributes={"switch": "on"}) for light in (orc.Light.a, orc.Light.b, orc.Light.c)]
-        configs = self._fetch(monkeypatch, docs, (orc.Light.a, orc.Light.c))
+    def test_returns_only_requested_subset(self):
+        _receive([_doc(id=light.value, attributes={"switch": "on"}) for light in (orc.Light.a, orc.Light.b, orc.Light.c)])
+        configs = mqtt.fetch_light_states((orc.Light.a, orc.Light.c))
         assert tuple(c.what for c in configs.items) == (orc.Light.a, orc.Light.c)
+
+
+class TestListeners:
+    def test_fires_per_attribute_including_unchanged(self):
+        events = []
+        mqtt.add_listener(lambda d, a, old, new: events.append((d.id, a, old, new)))
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed", "battery": "100"})])
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "open", "battery": "100"})])
+        assert (56, "contact", None, "closed") in events  # retained flood: old is None
+        assert (56, "contact", "closed", "open") in events
+        assert (56, "battery", "100", "100") in events  # republished unchanged, still delivered
+
+    def test_failing_listener_does_not_break_cache_or_others(self):
+        events = []
+        mqtt.add_listener(lambda d, a, old, new: 1 / 0)
+        mqtt.add_listener(lambda d, a, old, new: events.append(a))
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed"})])
+        assert events == ["contact"]
+        assert mqtt.snapshot()[0].attributes == {"contact": "closed"}
+
+    def test_add_listener_is_idempotent(self):
+        events = []
+
+        def listener(d, a, old, new):
+            events.append(a)
+
+        mqtt.add_listener(listener)
+        mqtt.add_listener(listener)
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed"})])
+        assert events == ["contact"]
