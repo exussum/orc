@@ -9,9 +9,9 @@ The hub uuid is captured from the first message rather than configured.
 import json
 import logging
 import os
-import threading
 import time
 from collections.abc import Callable, Sequence
+from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -32,52 +32,79 @@ _hub_id: str | None = None  # written only by the mqtt thread
 _client: mqtt.Client | None = None  # the standing client, retained for publishing commands
 
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
-# of every received document — battery levels, motion active/inactive, contact
-# open/close, switch state, all attributes alike. No dedup: the hub republishes the
-# whole document when anything changes, so unchanged attributes fire too (old == new),
-# and the initial retained flood fires with old=None. Consumers filter for what they
-# care about. Callbacks run on the mqtt thread; keep them fast and don't block.
+# of every received document that represents something happening — battery levels,
+# motion active/inactive, contact open/close, switch state, all attributes alike.
+# State is never an event: stale documents (lastActivity older than _EVENT_MAX_AGE —
+# post-outage replays) and first sightings (the retained flood at (re)connect) update
+# the cache but fire no listeners, so ``old`` is never None. No other dedup: the hub
+# republishes the whole document when anything changes, so unchanged attributes fire
+# too (old == new); consumers filter for what they care about. Callbacks run on the
+# mqtt thread; keep them fast and don't block.
 type Listener = Callable[[m.DeviceState, str, Any, Any], None]
 _listeners: list[Listener] = []
 
+_EVENT_MAX_AGE = timedelta(seconds=60)
+
 
 def add_listener(fn: Listener) -> None:
-    if fn not in _listeners:
-        _listeners.append(fn)
+    _listeners.append(fn)
 
 
-def new_client() -> tuple[mqtt.Client, str, int] | None:
-    """A credentialed client plus broker host/port, or None when the hubitat url or
-    MQTT_USER/MQTT_PASSWORD secrets are missing."""
-    host = _mqtt_host()
-    user = config.secrets.get("MQTT_USER")
-    password = config.secrets.get("MQTT_PASSWORD")
-    if not (host and user and password):
+_LAST_ACTIVITY_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
+
+
+def device_age(device: m.DeviceState) -> timedelta | None:
+    """Time since the hub last saw activity from the device, or None when the document
+    carries no parseable timestamp. _on_message uses this to keep stale documents (the
+    retained flood, post-outage replays) from firing event listeners."""
+    if device.last_activity is None:
         return None
+    try:
+        happened = datetime.strptime(device.last_activity, _LAST_ACTIVITY_FORMAT)
+    except ValueError:
+        return None
+    return datetime.now(tz=happened.tzinfo) - happened
+
+
+def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message: Callable[..., None], timeout: float) -> mqtt.Client | None:
+    """A credentialed, connected client wired to the given callbacks, its network loop
+    running on a paho background thread, returned once the retained flood settles or
+    ``timeout`` passes (logged). The flood is watched through a boot-only wrapper
+    counting retained messages (the broker sets the RETAIN flag only on subscription
+    replay, never on live forwards); the raw handler is restored before returning.
+    None when the host or MQTT_USER/MQTT_PASSWORD secrets are missing (logged)."""
+    host = _mqtt_host()
+    user, password = secrets.get("MQTT_USER"), secrets.get("MQTT_PASSWORD")
+    if not (host and user and password):
+        _log.warning("mqtt: host or MQTT_USER/MQTT_PASSWORD missing, skipping")
+        return None
+
+    received = 0
+
+    def counting(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+        nonlocal received
+        received += msg.retain
+        on_message(client, userdata, msg)
+
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.username_pw_set(user, password)
-    return client, host, _MQTT_PORT
+    client.on_connect = on_connect
+    client.on_message = counting
+    client.reconnect_delay_set(min_delay=1, max_delay=60)
+    client.connect_async(host, _MQTT_PORT, keepalive=30)
+    client.loop_start()
+    if not _wait_settled(lambda: received, timeout):
+        _log.warning("mqtt: retained documents still arriving after %.0fs (%d so far)", timeout, received)
+    client.on_message = on_message
+    return client
 
 
 def start() -> None:
+    """Start the standing subscriber. _new_client blocks boot briefly until the
+    retained flood settles, so early reads don't see an empty cache and report every
+    light off."""
     global _client
-    connected = new_client()
-    if connected is None:
-        _log.info("mqtt: hubitat url or MQTT_USER/MQTT_PASSWORD secrets not set, skipping")
-        return
-    _client = connected[0]
-    threading.Thread(target=_run, args=connected, name="hubitat-mqtt", daemon=True).start()
-    # Block boot briefly until the retained flood settles (device count nonzero and
-    # stable), so early reads don't see an empty cache and report every light off.
-    deadline = time.monotonic() + 3.0
-    previous = -1
-    while time.monotonic() < deadline:
-        time.sleep(0.25)
-        count = len(_devices.values())
-        if count and count == previous:
-            return
-        previous = count
-    _log.warning("mqtt: retained documents still arriving after 3s (%d so far)", max(previous, 0))
+    _client = _new_client(config.secrets, _on_connect, _on_message, 3.0)
 
 
 def hub_id() -> str | None:
@@ -126,48 +153,17 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
     before the standing client starts — so credentials come in explicitly. Dimmable is
     inferred from a ``level`` attribute in the document (verified equivalent to Maker
     API's ChangeLevel capability for every exported device)."""
-    host = _mqtt_host()
-    user, password = secrets.get("MQTT_USER"), secrets.get("MQTT_PASSWORD")
-    if not (host and user and password):
-        _log.warning("mqtt: host or MQTT_USER/MQTT_PASSWORD missing; no devices discovered")
-        return {}
     found: dict[str, tuple[int, frozenset[m.Capability]]] = {}
 
-    def on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
-        if rc != 0:
-            _log.warning("mqtt: discovery connect refused: %s", rc)
-        else:
-            client.subscribe("hubitat/#", qos=0)
-
     def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-        parts = msg.topic.split("/")
-        if len(parts) != 4 or parts[2] != "devices":
-            return
-        try:
-            doc = json.loads(msg.payload)
-            dimmable = any(a["name"] == "level" for a in doc["attributes"])
-            found[doc["name"]] = (int(doc["id"]), frozenset([m.Capability.change_level]) if dimmable else frozenset())
-        except ValueError, KeyError, TypeError:
-            _log.exception("mqtt: bad device document on %s", msg.topic)
+        device = _parse_device_state(msg)
+        if device is not None:
+            dimmable = "level" in device.attributes
+            found[device.name] = (device.id, frozenset([m.Capability.change_level]) if dimmable else frozenset())
 
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.username_pw_set(user, password)
-    client.on_connect = on_connect
-    client.on_message = on_message
-    try:
-        client.connect(host, _MQTT_PORT, keepalive=30)
-    except OSError:
-        _log.warning("mqtt: discovery connect failed; no devices discovered")
+    client = _new_client(secrets, _on_connect, on_message, timeout)
+    if client is None:
         return {}
-    client.loop_start()
-    # Collect the retained flood until the device count settles, like start()'s wait.
-    deadline = time.monotonic() + timeout
-    previous = -1
-    while time.monotonic() < deadline:
-        time.sleep(0.25)
-        if found and len(found) == previous:
-            break
-        previous = len(found)
     client.loop_stop()
     client.disconnect()
     return found
@@ -207,15 +203,15 @@ def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: 
     client.subscribe("hubitat/#", qos=0)
 
 
-def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    global _hub_id
+def _parse_device_state(msg: mqtt.MQTTMessage) -> m.DeviceState | None:
+    """The device document as a ``DeviceState``, or None when the topic is not a
+    device topic or the payload is malformed (logged)."""
     parts = msg.topic.split("/")
     if len(parts) != 4 or parts[2] != "devices":
-        return  # location/variables topics, or command echoes
-    _hub_id = parts[1]
+        return None
     try:
         doc = json.loads(msg.payload)
-        device = m.DeviceState(
+        return m.DeviceState(
             id=int(doc["id"]),
             name=doc["name"],
             attributes={a["name"]: a["value"] for a in doc["attributes"]},
@@ -223,28 +219,39 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
         )
     except ValueError, KeyError, TypeError:
         _log.exception("mqtt: bad device document on %s", msg.topic)
+        return None
+
+
+def _wait_settled(count: Callable[[], int], timeout: float) -> bool:
+    """Poll until ``count()`` is nonzero and stable across two polls (the retained
+    flood has settled) and return True, or False when the timeout passes first."""
+    deadline = time.monotonic() + timeout
+    previous = -1
+    while time.monotonic() < deadline:
+        time.sleep(0.25)
+        current = count()
+        if current and current == previous:
+            return True
+        previous = current
+    return False
+
+
+def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+    global _hub_id
+    device = _parse_device_state(msg)
+    if device is None:
         return
-    old = _devices.get(device.id)
-    _devices[device.id] = device
+
+    _hub_id = msg.topic.split("/")[1]
+    old, _devices[device.id], age = _devices.get(device.id), device, device_age(device)
+
+    if old is None or (age is not None and age > _EVENT_MAX_AGE):
+        return
+
     for attribute, new_value in device.attributes.items():
-        old_value = old.attributes.get(attribute) if old is not None else None
+        old_value = old.attributes.get(attribute)
         for listener in list(_listeners):
             try:
                 listener(device, attribute, old_value, new_value)
             except Exception:
                 _log.exception("mqtt: listener failed for %s.%s", device.name, attribute)
-
-
-def _run(client: mqtt.Client, host: str, port: int) -> None:
-    client.on_connect = _on_connect
-    client.on_message = _on_message
-    client.reconnect_delay_set(min_delay=1, max_delay=60)
-    while True:
-        try:
-            client.connect(host, port, keepalive=30)
-        except Exception:
-            _log.exception("mqtt: connect failed; retrying in 60s")
-            time.sleep(60)
-            continue
-        client.loop_forever()  # reconnects internally; returns only if stopped
-        time.sleep(1)

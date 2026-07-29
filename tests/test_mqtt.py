@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -9,16 +10,17 @@ from orc.collections import LockedDict
 from orc.dal import mqtt
 
 
-def _msg(topic, payload):
-    return SimpleNamespace(topic=topic, payload=json.dumps(payload).encode() if isinstance(payload, dict) else payload)
+def _msg(topic, payload, retain=True):
+    return SimpleNamespace(topic=topic, payload=json.dumps(payload).encode() if isinstance(payload, dict) else payload, retain=retain)
 
 
-def _doc(id=17, name="entrance bulb 1", attributes=None):
+def _doc(id=17, name="entrance bulb 1", attributes=None, last_activity=None):
     attrs = attributes if attributes is not None else {"switch": "off", "level": "20"}
     return {
         "id": id,
         "name": name,
-        "lastActivity": "2026-07-28T23:25:41+0000",
+        # fresh by default: stale documents update the cache but fire no listeners
+        "lastActivity": last_activity or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S%z"),
         "attributes": [{"name": k, "value": v, "dataType": "ENUM", "unit": None} for k, v in attrs.items()],
     }
 
@@ -46,11 +48,12 @@ def _receive(docs):
 
 class TestOnMessage:
     def test_device_document_is_cached(self):
-        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
+        doc = _doc()
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", doc))
         (device,) = mqtt.snapshot()
         assert (device.id, device.name) == (17, "entrance bulb 1")
         assert device.attributes == {"switch": "off", "level": "20"}
-        assert device.last_activity == "2026-07-28T23:25:41+0000"
+        assert device.last_activity == doc["lastActivity"]
 
     def test_hub_id_captured_from_topic(self):
         assert mqtt.hub_id() is None
@@ -125,8 +128,8 @@ class TestListeners:
         events = []
         mqtt.add_listener(lambda d, a, old, new: events.append((d.id, a, old, new)))
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed", "battery": "100"})])
+        assert events == []  # first sighting (retained flood): state only, no events
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open", "battery": "100"})])
-        assert (56, "contact", None, "closed") in events  # retained flood: old is None
         assert (56, "contact", "closed", "open") in events
         assert (56, "battery", "100", "100") in events  # republished unchanged, still delivered
 
@@ -135,19 +138,16 @@ class TestListeners:
         mqtt.add_listener(lambda d, a, old, new: 1 / 0)
         mqtt.add_listener(lambda d, a, old, new: events.append(a))
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed"})])
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"})])
         assert events == ["contact"]
-        assert mqtt.snapshot()[0].attributes == {"contact": "closed"}
+        assert mqtt.snapshot()[0].attributes == {"contact": "open"}
 
-    def test_add_listener_is_idempotent(self):
+    def test_stale_document_updates_cache_without_events(self):
         events = []
-
-        def listener(d, a, old, new):
-            events.append(a)
-
-        mqtt.add_listener(listener)
-        mqtt.add_listener(listener)
-        _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed"})])
-        assert events == ["contact"]
+        mqtt.add_listener(lambda d, a, old, new: events.append(a))
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2020-01-01T00:00:00+0000")])
+        assert events == []
+        assert mqtt.snapshot()[0].attributes == {"contact": "open"}
 
 
 @pytest.mark.usefixtures("enabled")
@@ -198,7 +198,10 @@ class TestFetchHubitatConfig:
         def username_pw_set(self, user, password):
             pass
 
-        def connect(self, host, port, keepalive):
+        def reconnect_delay_set(self, min_delay, max_delay):
+            pass
+
+        def connect_async(self, host, port, keepalive):
             pass
 
         def loop_start(self):
