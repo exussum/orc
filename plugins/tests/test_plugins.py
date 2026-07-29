@@ -8,7 +8,6 @@ from orc_plugins.entrance_sensor import plugins
 
 from orc import api
 from orc import model as m
-from orc.collections import LockedDict
 from orc.model import DeviceEnum
 
 _UTC = ZoneInfo("UTC")
@@ -97,8 +96,11 @@ def _cleanup(sensor, plugin_ctx):
         plugins._run_trigger_sensor_off.__wrapped__(sensor, ctx=MagicMock())
 
 
-# Unwrap the config-loading decorator to call the underlying function directly
-_trigger_sensor = plugins.trigger_sensor.__wrapped__
+def _trigger_sensor(ctx, sensor, device_id, event):
+    """Feed a motion transition through the listener, as the MQTT client would."""
+    old = "inactive" if event == "active" else "active"
+    device = m.DeviceState(id=int(device_id), name="front door motion sensor", attributes={"motion": event}, last_activity=None)
+    plugins._on_sensor_event(ctx, sensor, {sensor.entrance_id, sensor.patio_door_id}, device, "motion", old, event)
 
 
 # --- Walking in ---
@@ -231,75 +233,83 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_shutdown)
 
 
-def _seed_door(monkeypatch, state):
-    door = plugins.dal.SensorState(name="balcony door", device_id=56, attributes={"contact": state, "battery": "98"})
-    monkeypatch.setattr(plugins.dal, "_states", LockedDict({56: door}))
+def _seed_devices(plugin_ctx, *devices):
+    plugin_ctx.api.device_states.return_value = list(devices)
 
 
-def test_open_door_counts_as_present(sensor, plugin_ctx, monkeypatch):
+def _door(state):
+    return m.DeviceState(id=56, name="balcony door", attributes={"contact": state, "battery": "98"}, last_activity=None)
+
+
+def test_open_door_counts_as_present(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    _seed_door(monkeypatch, "open")
+    _seed_devices(plugin_ctx, _door("open"))
     _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_door_open)
 
 
-def test_closed_door_still_shuts_down(sensor, plugin_ctx, monkeypatch):
+def test_closed_door_still_shuts_down(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    _seed_door(monkeypatch, "closed")
+    _seed_devices(plugin_ctx, _door("closed"))
     _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_shutdown)
 
 
-def test_unseen_door_still_shuts_down(sensor, plugin_ctx, monkeypatch):
+def test_unseen_door_still_shuts_down(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    monkeypatch.setattr(plugins.dal, "_states", LockedDict())
+    _seed_devices(plugin_ctx)
     _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, sensor.log_shutdown)
 
 
-def _device(id=16, name="front door motion sensor", battery="100"):
-    from orc.model import DeviceState
-
-    return DeviceState(id=id, name=name, attributes={"battery": battery}, last_activity=None)
+def _device(id=16, name="front door motion sensor", battery="100", attributes=None):
+    return m.DeviceState(id=id, name=name, attributes=attributes or {"battery": battery}, last_activity=None)
 
 
-@pytest.fixture
-def sensor_store(monkeypatch):
-    monkeypatch.setattr(plugins, "_sensor_ids", {16})
-    monkeypatch.setattr(plugins.dal, "_states", LockedDict())
+def test_critical_battery_report_logs(plugin_ctx, sensor):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(battery="5"), "battery", "5", "5")
+    plugin_ctx.api.log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, "Low battery on front door motion sensor (CRITICAL)")
 
 
-def test_critical_battery_report_logs(sensor_store):
-    with patch.object(api, "log") as log, patch.object(api, "local_now", return_value=_DAYTIME):
-        plugins._on_sensor_event(_device(battery="5"), "battery", "5", "5")
-    log.assert_called_once_with(_DAYTIME, m.LogSource.PLUGIN, "Low battery on front door motion sensor (CRITICAL)")
+def test_healthy_battery_report_does_not_log(plugin_ctx, sensor):
+    plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(battery="80"), "battery", None, "80")
+    plugin_ctx.api.log.assert_not_called()
 
 
-def test_healthy_battery_report_does_not_log(sensor_store):
-    with patch.object(api, "log") as log:
-        plugins._on_sensor_event(_device(battery="80"), "battery", None, "80")
-    log.assert_not_called()
+def test_unwatched_device_is_ignored(plugin_ctx, sensor):
+    plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(id=99, battery="5"), "battery", None, "5")
+    plugin_ctx.api.log.assert_not_called()
 
 
-def test_unwatched_device_is_ignored(sensor_store):
-    with patch.object(api, "log") as log:
-        plugins._on_sensor_event(_device(id=99, battery="5"), "battery", None, "5")
-    log.assert_not_called()
-    assert plugins.dal.get(99) is None
+def test_battery_state_reads_the_device_cache(plugin_ctx):
+    _seed_devices(plugin_ctx, _device(battery="80"))
+    assert plugins.battery_state(plugin_ctx, {16}) == [{"name": "front door motion sensor", "battery": "HIGH", "last_activity": None}]
 
 
-def test_non_battery_attribute_records_without_logging(sensor_store):
-    with patch.object(api, "log") as log:
-        plugins._on_sensor_event(_device(), "motion", "inactive", "active")
-    log.assert_not_called()
-    assert plugins.dal.get(16).name == "front door motion sensor"
+def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
+    plugins.setup.__wrapped__(plugin_ctx, sensor)
+    plugin_ctx.api.add_listener.assert_called_once()
+    title, provider = plugin_ctx.api.add_state_provider.call_args[0]
+    assert title == "Entrance Sensors"
+    _seed_devices(plugin_ctx, _device(battery="80"))
+    assert provider() == [{"name": "front door motion sensor", "battery": "HIGH", "last_activity": None}]
 
 
-def test_battery_state_reads_recorded_sensors(sensor_store):
-    with patch.object(api, "log"):
-        plugins._on_sensor_event(_device(battery="80"), "battery", None, "80")
-    assert plugins.battery_state() == [{"name": "front door motion sensor", "battery": "HIGH", "last_activity": None}]
+def _motion(ctx, sensor, old, new, device_id=16):
+    device = _device(id=device_id, attributes={"motion": new})
+    plugins._on_sensor_event(ctx, sensor, {16, 56}, device, "motion", old, new)
+
+
+def test_motion_republish_does_not_fire(ctx, sensor):
+    _motion(ctx, sensor, "active", "active")
+    ctx.api.dispatch.assert_not_called()
+
+
+def test_unwatched_motion_does_not_fire(ctx, sensor):
+    _motion(ctx, sensor, "inactive", "active", device_id=99)
+    ctx.api.dispatch.assert_not_called()
 
 
 def test_presence_is_expired_before_checking(sensor, plugin_ctx):
