@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 from enum import Enum
+from functools import partial
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Sequence
 
 from apscheduler.triggers.date import DateTrigger
-from orc_plugins.entrance_sensor import dal
 
 from orc.plugins import PluginCtx, build_ctx, plugin_config, requires_ctx
 
@@ -15,8 +15,6 @@ if TYPE_CHECKING:
 
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
-
-_sensor_ids: set[int] = set()  # device ids this plugin watches, wired at startup
 
 
 @plugin_config(
@@ -28,28 +26,40 @@ _sensor_ids: set[int] = set()  # device ids this plugin watches, wired at startu
         "Timed": ("Name", "Start", "Stop", "Device", "State"),
     },
 )
-def trigger_sensor(ctx: PluginCtx, sensor: SimpleNamespace, device_id: str, event: int) -> None:
-    if int(device_id) != sensor.entrance_id:
-        return
+def setup(ctx: PluginCtx, sensor: SimpleNamespace) -> None:
+    ids = {sensor.entrance_id, sensor.patio_door_id}
+    ctx.api.add_listener(partial(_on_sensor_event, ctx, sensor, ids))
+    ctx.api.add_state_provider("Entrance Sensors", partial(battery_state, ctx, ids))
 
-    if event == sensor.active_event:
-        if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
-            ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
-        restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
-        timed_name, timed_rows = _timed_rows(ctx, sensor)
-        ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
-        ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
-    elif event == sensor.inactive_event:
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
-        ctx.scheduler.add_job(
-            _run_trigger_sensor_off,
-            DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
-            name="Trigger Sensor",
-            id=JOB_ID,
-            replace_existing=True,
-            jobstore=ctx.api.JOBSTORE_MEMORY,
-            args=(sensor,),
-        )
+
+def _on_sensor_event(
+    ctx: PluginCtx, sensor: SimpleNamespace, sensor_ids: set[int], device: m.DeviceState, attribute: str, old: Any, new: Any
+) -> None:
+    if device.id not in sensor_ids:
+        return
+    if attribute == "battery":
+        level = ctx.model.BatteryLevel.from_fraction(new, 100)
+        if level.is_critical:
+            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Low battery on {device.name} ({level.value})")
+    elif attribute == "motion" and old != new and device.id == sensor.entrance_id:
+        if new == sensor.active_event:
+            if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
+                ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
+            restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
+            timed_name, timed_rows = _timed_rows(ctx, sensor)
+            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
+            ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
+        elif new == sensor.inactive_event:
+            ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
+            ctx.scheduler.add_job(
+                _run_trigger_sensor_off,
+                DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
+                name="Trigger Sensor",
+                id=JOB_ID,
+                replace_existing=True,
+                jobstore=ctx.api.JOBSTORE_MEMORY,
+                args=(sensor,),
+            )
 
 
 @requires_ctx
@@ -76,36 +86,17 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
     plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.PLUGIN, msg)
 
 
-@plugin_config("entrance_sensor", schema={"Settings": ("Key", "Value")})
-def start(ctx: PluginCtx, sensor: SimpleNamespace) -> None:
-    _sensor_ids.update((sensor.entrance_id, sensor.patio_door_id))
-    ctx.api.add_listener(_on_sensor_event)
-    ctx.api.add_state_provider("Entrance Sensors", battery_state)
-
-
-def _on_sensor_event(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
-    """Central-listener consumer: record watched sensors into the dal store and log
-    critical battery reports."""
-    from orc import api
-    from orc import model as m
-
-    if device.id not in _sensor_ids:
-        return
-    dal.record(device)
-    if attribute != "battery":
-        return
-    level = m.BatteryLevel.from_fraction(new, 100)
-    if level.is_critical:
-        api.log(api.local_now(), m.LogSource.PLUGIN, f"Low battery on {device.name} ({level.value})")
-
-
-def battery_state() -> list[dict[str, Any]]:
-    """Per-sensor battery rows for core's generic state renderer (needs a "name" key).
-    Device names come from the hub's documents; ids without a document yet are skipped."""
+def battery_state(ctx: PluginCtx, sensor_ids: set[int]) -> list[dict[str, Any]]:
+    devices = ctx.api.device_states()
     return [
-        {"name": s.name, "battery": s.battery.value if s.battery is not None else None, "last_activity": s.last_activity}
-        for device_id in sorted(_sensor_ids)
-        if (s := dal.get(device_id)) is not None
+        {
+            "name": d.name,
+            "battery": ctx.model.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
+            "last_activity": d.last_activity,
+        }
+        for device_id in sorted(sensor_ids)
+        if (d := _sensor(devices, device_id)) is not None
+        for battery in (d.attributes.get("battery"),)
     ]
 
 
@@ -113,8 +104,12 @@ def _door_open(ctx: PluginCtx, sensor: SimpleNamespace) -> bool:
     # An open entrance door means someone is around even if presence hasn't seen them.
     # A door never seen over MQTT reads as closed, falling back to the presence-only
     # decision like the old unreachable-hub path.
-    state = dal.get(sensor.patio_door_id)
-    return state is not None and state.attributes.get("contact") == "open"
+    device = _sensor(ctx.api.device_states(), sensor.patio_door_id)
+    return device is not None and device.attributes.get("contact") == "open"
+
+
+def _sensor(devices: Sequence[m.DeviceState], device_id: int) -> m.DeviceState | None:
+    return next((d for d in devices if d.id == device_id), None)
 
 
 def _timed_rows(ctx: PluginCtx, sensor: SimpleNamespace) -> tuple[str, Sequence[Any]]:

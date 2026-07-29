@@ -38,16 +38,17 @@ dependencies = [
 A plugin function takes a `PluginCtx` as its first argument. The remaining
 arguments depend on which section the plugin is registered under (step 2):
 
-| Section   | Called as                      | When                                        |
-|-----------|--------------------------------|---------------------------------------------|
-| `scene`   | `fn(ctx)`                      | user presses its button on the Scene page   |
-| `system`  | `fn(ctx)`                      | user presses its button on the System page  |
-| `hubitat` | `fn(ctx, device_id, value)`    | every Hubitat Maker API callback            |
+| Section  | Called as                | When                                            |
+|----------|--------------------------|-------------------------------------------------|
+| `scene`  | `fn(ctx)`                | user presses its button on the Scene page       |
+| `system` | `fn(ctx)`                | user presses its button on the System page      |
+| `device` | `fn(ctx, device=<name>)` | clicked from a device row (`/api/run?device=…`) |
 
-This plugin is a `hubitat` plugin — `trigger_sensor` in
+Event-driven plugins don't use the Plugins table at all: the entrance sensor in
 [`src/orc_plugins/entrance_sensor/plugins.py`](src/orc_plugins/entrance_sensor/plugins.py)
-receives every device event and returns early unless `device_id` matches the
-sensor it cares about.
+wires itself in its package ``declare()`` hook — a setup hook receives the
+`PluginCtx` and registers an MQTT device listener (`ctx.api.add_listener`) and a
+state-page section (`ctx.api.add_state_provider`).
 
 ### The plugin context
 
@@ -55,14 +56,14 @@ sensor it cares about.
 dataclass that hands a plugin everything it may touch, so plugins never
 import orc internals directly:
 
-| Field                  | What it is                    | What it provides                                                                                                              |
-|------------------------|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| `ctx.api`              | `orc.api` module          | The verbs of the system. Everything a plugin does to the outside world goes through this module.                                |
-| `ctx.model`            | `orc.model` module        | The vocabulary. The data types and constants that the api functions accept and return.                                          |
-| `ctx.config`           | runtime configuration     | What the operator decided. The parsed `config.md` tables plus environment settings.                                             |
-| `ctx.snapshot_manager` | snapshot manager          | Undo for device state. Records what devices looked like before a plugin changes them, so that state can be restored later.      |
-| `ctx.scheduler`        | APScheduler instance      | Deferred work. Lets a plugin queue a follow-up job to run at a later time instead of acting immediately.                        |
-| `ctx.orc`              | top-level `orc` package   | The devices themselves. The enums used to say which device a config applies to.                                                 |
+| Field                  | What it is              | What it provides                                                                                                            |
+|------------------------|-------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `ctx.api`              | `orc.api` module        | The verbs of the system. Everything a plugin does to the outside world goes through this module.                            |
+| `ctx.model`            | `orc.model` module      | The vocabulary. The data types and constants that the api functions accept and return.                                      |
+| `ctx.config`           | runtime configuration   | What the operator decided. The parsed `config.md` tables plus environment settings.                                         |
+| `ctx.snapshot_manager` | snapshot manager        | Undo for device state. Records what devices looked like before a plugin changes them, so that state can be restored later.  |
+| `ctx.scheduler`        | APScheduler instance    | Deferred work. Lets a plugin queue a follow-up job to run at a later time instead of acting immediately.                    |
+| `ctx.orc`              | top-level `orc` package | The devices themselves. The enums used to say which device a config applies to.                                             |
 
 For work scheduled to run later (this plugin queues a follow-up job with
 `ctx.scheduler.add_job`), decorate the job function with `@requires_ctx` and
@@ -78,9 +79,9 @@ Add a row to the `Plugins` table in `$ORC_CONFIG_DIR/config.md`. The
 ```markdown
 ##### Plugins
 
-| Name            | Plugin                                     | Parameters      |
-|-----------------|--------------------------------------------|-----------------|
-| Entrance Sensor | orc_plugins.entrance_sensor.plugins.trigger_sensor | section=hubitat |
+| Name       | Plugin                           | Parameters              |
+|------------|----------------------------------|-------------------------|
+| Pair LG TV | orc_plugins.lgtv.plugins.pair_tv | section=device icon=tv  |
 ```
 
 ## 3. Install it
@@ -115,7 +116,7 @@ from orc.plugins import build_ctx, plugin_config, requires_ctx
         "Timed": ("Name", "Start", "Stop", "Device", "State"),
     },
 )
-def trigger_sensor(ctx, sensor, device_id, event):
+def start(ctx, sensor):
     ...
 ```
 
