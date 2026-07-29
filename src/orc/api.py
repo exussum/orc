@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import date, datetime, timedelta
@@ -23,13 +23,16 @@ from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
 import orc
-from orc import config, device_registry
+from orc import config
 from orc import model as m
 from orc.dal import broadlink, chromecast, feeds, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.mqtt import add_listener  # noqa: F401
 from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
+from orc.dal.mqtt import snapshot as device_states  # noqa: F401
+from orc.dal.mqtt import start as start_mqtt  # noqa: F401
+from orc.dal.mqtt import state_rows as mqtt_state_rows  # noqa: F401
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import update_avg  # noqa: F401
@@ -38,6 +41,7 @@ from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.usb import play_alert, play_text
+from orc.declarations import Declarations
 from orc.decorators import (
     requires_ctx,
     synchronized,
@@ -127,7 +131,7 @@ def capture_sounds() -> m.Configs[m.SoundState]:
         return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
 
 
-# Dispatch handlers keyed by device-type name in orc.device_registry. Each takes
+# Dispatch handlers keyed by device-type name in orc.declarations. Each takes
 # the device, the rule, and a per-dispatch `stream` cache (shared across the
 # devices in one dispatch call so a stream's metadata is fetched only once).
 # Plugins register their own handlers the same way.
@@ -158,14 +162,25 @@ def _dispatch_chromecast(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tupl
         chromecast.play(w, *stream[rule.state])
 
 
-def register_core(core: device_registry.RegistryBuilder) -> None:
-    """Register core's own dispatch handlers into the given registry state. Called
-    from ``Config.load`` (not at import) so all registration happens on config load,
-    like plugins."""
-    core.register_dispatch("Light", _dispatch_light)
-    core.register_dispatch("Chromecast", _dispatch_chromecast)
-    # Startup hooks receive a PluginCtx; the dal's start takes no arguments, so adapt here.
-    core.register_plugin(state_providers={"Hubitat MQTT": mqtt.state_rows}, startup=[lambda ctx: mqtt.start()])
+def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
+    """Register a state-page section. All providers register at startup — from hooks,
+    like listeners — so ctx-bound and plain providers arrive the same way."""
+    config.registry.state_providers[title] = provider
+
+
+def add_dispatch_handler(name: str, handler: Callable[..., None]) -> None:
+    """Swap in a device type's dispatch handler at startup, for handlers bound to a
+    PluginCtx that can't exist at config load."""
+    config.registry.devices[name] = replace(config.registry.devices[name], dispatch=handler)
+
+
+def declare_core(declarations: Declarations) -> None:
+    """Declare core's own dispatch handlers. Called from ``Config.load`` (not at
+    import) so all declarations happen on config load, like plugins. Core's state
+    provider and the mqtt client are wired by the runner directly, after the setup
+    hooks."""
+    declarations.declare_dispatch("Light", _dispatch_light)
+    declarations.declare_dispatch("Chromecast", _dispatch_chromecast)
 
 
 @unwrap_rule_container

@@ -27,7 +27,7 @@ def mock_registry(monkeypatch):
             click_hooks={},
             button_labels={},
             state_providers={},
-            startup_hooks=[],
+            setup_hooks=[],
         )
         monkeypatch.setattr(orc.config, "registry", registry)
         return registry
@@ -77,13 +77,12 @@ class TestDispatchLGTV:
 def test_lgtv_registers_with_core():
     from orc import config
 
-    assert "TV" in config.registry.state_providers
-    # init_db is registered behind a ctx-discarding lambda; run the hooks to prove it's wired
+    assert lgtv.setup in config.registry.setup_hooks
     with patch.object(webos, "init_db") as init_db:
-        for hook in config.registry.startup_hooks:
-            if hook.__module__ == "orc_plugins.lgtv":
-                hook(MagicMock())
+        ctx = MagicMock()
+        lgtv.setup(ctx)
     init_db.assert_called_once_with()
+    ctx.api.add_state_provider.assert_called_once_with("TV", lgtv.tv_state)
 
     lgtv_dev = config.registry.devices["LGTV"]
     assert lgtv_dev.dispatch is lgtv._dispatch

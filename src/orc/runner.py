@@ -1,4 +1,3 @@
-import os
 import sys
 import traceback
 from pathlib import Path
@@ -20,9 +19,7 @@ from orc.view import OrcFlask, VersionManager, bp
 
 def flask() -> None:
     app, scheduler = _build_app()
-    scheduler.resume()
-    api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
-    _print_started()
+    _start_services(scheduler)
     app.run(host="0.0.0.0", port=8000, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
@@ -41,28 +38,32 @@ def web() -> None:
             except Exception:
                 traceback.print_exc()
                 sys.exit(4)
-            scheduler.resume()
-            api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
-            _print_started()
+            _start_services(scheduler)
             return app
 
     GunicornApp().run()
 
 
-def _print_started() -> None:
+def _start_services(scheduler: BackgroundScheduler) -> None:
+    api.start_mqtt()
+    scheduler.resume()
+    api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
 def _build_app() -> tuple[OrcFlask, BackgroundScheduler]:
-    if os.getenv("ORC_ENABLED"):
-        secrets = api.fetch_secrets()
-        config.config.load(secrets, api.fetch_hubitat_config(secrets))
-
+    secrets = api.fetch_secrets()
+    config.config.load(secrets, api.fetch_hubitat_config(secrets))
     api.init_db()
 
-    snapshot_manager = api.snapshot_manager
-    version_manager = VersionManager()
+    ctx = _build_scheduler()
 
+    _run_setup(ctx)
+    return _build_flask(ctx), ctx.scheduler
+
+
+def _build_scheduler() -> m.AppContext:
+    version_manager = VersionManager()
     scheduler = BackgroundScheduler(
         jobstores={
             JOBSTORE_DEFAULT: SQLAlchemyJobStore(url=config.config.jobs_db),
@@ -71,24 +72,28 @@ def _build_app() -> tuple[OrcFlask, BackgroundScheduler]:
         job_defaults={"misfire_grace_time": 30},
         timezone=config.config.tz,
     )
-
     ctx = m.AppContext(
-        snapshot_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.wav").resolve().as_posix(), version_manager
+        api.snapshot_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.wav").resolve().as_posix(), version_manager
     )
     scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), JOBSTORE_DEFAULT)
     scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start(paused=True)
+    return ctx
 
+
+def _run_setup(ctx: m.AppContext) -> None:
     api.setup_scheduler(ctx)
     plugin_ctx = plugins.build_ctx(ctx)
-    for hook in config.config.registry.startup_hooks:
+    for hook in config.config.registry.setup_hooks:
         hook(plugin_ctx)
+    api.add_state_provider("Hubitat MQTT", api.mqtt_state_rows)
 
+
+def _build_flask(ctx: m.AppContext) -> OrcFlask:
     app = OrcFlask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
     app.orc = ctx
     app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
-
-    return app, scheduler
+    return app

@@ -17,7 +17,7 @@ def _core_registry(monkeypatch):
     runs in the same process it asserts against the real registry. So we save/restore
     rather than clobber. Autouse in this conftest ⇒ scoped to tests/."""
     import orc
-    from orc import api, device_registry
+    from orc import api, declarations
 
     class Light(DeviceEnum):
         a = (1, frozenset([m.Capability.change_level]))
@@ -32,8 +32,8 @@ def _core_registry(monkeypatch):
 
     # Register core dispatch into a fresh builder, then build the registry from the test
     # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.
-    builder = device_registry.RegistryBuilder()
-    api.register_core(builder)
+    builder = declarations.Declarations()
+    api.declare_core(builder)
     monkeypatch.setattr(orc, "Light", Light, raising=False)
     monkeypatch.setattr(orc, "Chromecast", Chromecast, raising=False)
     monkeypatch.setattr(orc, "TV", TV, raising=False)
