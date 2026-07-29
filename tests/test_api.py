@@ -59,7 +59,7 @@ class TestManagingConfig:
         dispatch.assert_not_called()
 
 
-@patch("orc.api.hubitat.update_light")
+@patch("orc.api.mqtt.publish_light")
 class TestIntercepts:
     @pytest.fixture(autouse=True)
     def _manager(self):

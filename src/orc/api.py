@@ -25,7 +25,7 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config, device_registry
 from orc import model as m
-from orc.dal import broadlink, chromecast, feeds, hubitat, mqtt, net, sqlite
+from orc.dal import broadlink, chromecast, feeds, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
@@ -133,9 +133,9 @@ def capture_sounds() -> m.Configs[m.SoundState]:
 # Plugins register their own handlers the same way.
 def _dispatch_light(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
-        hubitat.update_light(w, brightness=rule.state)
+        mqtt.publish_light(w, brightness=rule.state)
     else:
-        hubitat.update_light(w, on=rule.state == m.ON)
+        mqtt.publish_light(w, on=rule.state == m.ON)
 
 
 def _dispatch_chromecast(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
