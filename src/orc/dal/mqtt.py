@@ -119,6 +119,60 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
     return m.Configs(*(m.Config(what=light, state=state(light)) for light in lights))
 
 
+@requires_enabled({})
+def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:
+    """One-shot boot-time discovery from the retained device documents: name ->
+    (id, capabilities). Runs during config load — before ``config.secrets`` exists and
+    before the standing client starts — so credentials come in explicitly. Dimmable is
+    inferred from a ``level`` attribute in the document (verified equivalent to Maker
+    API's ChangeLevel capability for every exported device)."""
+    host = _mqtt_host()
+    user, password = secrets.get("MQTT_USER"), secrets.get("MQTT_PASSWORD")
+    if not (host and user and password):
+        _log.warning("mqtt: host or MQTT_USER/MQTT_PASSWORD missing; no devices discovered")
+        return {}
+    found: dict[str, tuple[int, frozenset[m.Capability]]] = {}
+
+    def on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
+        if rc != 0:
+            _log.warning("mqtt: discovery connect refused: %s", rc)
+        else:
+            client.subscribe("hubitat/#", qos=0)
+
+    def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+        parts = msg.topic.split("/")
+        if len(parts) != 4 or parts[2] != "devices":
+            return
+        try:
+            doc = json.loads(msg.payload)
+            dimmable = any(a["name"] == "level" for a in doc["attributes"])
+            found[doc["name"]] = (int(doc["id"]), frozenset([m.Capability.change_level]) if dimmable else frozenset())
+        except ValueError, KeyError, TypeError:
+            _log.exception("mqtt: bad device document on %s", msg.topic)
+
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    client.username_pw_set(user, password)
+    client.on_connect = on_connect
+    client.on_message = on_message
+    try:
+        client.connect(host, _MQTT_PORT, keepalive=30)
+    except OSError:
+        _log.warning("mqtt: discovery connect failed; no devices discovered")
+        return {}
+    client.loop_start()
+    # Collect the retained flood until the device count settles, like start()'s wait.
+    deadline = time.monotonic() + timeout
+    previous = -1
+    while time.monotonic() < deadline:
+        time.sleep(0.25)
+        if found and len(found) == previous:
+            break
+        previous = len(found)
+    client.loop_stop()
+    client.disconnect()
+    return found
+
+
 @requires_enabled(None)
 def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
     """Command a light by publishing to its command topic. The broker accepting the
