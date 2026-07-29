@@ -12,7 +12,6 @@ import os
 import threading
 import time
 from collections.abc import Callable, Sequence
-from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -65,6 +64,17 @@ def start() -> None:
         _log.info("mqtt: hubitat url or MQTT_USER/MQTT_PASSWORD secrets not set, skipping")
         return
     threading.Thread(target=_run, args=connected, name="hubitat-mqtt", daemon=True).start()
+    # Block boot briefly until the retained flood settles (device count nonzero and
+    # stable), so early reads don't see an empty cache and report every light off.
+    deadline = time.monotonic() + 3.0
+    previous = -1
+    while time.monotonic() < deadline:
+        time.sleep(0.25)
+        count = len(_devices.values())
+        if count and count == previous:
+            return
+        previous = count
+    _log.warning("mqtt: retained documents still arriving after 3s (%d so far)", max(previous, 0))
 
 
 def hub_id() -> str | None:
@@ -132,7 +142,6 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
             name=doc["name"],
             attributes={a["name"]: a["value"] for a in doc["attributes"]},
             last_activity=doc.get("lastActivity"),
-            received=datetime.now(tz=config.tz),
         )
     except ValueError, KeyError, TypeError:
         _log.exception("mqtt: bad device document on %s", msg.topic)
