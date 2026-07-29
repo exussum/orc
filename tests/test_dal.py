@@ -64,7 +64,7 @@ class TestRequiresEnabled:
 
 @pytest.mark.usefixtures("enabled")
 class TestReboot:
-    @patch("requests.Session.post")
+    @patch("requests.post")
     def test_reboot_hits_hub_endpoint(self, post):
         hubitat.reboot()
         assert "/hub/reboot" in post.call_args[0][0]
