@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import orc
+from orc import model as m
 from orc.collections import LockedDict
 from orc.dal import mqtt
 
@@ -183,3 +184,52 @@ class TestPublishLight:
         monkeypatch.setattr(mqtt, "_client", None)
         with pytest.raises(RuntimeError):
             mqtt.publish_light(orc.Light.a, on=True)
+
+
+@pytest.mark.usefixtures("enabled")
+class TestFetchHubitatConfig:
+    class FakeClient:
+        """Replays retained documents through the on_message callback at loop_start,
+        like the broker's retained flood."""
+
+        def __init__(self, *a, **k):
+            self.docs = []
+
+        def username_pw_set(self, user, password):
+            pass
+
+        def connect(self, host, port, keepalive):
+            pass
+
+        def loop_start(self):
+            for doc in self.docs:
+                self.on_message(self, None, _msg(f"hubitat/{HUB}/devices/{doc['id']}", doc))
+
+        def loop_stop(self):
+            pass
+
+        def disconnect(self):
+            pass
+
+    def _fetch(self, monkeypatch, docs):
+        fake = self.FakeClient()
+        fake.docs = docs
+        monkeypatch.setenv("ORC_MQTT_HOST", "hub.test")
+        monkeypatch.setattr(mqtt.mqtt, "Client", lambda *a, **k: fake)
+        secrets = m.Secrets("", "", "", _raw={"MQTT_USER": "u", "MQTT_PASSWORD": "p"})
+        return mqtt.fetch_hubitat_config(secrets, timeout=1.0)
+
+    def test_maps_name_to_id_and_infers_dimmable_from_level(self, monkeypatch):
+        docs = [
+            _doc(id=17, name="entrance bulb 1", attributes={"switch": "off", "level": "20"}),
+            _doc(id=1, name="office floor lamp", attributes={"switch": "off", "power": "0"}),
+        ]
+        config = self._fetch(monkeypatch, docs)
+        assert config == {
+            "entrance bulb 1": (17, frozenset([m.Capability.change_level])),
+            "office floor lamp": (1, frozenset()),
+        }
+
+    def test_missing_credentials_discovers_nothing(self, monkeypatch):
+        monkeypatch.setenv("ORC_MQTT_HOST", "hub.test")
+        assert mqtt.fetch_hubitat_config(m.Secrets("", "", ""), timeout=0.1) == {}

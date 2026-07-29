@@ -27,9 +27,9 @@ from orc import config, device_registry
 from orc import model as m
 from orc.dal import broadlink, chromecast, feeds, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
-from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.mqtt import add_listener  # noqa: F401
+from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import update_avg  # noqa: F401
