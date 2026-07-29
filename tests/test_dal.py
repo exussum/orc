@@ -2,7 +2,6 @@ from unittest.mock import patch
 
 import pytest
 
-import orc
 from orc.dal import hubitat
 from orc.dal.chromecast import _strip_googlevideo_params
 from orc.decorators import requires_enabled
@@ -64,19 +63,8 @@ class TestRequiresEnabled:
 
 
 @pytest.mark.usefixtures("enabled")
-class TestUpdateLight:
-    @patch("requests.Session.get")
-    def test_on_hits_on_endpoint(self, get):
-        hubitat.update_light(orc.Light.a, on=True)
-        assert "/devices/1/on" in get.call_args[0][0]
-
-    @patch("requests.Session.get")
-    def test_brightness_uses_set_level(self, get):
-        hubitat.update_light(orc.Light.a, brightness=42)
-        assert "/devices/1/setLevel/42" in get.call_args[0][0]
-
-    @patch("requests.Session.get")
-    def test_brightness_without_capability_raises(self, get):
-        with pytest.raises(ValueError):
-            hubitat.update_light(orc.Light.b, brightness=42)
-        get.assert_not_called()
+class TestReboot:
+    @patch("requests.Session.post")
+    def test_reboot_hits_hub_endpoint(self, post):
+        hubitat.reboot()
+        assert "/hub/reboot" in post.call_args[0][0]

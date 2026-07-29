@@ -147,3 +147,39 @@ class TestListeners:
         mqtt.add_listener(listener)
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed"})])
         assert events == ["contact"]
+
+
+@pytest.mark.usefixtures("enabled")
+class TestPublishLight:
+    @pytest.fixture(autouse=True)
+    def commanding_client(self, monkeypatch):
+        self.published = []
+        client = SimpleNamespace(publish=lambda topic, payload=None: self.published.append((topic, payload)))
+        monkeypatch.setattr(mqtt, "_client", client)
+        monkeypatch.setattr(mqtt, "_hub_id", HUB)
+
+    def test_on_publishes_on_command(self):
+        mqtt.publish_light(orc.Light.a, on=True)
+        assert self.published == [(f"hubitat/{HUB}/devices/1/commands/on", None)]
+
+    def test_off_publishes_off_command(self):
+        mqtt.publish_light(orc.Light.a, on=False)
+        assert self.published == [(f"hubitat/{HUB}/devices/1/commands/off", None)]
+
+    def test_brightness_publishes_set_level_with_raw_payload(self):
+        mqtt.publish_light(orc.Light.a, brightness=42)
+        assert self.published == [(f"hubitat/{HUB}/devices/1/commands/setLevel", "42")]
+
+    def test_brightness_zero_without_capability_publishes_off(self):
+        mqtt.publish_light(orc.Light.b, brightness=0)
+        assert self.published == [(f"hubitat/{HUB}/devices/2/commands/off", None)]
+
+    def test_brightness_without_capability_raises(self):
+        with pytest.raises(ValueError):
+            mqtt.publish_light(orc.Light.b, brightness=42)
+        assert self.published == []
+
+    def test_unstarted_client_raises(self, monkeypatch):
+        monkeypatch.setattr(mqtt, "_client", None)
+        with pytest.raises(RuntimeError):
+            mqtt.publish_light(orc.Light.a, on=True)
