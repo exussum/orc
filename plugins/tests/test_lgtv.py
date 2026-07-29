@@ -1,9 +1,10 @@
 from enum import Enum
+from functools import partial
 from unittest.mock import MagicMock, patch
 
 import pytest
 from orc_plugins import lgtv
-from orc_plugins.lgtv import webos
+from orc_plugins.lgtv import plugins
 
 import orc
 from orc import api
@@ -47,45 +48,49 @@ class TestDispatchLGTV:
         class BroadLink(Enum):
             living_room = 1
 
-        # LGTV routes to lgtv._dispatch; the backing WebOS/BroadLink types carry no handler.
-        mock_registry(LGTV=(LGTV, lgtv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
+        # LGTV routes to the ctx-bound handler start() would register; the backing
+        # WebOS/BroadLink types carry no handler.
+        self.ctx = MagicMock()
+        mock_registry(LGTV=(LGTV, partial(lgtv._dispatch, self.ctx)), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lgtv = LGTV.living_room
         self.webos = WebOS.living_room
         self.bl = BroadLink.living_room
 
     def test_off_powers_webos_off(self):
-        with patch.object(webos, "off") as webos_off:
+        with patch.object(plugins, "off") as webos_off:
             api.dispatch(m.Config(self.lgtv, m.OFF))
-        webos_off.assert_called_once_with(self.webos)
+        webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
-        with patch.object(webos, "is_off", return_value=True), patch.object(api, "tv_toggle") as tv_toggle:
+        with patch.object(plugins, "is_off", return_value=True):
             api.dispatch(m.Config(self.lgtv, m.ON))
-        tv_toggle.assert_called_once_with(self.bl)
+        self.ctx.api.tv_toggle.assert_called_once_with(self.bl)
 
     def test_on_skips_toggle_when_tv_already_on(self):
-        with patch.object(webos, "is_off", return_value=False), patch.object(api, "tv_toggle") as tv_toggle:
+        with patch.object(plugins, "is_off", return_value=False):
             api.dispatch(m.Config(self.lgtv, m.ON))
-        tv_toggle.assert_not_called()
+        self.ctx.api.tv_toggle.assert_not_called()
 
     def test_device_command_routes_to_lgtv_handler(self):
-        with patch.object(webos, "off") as webos_off:
+        with patch.object(plugins, "off") as webos_off:
             api.device_command("living_room", m.OFF)
-        webos_off.assert_called_once_with(self.webos)
+        webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
 
 
 def test_lgtv_registers_with_core():
     from orc import config
 
     assert lgtv.setup in config.registry.setup_hooks
-    with patch.object(webos, "init_db") as init_db:
+    with patch.object(plugins, "init_db") as init_db:
         ctx = MagicMock()
         lgtv.setup(ctx)
-    init_db.assert_called_once_with()
+    init_db.assert_called_once_with(ctx.api.connection)
+    name, handler = ctx.api.add_dispatch_handler.call_args[0]
+    assert name == "LGTV" and handler.func is lgtv._dispatch
     ctx.api.add_state_provider.assert_called_once_with("TV", lgtv.tv_state)
 
     lgtv_dev = config.registry.devices["LGTV"]
-    assert lgtv_dev.dispatch is lgtv._dispatch
+    assert lgtv_dev.dispatch is None  # bound handler arrives at startup
     assert lgtv_dev.controllable
     assert lgtv_dev.icon == "tv"
     assert config.registry.devices["WebOS"].reset_excluded
