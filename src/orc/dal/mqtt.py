@@ -22,7 +22,7 @@ import paho.mqtt.client as mqtt
 from orc import config
 from orc import model as m
 from orc.collections import LockedDict
-from orc.dal.decorators import requires_enabled
+from orc.decorators import requires_enabled
 
 _log = logging.getLogger(__name__)
 
