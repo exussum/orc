@@ -4,7 +4,7 @@ import requests
 
 from orc import config
 from orc import model as m
-from orc.dal.decorators import requires_enabled
+from orc.decorators import requires_enabled
 
 _CAPABILITY_MAP: dict[str, m.Capability] = {
     "ChangeLevel": m.Capability.change_level,

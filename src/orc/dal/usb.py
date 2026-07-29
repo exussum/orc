@@ -11,7 +11,7 @@ import pyaudio
 
 from orc import config
 from orc import model as m
-from orc._decorators import audio_lock, silence_fd
+from orc.decorators import audio_lock, silence_fd
 
 _MODEL_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
