@@ -9,13 +9,16 @@ from collections.abc import Callable, Iterator
 from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mistletoe import Document
 
 from orc import model as m
 from orc.collections import doc_to_sub_tables
 from orc.model import column_to_value
+
+if TYPE_CHECKING:
+    from orc.plugins import PluginCtx
 
 audio_lock = threading.Lock()
 
@@ -30,6 +33,20 @@ def silence_fd(fd: int) -> Iterator[None]:
         finally:
             os.dup2(saved, fd)
             os.close(saved)
+
+
+def requires_enabled[**P, R](stub: Any) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def deco(fn: Callable[P, R]) -> Callable[P, R]:
+        @wraps(fn)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            if not os.getenv("ORC_ENABLED"):
+                print(f"[disabled] {fn.__name__} args={args} kwargs={kwargs}", file=sys.stderr)
+                return stub(*args, **kwargs) if callable(stub) else stub
+            return fn(*args, **kwargs)
+
+        return wrapper
+
+    return deco
 
 
 def requires_ctx[**P, R](f: Callable[P, R]) -> Callable[P, R]:
@@ -65,7 +82,7 @@ def plugin_config[R](name: str, *, schema: dict[str, tuple[str, ...]]) -> Callab
         cache: Any = _UNSET
 
         @wraps(fn)
-        def wrapper(ctx: Any, *args: Any, **kwargs: Any) -> R | None:
+        def wrapper(ctx: "PluginCtx", *args: Any, **kwargs: Any) -> R | None:
             nonlocal cache
             if cache is _UNSET:
                 try:
@@ -114,17 +131,3 @@ def unwrap_rule_container[R](f: Callable[..., R]) -> Callable[..., None]:
             f(*args, **kwargs)
 
     return wrapper
-
-
-def requires_enabled[**P, R](stub: Any) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    def deco(fn: Callable[P, R]) -> Callable[P, R]:
-        @wraps(fn)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            if not os.getenv("ORC_ENABLED"):
-                print(f"[disabled] {fn.__name__} args={args} kwargs={kwargs}", file=sys.stderr)
-                return stub(*args, **kwargs) if callable(stub) else stub
-            return fn(*args, **kwargs)
-
-        return wrapper
-
-    return deco

@@ -5,21 +5,16 @@ BroadLink IR toggle to power on), a "TV" state row set, the pairing action's on-
 notification, a boot hook to create its DB table, and marks WebOS reset-excluded.
 """
 
-import os
 from typing import Any
 
 from orc_plugins.lgtv import webos
 
 import orc
 from orc import model as m
-from orc.dal import broadlink
 
 # orc.LGTV/WebOS/BroadLink are built at runtime from the registered device types; read
 # them through an Any view since mypy can't see the dynamic package attributes.
 _orc: Any = orc
-
-# LGTV's IR power-on shares core's BroadLink codes file (same env var as AC).
-_BROADLINK_CODES = os.getenv("ORC_BROADLINK_CODES", "/etc/orc/broadlink_codes.json")
 
 # Client behavior for the "Pair LG TV" button: show a browser notification while pairing.
 PAIRING_JS = """
@@ -31,12 +26,14 @@ dismiss?.();
 
 
 def _dispatch(w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
+    from orc import api  # deferred: this package is imported during orc's config load
+
     webos_device, bl_device = _orc.WebOS[w.name], _orc.BroadLink[w.name]
     if rule.state == m.OFF:
         webos.off(webos_device)
     elif rule.state == m.ON:
         if webos.is_off(webos_device):
-            broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
+            api.tv_toggle(bl_device)
     else:
         raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
 
@@ -54,7 +51,7 @@ def register(core: Any) -> None:
         icons={"LGTV": "tv"},
         dispatch={"LGTV": _dispatch},
         state_providers={"TV": tv_state},
-        startup=[webos.init_db],
+        startup=[lambda ctx: webos.init_db()],  # startup hooks receive a PluginCtx; the db init doesn't need it
         on_click={"Pair LG TV": PAIRING_JS},
         button_labels={"Pair LG TV": "Pair {device}"},
     )
