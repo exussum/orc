@@ -30,7 +30,7 @@ from orc._decorators import (
     synchronized,
     unwrap_rule_container,
 )
-from orc.dal import broadlink, chromecast, feeds, hubitat, net, sqlite
+from orc.dal import broadlink, chromecast, feeds, hubitat, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import fetch_hubitat_config  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
@@ -162,6 +162,7 @@ def register_core(core: device_registry.RegistryBuilder) -> None:
     like plugins."""
     core.register_dispatch("Light", _dispatch_light)
     core.register_dispatch("Chromecast", _dispatch_chromecast)
+    core.register_plugin(state_providers={"Hubitat MQTT": mqtt.state_rows}, startup=[mqtt.start])
 
 
 @unwrap_rule_container
