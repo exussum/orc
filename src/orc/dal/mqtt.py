@@ -29,6 +29,7 @@ _MQTT_PORT = 1883
 
 _devices: LockedDict[int, m.DeviceState] = LockedDict()
 _hub_id: str | None = None  # written only by the mqtt thread
+_client: mqtt.Client | None = None  # the standing client, retained for publishing commands
 
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document — battery levels, motion active/inactive, contact
@@ -59,10 +60,12 @@ def new_client() -> tuple[mqtt.Client, str, int] | None:
 
 
 def start() -> None:
+    global _client
     connected = new_client()
     if connected is None:
         _log.info("mqtt: hubitat url or MQTT_USER/MQTT_PASSWORD secrets not set, skipping")
         return
+    _client = connected[0]
     threading.Thread(target=_run, args=connected, name="hubitat-mqtt", daemon=True).start()
     # Block boot briefly until the retained flood settles (device count nonzero and
     # stable), so early reads don't see an empty cache and report every light off.
@@ -114,6 +117,27 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
         return int(attrs["level"]) if ("level" in attrs and switch == m.ON) else switch
 
     return m.Configs(*(m.Config(what=light, state=state(light)) for light in lights))
+
+
+@requires_enabled(None)
+def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
+    """Command a light by publishing to its command topic. The broker accepting the
+    publish is the only acknowledgement; the device's state document is the signal
+    that a command actually landed. setLevel takes the raw value as payload; the
+    driver treats level 0 as off (verified live)."""
+    if brightness is not None and m.Capability.change_level in light.capabilities:
+        command, payload = "setLevel", str(brightness)
+    else:
+        if brightness == 0:
+            on = False
+        elif brightness == 100:
+            on = True
+        elif brightness is not None:
+            raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
+        command, payload = (m.ON if on else m.OFF), None
+    if _client is None or _hub_id is None:
+        raise RuntimeError(f"mqtt client not started or hub not yet seen; cannot command {light.name}")
+    _client.publish(f"hubitat/{_hub_id}/devices/{light.value}/commands/{command}", payload)
 
 
 def _mqtt_host() -> str | None:
