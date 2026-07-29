@@ -1,5 +1,5 @@
 from enum import Enum
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from orc_plugins import lgtv
@@ -8,7 +8,6 @@ from orc_plugins.lgtv import webos
 import orc
 from orc import api
 from orc import model as m
-from orc.dal import broadlink
 
 
 @pytest.fixture
@@ -60,12 +59,12 @@ class TestDispatchLGTV:
         webos_off.assert_called_once_with(self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
-        with patch.object(webos, "is_off", return_value=True), patch.object(broadlink, "tv_toggle") as tv_toggle:
+        with patch.object(webos, "is_off", return_value=True), patch.object(api, "tv_toggle") as tv_toggle:
             api.dispatch(m.Config(self.lgtv, m.ON))
-        tv_toggle.assert_called_once_with(self.bl, lgtv._BROADLINK_CODES)
+        tv_toggle.assert_called_once_with(self.bl)
 
     def test_on_skips_toggle_when_tv_already_on(self):
-        with patch.object(webos, "is_off", return_value=False), patch.object(broadlink, "tv_toggle") as tv_toggle:
+        with patch.object(webos, "is_off", return_value=False), patch.object(api, "tv_toggle") as tv_toggle:
             api.dispatch(m.Config(self.lgtv, m.ON))
         tv_toggle.assert_not_called()
 
@@ -79,7 +78,12 @@ def test_lgtv_registers_with_core():
     from orc import config
 
     assert "TV" in config.registry.state_providers
-    assert webos.init_db in config.registry.startup_hooks
+    # init_db is registered behind a ctx-discarding lambda; run the hooks to prove it's wired
+    with patch.object(webos, "init_db") as init_db:
+        for hook in config.registry.startup_hooks:
+            if hook.__module__ == "orc_plugins.lgtv":
+                hook(MagicMock())
+    init_db.assert_called_once_with()
 
     lgtv_dev = config.registry.devices["LGTV"]
     assert lgtv_dev.dispatch is lgtv._dispatch

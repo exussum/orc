@@ -6,7 +6,10 @@ this package is imported during orc's config load (before api.py is importable) 
 top-level import would be circular.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from orc.plugins import PluginCtx
 
 from orc_plugins.yolink import dal
 
@@ -64,7 +67,7 @@ def _on_transition(name: str, kind: str, old: Any, new: Any) -> None:
         api.play_text(msg)
 
 
-def start() -> None:
+def start(ctx: "PluginCtx") -> None:
     dal.set_transition_callback(_on_transition)
     dal.start()
 

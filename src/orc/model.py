@@ -29,12 +29,6 @@ class ThemeOverride(NamedTuple):
     end: date
 
 
-class CronJob(NamedTuple):
-    func: Callable[..., Any]
-    crontab: str
-    name: str
-
-
 SUNRISE = "sunrise"
 SUNSET = "sunset"
 
@@ -91,6 +85,17 @@ class Trigger(str, Enum):
 class WeatherCondition(str, Enum):
     SUNNY = "SUNNY"
     CLOUDY = "CLOUDY"
+
+
+@dataclass(frozen=True)
+class DeviceState:
+    """Last-received device document from the hub's MQTT export."""
+
+    id: int
+    name: str
+    attributes: dict[str, Any]
+    last_activity: str | None
+    received: datetime
 
 
 class BatteryLevel(str, Enum):
@@ -300,15 +305,13 @@ class Registry:
     ``click_hooks`` and ``button_labels`` are keyed by button/action id, not device
     type, so they sit alongside ``devices`` rather than folding into a DeviceType.
     ``state_providers`` are stored as functions and called fresh by consumers on each
-    request, so the returned rows reflect live device state. ``cron_jobs`` is keyed by
-    job id and scheduled by ``api.setup_scheduler`` alongside core's own crons."""
+    request, so the returned rows reflect live device state."""
 
     devices: dict[str, DeviceType]
     click_hooks: dict[str, str]
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]
-    startup_hooks: list[Callable[[], None]]
-    cron_jobs: dict[str, CronJob] = field(default_factory=dict)
+    startup_hooks: list[Callable[[Any], None]]  # arg is a PluginCtx; typed loosely to keep the plugin layer out of core
 
 
 def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:

@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from orc.model import CronJob, DeviceType, Registry
+from orc.model import DeviceType, Registry
 
 if TYPE_CHECKING:
     from orc.model import DeviceEnum
@@ -29,10 +29,9 @@ class RegistryBuilder:
     device_icons: dict[str, str] = field(default_factory=dict)
     state_providers: dict[str, Callable[[], Any]] = field(default_factory=dict)
     dispatch_handlers: dict[str, Callable[..., None]] = field(default_factory=dict)
-    startup_hooks: list[Callable[[], None]] = field(default_factory=list)
+    startup_hooks: list[Callable[[Any], None]] = field(default_factory=list)
     click_hooks: dict[str, str] = field(default_factory=dict)
     button_labels: dict[str, str] = field(default_factory=dict)
-    cron_jobs: dict[str, CronJob] = field(default_factory=dict)
 
     def register_device_type(self, name: str) -> None:
         if name not in self.device_types:
@@ -50,10 +49,9 @@ class RegistryBuilder:
         icons: dict[str, str] | None = None,
         dispatch: dict[str, Callable[..., None]] | None = None,
         state_providers: dict[str, Callable[[], Any]] | None = None,
-        startup: Iterable[Callable[[], None]] = (),
+        startup: Iterable[Callable[[Any], None]] = (),
         on_click: dict[str, str] | None = None,
         button_labels: dict[str, str] | None = None,
-        crons: dict[str, CronJob] | None = None,
     ) -> None:
         """One entry point for a plugin to register everything it contributes; all
         pieces are optional."""
@@ -63,9 +61,6 @@ class RegistryBuilder:
         self.state_providers.update(state_providers or {})
         self.click_hooks.update(on_click or {})
         self.button_labels.update(button_labels or {})
-        if overlap := self.cron_jobs.keys() & (crons or {}).keys():
-            raise ValueError(f"Duplicate cron job ids: {', '.join(sorted(overlap))}")
-        self.cron_jobs.update(crons or {})
 
         for name in device_types:
             self.register_device_type(name)
@@ -93,7 +88,6 @@ class RegistryBuilder:
             button_labels=dict(self.button_labels),
             state_providers=dict(self.state_providers),
             startup_hooks=list(self.startup_hooks),
-            cron_jobs=dict(self.cron_jobs),
         )
 
 
