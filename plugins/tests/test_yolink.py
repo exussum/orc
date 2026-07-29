@@ -12,7 +12,7 @@ def test_yolink_registers_with_core():
     from unittest.mock import MagicMock, patch
 
     ctx = MagicMock()
-    with patch.object(yolink.dal, "start"), patch.object(yolink.dal, "set_transition_callback"):
+    with patch.object(yolink.plugins, "start"), patch.object(yolink.plugins, "set_transition_callback"):
         yolink.setup(ctx)
     ctx.api.add_state_provider.assert_called_once_with("Leak Sensors", yolink.leak_state)
 
@@ -23,4 +23,4 @@ def test_leak_state_rows_have_name_key():
 
 
 def test_simulate_transition_unknown_sensor_returns_false():
-    assert yolink.dal.simulate_transition("no-such-sensor") is False
+    assert yolink.plugins.simulate_transition("no-such-sensor") is False
