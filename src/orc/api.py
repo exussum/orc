@@ -32,7 +32,6 @@ from orc.dal.mqtt import add_listener  # noqa: F401
 from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
 from orc.dal.mqtt import snapshot as device_states  # noqa: F401
 from orc.dal.mqtt import start as start_mqtt  # noqa: F401
-from orc.dal.mqtt import state_rows as mqtt_state_rows  # noqa: F401
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import update_avg  # noqa: F401
