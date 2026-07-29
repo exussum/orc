@@ -9,9 +9,6 @@ from typing import TYPE_CHECKING, Any
 from apscheduler.schedulers.base import BaseScheduler
 
 from orc import model as m
-
-# Re-exported for plugin authors: the documented import path is ``from orc.plugins
-# import plugin_config, requires_ctx`` (see plugins/README.md).
 from orc.decorators import plugin_config, requires_ctx  # noqa: F401
 
 if TYPE_CHECKING:
@@ -49,8 +46,6 @@ def build_ctx(orc_ctx: m.AppContext) -> PluginCtx:
 
 
 def execute_plugin(orc_ctx: m.AppContext, id: str, **params: Any) -> None:
-    # params are optional request-supplied kwargs (e.g. the clicked device); only
-    # forwarded when present, so plugins that take just (ctx) are unaffected.
     ctx = build_ctx(orc_ctx)
     ctx.config.plugins[id].func(ctx, **params)
 
