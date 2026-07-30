@@ -11,7 +11,6 @@ import logging
 import os
 import time
 from collections.abc import Callable, Sequence
-from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -34,12 +33,13 @@ _client: mqtt.Client | None = None  # the standing client, retained for publishi
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document that represents something happening — battery levels,
 # motion active/inactive, contact open/close, switch state, all attributes alike.
-# State is never an event: stale documents (lastActivity older than _EVENT_MAX_AGE —
-# post-outage replays) and first sightings (the retained flood at (re)connect) update
-# the cache but fire no listeners, so ``old`` is never None. No other dedup: the hub
-# republishes the whole document when anything changes, so unchanged attributes fire
-# too (old == new); consumers filter for what they care about. Callbacks run on the
-# mqtt thread; keep them fast and don't block.
+# State is never an event: first sightings (the retained flood at boot) and replays
+# (a document identical to the cached one — reconnect floods, hub republish after
+# reboot) update the cache but fire no listeners, so ``old`` is never None. No other
+# dedup: the hub regenerates the document only when something happens, so a changed
+# document fires every attribute, unchanged ones included (old == new); consumers
+# filter for what they care about. Callbacks run on the mqtt thread; keep them fast
+# and don't block.
 type Listener = Callable[[m.DeviceState, str, Any, Any], None]
 _listeners: list[Listener] = []
 
@@ -49,8 +49,6 @@ _listeners: list[Listener] = []
 type ButtonListener = Callable[[int, int, str], None]
 _button_listeners: list[ButtonListener] = []
 
-_EVENT_MAX_AGE = timedelta(seconds=60)
-
 
 def add_listener(fn: Listener) -> None:
     _listeners.append(fn)
@@ -58,22 +56,6 @@ def add_listener(fn: Listener) -> None:
 
 def add_button_listener(fn: ButtonListener) -> None:
     _button_listeners.append(fn)
-
-
-_LAST_ACTIVITY_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
-
-
-def device_age(device: m.DeviceState) -> timedelta | None:
-    """Time since the hub last saw activity from the device, or None when the document
-    carries no parseable timestamp. _on_message uses this to keep stale documents (the
-    retained flood, post-outage replays) from firing event listeners."""
-    if device.last_activity is None:
-        return None
-    try:
-        happened = datetime.strptime(device.last_activity, _LAST_ACTIVITY_FORMAT)
-    except ValueError:
-        return None
-    return datetime.now(tz=happened.tzinfo) - happened
 
 
 def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message: Callable[..., None], timeout: float) -> mqtt.Client | None:
@@ -149,7 +131,9 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
     (id, capabilities). Runs during config load — before ``config.secrets`` exists and
     before the standing client starts — so credentials come in explicitly. Dimmable is
     inferred from a ``level`` attribute in the document (verified equivalent to Maker
-    API's ChangeLevel capability for every exported device)."""
+    API's ChangeLevel capability for every exported device). Raises when nothing was
+    discovered (broker unreachable, credentials missing), failing boot loudly instead
+    of silently demoting every device to a virtual id."""
     found: dict[str, tuple[int, frozenset[m.Capability]]] = {}
 
     def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
@@ -159,10 +143,11 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
             found[device.name] = (device.id, frozenset([m.Capability.change_level]) if dimmable else frozenset())
 
     client = _new_client(secrets, _on_connect, on_message, timeout)
-    if client is None:
-        return {}
-    client.loop_stop()
-    client.disconnect()
+    if client is not None:
+        client.loop_stop()
+        client.disconnect()
+    if not found:
+        raise RuntimeError("mqtt: device discovery found no device documents; broker unreachable or MQTT credentials missing")
     return found
 
 
@@ -251,13 +236,13 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
 
 def _receive_document(msg: mqtt.MQTTMessage) -> None:
     """Cache the document; fire attribute listeners only when it represents something
-    happening (see the Listener comment: first sightings and stale replays are state,
-    not events)."""
+    happening (see the Listener comment: first sightings and replays are state, not
+    events)."""
     device = _parse_device_state(msg)
     if device is None:
         return
-    old, _devices[device.id], age = _devices.get(device.id), device, device_age(device)
-    if old is None or (age is not None and age > _EVENT_MAX_AGE):
+    old, _devices[device.id] = _devices.get(device.id), device
+    if old is None or old == device:
         return
     for attribute, new_value in device.attributes.items():
         _fire(_listeners, msg.topic, device, attribute, old.attributes.get(attribute), new_value)
