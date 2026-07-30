@@ -340,12 +340,7 @@ def version() -> tuple[dict[str, Any], int]:
 
 @bp.route("/api/durations")
 def durations() -> tuple[dict[str, Any], int]:
-    return dict(api.fetch_durations()), 200
-
-
-@bp.route("/api/command_latencies")
-def command_latencies() -> tuple[dict[str, Any], int]:
-    return {topic: round(avg, 1) for topic, (_, avg) in api.command_latencies().items()}, 200
+    return {name: {"avg": round(avg, 3), "samples": samples} for name, (samples, avg) in api.duration_stats().items()}, 200
 
 
 def _to_level(state: object) -> int:
