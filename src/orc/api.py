@@ -25,9 +25,11 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config
 from orc import model as m
+from orc import plugins
 from orc.dal import broadlink, chromecast, feeds, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
+from orc.dal.mqtt import add_button_listener  # noqa: F401
 from orc.dal.mqtt import add_listener  # noqa: F401
 from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
 from orc.dal.mqtt import snapshot as device_states  # noqa: F401
@@ -182,6 +184,65 @@ def declare_core(declarations: Declarations) -> None:
     declarations.declare_dispatch("Chromecast", _dispatch_chromecast)
 
 
+def resolve_run_action(
+    ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False
+) -> tuple[Callable[[], None], timedelta] | None:
+    """Resolve a run id to (action, delay), or None if the id is unknown.
+
+    ``hub_origin`` marks runs triggered by the hub (button events; formerly its HTTP
+    callbacks): ad-hoc routines with a snapshot window then record the pre-run state
+    for restore instead of dispatching directly."""
+    if id == ORC_SYSTEM_SNAPSHOT:
+        return lambda: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
+    elif id in config.plugins:
+        params = {"device": device} if device else {}
+        return lambda: plugins.execute_plugin(ctx, id, **params), config.plugins[id].delay
+    elif id in config.schedule_routines:
+        return lambda: dispatch(config.schedule_routines[id], force=True), timedelta()
+    elif id in config.ad_hoc_routines:
+        routine = config.ad_hoc_routines[id]
+        if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
+            # Don't stack snapshots
+            snap = routine.snapshot
+            return lambda: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap), timedelta()
+        base = (config.reset_config,) if routine.reset else ()
+        return lambda: dispatch(m.squish_configs(*base, routine), force=True), routine.delay
+    return None
+
+
+def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False) -> bool:
+    resolved = resolve_run_action(ctx, id, device=device, hub_origin=hub_origin)
+    if resolved is None:
+        return False
+    action, delay = resolved
+
+    @requires_ctx
+    def run(ctx: m.AppContext) -> None:
+        log(local_now(), m.LogSource.MANUAL, id)
+        action()
+
+    with record_duration(id):
+        if delay:
+            when = local_now() + delay
+            log(local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
+            job_id = f"run-{id}-{when.isoformat()}"
+            ctx.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), id=job_id, jobstore=JOBSTORE_MEMORY)
+        else:
+            run(ctx=ctx)
+    return True
+
+
+def wire_buttons(ctx: m.AppContext) -> None:
+    mapping = {(what.value, button, event): action for (what, button, event), action in config.buttons.items()}
+
+    def on_button(device_id: int, button: int, event_type: str) -> None:
+        action = mapping.get((device_id, button, event_type))
+        if action is not None and not run_action(ctx, action, hub_origin=True):
+            log(local_now(), m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action))
+
+    add_button_listener(on_button)
+
+
 @unwrap_rule_container
 def dispatch(rule: m.Config, force: bool = False) -> None:
     if not force and snapshot_manager.intercepts(rule):
@@ -196,8 +257,6 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
         device_type = config.registry.devices.get(type(w).__name__)
         if device_type is None or device_type.dispatch is None:
             raise Exception("Unknown type")
-        # Isolate per-device failures: one wedged/unreachable device must not abort the
-        # rest of the routine (and thereby skip duration recording). Log and carry on.
         try:
             device_type.dispatch(w, rule, stream)
         except Exception as exc:

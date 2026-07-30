@@ -67,9 +67,12 @@ class Config:
         declarations = collect_declarations(p.func.__module__ for p in self.plugins.values())
         if "orc.api" in sys.modules:  # bootstrap load runs during `import orc`, before api is importable — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
-        # Only Light carries a hubitat id_lookup; every other device type ignores it.
+        # Light and Button rows name hub devices, so they carry the hubitat id_lookup;
+        # every other device type ignores it.
         enums = {
-            name: m.build_enum(doc, "Devices", name, hubitat_config if name == "Light" else None, device_types=declarations.device_types)
+            name: m.build_enum(
+                doc, "Devices", name, hubitat_config if name in ("Light", "Button") else None, device_types=declarations.device_types
+            )
             for name in declarations.device_types
         }
         globals().update(enums)
@@ -89,6 +92,7 @@ class Config:
         self.room_configs = m.build_config(doc, "Room Configs")
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=m.OFF)
         self.ad_hoc_routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
+        self.buttons = m.build_buttons(doc, "Button Mapping")
         self.button_highlight_configs = m.build_highlights(doc, "Button Highlights")
         self.audio_volumes = m.build_audio_volumes(doc, "Audio Volumes", required=(m.AUDIO_INFO, m.AUDIO_FATAL))
 

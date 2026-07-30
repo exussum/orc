@@ -33,6 +33,7 @@ def clean_state(monkeypatch):
     monkeypatch.setattr(mqtt, "_devices", LockedDict())
     monkeypatch.setattr(mqtt, "_hub_id", None)
     monkeypatch.setattr(mqtt, "_listeners", [])
+    monkeypatch.setattr(mqtt, "_button_listeners", [])
 
 
 @pytest.fixture
@@ -139,6 +140,49 @@ class TestListeners:
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2020-01-01T00:00:00+0000")])
         assert events == []
         assert mqtt.snapshot()[0].attributes == {"contact": "open"}
+
+
+def _button_msg(event_type, device_id=10, button=1):
+    payload = {"event_type": event_type, "button": button, "timestamp": "2026-07-29T22:42:37+0000"}
+    return _msg(f"hubitat/{HUB}/devices/{device_id}/button/{button}", payload, retain=False)
+
+
+class TestButtonEvents:
+    def test_fires_listener_with_device_button_event(self):
+        events = []
+        mqtt.add_button_listener(lambda d, b, e: events.append((d, b, e)))
+        mqtt._on_message(None, None, _button_msg("held"))
+        assert events == [(10, 1, "held")]
+
+    def test_clearing_publish_ignored(self):
+        events = []
+        mqtt.add_button_listener(lambda *a: events.append(a))
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"", retain=False))
+        assert events == []
+
+    def test_command_echo_ignored(self):
+        events = []
+        mqtt.add_button_listener(lambda *a: events.append(a))
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/commands/release", b"1", retain=False))
+        assert events == []
+
+    def test_bad_payload_ignored(self):
+        events = []
+        mqtt.add_button_listener(lambda *a: events.append(a))
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"not json", retain=False))
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", {"unexpected": "shape"}, retain=False))
+        assert events == []
+
+    def test_failing_listener_does_not_break_others(self):
+        events = []
+        mqtt.add_button_listener(lambda d, b, e: 1 / 0)
+        mqtt.add_button_listener(lambda d, b, e: events.append(e))
+        mqtt._on_message(None, None, _button_msg("pushed"))
+        assert events == ["pushed"]
+
+    def test_button_event_does_not_touch_device_cache(self):
+        mqtt._on_message(None, None, _button_msg("pushed"))
+        assert mqtt.snapshot() == []
 
 
 @pytest.mark.usefixtures("enabled")

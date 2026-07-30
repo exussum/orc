@@ -8,7 +8,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from apscheduler.triggers.date import DateTrigger
 from flask import Blueprint, Flask
 from flask import current_app as _current_app
 from flask import render_template, request
@@ -18,7 +17,6 @@ from mistletoe import Document, HtmlRenderer
 import orc
 from orc import api, config
 from orc import model as m
-from orc import plugins
 from orc.collections import where
 from orc.locale import Log
 from orc.security import safe_html
@@ -147,24 +145,9 @@ def rebuild_jobs() -> tuple[dict[str, Any], int]:
 
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> tuple[dict[str, Any], int]:
-    resolved = _resolve_run_action(id)
-    if resolved is None:
+    hub_origin = request.remote_addr == config.hubitat_ip
+    if not api.run_action(app.orc, id, device=request.args.get("device"), hub_origin=hub_origin):
         return {"error": "Unknown routine"}, 404
-    action, delay = resolved
-
-    @api.requires_ctx
-    def run(ctx: m.AppContext) -> None:
-        api.log(api.local_now(), m.LogSource.MANUAL, id)
-        action()
-
-    with api.record_duration(id):
-        if delay:
-            when = api.local_now() + delay
-            api.log(api.local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
-            job_id = f"run-{id}-{when.isoformat()}"
-            app.orc.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), id=job_id, jobstore=api.JOBSTORE_MEMORY)
-        else:
-            run(ctx=app.orc)
     return {"version": VersionManager.version}, 200
 
 
@@ -365,23 +348,3 @@ def _to_level(state: object) -> int:
     if isinstance(state, int):
         return state
     return 100 if state == m.ON else 0
-
-
-def _resolve_run_action(id: str) -> tuple[Callable[[], None], timedelta] | None:
-    """Resolve a run id to (action, delay), or None if the id is unknown."""
-    if id == api.ORC_SYSTEM_SNAPSHOT:
-        return lambda: app.orc.snapshot_manager.resume(api.ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
-    elif id in config.plugins:
-        params = {"device": device} if (device := request.args.get("device")) else {}
-        return lambda: plugins.execute_plugin(app.orc, id, **params), config.plugins[id].delay
-    elif id in config.schedule_routines:
-        return lambda: api.dispatch(config.schedule_routines[id], force=True), timedelta()
-    elif id in config.ad_hoc_routines:
-        routine = config.ad_hoc_routines[id]
-        if request.remote_addr == config.hubitat_ip and routine.snapshot and not app.orc.snapshot_manager.active(api.ORC_SYSTEM_SNAPSHOT):
-            # Don't stack snapshots
-            snap = routine.snapshot
-            return lambda: app.orc.snapshot_manager.replace_config(api.ORC_SYSTEM_SNAPSHOT, routine, api.local_now() + snap), timedelta()
-        base = (config.reset_config,) if routine.reset else ()
-        return lambda: api.dispatch(m.squish_configs(*base, routine), force=True), routine.delay
-    return None

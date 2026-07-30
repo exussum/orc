@@ -70,7 +70,7 @@ def test_versioned_bumps_after_success(client, ctx, good_version):
 def test_console_plugin(client, ctx):
     with (
         patch.object(config, "plugins", {"do-thing": m.Plugin(func=lambda ctx: None)}),
-        patch("orc.view.plugins.execute_plugin") as exec_plugin,
+        patch("orc.plugins.execute_plugin") as exec_plugin,
     ):
         response = client.get("/api/run/do-thing")
     assert response.status_code == 200

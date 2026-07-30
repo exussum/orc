@@ -270,3 +270,35 @@ def test_build_config_missing_required_room():
     doc = Document(_rooms_md(["| Bedroom | Light.b | on |\n"]))
     with pytest.raises(ValueError, match="Missing required entries.*Living Room"):
         m.build_config(doc, "Room Configs", required=("Living Room",))
+
+
+def _button_mapping_md(rows):
+    header = "| Device | Button | Event | Action |\n|--------|--------|-------|--------|\n"
+    return "##### Button Mapping\n\n" + header + "".join(rows) + "\n---\n"
+
+
+def test_build_buttons():
+    import orc
+
+    doc = Document(_button_mapping_md(["| Light.a | 1 | pushed | TV Lights |\n", "| Light.a | 1 | held | Silence |\n"]))
+    assert m.build_buttons(doc, "Button Mapping") == {
+        (orc.Light.a, 1, "pushed"): "TV Lights",
+        (orc.Light.a, 1, "held"): "Silence",
+    }
+
+
+def test_build_buttons_invalid_event():
+    doc = Document(_button_mapping_md(["| Light.a | 1 | tripleTapped | TV Lights |\n"]))
+    with pytest.raises(ValueError, match="Invalid button event"):
+        m.build_buttons(doc, "Button Mapping")
+
+
+def test_build_buttons_invalid_button_number():
+    doc = Document(_button_mapping_md(["| Light.a | first | pushed | TV Lights |\n"]))
+    with pytest.raises(ValueError, match="Invalid parameter"):
+        m.build_buttons(doc, "Button Mapping")
+
+
+def test_build_buttons_missing_section_is_empty():
+    doc = Document(_themes_md([]))
+    assert m.build_buttons(doc, "Button Mapping") == {}
