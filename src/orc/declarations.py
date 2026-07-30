@@ -22,7 +22,7 @@ class Declarations:
     their ``declare(declarations)`` hook, then ``build`` turns it into a ``Registry``
     and it is discarded. Core seeds its device-type defaults here."""
 
-    device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC"])
+    device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC", "Button"])
     controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
     reset_excluded_types: set[str] = field(default_factory=set)
     device_icons: dict[str, str] = field(default_factory=dict)

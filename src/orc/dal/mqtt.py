@@ -43,11 +43,21 @@ _client: mqtt.Client | None = None  # the standing client, retained for publishi
 type Listener = Callable[[m.DeviceState, str, Any, Any], None]
 _listeners: list[Listener] = []
 
+# Button-event listeners: fired as (device id, button number, event type) for every
+# ``devices/<id>/button/<n>`` publish. Unlike the document topics these are dedicated
+# event messages (not retained, no flood replay), so no staleness filtering applies.
+type ButtonListener = Callable[[int, int, str], None]
+_button_listeners: list[ButtonListener] = []
+
 _EVENT_MAX_AGE = timedelta(seconds=60)
 
 
 def add_listener(fn: Listener) -> None:
     _listeners.append(fn)
+
+
+def add_button_listener(fn: ButtonListener) -> None:
+    _button_listeners.append(fn)
 
 
 _LAST_ACTIVITY_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
@@ -224,21 +234,50 @@ def _wait_settled(count: Callable[[], int], timeout: float) -> bool:
 
 
 def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+    """Route a device publish by the segment after the device id: none for the
+    per-device JSON document, ``button`` for a dedicated button event, ``commands``
+    for our own command echoes (ignored)."""
     global _hub_id
+    parts = msg.topic.split("/")
+    if len(parts) < 4 or parts[2] != "devices":
+        return  # location/variables topics
+    _hub_id = parts[1]
+    kind = parts[4] if len(parts) > 4 else None
+    if kind is None:
+        _receive_document(msg)
+    elif kind == "button" and msg.payload:  # the empty clearing publish follows each event
+        _receive_button_event(msg)
+
+
+def _receive_document(msg: mqtt.MQTTMessage) -> None:
+    """Cache the document; fire attribute listeners only when it represents something
+    happening (see the Listener comment: first sightings and stale replays are state,
+    not events)."""
     device = _parse_device_state(msg)
     if device is None:
         return
-
-    _hub_id = msg.topic.split("/")[1]
     old, _devices[device.id], age = _devices.get(device.id), device, device_age(device)
-
     if old is None or (age is not None and age > _EVENT_MAX_AGE):
         return
-
     for attribute, new_value in device.attributes.items():
-        old_value = old.attributes.get(attribute)
-        for listener in list(_listeners):
-            try:
-                listener(device, attribute, old_value, new_value)
-            except Exception:
-                _log.exception("mqtt: listener failed for %s.%s", device.name, attribute)
+        _fire(_listeners, msg.topic, device, attribute, old.attributes.get(attribute), new_value)
+
+
+def _receive_button_event(msg: mqtt.MQTTMessage) -> None:
+    try:
+        doc = json.loads(msg.payload)
+        event = int(msg.topic.split("/")[3]), int(doc["button"]), doc["event_type"]
+    except ValueError, KeyError, TypeError:
+        _log.exception("mqtt: bad button event on %s", msg.topic)
+        return
+    _fire(_button_listeners, msg.topic, *event)
+
+
+def _fire(listeners: Sequence[Callable[..., None]], topic: str, *args: Any) -> None:
+    """Call each listener, isolating failures so one bad consumer can't starve the
+    rest or kill the mqtt thread."""
+    for listener in list(listeners):
+        try:
+            listener(*args)
+        except Exception:
+            _log.exception("mqtt: listener failed for %s", topic)
