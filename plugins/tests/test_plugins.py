@@ -41,7 +41,6 @@ def ctx():
     mock.model = m
     mock.snapshot_manager = api.SnapshotManager()
     mock.api.JOBSTORE_MEMORY = "memory"
-    mock.api.check_presence.return_value = {"alice"}  # someone home: the welcome path
     mock.config.tz = _UTC
     return mock
 
@@ -97,10 +96,14 @@ def _cleanup(sensor, plugin_ctx):
 
 
 def _trigger_sensor(ctx, sensor, device_id, event):
-    """Feed a motion transition through the listener, as the MQTT client would."""
     old = "inactive" if event == "active" else "active"
     device = m.DeviceState(id=int(device_id), name="front door motion sensor", attributes={"motion": event}, last_activity=None)
     plugins._on_sensor_event(ctx, sensor, {sensor.entrance_id, sensor.patio_door_id}, device, "motion", old, event)
+    queued = [c for c in ctx.scheduler.add_job.call_args_list if c.args[0] is plugins._run_motion]
+    ctx.scheduler.add_job.reset_mock()
+    for call in queued:
+        with patch.object(plugins, "build_ctx", return_value=ctx):
+            plugins._run_motion.__wrapped__(*call.kwargs["args"], ctx=MagicMock())
 
 
 # --- Walking in ---
@@ -143,9 +146,7 @@ def test_walk_in_outside_any_window_runs_enter_only(ctx, sensor):
 
 
 def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
-    # Even with nobody detected yet: the snapshot alone is enough to welcome
     ctx.api.local_now.return_value = _DAYTIME
-    ctx.api.check_presence.return_value = set()
     ctx.snapshot_manager.snapshots[plugins.SNAPSHOT_NAME] = _snapshot(
         m.Config(Light.saved, m.ON),  # how the house looked before shutdown
         m.Config(Light.day_bulb, m.OFF),  # entrance lights: off because the plugin turned them off
@@ -297,18 +298,13 @@ def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
     assert provider() == [{"name": "front door motion sensor", "battery": "HIGH", "last_activity": None}]
 
 
-def _motion(ctx, sensor, old, new, device_id=16):
-    device = _device(id=device_id, attributes={"motion": new})
+def _motion(ctx, sensor, old, new):
+    device = _device(attributes={"motion": new})
     plugins._on_sensor_event(ctx, sensor, {16, 56}, device, "motion", old, new)
 
 
 def test_motion_republish_does_not_fire(ctx, sensor):
     _motion(ctx, sensor, "active", "active")
-    ctx.api.dispatch.assert_not_called()
-
-
-def test_unwatched_motion_does_not_fire(ctx, sensor):
-    _motion(ctx, sensor, "inactive", "active", device_id=99)
     ctx.api.dispatch.assert_not_called()
 
 

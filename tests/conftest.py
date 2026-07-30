@@ -27,18 +27,14 @@ def _core_registry(monkeypatch):
     class Chromecast(Enum):
         x = 1
 
-    class TV(Enum):
-        t = 1
-
     # Register core dispatch into a fresh builder, then build the registry from the test
     # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.
     builder = declarations.Declarations()
     api.declare_core(builder)
     monkeypatch.setattr(orc, "Light", Light, raising=False)
     monkeypatch.setattr(orc, "Chromecast", Chromecast, raising=False)
-    monkeypatch.setattr(orc, "TV", TV, raising=False)
-    monkeypatch.setattr(orc, "device_enums", [Light, Chromecast, TV], raising=False)
-    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast, "TV": TV}))
+    monkeypatch.setattr(orc, "device_enums", [Light, Chromecast], raising=False)
+    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast}))
     yield
 
 

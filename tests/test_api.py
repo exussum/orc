@@ -274,10 +274,7 @@ class TestGetSchedule:
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
 class TestPresence:
-    @pytest.fixture(autouse=True)
-    def _setup(self):
-        self.target = api.SnapshotManager()
-        self.ctx = type("Ctx", (), {"snapshot_manager": self.target})()
+    ctx = object()  # run_iot_job never reads it; requires_ctx only rejects None
 
     @staticmethod
     def _routine(name, trigger):

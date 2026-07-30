@@ -16,10 +16,6 @@ class Chromecast(Enum):
     x = 1
 
 
-class LGTV(Enum):
-    t = 1
-
-
 def _routines_md(rows):
     header = "| ID | Name | Expression | State | Trigger |\n|----|------|------------|-------|---------|\n"
     return "##### Routines\n\n" + header + "".join(rows) + "\n---\n"
