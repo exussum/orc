@@ -68,6 +68,11 @@
     }
 }
 
+@utility orc-btn-sm {
+    @apply py-1 px-2;
+    height: 28px;
+}
+
 @utility orc-btn-absent {
     --orc-btn-color: var(--color-orc-secondary);
     --orc-btn-color-hover: var(--color-orc-secondary-hover);
