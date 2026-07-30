@@ -30,6 +30,16 @@ _devices: LockedDict[int, m.DeviceState] = LockedDict()
 _hub_id: str | None = None  # written only by the mqtt thread
 _client: mqtt.Client | None = None  # the standing client, retained for publishing commands
 
+# Command round-trip measurement: publish_light stamps the command topic at send, and
+# the broker echoing our own publish back on the hubitat/# subscription pops it. Keyed
+# by topic, so the size is bounded by distinct (device, command) pairs; an entry whose
+# echo never arrives (broker down at publish) is overwritten by the topic's next send.
+# Round trips fold into a per-topic exponential moving average, the same smoothing as
+# orc_durations but in memory only.
+_ALPHA = 0.3
+_command_sent: LockedDict[str, float] = LockedDict()  # command topic -> monotonic send time
+_command_latencies: LockedDict[str, tuple[int, float]] = LockedDict()  # command topic -> (samples, average ms)
+
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document that represents something happening — battery levels,
 # motion active/inactive, contact open/close, switch state, all attributes alike.
@@ -169,7 +179,14 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
         command, payload = (m.ON if on else m.OFF), None
     if _client is None or _hub_id is None:
         raise RuntimeError(f"mqtt client not started or hub not yet seen; cannot command {light.name}")
-    _client.publish(f"hubitat/{_hub_id}/devices/{light.value}/commands/{command}", payload)
+    topic = f"hubitat/{_hub_id}/devices/{light.value}/commands/{command}"
+    _command_sent[topic] = time.monotonic()
+    _client.publish(topic, payload)
+
+
+def command_latencies() -> dict[str, tuple[int, float]]:
+    """Command round trips as command topic -> (samples, average milliseconds)."""
+    return _command_latencies.copy()
 
 
 def _mqtt_host() -> str | None:
@@ -221,7 +238,7 @@ def _wait_settled(count: Callable[[], int], timeout: float) -> bool:
 def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
     """Route a device publish by the segment after the device id: none for the
     per-device JSON document, ``button`` for a dedicated button event, ``commands``
-    for our own command echoes (ignored)."""
+    for our own command echoes (round-trip latency)."""
     global _hub_id
     parts = msg.topic.split("/")
     if len(parts) < 4 or parts[2] != "devices":
@@ -232,6 +249,8 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
         _receive_document(msg)
     elif kind == "button" and msg.payload:  # the empty clearing publish follows each event
         _receive_button_event(msg)
+    elif kind == "commands":
+        _receive_command_echo(msg)
 
 
 def _receive_document(msg: mqtt.MQTTMessage) -> None:
@@ -246,6 +265,16 @@ def _receive_document(msg: mqtt.MQTTMessage) -> None:
         return
     for attribute, new_value in device.attributes.items():
         _fire(_listeners, msg.topic, device, attribute, old.attributes.get(attribute), new_value)
+
+
+def _receive_command_echo(msg: mqtt.MQTTMessage) -> None:
+    """Pop the send stamp and fold the broker round trip into the topic's average.
+    Echoes with no stamp — another client's command, or a stamp already consumed —
+    are ignored."""
+    sent = _command_sent.pop(msg.topic)
+    if sent is not None:
+        ms = (time.monotonic() - sent) * 1000
+        _command_latencies.update(msg.topic, lambda cur: (1, ms) if cur is None else (cur[0] + 1, _ALPHA * ms + (1 - _ALPHA) * cur[1]))
 
 
 def _receive_button_event(msg: mqtt.MQTTMessage) -> None:

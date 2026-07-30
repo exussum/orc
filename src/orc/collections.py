@@ -27,6 +27,10 @@ class LockedDict[K, V]:
         with self._lock:
             return self._data.get(key, default)
 
+    def pop(self, key: K, default: V | None = None) -> V | None:
+        with self._lock:
+            return self._data.pop(key, default)
+
     def get_or_set(self, key: K, factory: Callable[[], V]) -> V:
         with self._lock:
             if key in self._data:
