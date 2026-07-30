@@ -145,8 +145,7 @@ def rebuild_jobs() -> tuple[dict[str, Any], int]:
 
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> tuple[dict[str, Any], int]:
-    hub_origin = request.remote_addr == config.hubitat_ip
-    if not api.run_action(app.orc, id, device=request.args.get("device"), hub_origin=hub_origin):
+    if not api.run_action(app.orc, id, device=request.args.get("device")):
         return {"error": "Unknown routine"}, 404
     return {"version": VersionManager.version}, 200
 
