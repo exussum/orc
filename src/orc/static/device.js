@@ -111,3 +111,32 @@ document.querySelectorAll('input[data-ac-ctrl]').forEach(slider => {
     const display = document.querySelector(`[data-ac-temp="${slider.dataset.acCtrl}"]`);
     if (display) slider.addEventListener('input', () => display.textContent = slider.value);
 });
+
+document.querySelectorAll('[data-device-toggle]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const on = btn.dataset.on === '1';
+        await send(`/api/device/${btn.dataset.deviceToggle}?state=${on ? 'off' : 'on'}`, btn);
+        btn.dataset.on = on ? '' : '1';
+        btn.querySelector('use').setAttribute('href', `/static/icons.svg#${btn.dataset.icon}${on ? '-outline' : ''}`);
+    });
+});
+
+const sliderTip = document.createElement('div');
+sliderTip.className = 'fixed z-50 -translate-x-1/2 -translate-y-full px-1.5 py-0.5 text-xs rounded bg-black/80 text-white pointer-events-none hidden';
+document.body.appendChild(sliderTip);
+
+function showSliderTip(slider) {
+    const rect = slider.getBoundingClientRect();
+    const min = +slider.min || 0, max = +slider.max || 100;
+    const pct = (slider.value - min) / (max - min);
+    const thumb = 16;
+    sliderTip.textContent = slider.value;
+    sliderTip.style.left = `${rect.left + thumb / 2 + pct * (rect.width - thumb)}px`;
+    sliderTip.style.top = `${rect.top - 6}px`;
+    sliderTip.classList.remove('hidden');
+}
+
+document.querySelectorAll('input[type="range"]').forEach(slider => {
+    slider.addEventListener('input', () => showSliderTip(slider));
+    ['change', 'pointerup', 'blur'].forEach(ev => slider.addEventListener(ev, () => sliderTip.classList.add('hidden')));
+});
