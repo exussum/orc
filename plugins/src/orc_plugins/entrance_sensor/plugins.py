@@ -41,25 +41,48 @@ def _on_sensor_event(
         level = ctx.model.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
             ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Low battery on {device.name} ({level.value})")
-    elif attribute == "motion" and old != new and device.id == sensor.entrance_id:
-        if new == sensor.active_event:
-            if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
-                ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
-            restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
-            timed_name, timed_rows = _timed_rows(ctx, sensor)
-            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
-            ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
-        elif new == sensor.inactive_event:
-            ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
-            ctx.scheduler.add_job(
-                _run_trigger_sensor_off,
-                DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
-                name="Trigger Sensor",
-                id=JOB_ID,
-                replace_existing=True,
-                jobstore=ctx.api.JOBSTORE_MEMORY,
-                args=(sensor,),
-            )
+    elif _entrance_motion_changed(sensor, device, attribute, old, new):
+        # The listener runs on the mqtt network thread, where a publish is only
+        # queued until the callback returns: dispatching here holds the light
+        # command behind the chromecast I/O the same dispatch triggers. Run on
+        # the scheduler's worker; None grace so a busy worker delays, never drops.
+        ctx.scheduler.add_job(
+            _run_motion,
+            DateTrigger(ctx.api.local_now(), timezone=ctx.config.tz),
+            name="Entrance Motion",
+            misfire_grace_time=None,
+            jobstore=ctx.api.JOBSTORE_MEMORY,
+            args=(sensor, new),
+        )
+
+
+def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, attribute: str, old: Any, new: Any) -> bool:
+    return attribute == "motion" and old != new and device.id == sensor.entrance_id and new in (sensor.active_event, sensor.inactive_event)
+
+
+@requires_ctx
+def _run_motion(sensor: SimpleNamespace, new: Any, *, ctx: m.AppContext) -> None:
+    plugin_ctx = build_ctx(ctx)
+    if new == sensor.active_event:
+        if plugin_ctx.scheduler.get_job(JOB_ID, jobstore=plugin_ctx.api.JOBSTORE_MEMORY):
+            plugin_ctx.scheduler.remove_job(JOB_ID, jobstore=plugin_ctx.api.JOBSTORE_MEMORY)
+        restore = _restorable(plugin_ctx, sensor, plugin_ctx.snapshot_manager.get(SNAPSHOT_NAME))
+        timed_name, timed_rows = _timed_rows(plugin_ctx, sensor)
+        plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
+        plugin_ctx.api.dispatch(
+            plugin_ctx.model.squish_configs(restore, _to_configs(plugin_ctx, [*sensor.rules.enter, *timed_rows])), force=True
+        )
+    elif new == sensor.inactive_event:
+        plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.inside, trigger=plugin_ctx.model.Trigger.SYSTEM))
+        plugin_ctx.scheduler.add_job(
+            _run_trigger_sensor_off,
+            DateTrigger(plugin_ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=plugin_ctx.config.tz),
+            name="Trigger Sensor",
+            id=JOB_ID,
+            replace_existing=True,
+            jobstore=plugin_ctx.api.JOBSTORE_MEMORY,
+            args=(sensor,),
+        )
 
 
 @requires_ctx
