@@ -115,12 +115,14 @@ def device() -> str:
 
     def make_device(d: Any) -> SimpleNamespace:
         level = _to_level(light_states.get(d.name))
+        capabilities = {c.name for c in d.capabilities}
         return SimpleNamespace(
             name=d.name.replace("_", " ").title(),
             id=d.name,
             type=type(d).__name__,
             icon=config.registry.devices[type(d).__name__].icon,
-            capabilities={c.name for c in d.capabilities},
+            capabilities=capabilities,
+            toggle=type(d).__name__ not in ("AC", "Chromecast") and "change_level" not in capabilities,
             level=level,
             on=level > 0,
             volume=sound_states.get(d.name, 0),
