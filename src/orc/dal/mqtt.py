@@ -19,6 +19,7 @@ import paho.mqtt.client as mqtt
 from orc import config
 from orc import model as m
 from orc.collections import LockedDict
+from orc.dal import sqlite
 from orc.decorators import requires_enabled
 
 _log = logging.getLogger(__name__)
@@ -34,11 +35,8 @@ _client: mqtt.Client | None = None  # the standing client, retained for publishi
 # the broker echoing our own publish back on the hubitat/# subscription pops it. Keyed
 # by topic, so the size is bounded by distinct (device, command) pairs; an entry whose
 # echo never arrives (broker down at publish) is overwritten by the topic's next send.
-# Round trips fold into a per-topic exponential moving average, the same smoothing as
-# orc_durations but in memory only.
-_ALPHA = 0.3
+# Round trips fold into orc_durations, keyed by command topic.
 _command_sent: LockedDict[str, float] = LockedDict()  # command topic -> monotonic send time
-_command_latencies: LockedDict[str, tuple[int, float]] = LockedDict()  # command topic -> (samples, average ms)
 
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document that represents something happening — battery levels,
@@ -184,11 +182,6 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
     _client.publish(topic, payload)
 
 
-def command_latencies() -> dict[str, tuple[int, float]]:
-    """Command round trips as command topic -> (samples, average milliseconds)."""
-    return _command_latencies.copy()
-
-
 def _mqtt_host() -> str | None:
     return os.getenv("ORC_MQTT_HOST") or urlsplit(config.hubitat_url or "").hostname
 
@@ -268,13 +261,12 @@ def _receive_document(msg: mqtt.MQTTMessage) -> None:
 
 
 def _receive_command_echo(msg: mqtt.MQTTMessage) -> None:
-    """Pop the send stamp and fold the broker round trip into the topic's average.
-    Echoes with no stamp — another client's command, or a stamp already consumed —
-    are ignored."""
+    """Pop the send stamp and fold the broker round trip into the topic's average in
+    orc_durations. Echoes with no stamp — another client's command, or a stamp already
+    consumed — are ignored."""
     sent = _command_sent.pop(msg.topic)
     if sent is not None:
-        ms = (time.monotonic() - sent) * 1000
-        _command_latencies.update(msg.topic, lambda cur: (1, ms) if cur is None else (cur[0] + 1, _ALPHA * ms + (1 - _ALPHA) * cur[1]))
+        sqlite.update_avg(msg.topic, time.monotonic() - sent)
 
 
 def _receive_button_event(msg: mqtt.MQTTMessage) -> None:
