@@ -134,12 +134,20 @@ class TestListeners:
         assert events == ["contact"]
         assert mqtt.snapshot()[0].attributes == {"contact": "open"}
 
-    def test_stale_document_updates_cache_without_events(self):
+    def test_replayed_document_updates_cache_without_events(self):
         events = []
         mqtt.add_listener(lambda d, a, old, new: events.append(a))
-        _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2020-01-01T00:00:00+0000")])
+        doc = _doc(id=56, name="balcony door", attributes={"contact": "open"})
+        _receive([doc, doc])  # first sighting, then a replay (reconnect flood, hub republish)
         assert events == []
         assert mqtt.snapshot()[0].attributes == {"contact": "open"}
+
+    def test_document_differing_only_in_last_activity_fires(self):
+        events = []
+        mqtt.add_listener(lambda d, a, old, new: events.append((a, old, new)))
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2026-07-29T00:00:00+0000")])
+        _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2026-07-29T00:00:05+0000")])
+        assert events == [("contact", "open", "open")]
 
 
 def _button_msg(event_type, device_id=10, button=1):
@@ -249,13 +257,13 @@ class TestFetchHubitatConfig:
         def disconnect(self):
             pass
 
-    def _fetch(self, monkeypatch, docs):
+    def _fetch(self, monkeypatch, docs, timeout=1.0):
         fake = self.FakeClient()
         fake.docs = docs
         monkeypatch.setenv("ORC_MQTT_HOST", "hub.test")
         monkeypatch.setattr(mqtt.mqtt, "Client", lambda *a, **k: fake)
         secrets = m.Secrets("", "", "", _raw={"MQTT_USER": "u", "MQTT_PASSWORD": "p"})
-        return mqtt.fetch_hubitat_config(secrets, timeout=1.0)
+        return mqtt.fetch_hubitat_config(secrets, timeout=timeout)
 
     def test_maps_name_to_id_and_infers_dimmable_from_level(self, monkeypatch):
         docs = [
@@ -268,6 +276,11 @@ class TestFetchHubitatConfig:
             "office floor lamp": (1, frozenset()),
         }
 
-    def test_missing_credentials_discovers_nothing(self, monkeypatch):
+    def test_missing_credentials_fails_boot(self, monkeypatch):
         monkeypatch.setenv("ORC_MQTT_HOST", "hub.test")
-        assert mqtt.fetch_hubitat_config(m.Secrets("", "", ""), timeout=0.1) == {}
+        with pytest.raises(RuntimeError, match="no device documents"):
+            mqtt.fetch_hubitat_config(m.Secrets("", "", ""), timeout=0.1)
+
+    def test_empty_flood_fails_boot(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="no device documents"):
+            self._fetch(monkeypatch, [], timeout=0.1)
