@@ -31,6 +31,7 @@ from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.mqtt import add_button_listener  # noqa: F401
 from orc.dal.mqtt import add_listener  # noqa: F401
+from orc.dal.mqtt import command_latencies  # noqa: F401
 from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
 from orc.dal.mqtt import snapshot as device_states  # noqa: F401
 from orc.dal.mqtt import start as start_mqtt  # noqa: F401
