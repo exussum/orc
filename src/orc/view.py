@@ -343,6 +343,11 @@ def durations() -> tuple[dict[str, Any], int]:
     return dict(api.fetch_durations()), 200
 
 
+@bp.route("/api/command_latencies")
+def command_latencies() -> tuple[dict[str, Any], int]:
+    return {topic: round(avg, 1) for topic, (_, avg) in api.command_latencies().items()}, 200
+
+
 def _to_level(state: object) -> int:
     if isinstance(state, int):
         return state
