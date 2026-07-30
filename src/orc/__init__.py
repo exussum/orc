@@ -1,9 +1,7 @@
 import os
-import socket
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from mistletoe import Document
@@ -25,22 +23,11 @@ if TYPE_CHECKING:
 device_enums: "list[type[m.DeviceEnum]]" = []
 
 
-def _resolve_ip(url: str | None) -> str | None:
-    host = urlsplit(url or "").hostname
-    if not host:
-        return None
-    try:
-        return socket.gethostbyname(host)
-    except socket.gaierror:
-        return None
-
-
 class Config:
     def __init__(self) -> None:
         self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
         self.jobs_db = os.getenv("ORC_DB", "sqlite:////tmp/jobs.sqlite")
         self.hubitat_url = os.getenv("ORC_HUBITAT_URL")
-        self.hubitat_ip = _resolve_ip(self.hubitat_url)
         self.internal_url = os.getenv("ORC_INTERNAL_URL", "http://example.test")
         self.http_timeout = int(os.getenv("ORC_HTTP_TIMEOUT", 5))
         self.http_ical_timeout = int(os.getenv("ORC_HTTP_ICAL_TIMEOUT", 120))
