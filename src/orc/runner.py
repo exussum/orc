@@ -18,8 +18,8 @@ from orc.view import OrcFlask, VersionManager, bp
 
 
 def flask() -> None:
-    app, scheduler = _build_app()
-    _start_services(scheduler)
+    app = _build_app()
+    _start_services(app.orc)
     app.run(host="0.0.0.0", port=8000, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
@@ -34,24 +34,26 @@ def web() -> None:
 
         def load(self) -> OrcFlask:
             try:
-                app, scheduler = _build_app()
+                app = _build_app()
             except Exception:
                 traceback.print_exc()
                 sys.exit(4)
-            _start_services(scheduler)
+            _start_services(app.orc)
             return app
 
     GunicornApp().run()
 
 
-def _start_services(scheduler: BackgroundScheduler) -> None:
+def _start_services(ctx: m.AppContext) -> None:
+    # Wire before the client connects so no event can arrive unrouted.
+    api.wire_buttons(ctx)
     api.start_mqtt()
-    scheduler.resume()
+    ctx.scheduler.resume()
     api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
-def _build_app() -> tuple[OrcFlask, BackgroundScheduler]:
+def _build_app() -> OrcFlask:
     secrets = api.fetch_secrets()
     config.config.load(secrets, api.fetch_hubitat_config(secrets))
     api.init_db()
@@ -59,7 +61,7 @@ def _build_app() -> tuple[OrcFlask, BackgroundScheduler]:
     ctx = _build_scheduler()
 
     _run_setup(ctx)
-    return _build_flask(ctx), ctx.scheduler
+    return _build_flask(ctx)
 
 
 def _build_scheduler() -> m.AppContext:

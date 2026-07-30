@@ -1,10 +1,11 @@
 ##### Devices
 
-| Type       | Name         | Room    | Host             |
-|------------|--------------|---------|------------------|
-| Light      | BEDROOM_LAMP | Bedroom | bedroom lamp     |
-|            | LIVING_ROOM  |         | living room desk |
-| Chromecast | LIVING_ROOM  | Living  | Living room mini |
+| Type       | Name               | Room    | Host             |
+|------------|--------------------|---------|------------------|
+| Light      | BEDROOM_LAMP       | Bedroom | bedroom lamp     |
+|            | LIVING_ROOM        |         | living room desk |
+| Chromecast | LIVING_ROOM        | Living  | Living room mini |
+| Button     | LIVING_ROOM_REMOTE | Living  | scene            |
 
 ---
 
@@ -55,6 +56,15 @@
 | Dog            | Chromecast | stop  | delay=7     |
 | All Lights On  | Light      | 100   | reset=false |
 | All Lights Off | Light      | off   | reset=false |
+
+---
+
+##### Button Mapping
+
+| Device                    | Button | Event  | Action        |
+|---------------------------|--------|--------|---------------|
+| Button.LIVING_ROOM_REMOTE | 1      | pushed | All Lights On |
+| Button.LIVING_ROOM_REMOTE | 1      | held   | Silence       |
 
 ---
 

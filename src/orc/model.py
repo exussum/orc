@@ -325,6 +325,23 @@ def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:
     }
 
 
+_BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
+
+
+def build_buttons(doc: Any, section: str) -> dict[tuple[Any, int, str], str]:
+    """(device, button number, event) -> run id, from the optional Buttons table."""
+    try:
+        rows = doc_to_table(doc, section, 4)
+    except ValueError:
+        return {}
+    for device, button, event, action in rows:
+        if event not in _BUTTON_EVENTS:
+            raise ValueError(f"Invalid button event {event!r} in section '{section}': expected one of {sorted(_BUTTON_EVENTS)}")
+        if not (button and button.isdigit()):
+            raise ValueError(_ERR_PARAMS.format("button", button))
+    return {(column_to_value("device", device), int(button), event): action for device, button, event, action in rows}
+
+
 def build_audio_volumes(doc: Any, section: str, required: Iterable[str]) -> dict[Any, int]:
     rows = doc_to_table(doc, section, 2)
 
