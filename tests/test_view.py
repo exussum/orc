@@ -250,10 +250,10 @@ def test_set_theme_set_parses_dates(client, ctx, good_version):
 
 
 def test_durations_returns_config(client):
-    with patch("orc.api.fetch_durations", return_value=[("TV Lights", 3.0), ("Reset", 0.5)]):
+    with patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}):
         response = client.get("/api/durations")
     assert response.status_code == 200
-    assert response.get_json() == {"TV Lights": 3.0, "Reset": 0.5}
+    assert response.get_json() == {"TV Lights": {"avg": 3.0, "samples": 4}, "Reset": {"avg": 0.5, "samples": 2}}
 
 
 # --- /api/schedule/<id>/pause: toggles pause/resume ---

@@ -31,7 +31,6 @@ from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.mqtt import add_button_listener  # noqa: F401
 from orc.dal.mqtt import add_listener  # noqa: F401
-from orc.dal.mqtt import command_latencies  # noqa: F401
 from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
 from orc.dal.mqtt import snapshot as device_states  # noqa: F401
 from orc.dal.mqtt import start as start_mqtt  # noqa: F401
@@ -68,8 +67,13 @@ _EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
 _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
 
 
+def duration_stats() -> dict[str, tuple[int, float]]:
+    """name -> (samples, average seconds); job names and command topics alike."""
+    return {name: (samples, avg) for name, samples, avg in _fetch_durations()}
+
+
 def fetch_durations() -> list[tuple[str, int]]:
-    return [(name, math.ceil(avg)) for name, avg in _fetch_durations()]
+    return [(name, math.ceil(avg)) for name, (_, avg) in duration_stats().items()]
 
 
 @contextlib.contextmanager

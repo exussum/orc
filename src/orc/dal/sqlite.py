@@ -81,7 +81,7 @@ def update_avg(name: str, duration: float) -> None:
 
 def fetch_durations() -> list[Any]:
     with connection() as conn:
-        return conn.execute("SELECT name, avg FROM orc_durations").fetchall()
+        return conn.execute("SELECT name, samples, avg FROM orc_durations ORDER BY name").fetchall()
 
 
 @contextmanager
