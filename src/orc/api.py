@@ -249,10 +249,11 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
         return
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
     stream: dict[Any, tuple[str, str]] = {}
-    for w in what:
+
+    def one(w: m.DeviceEnum) -> None:
         if os.getenv("ORC_ENABLED") and w in config.virtual_devices:
             print("Skipping virtual device:" + w.name, file=sys.stderr)
-            continue
+            return
 
         device_type = config.registry.devices.get(type(w).__name__)
         if device_type is None or device_type.dispatch is None:
@@ -261,6 +262,9 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
             device_type.dispatch(w, rule, stream)
         except Exception as exc:
             log(local_now(), m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
+
+    with Pool(max_workers=max(1, len(what))) as ex:
+        list(ex.map(one, what))
 
 
 def tv_toggle(bl_device: m.DeviceEnum) -> None:
