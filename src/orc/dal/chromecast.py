@@ -90,6 +90,7 @@ def set_volume(device: m.DeviceEnum, lvl: int) -> None:
 
 @contextmanager
 def _cast(device: m.DeviceEnum, **kwargs: Any) -> Iterator[Any]:
+    kwargs.setdefault("timeout", 5)
     ip = socket.gethostbyname(device.value)
     # pychromecast accepts None for uuid/model/name at runtime; its stub declares stricter tuple types
     cast = pychromecast.get_chromecast_from_host((ip, 8009, None, None, None), **kwargs)  # type: ignore[arg-type]
