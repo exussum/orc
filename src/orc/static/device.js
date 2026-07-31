@@ -1,7 +1,10 @@
 async function send(url, el) {
     el.disabled = true;
-    try { await fetch(url); }
-    finally { el.disabled = false; }
+    try {
+        const response = await fetch(url, { headers: { "orc-version": version } });
+        if (response.status === 412) hardRefresh();
+        else if (response.ok) version = (await response.json()).version;
+    } finally { el.disabled = false; }
 }
 
 const acSelections = {};
