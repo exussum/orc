@@ -134,7 +134,7 @@ def device() -> str:
 
     rooms = sorted({d.room for d in all_devices}, key=lambda r: r or "")
     devices_grouped = {room: [make_device(d) for d in sorted((d for d in all_devices if d.room == room), key=sort_key)] for room in rooms}
-    return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped)
+    return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped, version=app.orc.version_manager.version)
 
 
 @bp.route("/api/rebuild_jobs")
@@ -240,9 +240,9 @@ def presence() -> tuple[str, int, dict[str, str]]:
 
 
 @bp.route("/api/device/<id>")
-def device_api(id: str) -> tuple[dict[str, Any], int]:
+@VersionManager.versioned
+def device_api(id: str) -> None:
     api.device_command(id, request.args.get("state"))
-    return {"version": VersionManager.version}, 200
 
 
 @bp.route("/api/device/ac/<id>")
