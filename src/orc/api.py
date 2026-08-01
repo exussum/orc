@@ -512,9 +512,13 @@ def next_iot_job(scheduler: BaseScheduler, present_names: set[str]) -> Job | Non
 def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
     rule = job.rule
     now = local_now()
-    if not (matched := matching_items(rule, now, present_names())):
-        unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
-        detail = ", ".join(unmet) if unmet else "no conditions met"
+    pnames = present_names()
+    if not (matched := matching_items(rule, now, pnames)):
+        if not pnames:
+            detail = "nobody home"
+        else:
+            unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
+            detail = ", ".join(unmet) if unmet else "no conditions met"
         log(now, m.LogSource.ROUTINE, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     elif weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
