@@ -107,10 +107,6 @@ def start() -> None:
     _client = _new_client(config.secrets, _on_connect, _on_message, 3.0)
 
 
-def hub_id() -> str | None:
-    return _hub_id
-
-
 def snapshot() -> list[m.DeviceState]:
     return sorted(_devices.values(), key=lambda d: d.id)
 

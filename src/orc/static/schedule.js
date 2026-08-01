@@ -7,16 +7,21 @@ async function set_theme() {
     const el = document.getElementById("orc-theme-submit");
     el.disabled = true;
     const container = startProgress(parseFloat(el.dataset.duration));
-    const response = await fetch("/api/schedule/set_theme", {
-        method: "POST",
-        headers: { "orc-version": version },
-        body: new URLSearchParams({ start: startEl.value, end: endEl.value, theme: selectEl.value }),
-    });
-    if (container) container.style.display = "none";
-    if (response.ok) location.reload(); else el.disabled = false;
+    try {
+        const response = await fetch("/api/schedule/set_theme", {
+            method: "POST",
+            headers: { "orc-version": version },
+            body: new URLSearchParams({ start: startEl.value, end: endEl.value, theme: selectEl.value }),
+        });
+        if (response.status === 412) hardRefresh();
+        else if (response.ok) location.reload();
+    } finally {
+        if (container) container.style.display = "none";
+        el.disabled = false;
+    }
 }
 
-async function run(el) {
+async function run_job(el) {
     await get(`/api/run/${el.dataset.id}`, el);
 }
 
@@ -28,7 +33,7 @@ async function pause(el) {
 
 function todayDate() {
     const now = new Date();
-    return now.getFullYear() + "-" + (now.getMonth() + 1) + "-" + now.getDate();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 function formUpdated() {
@@ -36,7 +41,7 @@ function formUpdated() {
 }
 
 document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => run(e.currentTarget));
+    el.addEventListener("click", (e) => run_job(e.currentTarget));
 });
 
 document.querySelectorAll(".orc-enable").forEach((el) => {

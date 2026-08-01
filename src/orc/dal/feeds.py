@@ -33,7 +33,14 @@ def _fetch_weather(now: datetime, lat: float, lon: float) -> frozenset[WeatherCo
     date_str = now.strftime("%Y-%m-%d")
     response = requests.get(
         "https://api.open-meteo.com/v1/forecast",
-        params={"latitude": str(lat), "longitude": str(lon), "hourly": "weather_code", "start_date": date_str, "end_date": date_str},
+        params={
+            "latitude": str(lat),
+            "longitude": str(lon),
+            "hourly": "weather_code",
+            "start_date": date_str,
+            "end_date": date_str,
+            "timezone": str(config.tz),
+        },
         timeout=config.http_timeout,
     )
     response.raise_for_status()

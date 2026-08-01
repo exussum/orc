@@ -137,14 +137,6 @@ def device() -> str:
     return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped, version=app.orc.version_manager.version)
 
 
-@bp.route("/api/rebuild_jobs")
-def rebuild_jobs() -> tuple[dict[str, Any], int]:
-    with api.record_duration("Rebuild Jobs"):
-        app.orc.scheduler.remove_all_jobs()
-        api.setup_scheduler(app.orc)
-    return {"version": VersionManager.version}, 200
-
-
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> tuple[dict[str, Any], int]:
     if not api.run_action(app.orc, id, device=request.args.get("device")):
