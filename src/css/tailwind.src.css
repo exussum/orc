@@ -191,12 +191,18 @@
     @apply fixed top-0 left-0 right-0 h-[3px] z-[1090];
 }
 
-/* dropup variant of <details> — menu pops above the summary */
+/* dropup menu: a popover anchored above its opener; popover="auto" light-dismisses */
 @utility orc-dropup {
-    @apply relative;
-    & > .orc-dropdown-menu {
-        @apply absolute bottom-full left-0 min-w-40 mb-1 py-1 rounded bg-orc-bg border border-orc-border z-[1000];
-    }
+    anchor-name: --orc-dropup;
+}
+
+@utility orc-dropdown-menu {
+    @apply min-w-40 px-0 py-1 rounded bg-orc-bg border border-orc-border;
+    position: fixed;
+    position-anchor: --orc-dropup;
+    position-area: top span-right;
+    inset: auto;
+    margin: 0 0 4px 0;
 }
 
 @utility orc-switch {
