@@ -21,10 +21,6 @@ async function set_theme() {
     }
 }
 
-async function run_job(el) {
-    await get(`/api/run/${el.dataset.id}`, el);
-}
-
 async function pause(el) {
     await get(`/api/schedule/${el.dataset.id}/pause`, el, () => {
         el.checked = !el.checked;
@@ -41,7 +37,7 @@ function formUpdated() {
 }
 
 document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => run_job(e.currentTarget));
+    el.addEventListener("click", (e) => runAction(e.currentTarget));
 });
 
 document.querySelectorAll(".orc-enable").forEach((el) => {
