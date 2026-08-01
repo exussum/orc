@@ -146,7 +146,7 @@ def _timed_rows(ctx: PluginCtx, sensor: SimpleNamespace) -> tuple[str, Sequence[
 
     return next(
         ((name, rows) for (name, rows) in vars(sensor.timed).items() if rows and in_window(rows[0])),
-        ("(non window found)", ()),
+        ("(no window found)", ()),
     )
 
 
