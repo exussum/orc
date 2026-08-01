@@ -1,7 +1,7 @@
 document.querySelectorAll(".orc-runner").forEach((el) => {
     el.addEventListener("click", (e) => {
         e.currentTarget.closest(".orc-dropup")?.removeAttribute("open");
-        run_with_confirm(e.currentTarget);
+        runAction(e.currentTarget);
     });
 });
 
