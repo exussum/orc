@@ -46,7 +46,8 @@ def fetch_secrets() -> m.Secrets:
 
     jwt = auth["access_token"]
     org_key = base64.b64decode(json.loads(_decrypt_enc_string(auth["encrypted_payload"], derived_key))["encryptionKey"])
-    jwt_payload = json.loads(base64.b64decode(jwt.split(".")[1] + "=="))
+    payload_b64 = jwt.split(".")[1]
+    jwt_payload = json.loads(base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)))
     org_id = jwt_payload["organization"]
 
     # List secret IDs then fetch values
