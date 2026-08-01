@@ -37,6 +37,13 @@ async function notifyPairing(durationSec) {
 }
 
 async function get(url, el, onFailure = () => {}) {
+    if (new Date().getHours() < 9) {
+        const what = el.dataset.id || el.dataset.deviceToggle || el.dataset.deviceInput || "this device";
+        if (!confirm(`It's after hours.  Go ahead with: ${what}?`)) {
+            onFailure();
+            return false;
+        }
+    }
     el.disabled = true;
     const container = startProgress(parseFloat(el.dataset.duration || "0"));
     let response = null;
@@ -85,19 +92,12 @@ async function checkVersion() {
     }
 }
 
-async function run(el) {
-    await get(`/api/${el.dataset.type}/${el.dataset.id}?state=${el.dataset.state}`, el);
-}
-
-async function run_with_confirm(el) {
-    if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${el.dataset.id}?`)) return;
-    await run(el);
-}
-
-async function run_config(el) {
-    if (new Date().getHours() < 9 && !confirm(`It's after hours.  Go ahead with: ${el.dataset.id}?`)) return;
-    const q = el.dataset.device ? `?device=${encodeURIComponent(el.dataset.device)}` : "";
-    await get(`/api/run/${el.dataset.id}${q}`, el);
+async function runAction(el) {
+    const params = new URLSearchParams();
+    if (el.dataset.state) params.set("state", el.dataset.state);
+    if (el.dataset.device) params.set("device", el.dataset.device);
+    const query = params.size ? `?${params}` : "";
+    await get(`/api/${el.dataset.type || "run"}/${el.dataset.id}${query}`, el);
 }
 
 document.addEventListener("click", (e) => {
