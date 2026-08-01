@@ -71,9 +71,7 @@ async function get(url, el, onFailure = () => {}) {
 
 async function checkVersion() {
     const spinner = document.getElementById("orc-version-spinner");
-    const banner = document.getElementById("orc-version-error");
     spinner.style.display = "block";
-    banner.style.display = "none";
     try {
         const response = await fetch("/api/version", {
             signal: AbortSignal.timeout(2000),
@@ -86,7 +84,7 @@ async function checkVersion() {
         const { version: serverVersion } = await response.json();
         if (serverVersion !== version) location.reload();
     } catch {
-        banner.style.display = "block";
+        // unreachable server: the per-action version check catches stale pages later
     } finally {
         spinner.style.display = "none";
     }
