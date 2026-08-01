@@ -70,10 +70,10 @@
 
 ##### Plugins
 
-| Name             | Plugin                                  | Parameters     |
-|------------------|-----------------------------------------|----------------|
-| Pair LG TV       | orc_plugins.lgtv.plugins.pair_tv        | section=device |
-| Test Leak Sensor | orc_plugins.yolink.plugins.test_sensor  | section=device |
+| Name             | Plugin                                 | Parameters     |
+|------------------|----------------------------------------|----------------|
+| Pair LG TV       | orc_plugins.lgtv.plugins.pair_tv       | section=device |
+| Test Leak Sensor | orc_plugins.yolink.plugins.test_sensor | section=device |
 
 ---
 
@@ -91,11 +91,3 @@
 |-------|--------|
 | INFO  | 4      |
 | FATAL | 10     |
-
----
-
-### Durations
-
-|         |   |
-|---------|---|
-| Silence | 0 |
