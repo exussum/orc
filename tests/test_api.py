@@ -332,6 +332,21 @@ class TestPresence:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatch.assert_not_called()
 
+    def test_run_iot_job_skip_log_blames_absence_not_weather(self):
+        rule = self._routine("sunny-r", "SUNNY")
+        with patch.object(api, "dispatch") as dispatch, patch.object(api, "log") as log:
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatch.assert_not_called()
+        assert "nobody home" in log.call_args[0][2]
+
+    def test_run_iot_job_skip_log_lists_weather_when_someone_home(self):
+        api.mark_present(["Alice"], when=api.local_now())
+        rule = self._routine("sunny-r", "SUNNY")
+        with patch.object(api, "dispatch") as dispatch, patch.object(api, "log") as log:
+            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatch.assert_not_called()
+        assert "SUNNY" in log.call_args[0][2]
+
     def test_replay_day_skips_routines_for_absent_people(self):
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
         partner = self._routine("partner-r", "Alice")
