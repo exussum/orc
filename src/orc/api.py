@@ -291,14 +291,11 @@ def device_command(id: str, state: str | None) -> None:
     # knowing them. state is an int level (brightness/volume) or an ON/OFF/STOP string.
     parsed: Any = int(state) if state and state.isdigit() else state
     for device_type in config.registry.devices.values():
-        if device_type.dispatch is None:
-            continue
-        try:
+        if device_type.dispatch is not None and device_type.handles(id):
             member = device_type.cls[id]
-        except KeyError:
-            continue
-        device_type.dispatch(member, m.Config(member, parsed), {})
-        return
+            device_type.dispatch(member, m.Config(member, parsed), {})
+            return
+    raise Exception(f"Unknown device: {id}")
 
 
 # --- State manager ---
