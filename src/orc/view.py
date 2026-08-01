@@ -308,6 +308,7 @@ def schedule() -> tuple[str, int, dict[str, str]]:
             version=app.orc.version_manager.version,
             jobs_grouped=jobs_grouped,
             theme=theme,
+            themes=sorted(config.themes),
             durations=dict(api.fetch_durations()),
             absent_by_job=absent_by_job,
             weather_by_job=weather_by_job,
@@ -322,6 +323,8 @@ def schedule() -> tuple[str, int, dict[str, str]]:
 @VersionManager.versioned
 def set_theme() -> None:
     name = request.form["theme"]
+    if name and name not in config.themes:
+        raise Exception(f"Unknown theme: {name}")
     start = date.fromisoformat(request.form["start"]) if name else None
     end = date.fromisoformat(request.form["end"]) if name else None
     api.apply_theme_change(app.orc, name, start, end)
