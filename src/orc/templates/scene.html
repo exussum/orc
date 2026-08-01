@@ -38,17 +38,16 @@
     <div class="orc-card mb-2">
         <div class="orc-routine-buttons overflow-visible p-4">
             <div>
-                <details class="orc-dropup">
-                    <summary class="orc-btn cursor-pointer list-none select-none">
-                        Routines
-                        <svg class="w-4 h-4 ml-1"><use href="/static/icons.svg#chevron-down"/></svg>
-                    </summary>
-                    <div class="orc-dropdown-menu">
-                        {% for id in schedule_routines|sort %}
-                            <a class="orc-dropdown-item orc-runner" href="#" data-type="run" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">{{ id }}</a>
-                        {% endfor %}
-                    </div>
-                </details>
+                <button class="orc-btn orc-dropup" popovertarget="orc-routines-menu">
+                    Routines
+                    <svg class="w-4 h-4 ml-1"><use href="/static/icons.svg#chevron-down"/></svg>
+                </button>
+                <div id="orc-routines-menu" popover class="orc-dropdown-menu">
+                    {% for id in schedule_routines|sort %}
+                        <button class="orc-dropdown-item orc-runner w-full text-left" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}"
+                                popovertarget="orc-routines-menu" popovertargetaction="hide">{{ id }}</button>
+                    {% endfor %}
+                </div>
             </div>
             {% if next_routine %}
                 <div class="orc-button-next">

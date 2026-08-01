@@ -1,8 +1,5 @@
 document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => {
-        e.currentTarget.closest(".orc-dropup")?.removeAttribute("open");
-        runAction(e.currentTarget);
-    });
+    el.addEventListener("click", (e) => runAction(e.currentTarget));
 });
 
 document.querySelector(".orc-pause")?.addEventListener("click", (e) => {
