@@ -11,13 +11,13 @@ calendar events, and a markdown config file.
 - Pulls calendar events from an iCal feed and schedules audio alerts /
   routines around them.
 - Skips market-holiday rules via a configurable holidays endpoint.
-- Controls Hubitat lights (REST), Chromecast speakers (pychromecast + yt-dlp
-  for YouTube audio), an LG webOS TV (aiowebostv + BroadLink IR), and an AC
-  unit (BroadLink IR).
+- Controls Hubitat lights (MQTT/REST), Chromecast speakers (pychromecast +
+  yt-dlp for YouTube audio), and an AC unit (BroadLink IR).
 - Supports weather-condition triggers (e.g. `SUNNY`) via the open-meteo API;
   the schedule UI marks weather-triggered jobs with a ☀ badge.
-- Monitors YoLink leak sensors; plays a fatal-level audio alert on water
-  detection.
+- Via the optional `orc_plugins` package (`plugins/`): controls an LG webOS
+  TV (aiowebostv + BroadLink IR), monitors YoLink leak sensors (fatal-level
+  audio alert on water detection), and runs the entrance-sensor automation.
 - Tracks network presence of configured devices/people and gates
   person-specific routine steps on who is currently home.
 - Serves a small Flask UI for manual control, schedule inspection, theme
@@ -32,7 +32,7 @@ whole UI works against the sample config.
 
 You'll need:
 
-- **Python 3.11+** (3.13 is what CI and production use)
+- **Python 3.14+** (what CI and production use)
 - **git LFS** — the TTS voice model, ephemeris, and compiled CSS are LFS
   objects; without it you'll get pointer files and confusing failures
 - **PortAudio**, to build the `pyaudio` dependency:
@@ -47,22 +47,23 @@ Then:
 git lfs install
 git clone https://github.com/exussum/orc.git && cd orc
 
-python3 -m venv ~/.venv-orc            # this exact path matters: the helper
-source ~/.venv-orc/bin/activate        # scripts and pre-commit hooks use it
+python3 -m venv ~/.venv-orc            # this exact path matters:
+source ~/.venv-orc/bin/activate        # scripts/dev.sh sources it
 pip install ./data '.[test]'
 
-sh scripts/run-tests.sh                # or: pytest && pytest entrance_sensor
+pytest && pytest plugins
 
-PYTHONPATH=src:data/src python -c 'from orc.runner import flask; flask()'
+PYTHONPATH=src:data/src:plugins/src python -c 'from orc.runner import flask; flask()'
 ```
 
 Open <http://localhost:8000> — the scene, device, schedule, presence, and
 log views are all live, driven by the sample config in `src/config.md`.
-`PYTHONPATH=src:data/src` makes the dev server run your working tree rather
-than the copy installed in the venv.
+`PYTHONPATH=src:data/src:plugins/src` makes the dev server run your working
+tree rather than the copy installed in the venv (the sample config registers
+plugins from `plugins/src`, so it must be on the path).
 
-Before your first commit, install the git hooks (black, isort, semgrep, and
-the test suite run on every commit):
+Before your first commit, install the git hooks (black, isort, flake8,
+opengrep, mypy, both test suites, and more run on every commit):
 
 ```sh
 pre-commit install
@@ -82,11 +83,11 @@ of `config.md` are never touched:
 
 Steps:
 
-1. **Install** on the target machine (add `./entrance_sensor` if you want
-   that plugin):
+1. **Install** on the target machine (add `./plugins` if you want the
+   bundled plugins — LG TV, YoLink, entrance sensor):
 
    ```sh
-   pip install ./data . ./entrance_sensor
+   pip install ./data . ./plugins
    ```
 
 2. **Create a config directory** (e.g. `/etc/orc`) and copy `src/config.md`
@@ -123,40 +124,41 @@ Two config surfaces:
 1. **Markdown config** at `ORC_CONFIG_DIR/config.md` (the in-repo sample is
    `src/config.md`). Defines devices, routines, themes, room configs, ad-hoc
    routines, plugins, and button highlights.
-2. **Environment variables** (read in `src/orc/__init__.py`):
+2. **Environment variables**:
 
-   | Var                     | Purpose                                                            | Default                          |
-   |-------------------------|--------------------------------------------------------------------|----------------------------------|
-   | `ORC_ENABLED`           | Opt-in: talk to real devices/secrets; unset = offline/dry-run      | unset                            |
-   | `ORC_HUBITAT_URL`       | Hubitat Maker API base URL                                         | unset                            |
-   | `ORC_CONFIG_DIR`        | Directory containing `config.md`                                   | `src`                            |
-   | `ORC_DB`                | SQLAlchemy URL for the APScheduler / orc state DB                  | `sqlite:////tmp/jobs.sqlite`     |
-   | `ORC_TZ`                | IANA timezone                                                      | `America/New_York`               |
-   | `ORC_LAT`               | Latitude for sunrise/sunset                                        | `40.7143`                        |
-   | `ORC_LONG`              | Longitude for sunrise/sunset                                       | `-74.0060`                       |
-   | `ORC_HTTP_TIMEOUT`      | Default outbound HTTP timeout (s)                                  | `5`                              |
-   | `ORC_HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                                     | `120`                            |
-   | `ORC_ROOT_DOMAIN`       | Suffix stripped from presence hostnames; allowlisted for streams   | `example.test`                   |
-   | `ORC_INTERNAL_URL`      | LAN-reachable base URL for static audio; its host is allowlisted   | `http://example.test`            |
-   | `ORC_AUDIO_DEVICE`      | Substring matching the audio output device for TTS/alerts          | `""`                             |
-   | `ORC_BROADLINK_CODES`   | Path to BroadLink IR codes JSON                                    | `/etc/orc/broadlink_codes.json`  |
-   | `BWS_ACCESS_TOKEN`      | URL whose body is the Bitwarden access token                       | required if `ORC_ENABLED`        |
+   | Var                     | Purpose                                                          | Default                         |
+   |-------------------------|------------------------------------------------------------------|---------------------------------|
+   | `ORC_ENABLED`           | Opt-in: talk to real devices/secrets; unset = offline/dry-run    | unset                           |
+   | `ORC_HUBITAT_URL`       | Hubitat Maker API base URL                                       | unset                           |
+   | `ORC_CONFIG_DIR`        | Directory containing `config.md`                                 | `src`                           |
+   | `ORC_DB`                | SQLAlchemy URL for the APScheduler / orc state DB                | `sqlite:////tmp/jobs.sqlite`    |
+   | `ORC_TZ`                | IANA timezone                                                    | `America/New_York`              |
+   | `ORC_LAT`               | Latitude for sunrise/sunset                                      | `40.7143`                       |
+   | `ORC_LONG`              | Longitude for sunrise/sunset                                     | `-74.0060`                      |
+   | `ORC_HTTP_TIMEOUT`      | Default outbound HTTP timeout (s)                                | `5`                             |
+   | `ORC_HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                                   | `120`                           |
+   | `ORC_ROOT_DOMAIN`       | Suffix stripped from presence hostnames; allowlisted for streams | `example.test`                  |
+   | `ORC_INTERNAL_URL`      | LAN-reachable base URL for static audio; its host is allowlisted | `http://example.test`           |
+   | `ORC_AUDIO_DEVICE`      | Substring matching the audio output device for TTS/alerts        | `""`                            |
+   | `ORC_BROADLINK_CODES`   | Path to BroadLink IR codes JSON                                  | `/etc/orc/broadlink_codes.json` |
+   | `BWS_ACCESS_TOKEN`      | URL whose body is the Bitwarden access token                     | required if `ORC_ENABLED`       |
 
    `BWS_ACCESS_TOKEN` is a URL (e.g. `data:` or `file://`), not the value
    itself — the body of the URL is read at startup.
 
 ## Secrets (Bitwarden)
 
-When `ORC_ENABLED` is set, five secrets are pulled from Bitwarden Secrets
-Manager by name:
+When `ORC_ENABLED` is set, secrets are pulled from Bitwarden Secrets
+Manager by name. The first three are required — startup fails without them;
+the YoLink pair is optional and only read by the yolink plugin:
 
-| Key                    | Used for                                            |
-|------------------------|-----------------------------------------------------|
-| `HUBITAT_ACCESS_TOKEN` | Hubitat Maker API access token (appended as query)  |
-| `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates        |
-| `ICS_URL`              | iCal feed URL for calendar-driven routines          |
-| `YOLINK_ID`            | Yolink API client ID                                |
-| `YOLINK_SECRET`        | Yolink API client secret                            |
+| Key                    | Used for                                           |
+|------------------------|----------------------------------------------------|
+| `HUBITAT_ACCESS_TOKEN` | Hubitat Maker API access token (appended as query) |
+| `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates       |
+| `ICS_URL`              | iCal feed URL for calendar-driven routines         |
+| `YOLINK_ID`            | Yolink API client ID (optional)                    |
+| `YOLINK_SECRET`        | Yolink API client secret (optional)                |
 
 ## Running
 
@@ -189,13 +191,16 @@ bounces the `orc` supervisor job.
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
 - `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), markdown → config parsing, routine/theme types
 - `src/orc/collections.py` — markdown table parsing (`doc_to_table`, `doc_to_sub_tables`, `LockedDict`)
-- `src/orc/dal/` — integrations split by target: `hubitat.py` (Hubitat
-  lights), `chromecast.py`, `tv.py` (LG webOS power control), `feeds.py` (iCal /
-  market holidays / open-meteo weather), `bws.py` (Bitwarden), `usb.py`
-  (pyaudio + piper TTS), `yolink.py`, `broadlink.py`, `lgtv.py`, `sqlite.py`,
-  `decorators.py` (`requires_enabled`, `retry_async`)
-- `src/orc/_decorators.py` — shared decorators and locks: `requires_ctx`, `plugin_config`, `synchronized`, `audio_lock`, `silence_fd`
-- `src/orc/plugins.py` — plugin functions (reboot, sensor handler, …)
+- `src/orc/dal/` — integrations split by target: `mqtt.py` (Hubitat MQTT
+  device cache), `hubitat.py` (Hubitat Maker API), `chromecast.py`,
+  `feeds.py` (iCal / market holidays / open-meteo weather), `bws.py`
+  (Bitwarden), `usb.py` (pyaudio + piper TTS), `broadlink.py` (IR),
+  `net.py` (presence scanning), `sqlite.py`
+- `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `requires_enabled`, `plugin_config`, `synchronized`, `audio_lock`, `silence_fd`
+- `src/orc/declarations.py` — per-config-load plugin declaration collection, built into the device/plugin `Registry`
+- `src/orc/plugins.py` — `PluginCtx` + built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
+- `src/orc/security.py` — `safe_eval` for config expressions, URL allowlisting, HTML sanitizing
+- `src/orc/_build.py` — build SHA/time stamped at release
 - `src/orc/locale.py` — log-message string constants
 - `src/orc/view.py` + `templates/` + `static/` — Flask UI (schedule, device, presence, log, config views)
 - `src/config.md` — sample device/routine/theme/plugin definitions

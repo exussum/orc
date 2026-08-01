@@ -7,7 +7,7 @@ requires = [
 [project]
 name = "orc_plugins"
 version = "0.0.1"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "orc==0.0.1",
 ]
