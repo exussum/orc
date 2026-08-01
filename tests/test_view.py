@@ -237,13 +237,25 @@ def test_set_theme_clear_passes_none_dates(client, ctx, good_version):
 
 
 def test_set_theme_set_parses_dates(client, ctx, good_version):
+    theme = next(iter(orc.config.themes))
     with patch.object(api, "apply_theme_change") as apply_change:
         client.post(
+            "/api/schedule/set_theme",
+            data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"},
+            headers=good_version,
+        )
+    apply_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10))
+
+
+def test_set_theme_rejects_unknown_theme(client, ctx, good_version):
+    with patch.object(api, "apply_theme_change") as apply_change:
+        response = client.post(
             "/api/schedule/set_theme",
             data={"theme": "vacation", "start": "2100-01-01", "end": "2100-01-10"},
             headers=good_version,
         )
-    apply_change.assert_called_once_with(ctx, "vacation", date(2100, 1, 1), date(2100, 1, 10))
+    assert response.status_code == 500
+    apply_change.assert_not_called()
 
 
 # --- /api/durations ---
