@@ -113,7 +113,7 @@
         const hooked = new Set([{% for button_id in registry.click_hooks %}{{ button_id | tojson }},{% endfor %}]);
         document.querySelectorAll(".orc-config-runner").forEach((el) => {
             if (hooked.has(el.dataset.id)) return;
-            el.addEventListener("click", (e) => run_config(e.currentTarget));
+            el.addEventListener("click", (e) => runAction(e.currentTarget));
         });
         {% for button_id, js in registry.click_hooks.items() %}
         document.querySelectorAll('.orc-config-runner[data-id="{{ button_id }}"]').forEach((btn) =>
