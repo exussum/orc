@@ -427,8 +427,7 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
         set_theme_override(name, start, end)
         log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
     after = calculate_theme(today)
-    ctx.scheduler.remove_all_jobs()
-    setup_scheduler(ctx)
+    rebuild_jobs(ctx)
     if before != after:
         replay_day(now)
 
@@ -526,6 +525,11 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
     else:
         log(now, m.LogSource.ROUTINE, rule.name)
     dispatch(replace(rule, items=matched))
+
+
+def rebuild_jobs(ctx: m.AppContext) -> None:
+    ctx.scheduler.remove_all_jobs()
+    setup_scheduler(ctx)
 
 
 def setup_scheduler(ctx: m.AppContext) -> None:
