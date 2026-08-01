@@ -97,8 +97,4 @@ def doc_to_table(doc: Any, section: str, columns: int) -> tuple[tuple[Any, ...],
         raise ValueError(f"Expected {columns} columns in section '{section}', but rows {bad_rows} have the wrong number")
 
     # mistletoe TableCell/TableRow children populated at runtime
-    return tuple(
-        tuple(c.children[0].content if c.children else None for c in e.children)  # type: ignore[index,union-attr]
-        + (None,) * (columns - len(e.children))  # type: ignore[arg-type]
-        for e in rows
-    )
+    return tuple(tuple(c.children[0].content if c.children else None for c in e.children) for e in rows)  # type: ignore[index,union-attr]
