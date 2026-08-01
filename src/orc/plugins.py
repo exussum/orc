@@ -6,24 +6,19 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
-from apscheduler.schedulers.base import BaseScheduler
-
 from orc import model as m
 from orc.decorators import plugin_config, requires_ctx  # noqa: F401
 
 if TYPE_CHECKING:
     from orc import Config as OrcConfig
-    from orc.api import SnapshotManager
 
 
 @dataclass
-class PluginCtx:
-    snapshot_manager: SnapshotManager
+class PluginCtx(m.AppContext):
     config: OrcConfig
     api: ModuleType
     model: ModuleType
     orc: ModuleType
-    scheduler: BaseScheduler
 
 
 def back_on_schedule(ctx: PluginCtx) -> None:
@@ -38,6 +33,8 @@ def build_ctx(orc_ctx: m.AppContext) -> PluginCtx:
     return PluginCtx(
         snapshot_manager=orc_ctx.snapshot_manager,
         scheduler=orc_ctx.scheduler,
+        sound_path=orc_ctx.sound_path,
+        version_manager=orc_ctx.version_manager,
         config=config,
         api=api,
         model=model,
@@ -58,8 +55,7 @@ def light_test(ctx: PluginCtx) -> None:
 
 
 def rebuild_jobs(ctx: PluginCtx) -> None:
-    ctx.scheduler.remove_all_jobs()
-    ctx.api.setup_scheduler(ctx)
+    ctx.api.rebuild_jobs(ctx)
 
 
 def reboot(ctx: PluginCtx) -> None:
