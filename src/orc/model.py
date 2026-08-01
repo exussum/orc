@@ -294,6 +294,9 @@ class DeviceType:
     reset_excluded: bool
     dispatch: Callable[..., None] | None
 
+    def handles(self, name: str) -> bool:
+        return name in self.cls.__members__
+
 
 @dataclass(frozen=True)
 class Registry:
