@@ -36,11 +36,6 @@ def clean_state(monkeypatch):
     monkeypatch.setattr(mqtt, "_button_listeners", [])
 
 
-@pytest.fixture
-def enabled(monkeypatch):
-    monkeypatch.setenv("ORC_ENABLED", "1")
-
-
 def _receive(docs):
     """Deliver device documents through _on_message as if the broker pushed them."""
     for doc in docs:
@@ -57,9 +52,9 @@ class TestOnMessage:
         assert device.last_activity == doc["lastActivity"]
 
     def test_hub_id_captured_from_topic(self):
-        assert mqtt.hub_id() is None
+        assert mqtt._hub_id is None
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
-        assert mqtt.hub_id() == HUB
+        assert mqtt._hub_id == HUB
 
     def test_non_device_topics_ignored(self):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/location", {"id": 1, "name": "home"}))
