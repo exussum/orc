@@ -312,34 +312,24 @@ def _authenticate() -> tuple[str, int]:
     return body["access_token"], int(body.get("expires_in", 7200))
 
 
-def _fetch_home_id(access_token: str) -> Any:
+def _api_post(access_token: str, body: dict[str, Any]) -> Any:
     response = requests.post(
         _API_URL,
-        json={"method": "Home.getGeneralInfo"},
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=config.config.http_timeout,
-    )
-    response.raise_for_status()
-    return response.json()["data"]["id"]
-
-
-def _fetch_device_tokens(access_token: str) -> dict[Any, Any]:
-    response = requests.post(
-        _API_URL,
-        json={"method": "Home.getDeviceList"},
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=config.config.http_timeout,
-    )
-    response.raise_for_status()
-    return {d["deviceId"]: d["token"] for d in response.json()["data"]["devices"]}
-
-
-def _fetch_leak_state(access_token: str, device_id: str, device_token: str) -> Any:
-    response = requests.post(
-        _API_URL,
-        json={"method": "LeakSensor.getState", "targetDevice": device_id, "token": device_token},
+        json=body,
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=config.config.http_timeout,
     )
     response.raise_for_status()
     return response.json()["data"]
+
+
+def _fetch_home_id(access_token: str) -> Any:
+    return _api_post(access_token, {"method": "Home.getGeneralInfo"})["id"]
+
+
+def _fetch_device_tokens(access_token: str) -> dict[Any, Any]:
+    return {d["deviceId"]: d["token"] for d in _api_post(access_token, {"method": "Home.getDeviceList"})["devices"]}
+
+
+def _fetch_leak_state(access_token: str, device_id: str, device_token: str) -> Any:
+    return _api_post(access_token, {"method": "LeakSensor.getState", "targetDevice": device_id, "token": device_token})
