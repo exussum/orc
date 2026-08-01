@@ -7,11 +7,6 @@ from orc.dal.chromecast import _strip_googlevideo_params
 from orc.decorators import requires_enabled
 
 
-@pytest.fixture
-def enabled(monkeypatch):
-    monkeypatch.setenv("ORC_ENABLED", "1")
-
-
 class TestStripGoogleVideoParams:
     def test_keeps_id_drops_other_params(self):
         url = "https://r1---sn-abc.googlevideo.com/videoplayback?id=abc123&sig=xxx&ip=1.2.3.4"

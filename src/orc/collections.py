@@ -11,14 +11,6 @@ class LockedDict[K, V]:
         self._lock = threading.Lock()
         self._data: dict[K, V] = dict(initial) if initial else {}
 
-    def __contains__(self, key: K) -> bool:
-        with self._lock:
-            return key in self._data
-
-    def __getitem__(self, key: K) -> V:
-        with self._lock:
-            return self._data[key]
-
     def __setitem__(self, key: K, value: V) -> None:
         with self._lock:
             self._data[key] = value
@@ -30,14 +22,6 @@ class LockedDict[K, V]:
     def pop(self, key: K, default: V | None = None) -> V | None:
         with self._lock:
             return self._data.pop(key, default)
-
-    def get_or_set(self, key: K, factory: Callable[[], V]) -> V:
-        with self._lock:
-            if key in self._data:
-                return self._data[key]
-            value = factory()
-            self._data[key] = value
-            return value
 
     def update(self, key: K, fn: Callable[[V | None], V | None]) -> V | None:
         with self._lock:

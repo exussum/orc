@@ -30,8 +30,8 @@
                             <div class="col-span-full text-sm font-medium">{{ device.name }}</div>
                             <div class="text-sm">Power</div>
                             <div class="grid grid-cols-2 gap-2">
-                                <button class="orc-btn" data-state="off" data-id="{{ device.id }}" data-ac-power="{{ device.id }}">Off</button>
-                                <button class="orc-btn" data-state="on" data-id="{{ device.id }}" data-ac-power="{{ device.id }}">On</button>
+                                <button class="orc-btn" data-state="off" data-ac-power="{{ device.id }}">Off</button>
+                                <button class="orc-btn" data-state="on" data-ac-power="{{ device.id }}">On</button>
                             </div>
                             <div class="text-sm">Temp</div>
                             <div class="flex gap-4 items-center">
@@ -57,11 +57,11 @@
                                 <button class="orc-runner orc-btn" data-state="stop" data-type="device" data-id="{{ device.id }}">
                                     <svg class="w-5 h-5"><use href="/static/icons.svg#stop"/></svg>
                                 </button>
-                                <input type="range" min="0" max="100" value="{{ device.volume }}" data-id="{{ device.id }}" data-param="volume" class="w-full" data-device-input="{{ device.id }}"/>
+                                <input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full" data-device-input="{{ device.id }}"/>
                             </div>
                         {% else %}
                             <div class="text-sm">{{ device.name }}</div>
-                            <div class="flex gap-4"><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span><input type="range" min="0" max="100" value="{{ device.level }}" data-id="{{ device.id }}" class="w-full" data-device-input="{{ device.id }}"/></div>
+                            <div class="flex gap-4"><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span><input type="range" min="0" max="100" value="{{ device.level }}" class="w-full" data-device-input="{{ device.id }}"/></div>
                         {% endif %}
                     {% endfor %}
                 </div>

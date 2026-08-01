@@ -38,6 +38,11 @@ def _core_registry(monkeypatch):
     yield
 
 
+@pytest.fixture
+def enabled(monkeypatch):
+    monkeypatch.setenv("ORC_ENABLED", "1")
+
+
 @pytest.fixture(autouse=True)
 def _orc_state_db(tmp_path, monkeypatch):
     from orc import config

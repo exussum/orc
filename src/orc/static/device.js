@@ -3,7 +3,11 @@ async function send(url, el) {
     try {
         const response = await fetch(url, { headers: { "orc-version": version } });
         if (response.status === 412) hardRefresh();
-        else if (response.ok) version = (await response.json()).version;
+        else if (response.ok) {
+            version = (await response.json()).version;
+            return true;
+        }
+        return false;
     } finally { el.disabled = false; }
 }
 
@@ -93,17 +97,8 @@ document.querySelectorAll('[data-ac-set]').forEach(el => {
 
 document.querySelectorAll("[data-ac-power][data-state='off']").forEach(el => setAcOff(el.dataset.acPower));
 
-function selectRunner(btn) {
-    if (!btn.classList.contains("orc-toggle")) return;
-    btn.parentElement.querySelectorAll(".orc-toggle").forEach((sib) => sib.classList.remove("orc-selected"));
-    btn.classList.add("orc-selected");
-}
-
 document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => {
-        selectRunner(e.currentTarget);
-        run(e.currentTarget);
-    });
+    el.addEventListener("click", (e) => run(e.currentTarget));
 });
 
 document.querySelectorAll('[data-device-input]').forEach(slider => {
@@ -118,7 +113,7 @@ document.querySelectorAll('input[data-ac-ctrl]').forEach(slider => {
 document.querySelectorAll('[data-device-toggle]').forEach(btn => {
     btn.addEventListener('click', async () => {
         const on = btn.dataset.on === '1';
-        await send(`/api/device/${btn.dataset.deviceToggle}?state=${on ? 'off' : 'on'}`, btn);
+        if (!await send(`/api/device/${btn.dataset.deviceToggle}?state=${on ? 'off' : 'on'}`, btn)) return;
         btn.dataset.on = on ? '' : '1';
         btn.querySelector('use').setAttribute('href', `/static/icons.svg#${btn.dataset.icon}${on ? '-outline' : ''}`);
     });
