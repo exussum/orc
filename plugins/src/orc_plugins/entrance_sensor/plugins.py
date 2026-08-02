@@ -40,7 +40,7 @@ def _on_sensor_event(
     if attribute == "battery":
         level = ctx.model.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
-            ctx.api.log(ctx.api.local_now(), ctx.model.LogSource.PLUGIN, f"Low battery on {device.name} ({level.value})")
+            ctx.api.log(ctx.model.LogSource.PLUGIN, f"Low battery on {device.name} ({level.value})")
     elif _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
@@ -68,7 +68,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, *, ctx: m.AppContext) -> None
             plugin_ctx.scheduler.remove_job(JOB_ID, jobstore=plugin_ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(plugin_ctx, sensor, plugin_ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(plugin_ctx, sensor)
-        plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
+        plugin_ctx.api.log(plugin_ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
         plugin_ctx.api.dispatch(
             plugin_ctx.model.squish_configs(restore, _to_configs(plugin_ctx, [*sensor.rules.enter, *timed_rows])), force=True
         )
@@ -106,7 +106,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
         plugin_ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(plugin_ctx, sensor.rules.shutdown), end)
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.absent))
         msg = sensor.log_shutdown
-    plugin_ctx.api.log(plugin_ctx.api.local_now(), plugin_ctx.model.LogSource.PLUGIN, msg)
+    plugin_ctx.api.log(plugin_ctx.model.LogSource.PLUGIN, msg)
 
 
 def battery_state(ctx: PluginCtx, sensor_ids: set[int]) -> list[dict[str, Any]]:
