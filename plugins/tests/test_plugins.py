@@ -185,7 +185,7 @@ def test_motion_reuses_the_latest_trigger_entry(ctx, sensor):
     ctx.api.log_entries.return_value = [entry]
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.log.assert_not_called()
-    assert [c.action for c in entry.children] == ["Applying Day rules"]
+    assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
 
 # --- Walking past, into the house ---

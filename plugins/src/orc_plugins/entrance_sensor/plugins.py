@@ -78,7 +78,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
             plugin_ctx.scheduler.remove_job(JOB_ID, jobstore=plugin_ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(plugin_ctx, sensor, plugin_ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(plugin_ctx, sensor)
-        log_entry.add(plugin_ctx.model.LogSource.PLUGIN, f"Applying {timed_name} rules")
+        log_entry.add(plugin_ctx.model.LogSource.PLUGIN, f"Applying `{timed_name}` rules")
         plugin_ctx.api.dispatch(
             plugin_ctx.model.squish_configs(restore, _to_configs(plugin_ctx, [*sensor.rules.enter, *timed_rows])), force=True
         )
