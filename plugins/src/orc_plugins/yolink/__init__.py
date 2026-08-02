@@ -41,7 +41,7 @@ def _on_transition(ctx: "PluginCtx", name: str, kind: str, old: Any, new: Any) -
     elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         if new == plugins.STATE_WET:
-            api.log(api.local_now(), m.LogSource.PLUGIN, msg)
+            api.log(m.LogSource.PLUGIN, msg)
             api.play_text(msg, level=m.AUDIO_FATAL)
             return
     elif kind == "battery":
@@ -63,7 +63,7 @@ def _on_transition(ctx: "PluginCtx", name: str, kind: str, old: Any, new: Any) -
         msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
 
     if msg:
-        api.log(api.local_now(), m.LogSource.PLUGIN, msg)
+        api.log(m.LogSource.PLUGIN, msg)
         api.play_text(msg)
 
 

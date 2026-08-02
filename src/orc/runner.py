@@ -49,7 +49,7 @@ def _start_services(ctx: m.AppContext) -> None:
     api.wire_buttons(ctx)
     api.start_mqtt()
     ctx.scheduler.resume()
-    api.log(api.local_now(), m.LogSource.SYSTEM, Log.BOOT)
+    api.log(m.LogSource.SYSTEM, Log.BOOT)
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 

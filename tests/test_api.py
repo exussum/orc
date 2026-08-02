@@ -337,7 +337,7 @@ class TestPresence:
         with patch.object(api, "dispatch") as dispatch, patch.object(api, "log") as log:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatch.assert_not_called()
-        assert "nobody home" in log.call_args[0][2]
+        assert "nobody home" in log.call_args[0][1]
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self):
         api.mark_present(["Alice"], when=api.local_now())
@@ -345,7 +345,7 @@ class TestPresence:
         with patch.object(api, "dispatch") as dispatch, patch.object(api, "log") as log:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatch.assert_not_called()
-        assert "SUNNY" in log.call_args[0][2]
+        assert "SUNNY" in log.call_args[0][1]
 
     def test_replay_day_skips_routines_for_absent_people(self):
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
@@ -443,4 +443,4 @@ class TestWireButtons:
         with patch.object(api, "run_action", return_value=False), patch.object(api, "log") as log:
             on_button(orc.Light.a.value, 1, "held")
         log.assert_called_once()
-        assert "No Such Routine" in log.call_args[0][2]
+        assert "No Such Routine" in log.call_args[0][1]

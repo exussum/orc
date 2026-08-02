@@ -53,7 +53,6 @@ class VersionManager:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not request.args.get("ignore-version") and not request.headers.get("orc-version") == VersionManager.version:
                 api.log(
-                    api.local_now(),
                     m.LogSource.SYSTEM,
                     Log.VERSION_MISMATCH.format(client=request.headers.get("orc-version"), server=VersionManager.version),
                 )
@@ -148,14 +147,14 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
 @VersionManager.versioned
 def checkin_presence(name: str) -> None:
     api.mark_present([name], when=api.local_now() + timedelta(hours=1))
-    api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
 
 
 @bp.route("/api/presence/<name>/expire")
 @VersionManager.versioned
 def expire_presence(name: str) -> None:
     api.expire_presence([name], force=True)
-    api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
 
 
 @bp.route("/")
@@ -268,7 +267,7 @@ def room(id: str) -> tuple[dict[str, Any], int]:
             api.dispatch(m.squish_configs(config.room_configs_off, config.room_configs[id]), force=True)
         else:
             raise Exception("Unknown state")
-    api.log(api.local_now(), m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
+    api.log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
     return {"version": VersionManager.version}, 200
 
 
@@ -278,7 +277,7 @@ def run_presence_check() -> tuple[dict[str, Any], int] | None:
     job = app.orc.scheduler.get_job("presence-cron")
     if job is None:
         return {"error": "Unknown job"}, 404
-    api.log(api.local_now(), m.LogSource.MANUAL, Log.PRESENCE_RESCAN)
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_RESCAN)
     api.delete_all_presence()
     job.func(ctx=app.orc)
     return None
