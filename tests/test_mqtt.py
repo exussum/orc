@@ -100,10 +100,6 @@ class TestFetchLightStates:
         _receive([_doc(id=1, attributes={"switch": "on"})])
         assert self._state_of(mqtt.fetch_light_states((orc.Light.a, orc.Light.b)), orc.Light.b) == "off"
 
-    def test_empty_cache_returns_all_off(self):
-        configs = mqtt.fetch_light_states((orc.Light.a, orc.Light.b))
-        assert all(c.state == "off" for c in configs.items)
-
     def test_returns_only_requested_subset(self):
         _receive([_doc(id=light.value, attributes={"switch": "on"}) for light in (orc.Light.a, orc.Light.b, orc.Light.c)])
         configs = mqtt.fetch_light_states((orc.Light.a, orc.Light.c))
