@@ -1068,7 +1068,7 @@ requires-dist = [
     { name = "nh3", specifier = "==0.3.6" },
     { name = "orc-data", directory = "data" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
-    { name = "piper-tts", specifier = "==1.5.0" },
+    { name = "piper-tts", specifier = "==1.6.0" },
     { name = "pyaudio", specifier = "==0.2.14" },
     { name = "pychromecast", specifier = "==14.0.10" },
     { name = "pyflakes", marker = "extra == 'lint'", specifier = "==3.4.0" },
@@ -1126,19 +1126,19 @@ wheels = [
 
 [[package]]
 name = "piper-tts"
-version = "1.5.0"
+version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "onnxruntime" },
     { name = "pathvalidate" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/d0/379043e3445b9cca71853282694b68ab5daecb728ff19112da3c93825df7/piper_tts-1.5.0.tar.gz", hash = "sha256:6053a505a61bbc8fa16dc06498355ae202c3470d0571397afa54e2d106ef5259", size = 4424497, upload-time = "2026-07-17T20:06:23.622Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/7d/2e97b591465abf75525e658df61cff4bcb34367d69b39b2ef19b1d533908/piper_tts-1.6.0.tar.gz", hash = "sha256:876952ba7e206957951943f24f0649415fc8c1c513bc8b7e58f2813bd01adb0a", size = 24250315, upload-time = "2026-07-23T16:11:44.946Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/0f/e0e7660853da1369124138b14b2916e102820e4c3f2244b864db4cd30a24/piper_tts-1.5.0-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:7f6db2990c9d27afd360352938efdcc67acdaed33216b40bfe683658266c6b4a", size = 14265832, upload-time = "2026-07-17T20:06:09.07Z" },
-    { url = "https://files.pythonhosted.org/packages/39/80/b09f69bd8cde608f5e6f5068910ecb354291faeb2943501c4980bb11a971/piper_tts-1.5.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:0ceb8548cac9700d1919f9ed69aeb10319cd74ace577667a57528f9538441980", size = 14273787, upload-time = "2026-07-17T20:06:12.129Z" },
-    { url = "https://files.pythonhosted.org/packages/2f/a2/1b75060b5966bc2954b6bde157ce6b0784d5e78b8ee071f5e0daf001d1e4/piper_tts-1.5.0-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:475c7c177edd58250324cfe4b67987f5ecab38940e14e827eb4bfa23f3fc595f", size = 14285756, upload-time = "2026-07-17T20:06:15.069Z" },
-    { url = "https://files.pythonhosted.org/packages/cc/e9/362668ab5c7ec53615fce4f71c9fbba2c0727e867dedffbe94d5e9ee3813/piper_tts-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c3c88342559ab0c859163649f0ab77e31c123e4265516e72973ac9a265887de6", size = 14285445, upload-time = "2026-07-17T20:06:17.903Z" },
-    { url = "https://files.pythonhosted.org/packages/15/98/bc24aa72dca6514af02d8d92a774f690a48912b8a626fa3496ac0a3c7492/piper_tts-1.5.0-cp39-abi3-win_amd64.whl", hash = "sha256:d05f0985143f180046d2765eed505a1f5ea1fc30cee4c9c18edb68ef58cce204", size = 14273715, upload-time = "2026-07-17T20:06:20.755Z" },
+    { url = "https://files.pythonhosted.org/packages/70/0f/1cd99c8074eece70cc578b92c81392f52baa481d36e2cecb3e0bbf6c2a82/piper_tts-1.6.0-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:930c1fe1f275fd45b2b96079efe34dad08763e08d72a7a3351051ca17101cd92", size = 34090334, upload-time = "2026-07-23T16:11:19.397Z" },
+    { url = "https://files.pythonhosted.org/packages/08/8e/1331e87924c96553fe9d1492c49e281d21136cc66c11ed27e58e4c1d67d3/piper_tts-1.6.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:b37ddd191b31995fbe981d5900df9c15888cccf427bff8e0b368cc95489fd60a", size = 34098290, upload-time = "2026-07-23T16:11:24.259Z" },
+    { url = "https://files.pythonhosted.org/packages/87/c7/0839e798a8577e539105e74834165ea43c3898d0889dfd98b2037e28dd1a/piper_tts-1.6.0-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f42386c8674959f5f1cc396d54f9b4e417d1956cc87ab1daa7728f43ff1f5fa1", size = 34110310, upload-time = "2026-07-23T16:11:29.709Z" },
+    { url = "https://files.pythonhosted.org/packages/60/45/e4393b88d31672993c9b916c6847593f63c1fbf7db323f2446e4192182e9/piper_tts-1.6.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3120d5cc45e07fb99bdede8feef85116fd45bf488aa1d89c7b1aefb657d38683", size = 34109999, upload-time = "2026-07-23T16:11:35.069Z" },
+    { url = "https://files.pythonhosted.org/packages/63/0a/ce74581bbbff5ceae2aa51f322ae01cd8239590efe5784df3e1ffd018e18/piper_tts-1.6.0-cp39-abi3-win_amd64.whl", hash = "sha256:5f10915ff8193053303ae406d0f121e2e775b4a91309c0c89b0d8652a232c438", size = 34098254, upload-time = "2026-07-23T16:11:39.96Z" },
 ]
 
 [[package]]
