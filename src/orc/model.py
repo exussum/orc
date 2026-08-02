@@ -124,14 +124,22 @@ class LogEntry:
     timestamp: datetime
     source: LogSource
     action: str
+    children: list[LogEntry] = field(default_factory=list)
+
+    def add(self, source: LogSource, action: str) -> LogEntry:
+        entry = LogEntry(datetime.now(self.timestamp.tzinfo), source, action)
+        self.children.append(entry)
+        return entry
 
 
 class ActivityLog:
     def __init__(self) -> None:
         self.entries: deque[LogEntry] = deque(maxlen=200)
 
-    def add(self, when: datetime, source: LogSource, action: str) -> None:
-        self.entries.appendleft(LogEntry(when, source, action))
+    def add(self, when: datetime, source: LogSource, action: str) -> LogEntry:
+        entry = LogEntry(when, source, action)
+        self.entries.appendleft(entry)
+        return entry
 
 
 @dataclass
