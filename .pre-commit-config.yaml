@@ -36,9 +36,10 @@ repos:
     hooks:
       - id: protect-sample-config
         name: sample config staged
-        entry: "src/config.md is the tracked sample — commit deliberately with SKIP=protect-sample-config"
-        language: fail
+        entry: bash -c 'git diff --cached --quiet -- src/config.md || { echo "sample config — commit with SKIP=protect-sample-config"; exit 1; }'
+        language: system
         files: ^src/config\.md$
+        pass_filenames: false
 
       - id: tailwind
         name: tailwind
