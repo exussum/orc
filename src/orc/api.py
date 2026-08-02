@@ -114,8 +114,8 @@ def local_now() -> datetime:
     return datetime.now(tz=config.tz)
 
 
-def log(source: m.LogSource, action: str) -> None:
-    _ACTIVITY_LOG.add(local_now(), source, action)
+def log(source: m.LogSource, action: str) -> m.LogEntry:
+    return _ACTIVITY_LOG.add(local_now(), source, action)
 
 
 def log_entries() -> list[m.LogEntry]:

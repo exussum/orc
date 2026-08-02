@@ -181,10 +181,7 @@ def index() -> tuple[str, int, dict[str, str]]:
 
 @bp.route("/log/")
 def log() -> tuple[str, int, dict[str, str]]:
-    entries_grouped = [
-        (day, [list(run) for _, run in groupby(day_entries, key=lambda e: (e.source, e.action))])
-        for day, day_entries in groupby(api.log_entries(), key=lambda e: e.timestamp.date())
-    ]
+    entries_grouped = [(day, list(day_entries)) for day, day_entries in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
     return (
         render_template("log.html", version=app.orc.version_manager.version, entries_grouped=entries_grouped),
         200,
