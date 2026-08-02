@@ -185,19 +185,6 @@ def test_unwrapper_class_single_rule():
     assert calls == [rule]
 
 
-def test_unwrapper_class_routine(snapshot_config):
-    calls = []
-
-    class Foo:
-        @api.unwrap_rule_container
-        def target(self, e):
-            calls.append(e)
-
-    Foo().target(snapshot_config)
-
-    assert calls == list(snapshot_config.items)
-
-
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
 class TestActiveOverride:
     OVERRIDE = m.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))

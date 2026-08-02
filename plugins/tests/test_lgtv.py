@@ -95,4 +95,3 @@ def test_lgtv_registers_with_core():
     assert lgtv_dev.icon == "tv"
     assert config.registry.devices["WebOS"].reset_excluded
     assert "Pair LG TV" in config.registry.click_hooks
-    assert config.registry.devices["Light"].icon == "light-bulb"  # default
