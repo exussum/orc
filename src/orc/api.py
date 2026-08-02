@@ -314,7 +314,7 @@ class SnapshotManager:
             self.snapshots[name] = m.SnapShot(capture_lights(), end)
             # captured light states are always enum members, not the class/set arm
             routine_items = self.snapshots[name].routine.items
-            items = ", ".join(f"{c.what.name}={c.state}" for c in routine_items if c.state != m.OFF)  # type: ignore[union-attr]
+            items = ", ".join(f"`{c.what.name}`={c.state}" for c in routine_items if c.state != m.OFF)  # type: ignore[union-attr]
             log(m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         dispatch(target_config, force=True)
@@ -365,7 +365,7 @@ class SnapshotManager:
             self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
         else:
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-            kinds = ", ".join(sorted({type(e).__name__ for e in what}))
+            kinds = ", ".join(f"`{kind}`" for kind in sorted({type(e).__name__ for e in what}))
             log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
             return True
         return False

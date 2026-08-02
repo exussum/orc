@@ -282,7 +282,7 @@ def _device(id=16, name="front door motion sensor", battery="100", attributes=No
 def test_critical_battery_report_logs(plugin_ctx, sensor):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(battery="5"), "battery", "5", "5")
-    plugin_ctx.api.log.assert_called_once_with(m.LogSource.PLUGIN, "Low battery on front door motion sensor (CRITICAL)")
+    plugin_ctx.api.log.assert_called_once_with(m.LogSource.PLUGIN, "Low battery on `front door motion sensor` (CRITICAL)")
 
 
 def test_healthy_battery_report_does_not_log(plugin_ctx, sensor):
