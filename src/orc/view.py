@@ -240,6 +240,7 @@ def presence() -> tuple[str, int, dict[str, str]]:
 @VersionManager.versioned
 def device_api(id: str) -> None:
     api.device_command(id, request.args.get("state"))
+    api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=request.args.get("state")))
 
 
 @bp.route("/api/device/ac/<id>")
