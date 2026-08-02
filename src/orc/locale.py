@@ -24,3 +24,4 @@ class Log:
     TASK_QUEUED: str = "Queued: `{id}` (until {when:%I:%M})"
     BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
     ROOM_SET: str = "Room: `{id}` {state}"
+    DEVICE_SET: str = "Device: `{id}` {state}"
