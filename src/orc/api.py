@@ -222,7 +222,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
 
     @requires_ctx
     def run(ctx: m.AppContext) -> None:
-        log(m.LogSource.MANUAL, id)
+        log(m.LogSource.MANUAL, f"`{id}`")
         action()
 
     with record_duration(id):
@@ -520,9 +520,9 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
         log(m.LogSource.ROUTINE, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     elif weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
-        log(m.LogSource.ROUTINE, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
+        log(m.LogSource.ROUTINE, f"`{rule.name}` (weather: {', '.join(sorted(weather_triggers))})")
     else:
-        log(m.LogSource.ROUTINE, rule.name)
+        log(m.LogSource.ROUTINE, f"`{rule.name}`")
     dispatch(replace(rule, items=matched))
 
 

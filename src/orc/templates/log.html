@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import day_card %}
-{% macro child_rows(entry, depth=1) %}
+{% macro child_rows(entry, parent_id, depth=1) %}
     {% for child in entry.children %}
-        <tr>
+        <tr class="hidden" data-log-parent="{{ parent_id }}">
             <td class="px-2 py-1">
                 <span class="whitespace-nowrap">{{ child.timestamp.strftime("%I:%M:%S %p") }}</span>
             </td>
@@ -10,10 +10,10 @@
                 <span class="orc-badge-{{ child.source.value }}">{{ child.source.value }}</span>
             </td>
             <td class="px-2 py-1 max-w-0 w-full">
-                <div class="orc-log-action truncate cursor-pointer" style="padding-left: {{ depth }}rem">{{ child.action }}</div>
+                <div class="orc-log-action truncate cursor-pointer" style="padding-left: {{ depth * 1.5 }}rem">{{ child.action|codespan }}</div>
             </td>
         </tr>
-        {{ child_rows(child, depth + 1) }}
+        {{ child_rows(child, parent_id, depth + 1) }}
     {% endfor %}
 {% endmacro %}
 {% block body %}
@@ -25,7 +25,8 @@
                 <th class="px-2 py-1 font-normal">Action</th>
             </tr>
             {% for entry in entries %}
-                <tr>
+                {% set eid = "log-" ~ day.isoformat() ~ "-" ~ loop.index %}
+                <tr{% if entry.children %} class="orc-log-parent cursor-pointer" data-log-id="{{ eid }}"{% endif %}>
                     <td class="px-2 py-1">
                         <span class="whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</span>
                     </td>
@@ -33,10 +34,13 @@
                         <span class="orc-badge-{{ entry.source.value }}">{{ entry.source.value }}</span>
                     </td>
                     <td class="px-2 py-1 max-w-0 w-full">
-                        <div class="orc-log-action truncate cursor-pointer">{{ entry.action }}</div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="orc-log-caret text-gray-400{% if not entry.children %} invisible{% endif %}">▾</span>
+                            <div class="orc-log-action truncate cursor-pointer flex-1">{{ entry.action|codespan }}</div>
+                        </div>
                     </td>
                 </tr>
-                {{ child_rows(entry) }}
+                {{ child_rows(entry, eid) }}
             {% endfor %}
         {% endcall %}
     {% else %}

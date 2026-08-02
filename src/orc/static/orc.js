@@ -102,6 +102,13 @@ document.addEventListener("click", (e) => {
     e.target.closest(".orc-log-action")?.classList.toggle("truncate");
 });
 
+document.addEventListener("click", (e) => {
+    const parent = e.target.closest("tr.orc-log-parent");
+    if (!parent || e.target.closest(".orc-log-action")) return;
+    const open = parent.classList.toggle("orc-log-open");
+    parent.closest("table").querySelectorAll(`[data-log-parent="${parent.dataset.logId}"]`).forEach((row) => row.classList.toggle("hidden", !open));
+});
+
 document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {
     const menu = document.getElementById("admin-navbar-collapse");
     const open = menu.classList.toggle("hidden");
