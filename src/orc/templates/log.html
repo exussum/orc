@@ -35,7 +35,7 @@
                     </td>
                     <td class="px-2 py-1 max-w-0 w-full">
                         <div class="flex items-center gap-1.5">
-                            <div class="orc-log-action truncate cursor-pointer flex-1">{{ entry.action|codespan }}</div>
+                            <div class="orc-log-action truncate cursor-pointer min-w-0">{{ entry.action|codespan }}</div>
                             <span class="orc-log-caret text-gray-400{% if not entry.children %} invisible{% endif %}">▾</span>
                         </div>
                     </td>
