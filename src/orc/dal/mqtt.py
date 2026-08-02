@@ -1,8 +1,8 @@
 """Hubitat MQTT Export subscriber.
 
 Background paho client that caches the retained per-device JSON documents the
-hub publishes to ``hubitat/<hub-uuid>/devices/<id>``. Read-only: state and
-events come from here in later parts; commands and discovery stay on Maker API.
+hub publishes to ``hubitat/<hub-uuid>/devices/<id>``. State, events, commands,
+and discovery all flow through here; only hub reboot stays on Maker API.
 The hub uuid is captured from the first message rather than configured.
 """
 
@@ -100,9 +100,6 @@ def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message:
 
 
 def start() -> None:
-    """Start the standing subscriber. _new_client blocks boot briefly until the
-    retained flood settles, so early reads don't see an empty cache and report every
-    light off."""
     global _client
     _client = _new_client(config.secrets, _on_connect, _on_message, 3.0)
 
@@ -131,13 +128,6 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
 
 @requires_enabled({})
 def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:
-    """One-shot boot-time discovery from the retained device documents: name ->
-    (id, capabilities). Runs during config load — before ``config.secrets`` exists and
-    before the standing client starts — so credentials come in explicitly. Dimmable is
-    inferred from a ``level`` attribute in the document (verified equivalent to Maker
-    API's ChangeLevel capability for every exported device). Raises when nothing was
-    discovered (broker unreachable, credentials missing), failing boot loudly instead
-    of silently demoting every device to a virtual id."""
     found: dict[str, tuple[int, frozenset[m.Capability]]] = {}
 
     def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
@@ -157,10 +147,6 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
 
 @requires_enabled(None)
 def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
-    """Command a light by publishing to its command topic. The broker accepting the
-    publish is the only acknowledgement; the device's state document is the signal
-    that a command actually landed. setLevel takes the raw value as payload; the
-    driver treats level 0 as off (verified live)."""
     if brightness is not None and m.Capability.change_level in light.capabilities:
         command, payload = "setLevel", str(brightness)
     else:
@@ -192,8 +178,6 @@ def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: 
 
 
 def _parse_device_state(msg: mqtt.MQTTMessage) -> m.DeviceState | None:
-    """The device document as a ``DeviceState``, or None when the topic is not a
-    device topic or the payload is malformed (logged)."""
     parts = msg.topic.split("/")
     if len(parts) != 4 or parts[2] != "devices":
         return None
@@ -211,8 +195,6 @@ def _parse_device_state(msg: mqtt.MQTTMessage) -> m.DeviceState | None:
 
 
 def _wait_settled(count: Callable[[], int], timeout: float) -> bool:
-    """Poll until ``count()`` is nonzero and stable across two polls (the retained
-    flood has settled) and return True, or False when the timeout passes first."""
     deadline = time.monotonic() + timeout
     previous = -1
     while time.monotonic() < deadline:
@@ -225,9 +207,6 @@ def _wait_settled(count: Callable[[], int], timeout: float) -> bool:
 
 
 def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    """Route a device publish by the segment after the device id: none for the
-    per-device JSON document, ``button`` for a dedicated button event, ``commands``
-    for our own command echoes (round-trip latency)."""
     global _hub_id
     parts = msg.topic.split("/")
     if len(parts) < 4 or parts[2] != "devices":
@@ -243,9 +222,6 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
 
 
 def _receive_document(msg: mqtt.MQTTMessage) -> None:
-    """Cache the document; fire attribute listeners only when it represents something
-    happening (see the Listener comment: first sightings and replays are state, not
-    events)."""
     device = _parse_device_state(msg)
     if device is None:
         return
@@ -257,9 +233,6 @@ def _receive_document(msg: mqtt.MQTTMessage) -> None:
 
 
 def _receive_command_echo(msg: mqtt.MQTTMessage) -> None:
-    """Pop the send stamp and fold the broker round trip into the topic's average in
-    orc_durations. Echoes with no stamp — another client's command, or a stamp already
-    consumed — are ignored."""
     sent = _command_sent.pop(msg.topic)
     if sent is not None:
         sqlite.update_avg(msg.topic, time.monotonic() - sent)
