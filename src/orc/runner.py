@@ -45,7 +45,6 @@ def web() -> None:
 
 
 def _start_services(ctx: m.AppContext) -> None:
-    # Wire before the client connects so no event can arrive unrouted.
     api.wire_buttons(ctx)
     api.start_mqtt()
     ctx.scheduler.resume()
