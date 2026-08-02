@@ -61,9 +61,8 @@ _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondit
 
 _STREAM_DOMAINS: set[str] = {".googlevideo.com", urlparse(config.internal_url).hostname or "", "." + config.root_domain}
 
-_EPHEMERIS_PATH = resources.files("orc_data") / "de421.bsp"
 _TIMESCALE = load.timescale()
-_EPHEMERIS = load_file(str(_EPHEMERIS_PATH))
+_EPHEMERIS = load_file(str(resources.files("orc_data") / "de421.bsp"))
 _TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
 
 
