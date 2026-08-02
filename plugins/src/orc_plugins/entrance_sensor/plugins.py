@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
+TRIGGER_MSG = "Entrance sensor triggered"
 
 
 @plugin_config(
@@ -46,13 +47,22 @@ def _on_sensor_event(
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on
         # the scheduler's worker; None grace so a busy worker delays, never drops.
+
+        # Both motion events of one visit land under a single log entry: reuse
+        # the latest entry if it's still the trigger message.
+        entries = ctx.api.log_entries()
+        if entries and entries[0].action == TRIGGER_MSG:
+            log_entry = entries[0]
+        else:
+            log_entry = ctx.api.log(ctx.model.LogSource.PLUGIN, TRIGGER_MSG)
+
         ctx.scheduler.add_job(
             _run_motion,
             DateTrigger(ctx.api.local_now(), timezone=ctx.config.tz),
             name="Entrance Motion",
             misfire_grace_time=None,
             jobstore=ctx.api.JOBSTORE_MEMORY,
-            args=(sensor, new),
+            args=(sensor, new, log_entry),
         )
 
 
@@ -61,14 +71,14 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, att
 
 
 @requires_ctx
-def _run_motion(sensor: SimpleNamespace, new: Any, *, ctx: m.AppContext) -> None:
+def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     plugin_ctx = build_ctx(ctx)
     if new == sensor.active_event:
         if plugin_ctx.scheduler.get_job(JOB_ID, jobstore=plugin_ctx.api.JOBSTORE_MEMORY):
             plugin_ctx.scheduler.remove_job(JOB_ID, jobstore=plugin_ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(plugin_ctx, sensor, plugin_ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(plugin_ctx, sensor)
-        plugin_ctx.api.log(plugin_ctx.model.LogSource.PLUGIN, f"Entrance triggered: {timed_name}")
+        log_entry.add(plugin_ctx.model.LogSource.PLUGIN, f"Applying {timed_name} rules")
         plugin_ctx.api.dispatch(
             plugin_ctx.model.squish_configs(restore, _to_configs(plugin_ctx, [*sensor.rules.enter, *timed_rows])), force=True
         )
@@ -81,12 +91,12 @@ def _run_motion(sensor: SimpleNamespace, new: Any, *, ctx: m.AppContext) -> None
             id=JOB_ID,
             replace_existing=True,
             jobstore=plugin_ctx.api.JOBSTORE_MEMORY,
-            args=(sensor,),
+            args=(sensor, log_entry),
         )
 
 
 @requires_ctx
-def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> None:
+def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     plugin_ctx = build_ctx(ctx)
 
     plugin_ctx.api.expire_presence(list(plugin_ctx.api.last_seen()))
@@ -106,7 +116,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, *, ctx: m.AppContext) -> No
         plugin_ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(plugin_ctx, sensor.rules.shutdown), end)
         plugin_ctx.api.dispatch(_to_configs(plugin_ctx, sensor.rules.absent))
         msg = sensor.log_shutdown
-    plugin_ctx.api.log(plugin_ctx.model.LogSource.PLUGIN, msg)
+    log_entry.add(plugin_ctx.model.LogSource.PLUGIN, msg)
 
 
 def battery_state(ctx: PluginCtx, sensor_ids: set[int]) -> list[dict[str, Any]]:
