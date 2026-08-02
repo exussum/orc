@@ -1,4 +1,5 @@
 import random
+import re
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
@@ -12,6 +13,7 @@ from flask import Blueprint, Flask
 from flask import current_app as _current_app
 from flask import render_template, request
 from flask.wrappers import Response
+from markupsafe import Markup, escape
 from mistletoe import Document, HtmlRenderer
 
 import orc
@@ -31,6 +33,13 @@ app = cast(OrcFlask, _current_app)
 bp = Blueprint("controls", __name__)
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
+_CODESPAN_RE = re.compile(r"`([^`]+)`")
+
+
+@bp.app_template_filter("codespan")
+def codespan(text: str) -> Markup:
+    """Log messages mark config-provided names with backticks; render them as <code>."""
+    return Markup(_CODESPAN_RE.sub(r"<code>\1</code>", str(escape(text))))  # nosemgrep: explicit-unescape-with-markup
 
 
 @bp.after_request

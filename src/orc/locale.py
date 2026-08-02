@@ -1,26 +1,26 @@
 class Log:
     BOOT: str = "Boot"
 
-    SNAPSHOT_TAKEN: str = "Snapshot '{name}' until {end:%I:%M}: {items}"
+    SNAPSHOT_TAKEN: str = "Snapshot `{name}` until {end:%I:%M}: {items}"
     SNAPSHOT_ALL_OFF: str = "all off"
-    SNAPSHOT_RESTORED: str = "Snapshot '{name}' restored"
+    SNAPSHOT_RESTORED: str = "Snapshot `{name}` restored"
 
     THEME_OVERRIDE_CLEARED: str = "Theme override cleared"
-    THEME_OVERRIDE_SET: str = "Theme override set: {name} {start}..{end}"
+    THEME_OVERRIDE_SET: str = "Theme override set: `{name}` {start}..{end}"
 
-    RULE_SKIPPED: str = "Skipped {rule_name} ({detail})"
+    RULE_SKIPPED: str = "Skipped `{rule_name}` ({detail})"
     RULE_SUPPRESSED: str = "Suppressed by snapshot: {kinds}"
-    DISPATCH_FAILED: str = "Dispatch failed for {device}: {exc}"
+    DISPATCH_FAILED: str = "Dispatch failed for `{device}`: {exc}"
 
-    PRESENCE_PING_FAILED: str = "Presence ping failed for {name}: {exc}"
-    PRESENCE_DETECTED: str = "Presence detected: {name}"
-    PRESENCE_LOST: str = "Presence lost: {name}"
-    PRESENCE_EXPIRED: str = "Presence expired: {name}"
-    PRESENCE_CHECKED_IN: str = "Presence checked in: {name}"
+    PRESENCE_PING_FAILED: str = "Presence ping failed for `{name}`: {exc}"
+    PRESENCE_DETECTED: str = "Presence detected: `{name}`"
+    PRESENCE_LOST: str = "Presence lost: `{name}`"
+    PRESENCE_EXPIRED: str = "Presence expired: `{name}`"
+    PRESENCE_CHECKED_IN: str = "Presence checked in: `{name}`"
     PRESENCE_RESCAN: str = "Presence rescan"
 
     VERSION_MISMATCH: str = "Version mismatch: client={client} server={server}"
 
-    TASK_QUEUED: str = "Queued: {id} (until {when:%I:%M})"
-    BUTTON_ACTION_UNKNOWN: str = "Unknown button action: {id}"
-    ROOM_SET: str = "Room: {id} {state}"
+    TASK_QUEUED: str = "Queued: `{id}` (until {when:%I:%M})"
+    BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
+    ROOM_SET: str = "Room: `{id}` {state}"

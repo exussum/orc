@@ -219,3 +219,22 @@
         @apply px-2.5;
     }
 }
+
+@layer base {
+    /* config-provided names in log messages (see the codespan filter) */
+    code {
+        color: #bbf7d0;
+    }
+}
+
+@layer components {
+    .orc-log-caret {
+        display: inline-block;
+        transition: transform 0.15s;
+        transform: rotate(-90deg);
+    }
+
+    .orc-log-open .orc-log-caret {
+        transform: rotate(0deg);
+    }
+}
