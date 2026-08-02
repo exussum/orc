@@ -20,17 +20,17 @@ _SIGNAL_WEAK_THRESHOLD = -90
 
 
 class Msg:
-    CONNECTED = "YoLink {name} connected"
-    DISCONNECTED = "YoLink {name} disconnected"
-    WATER_DETECTED = "Water detected in {name}"
-    WATER_CLEARED = "Water cleared in {name}"
-    LOW_BATTERY = "Low battery on {name} ({battery})"
-    BATTERY_RESTORED = "Battery restored on {name} ({battery})"
-    WEAK_SIGNAL = "Weak signal on {name} ({signal} dBm)"
-    SIGNAL_RESTORED = "Signal restored on {name} ({signal} dBm)"
-    INTERVAL_CHANGED = "Report interval for {name} changed to {interval}s"
-    OFFLINE = "{name} offline"
-    ONLINE = "{name} online"
+    CONNECTED = "YoLink `{name}` connected"
+    DISCONNECTED = "YoLink `{name}` disconnected"
+    WATER_DETECTED = "Water detected in `{name}`"
+    WATER_CLEARED = "Water cleared in `{name}`"
+    LOW_BATTERY = "Low battery on `{name}` ({battery})"
+    BATTERY_RESTORED = "Battery restored on `{name}` ({battery})"
+    WEAK_SIGNAL = "Weak signal on `{name}` ({signal} dBm)"
+    SIGNAL_RESTORED = "Signal restored on `{name}` ({signal} dBm)"
+    INTERVAL_CHANGED = "Report interval for `{name}` changed to {interval}s"
+    OFFLINE = "`{name}` offline"
+    ONLINE = "`{name}` online"
 
 
 def _on_transition(ctx: "PluginCtx", name: str, kind: str, old: Any, new: Any) -> None:
@@ -42,7 +42,7 @@ def _on_transition(ctx: "PluginCtx", name: str, kind: str, old: Any, new: Any) -
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         if new == plugins.STATE_WET:
             api.log(m.LogSource.PLUGIN, msg)
-            api.play_text(msg, level=m.AUDIO_FATAL)
+            api.play_text(msg.replace("`", ""), level=m.AUDIO_FATAL)
             return
     elif kind == "battery":
         old_critical = old is not None and old.is_critical
@@ -64,7 +64,7 @@ def _on_transition(ctx: "PluginCtx", name: str, kind: str, old: Any, new: Any) -
 
     if msg:
         api.log(m.LogSource.PLUGIN, msg)
-        api.play_text(msg)
+        api.play_text(msg.replace("`", ""))
 
 
 def setup(ctx: "PluginCtx") -> None:

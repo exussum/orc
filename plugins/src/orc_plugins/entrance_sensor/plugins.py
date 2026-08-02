@@ -41,7 +41,7 @@ def _on_sensor_event(
     if attribute == "battery":
         level = ctx.model.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
-            ctx.api.log(ctx.model.LogSource.PLUGIN, f"Low battery on {device.name} ({level.value})")
+            ctx.api.log(ctx.model.LogSource.PLUGIN, f"Low battery on `{device.name}` ({level.value})")
     elif _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
