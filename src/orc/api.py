@@ -114,8 +114,8 @@ def local_now() -> datetime:
     return datetime.now(tz=config.tz)
 
 
-def log(when: datetime, source: m.LogSource, action: str) -> None:
-    _ACTIVITY_LOG.add(when, source, action)
+def log(source: m.LogSource, action: str) -> None:
+    _ACTIVITY_LOG.add(local_now(), source, action)
 
 
 def log_entries() -> list[m.LogEntry]:
@@ -222,13 +222,13 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
 
     @requires_ctx
     def run(ctx: m.AppContext) -> None:
-        log(local_now(), m.LogSource.MANUAL, id)
+        log(m.LogSource.MANUAL, id)
         action()
 
     with record_duration(id):
         if delay:
             when = local_now() + delay
-            log(local_now(), m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
+            log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
             job_id = f"run-{id}-{when.isoformat()}"
             ctx.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), id=job_id, jobstore=JOBSTORE_MEMORY)
         else:
@@ -242,7 +242,7 @@ def wire_buttons(ctx: m.AppContext) -> None:
     def on_button(device_id: int, button: int, event_type: str) -> None:
         action = mapping.get((device_id, button, event_type))
         if action is not None and not run_action(ctx, action, hub_origin=True):
-            log(local_now(), m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action))
+            log(m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action))
 
     add_button_listener(on_button)
 
@@ -265,7 +265,7 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
         try:
             device_type.dispatch(w, rule, stream)
         except Exception as exc:
-            log(local_now(), m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
+            log(m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
 
     with Pool(max_workers=max(1, len(what))) as ex:
         list(ex.map(one, what))
@@ -315,7 +315,7 @@ class SnapshotManager:
             # captured light states are always enum members, not the class/set arm
             routine_items = self.snapshots[name].routine.items
             items = ", ".join(f"{c.what.name}={c.state}" for c in routine_items if c.state != m.OFF)  # type: ignore[union-attr]
-            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
+            log(m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         dispatch(target_config, force=True)
 
@@ -338,7 +338,7 @@ class SnapshotManager:
 
         if snapshot:
             routine = snapshot.routine
-            log(local_now(), m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=name))
+            log(m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=name))
         else:
             routine = target_config
         dispatch(routine, force=True)
@@ -366,7 +366,7 @@ class SnapshotManager:
         else:
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             kinds = ", ".join(sorted({type(e).__name__ for e in what}))
-            log(local_now(), m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
+            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
             return True
         return False
 
@@ -419,12 +419,12 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
     today = now.date()
     before = calculate_theme(today)
     if not name:
-        log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
+        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
         clear_theme_override()
     else:
         assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
-        log(now, m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
+        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
     after = calculate_theme(today)
     rebuild_jobs(ctx)
     if before != after:
@@ -438,15 +438,15 @@ def check_presence(silent: bool = False) -> set[str]:
     before = present_names()
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
-        log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
+        log(m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
     mark_present(present, local_now())
     after = present_names()
 
     if not silent:
         if detected := sorted(after - before):
-            log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
+            log(m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
         if lost := sorted(before - after):
-            log(local_now(), m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
+            log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
     return after
 
 
@@ -517,12 +517,12 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
         else:
             unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
-        log(now, m.LogSource.ROUTINE, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
+        log(m.LogSource.ROUTINE, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     elif weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
-        log(now, m.LogSource.ROUTINE, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
+        log(m.LogSource.ROUTINE, f"{rule.name} (weather: {', '.join(sorted(weather_triggers))})")
     else:
-        log(now, m.LogSource.ROUTINE, rule.name)
+        log(m.LogSource.ROUTINE, rule.name)
     dispatch(replace(rule, items=matched))
 
 
@@ -614,7 +614,7 @@ def _run_cal_job(job: m.CalendarJob, ctx: m.AppContext) -> None:
     if job.event_type == m.CalendarEvent.WARNING:
         play_alert(ctx.sound_path)
     else:
-        log(local_now(), m.LogSource.CALENDAR, job.summary)
+        log(m.LogSource.CALENDAR, job.summary)
         play_text(job.summary)
 
 
