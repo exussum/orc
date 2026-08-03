@@ -222,7 +222,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
 
     @requires_ctx
     def run(ctx: m.AppContext) -> None:
-        log(m.LogSource.MANUAL, f"`{id}`")
+        log(m.LogSource.MANUAL, f"`{_RUN_DISPLAY.get(id, id)}`")
         action()
 
     with record_duration(id):
@@ -300,6 +300,7 @@ def device_command(id: str, state: str | None) -> None:
 # --- State manager ---
 
 ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
+_RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 
 
 class SnapshotManager:
