@@ -1,9 +1,14 @@
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from orc.model import DeviceType, Registry
+from mistletoe import Document
+
+from orc.collections import doc_to_sub_tables
+from orc.model import DeviceType, Registry, column_to_value
 
 if TYPE_CHECKING:
     from orc.model import DeviceEnum
@@ -11,6 +16,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class Declarations:
+    config_dir: str = ""
     device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC", "Button"])
     controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
     reset_excluded_types: set[str] = field(default_factory=set)
@@ -77,8 +83,8 @@ class Declarations:
         )
 
 
-def collect_declarations(module_paths: Iterable[str]) -> Declarations:
-    declarations = Declarations()
+def collect_declarations(module_paths: Iterable[str], config_dir: str) -> Declarations:
+    declarations = Declarations(config_dir=config_dir)
     seen: set[str] = set()
     for path in module_paths:
         package = path.split(".")[0]
@@ -90,3 +96,22 @@ def collect_declarations(module_paths: Iterable[str]) -> Declarations:
         if declare is not None:
             declare(declarations)
     return declarations
+
+
+def load_plugin_config(name: str, config_dir: str, schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
+    path = Path(config_dir) / "plugins" / f"{name}.md"
+    with open(path) as fh:
+        doc = Document(fh)
+
+    attrs: dict[str, Any] = {}
+    for section, columns in schema.items():
+        if len(columns) == 2:
+            col_attr = columns[1].lower()
+            for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value):
+                attrs[trigger] = getattr(rows[0], col_attr)
+        else:
+            attrs[section.lower()] = SimpleNamespace(
+                **{trigger: rows for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value)}
+            )
+
+    return SimpleNamespace(**attrs)
