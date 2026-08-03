@@ -173,12 +173,6 @@ def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
     config.registry.state_providers[title] = provider
 
 
-def add_dispatch_handler(name: str, handler: Callable[..., None]) -> None:
-    """Swap in a device type's dispatch handler at startup, for handlers bound to a
-    ctx that can't exist at config load."""
-    config.registry.devices[name] = replace(config.registry.devices[name], dispatch=handler)
-
-
 def declare_core(declarations: Declarations) -> None:
     """Declare core's own dispatch handlers. Called from ``Config.load`` (not at
     import) so all declarations happen on config load, like plugins. Core's state
