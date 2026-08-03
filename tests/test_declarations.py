@@ -89,7 +89,7 @@ def test_declare_wires_every_piece():
     assert "Acme" in builder.device_types
     reg = builder.build({"Acme": Acme})
     assert reg.devices["Acme"].dispatch is handler
-    assert reg.state_providers == {}  # providers register at startup via api.add_state_provider
+    assert reg.state_providers == {}
     assert hook in reg.setup_hooks
 
 
