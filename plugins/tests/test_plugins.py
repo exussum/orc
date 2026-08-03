@@ -299,7 +299,7 @@ def test_battery_state_reads_the_device_cache(plugin_ctx):
 
 
 def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
-    plugins.setup.__wrapped__(plugin_ctx, sensor)
+    plugins.setup(sensor, {16, 56}, plugin_ctx)
     plugin_ctx.api.add_listener.assert_called_once()
     title, provider = plugin_ctx.api.add_state_provider.call_args[0]
     assert title == "Entrance Sensors"

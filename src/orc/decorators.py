@@ -7,15 +7,10 @@ import sys
 import threading
 from collections.abc import Callable, Iterator
 from functools import wraps
-from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
-from mistletoe import Document
-
 from orc import model as m
-from orc.collections import doc_to_sub_tables
-from orc.model import column_to_value
+from orc.declarations import load_plugin_config
 
 audio_lock = threading.Lock()
 
@@ -83,7 +78,7 @@ def plugin_config[R](name: str, *, schema: dict[str, tuple[str, ...]]) -> Callab
             nonlocal cache
             if cache is _UNSET:
                 try:
-                    cache = _load_plugin_config(resolved, ctx.config.config_dir, schema)
+                    cache = load_plugin_config(resolved, ctx.config.config_dir, schema)
                 except Exception as exc:
                     print(f"Failed to load plugin config {resolved!r}: {exc}", file=sys.stderr)
                     cache = _FAILED
@@ -95,25 +90,6 @@ def plugin_config[R](name: str, *, schema: dict[str, tuple[str, ...]]) -> Callab
         return wrapper
 
     return decorator
-
-
-def _load_plugin_config(name: str, config_dir: str, schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
-    path = Path(config_dir) / "plugins" / f"{name}.md"
-    with open(path) as fh:
-        doc = Document(fh)
-
-    attrs: dict[str, Any] = {}
-    for section, columns in schema.items():
-        if len(columns) == 2:
-            col_attr = columns[1].lower()
-            for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value):
-                attrs[trigger] = getattr(rows[0], col_attr)
-        else:
-            attrs[section.lower()] = SimpleNamespace(
-                **{trigger: rows for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value)}
-            )
-
-    return SimpleNamespace(**attrs)
 
 
 def unwrap_rule_container[R](f: Callable[..., R]) -> Callable[..., None]:
