@@ -136,18 +136,18 @@ def capture_sounds() -> m.Configs[m.SoundState]:
         return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
 
 
-# Dispatch handlers keyed by device-type name in orc.declarations. Each takes
-# the device, the rule, and a per-dispatch `stream` cache (shared across the
-# devices in one dispatch call so a stream's metadata is fetched only once).
+# Dispatch handlers keyed by device-type name in orc.declarations. Each takes the
+# AppContext, the device, the rule, and a per-dispatch `stream` cache (shared across
+# the devices in one dispatch call so a stream's metadata is fetched only once).
 # Plugins register their own handlers the same way.
-def _dispatch_light(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
         mqtt.publish_light(w, brightness=rule.state)
     else:
         mqtt.publish_light(w, on=rule.state == m.ON)
 
 
-def _dispatch_chromecast(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
         chromecast.set_volume(w, rule.state)
     elif rule.state == m.STOP:
@@ -250,7 +250,7 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
         if device_type is None or device_type.dispatch is None:
             raise Exception("Unknown type")
         try:
-            device_type.dispatch(w, rule, stream)
+            device_type.dispatch(config.registry.ctx, w, rule, stream)
         except Exception as exc:
             log(m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
 
@@ -279,7 +279,7 @@ def device_command(id: str, state: str | None) -> None:
     for device_type in config.registry.devices.values():
         if device_type.dispatch is not None and device_type.handles(id):
             member = device_type.cls[id]
-            device_type.dispatch(member, m.Config(member, parsed), {})
+            device_type.dispatch(config.registry.ctx, member, m.Config(member, parsed), {})
             return
     raise Exception(f"Unknown device: {id}")
 

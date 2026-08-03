@@ -317,7 +317,7 @@ class DeviceType:
         return name in self.cls.__members__
 
 
-@dataclass(frozen=True)
+@dataclass
 class Registry:
     """What plugins registered, built per config load and exposed as
     ``orc.config.registry``.
@@ -333,6 +333,7 @@ class Registry:
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]
     setup_hooks: list[Callable[[AppContext], None]]
+    ctx: AppContext | None = None  # set once at startup; None during config load
 
 
 def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:

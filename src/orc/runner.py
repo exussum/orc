@@ -56,15 +56,23 @@ def _build_app() -> OrcFlask:
     config.config.load(secrets, api.fetch_hubitat_config(secrets))
     api.init_db()
 
-    ctx = _build_scheduler()
+    scheduler = _build_scheduler()
+    ctx = m.AppContext(
+        api.snapshot_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.wav").resolve().as_posix(), VersionManager()
+    )
+    config.config.registry.ctx = ctx
+    scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), JOBSTORE_DEFAULT)
+    scheduler.add_listener(lambda e: ctx.version_manager.bump_version(), EVENT_JOB_EXECUTED)
+    scheduler.start(paused=True)
 
-    _run_setup(ctx)
+    api.setup_scheduler(ctx)
+    for hook in config.config.registry.setup_hooks:
+        hook(ctx)
     return _build_flask(ctx)
 
 
-def _build_scheduler() -> m.AppContext:
-    version_manager = VersionManager()
-    scheduler = BackgroundScheduler(
+def _build_scheduler() -> BackgroundScheduler:
+    return BackgroundScheduler(
         jobstores={
             JOBSTORE_DEFAULT: SQLAlchemyJobStore(url=config.config.jobs_db),
             JOBSTORE_MEMORY: MemoryJobStore(),
@@ -72,19 +80,6 @@ def _build_scheduler() -> m.AppContext:
         job_defaults={"misfire_grace_time": 30},
         timezone=config.config.tz,
     )
-    ctx = m.AppContext(
-        api.snapshot_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.wav").resolve().as_posix(), version_manager
-    )
-    scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), JOBSTORE_DEFAULT)
-    scheduler.add_listener(lambda e: version_manager.bump_version(), EVENT_JOB_EXECUTED)
-    scheduler.start(paused=True)
-    return ctx
-
-
-def _run_setup(ctx: m.AppContext) -> None:
-    api.setup_scheduler(ctx)
-    for hook in config.config.registry.setup_hooks:
-        hook(ctx)
 
 
 def _build_flask(ctx: m.AppContext) -> OrcFlask:
