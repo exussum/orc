@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 @dataclass
 class Declarations:
-    plugin_docs: dict[str, Any] = field(default_factory=dict)
     device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC", "Button"])
     controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
     device_icons: dict[str, str] = field(default_factory=dict)
@@ -29,9 +28,6 @@ class Declarations:
 
     def declare_dispatch(self, name: str, fn: Callable[..., None]) -> None:
         self.dispatch_handlers[name] = fn
-
-    def load_plugin_config(self, name: str, schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
-        return load_plugin_config(name, self.plugin_docs, schema)
 
     def declare(
         self,
@@ -79,8 +75,8 @@ class Declarations:
         )
 
 
-def collect_declarations(module_paths: Iterable[str], plugin_docs: dict[str, Any]) -> Declarations:
-    declarations = Declarations(plugin_docs=plugin_docs)
+def collect_declarations(module_paths: Iterable[str]) -> Declarations:
+    declarations = Declarations()
     seen: set[str] = set()
     for path in module_paths:
         package = path.split(".")[0]
