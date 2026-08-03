@@ -78,7 +78,7 @@ def plugin_config[R](name: str, *, schema: dict[str, tuple[str, ...]]) -> Callab
             nonlocal cache
             if cache is _UNSET:
                 try:
-                    cache = load_plugin_config(resolved, ctx.config.config_dir, schema)
+                    cache = load_plugin_config(resolved, ctx.config.plugin_docs, schema)
                 except Exception as exc:
                     print(f"Failed to load plugin config {resolved!r}: {exc}", file=sys.stderr)
                     cache = _FAILED

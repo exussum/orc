@@ -386,6 +386,10 @@ def build_config(doc: Any, section: str, required: Iterable[str] = ()) -> dict[A
     return result
 
 
+def device_types_in(doc: Any, section: str) -> list[str]:
+    return list(dict.fromkeys(t for t, _ in _typed_sub_tables(doc, section, ("Type", "Name", "Room", "Host"))))
+
+
 def build_enum(
     doc: Any, section: str, sub_section: str, id_lookup: dict[Any, tuple[Any, ...]] | None = None, *, device_types: Iterable[str]
 ) -> type[DeviceEnum]:
