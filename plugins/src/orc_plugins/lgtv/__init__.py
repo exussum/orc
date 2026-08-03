@@ -5,7 +5,6 @@ BroadLink IR toggle to power on), a "TV" state row set, the pairing action's on-
 notification, a boot hook to create its DB table, and marks WebOS reset-excluded.
 """
 
-from functools import partial
 from typing import Any
 
 from orc_plugins.lgtv import plugins
@@ -28,17 +27,20 @@ dismiss?.();
 
 def setup(ctx: "m.AppContext") -> None:
     plugins.init_db(ctx.api.connection)
-    ctx.api.add_dispatch_handler("LGTV", partial(_dispatch, ctx))
     ctx.api.add_state_provider("TV", tv_state)
 
 
-def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch(w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
+    # Deferred: this package is imported during orc's config load, before orc.api is
+    # importable; dispatch only runs after startup.
+    from orc import api
+
     webos_device, bl_device = _orc.WebOS[w.name], _orc.BroadLink[w.name]
     if rule.state == m.OFF:
-        plugins.off(ctx.api.connection, webos_device)
+        plugins.off(api.connection, webos_device)
     elif rule.state == m.ON:
         if plugins.is_off(webos_device):
-            ctx.api.tv_toggle(bl_device)
+            api.tv_toggle(bl_device)
     else:
         raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
 
@@ -54,6 +56,7 @@ def declare(declarations: Any) -> None:
         controllable=["LGTV"],
         reset_excluded=["WebOS"],
         icons={"LGTV": "tv"},
+        dispatch={"LGTV": _dispatch},
         setup=[setup],
         on_click={"Pair LG TV": PAIRING_JS},
         button_labels={"Pair LG TV": "Pair {device}"},
