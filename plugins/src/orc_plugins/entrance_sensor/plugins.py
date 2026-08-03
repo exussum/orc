@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 from enum import Enum
-from functools import partial
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Sequence
 
@@ -22,11 +21,6 @@ SCHEMA = {
     "Rules": ("Trigger", "Device", "State"),
     "Timed": ("Name", "Start", "Stop", "Device", "State"),
 }
-
-
-def setup(sensor: SimpleNamespace, ids: set[int], ctx: m.AppContext) -> None:
-    ctx.api.add_listener(partial(_on_sensor_event, ctx, sensor, ids))
-    ctx.api.add_state_provider("Entrance Sensors", partial(battery_state, ctx, ids))
 
 
 def _on_sensor_event(
