@@ -31,8 +31,6 @@ def setup(ctx: "m.AppContext") -> None:
 
 
 def _dispatch(w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
-    # Deferred: this package is imported during orc's config load, before orc.api is
-    # importable; dispatch only runs after startup.
     from orc import api
 
     webos_device, bl_device = _orc.WebOS[w.name], _orc.BroadLink[w.name]
