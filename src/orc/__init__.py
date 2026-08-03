@@ -67,7 +67,7 @@ class Config:
         every builder that parses a Device column resolves it through ``orc.device_enums``,
         so this must run before any other section builds."""
         self.plugins = m.build_plugins(doc, "Plugins")
-        declarations = collect_declarations((p.func.__module__ for p in self.plugins.values()), self.plugin_docs)
+        declarations = collect_declarations(p.func.__module__ for p in self.plugins.values())
         if "orc.api" in sys.modules:  # bootstrap load runs during `import orc`, before api is importable — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
 

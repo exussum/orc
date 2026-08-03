@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from orc import model as m
-from orc.decorators import plugin_config, requires_ctx  # noqa: F401
+from orc.decorators import requires_ctx  # noqa: F401
 
 
 def back_on_schedule(ctx: m.AppContext) -> None:
