@@ -9,16 +9,13 @@ from collections.abc import Callable, Iterator
 from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from mistletoe import Document
 
 from orc import model as m
 from orc.collections import doc_to_sub_tables
 from orc.model import column_to_value
-
-if TYPE_CHECKING:
-    from orc.plugins import PluginCtx
 
 audio_lock = threading.Lock()
 
@@ -82,7 +79,7 @@ def plugin_config[R](name: str, *, schema: dict[str, tuple[str, ...]]) -> Callab
         cache: Any = _UNSET
 
         @wraps(fn)
-        def wrapper(ctx: "PluginCtx", *args: Any, **kwargs: Any) -> R | None:
+        def wrapper(ctx: m.AppContext, *args: Any, **kwargs: Any) -> R | None:
             nonlocal cache
             if cache is _UNSET:
                 try:

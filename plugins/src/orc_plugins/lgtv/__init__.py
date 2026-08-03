@@ -12,7 +12,6 @@ from orc_plugins.lgtv import plugins
 
 import orc
 from orc import model as m
-from orc.plugins import PluginCtx
 
 # orc.LGTV/WebOS/BroadLink are built at runtime from the registered device types; read
 # them through an Any view since mypy can't see the dynamic package attributes.
@@ -27,13 +26,13 @@ dismiss?.();
 """
 
 
-def setup(ctx: PluginCtx) -> None:
+def setup(ctx: "m.AppContext") -> None:
     plugins.init_db(ctx.api.connection)
     ctx.api.add_dispatch_handler("LGTV", partial(_dispatch, ctx))
     ctx.api.add_state_provider("TV", tv_state)
 
 
-def _dispatch(ctx: PluginCtx, w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
     webos_device, bl_device = _orc.WebOS[w.name], _orc.BroadLink[w.name]
     if rule.state == m.OFF:
         plugins.off(ctx.api.connection, webos_device)

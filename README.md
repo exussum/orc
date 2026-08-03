@@ -198,7 +198,7 @@ bounces the `orc` supervisor job.
   `net.py` (presence scanning), `sqlite.py`
 - `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `requires_enabled`, `plugin_config`, `synchronized`, `audio_lock`, `silence_fd`
 - `src/orc/declarations.py` — per-config-load plugin declaration collection, built into the device/plugin `Registry`
-- `src/orc/plugins.py` — `PluginCtx` + built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
+- `src/orc/plugins.py` — built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
 - `src/orc/security.py` — `safe_eval` for config expressions, URL allowlisting, HTML sanitizing
 - `src/orc/_build.py` — build SHA/time stamped at release
 - `src/orc/locale.py` — log-message string constants

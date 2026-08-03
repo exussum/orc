@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -92,8 +92,7 @@ def plugin_ctx():
 
 def _cleanup(sensor, plugin_ctx):
     entry = m.LogEntry(_DAYTIME, m.LogSource.PLUGIN, "Entrance sensor triggered")
-    with patch.object(plugins, "build_ctx", return_value=plugin_ctx):
-        plugins._run_trigger_sensor_off.__wrapped__(sensor, entry, ctx=MagicMock())
+    plugins._run_trigger_sensor_off.__wrapped__(sensor, entry, ctx=plugin_ctx)
     return entry
 
 
@@ -104,8 +103,7 @@ def _trigger_sensor(ctx, sensor, device_id, event):
     queued = [c for c in ctx.scheduler.add_job.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.add_job.reset_mock()
     for call in queued:
-        with patch.object(plugins, "build_ctx", return_value=ctx):
-            plugins._run_motion.__wrapped__(*call.kwargs["args"], ctx=MagicMock())
+        plugins._run_motion.__wrapped__(*call.kwargs["args"], ctx=ctx)
 
 
 # --- Walking in ---
