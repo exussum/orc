@@ -16,7 +16,6 @@ class Declarations:
     plugin_docs: dict[str, Any] = field(default_factory=dict)
     device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC", "Button"])
     controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
-    reset_excluded_types: set[str] = field(default_factory=set)
     device_icons: dict[str, str] = field(default_factory=dict)
     dispatch_handlers: dict[str, Callable[..., None]] = field(default_factory=dict)
     state_providers: dict[str, Callable[[], Any]] = field(default_factory=dict)
@@ -39,7 +38,6 @@ class Declarations:
         *,
         device_types: Iterable[str] = (),
         controllable: Iterable[str] = (),
-        reset_excluded: Iterable[str] = (),
         icons: dict[str, str] | None = None,
         dispatch: dict[str, Callable[..., None]] | None = None,
         state_providers: dict[str, Callable[[], Any]] | None = None,
@@ -47,7 +45,6 @@ class Declarations:
         on_click: dict[str, str] | None = None,
         button_labels: dict[str, str] | None = None,
     ) -> None:
-        self.reset_excluded_types.update(reset_excluded)
         self.device_icons.update(icons or {})
         self.dispatch_handlers.update(dispatch or {})
         self.state_providers.update(state_providers or {})
@@ -69,7 +66,6 @@ class Declarations:
                 cls=cls,
                 icon=self.device_icons.get(name, "light-bulb"),
                 controllable=name in self.controllable_devices,
-                reset_excluded=name in self.reset_excluded_types,
                 dispatch=self.dispatch_handlers.get(name),
             )
             for name, cls in enums.items()
