@@ -1,10 +1,3 @@
-"""Plugin declarations: ``collect_declarations`` builds a fresh ``Declarations`` per
-config load and hands it to each plugin's ``declare(declarations)`` hook;
-``declarations.declare(...)`` populates it, and ``Declarations.build`` turns it into a
-``model.Registry``. The ``Declarations`` object is transient — nothing keeps it after
-``build``.
-"""
-
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -18,10 +11,6 @@ if TYPE_CHECKING:
 
 @dataclass
 class Declarations:
-    """Mutable accumulator for one config load: plugins fill it via ``declare`` from
-    their ``declare(declarations)`` hook, then ``build`` turns it into a ``Registry``
-    and it is discarded. Core seeds its device-type defaults here."""
-
     device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC", "Button"])
     controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
     reset_excluded_types: set[str] = field(default_factory=set)
@@ -50,8 +39,6 @@ class Declarations:
         on_click: dict[str, str] | None = None,
         button_labels: dict[str, str] | None = None,
     ) -> None:
-        """One entry point for a plugin to declare everything it contributes; all
-        pieces are optional."""
         self.reset_excluded_types.update(reset_excluded)
         self.device_icons.update(icons or {})
         self.dispatch_handlers.update(dispatch or {})
@@ -88,13 +75,6 @@ class Declarations:
 
 
 def collect_declarations(module_paths: Iterable[str]) -> Declarations:
-    """Build a fresh ``Declarations`` and let each plugin package's optional
-    ``declare(declarations)`` hook populate it.
-
-    The packages are already imported (build_plugins resolved their functions), so
-    they are looked up in sys.modules rather than imported again. Packages are
-    de-duped, so a package listed by several plugins registers once.
-    """
     declarations = Declarations()
     seen: set[str] = set()
     for path in module_paths:

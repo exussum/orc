@@ -47,7 +47,6 @@ class TestDispatchLGTV:
         class BroadLink(Enum):
             living_room = 1
 
-        # The backing WebOS/BroadLink types carry no handler.
         mock_registry(LGTV=(LGTV, lgtv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lgtv = LGTV.living_room
         self.webos = WebOS.living_room
