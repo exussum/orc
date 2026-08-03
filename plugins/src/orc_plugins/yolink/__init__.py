@@ -68,7 +68,6 @@ def _on_transition(ctx: "AppContext", name: str, kind: str, old: Any, new: Any) 
 
 
 def setup(ctx: "AppContext") -> None:
-    ctx.api.add_state_provider("Leak Sensors", leak_state)
     plugins.set_transition_callback(partial(_on_transition, ctx))
     plugins.start()
 
@@ -98,6 +97,7 @@ def leak_state() -> list[dict[str, Any]]:
 def declare(declarations: Any) -> None:
     declarations.declare(
         device_types=["Leak"],
+        state_providers={"Leak Sensors": leak_state},
         setup=[setup],
         button_labels={"Test Leak Sensor": "Test {device}"},
     )

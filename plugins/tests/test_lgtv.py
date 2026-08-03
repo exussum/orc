@@ -81,7 +81,7 @@ def test_lgtv_registers_with_core():
         ctx = MagicMock()
         lgtv.setup(ctx)
     init_db.assert_called_once_with(ctx.api.connection)
-    ctx.api.add_state_provider.assert_called_once_with("TV", lgtv.tv_state)
+    assert config.registry.state_providers["TV"] is lgtv.tv_state
 
     lgtv_dev = config.registry.devices["LGTV"]
     assert lgtv_dev.dispatch is lgtv._dispatch

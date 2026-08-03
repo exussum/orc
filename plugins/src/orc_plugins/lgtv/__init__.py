@@ -27,7 +27,6 @@ dismiss?.();
 
 def setup(ctx: "m.AppContext") -> None:
     plugins.init_db(ctx.api.connection)
-    ctx.api.add_state_provider("TV", tv_state)
 
 
 def _dispatch(w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
@@ -55,6 +54,7 @@ def declare(declarations: Any) -> None:
         reset_excluded=["WebOS"],
         icons={"LGTV": "tv"},
         dispatch={"LGTV": _dispatch},
+        state_providers={"TV": tv_state},
         setup=[setup],
         on_click={"Pair LG TV": PAIRING_JS},
         button_labels={"Pair LG TV": "Pair {device}"},
