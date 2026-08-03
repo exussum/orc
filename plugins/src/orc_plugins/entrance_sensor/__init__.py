@@ -9,8 +9,6 @@ import sys
 from functools import partial
 from typing import Any
 
-from orc.declarations import load_plugin_config
-
 _CONFIG = "orc_plugins/entrance_sensor"
 
 
@@ -18,7 +16,7 @@ def declare(declarations: Any) -> None:
     from orc_plugins.entrance_sensor import plugins
 
     try:
-        sensor = load_plugin_config(_CONFIG, declarations.config_dir, plugins.SCHEMA)
+        sensor = declarations.load_plugin_config(_CONFIG, plugins.SCHEMA)
     except Exception as exc:
         print(f"Failed to load plugin config {_CONFIG!r}: {exc}", file=sys.stderr)
         return

@@ -1,11 +1,8 @@
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
-
-from mistletoe import Document
 
 from orc.collections import doc_to_sub_tables
 from orc.model import DeviceType, Registry, column_to_value
@@ -16,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class Declarations:
-    config_dir: str = ""
+    plugin_docs: dict[str, Any] = field(default_factory=dict)
     device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC", "Button"])
     controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
     reset_excluded_types: set[str] = field(default_factory=set)
@@ -33,6 +30,9 @@ class Declarations:
 
     def declare_dispatch(self, name: str, fn: Callable[..., None]) -> None:
         self.dispatch_handlers[name] = fn
+
+    def load_plugin_config(self, name: str, schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
+        return load_plugin_config(name, self.plugin_docs, schema)
 
     def declare(
         self,
@@ -83,8 +83,8 @@ class Declarations:
         )
 
 
-def collect_declarations(module_paths: Iterable[str], config_dir: str) -> Declarations:
-    declarations = Declarations(config_dir=config_dir)
+def collect_declarations(module_paths: Iterable[str], plugin_docs: dict[str, Any]) -> Declarations:
+    declarations = Declarations(plugin_docs=plugin_docs)
     seen: set[str] = set()
     for path in module_paths:
         package = path.split(".")[0]
@@ -98,10 +98,10 @@ def collect_declarations(module_paths: Iterable[str], config_dir: str) -> Declar
     return declarations
 
 
-def load_plugin_config(name: str, config_dir: str, schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
-    path = Path(config_dir) / "plugins" / f"{name}.md"
-    with open(path) as fh:
-        doc = Document(fh)
+def load_plugin_config(name: str, plugin_docs: dict[str, Any], schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
+    doc = plugin_docs.get(name)
+    if doc is None:
+        raise FileNotFoundError(f"no config doc 'plugins/{name}.md'")
 
     attrs: dict[str, Any] = {}
     for section, columns in schema.items():
