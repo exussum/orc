@@ -10,7 +10,6 @@ from functools import wraps
 from typing import Any
 
 from orc import model as m
-from orc.declarations import load_plugin_config
 
 audio_lock = threading.Lock()
 
@@ -58,38 +57,6 @@ def synchronized[R](method: Callable[..., R]) -> Callable[..., R]:
             return method(self, *args, **kwargs)
 
     return wrapper
-
-
-_UNSET = object()
-_FAILED = object()
-
-
-def plugin_config[R](name: str, *, schema: dict[str, tuple[str, ...]]) -> Callable[[Callable[..., R]], Callable[..., R | None]]:
-    def decorator(fn: Callable[..., R]) -> Callable[..., R | None]:
-        if fn.__module__.split(".")[0] != "orc" and "/" not in name:
-            package = fn.__module__.split(".")[0]
-            resolved = f"{package}/{name}"
-        else:
-            resolved = name
-        cache: Any = _UNSET
-
-        @wraps(fn)
-        def wrapper(ctx: m.AppContext, *args: Any, **kwargs: Any) -> R | None:
-            nonlocal cache
-            if cache is _UNSET:
-                try:
-                    cache = load_plugin_config(resolved, ctx.config.plugin_docs, schema)
-                except Exception as exc:
-                    print(f"Failed to load plugin config {resolved!r}: {exc}", file=sys.stderr)
-                    cache = _FAILED
-            if cache is not _FAILED:
-                return fn(ctx, cache, *args, **kwargs)
-            return None
-
-        wrapper._config = resolved  # type: ignore[attr-defined]  # attach resolved config name onto the wrapper
-        return wrapper
-
-    return decorator
 
 
 def unwrap_rule_container[R](f: Callable[..., R]) -> Callable[..., None]:
