@@ -53,9 +53,9 @@ class Config:
         self.audio_volumes = m.build_audio_volumes(doc, "Audio Volumes", required=(m.AUDIO_INFO, m.AUDIO_FATAL))
 
         self.default_config = self.routines["ROUTINE_DEFAULT"]
+        self.reset_config = self.routines["ROUTINE_RESET"]
         self.schedule_routines = {r.name: r for theme in self.themes.values() for r in theme.configs}
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=m.OFF)
-        self.reset_config = self._build_reset_config()
 
     def _parse_config_docs(self) -> tuple[Document, dict[str, Document]]:
         plugins_dir = Path(self.config_dir) / "plugins"
@@ -81,18 +81,6 @@ class Config:
         globals()["device_enums"] = list(enums.values())
         self.registry = declarations.build(enums)
         self.virtual_devices = {e for e in enums["Light"] if isinstance(e.value, int) and e.value < 0}
-
-    def _build_reset_config(self) -> m.Configs:
-        excluded = {name for name, d in self.registry.devices.items() if d.reset_excluded}
-        return m.squish_configs(
-            m.Configs(
-                *(
-                    i
-                    for i in self.routines["ROUTINE_RESET"].items
-                    if (i.what if isinstance(i.what, type) else type(i.what)).__name__ not in excluded
-                )
-            )
-        )
 
 
 config = Config()

@@ -2,7 +2,7 @@
 
 Registers the LGTV/WebOS device types, a dispatch handler (on/off via WebOS, with a
 BroadLink IR toggle to power on), a "TV" state row set, the pairing action's on-click
-notification, a boot hook to create its DB table, and marks WebOS reset-excluded.
+notification, and a boot hook to create its DB table.
 """
 
 from typing import Any
@@ -49,7 +49,6 @@ def declare(declarations: Any) -> None:
     declarations.declare(
         device_types=["LGTV", "WebOS"],
         controllable=["LGTV"],
-        reset_excluded=["WebOS"],
         icons={"LGTV": "tv"},
         dispatch={"LGTV": _dispatch},
         state_providers={"TV": tv_state},

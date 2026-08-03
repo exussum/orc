@@ -56,20 +56,6 @@ def test_build_carries_dispatch_and_missing():
     assert reg.devices["NoDispatch"].dispatch is None
 
 
-def test_build_carries_reset_excluded_flag():
-    class Excluded(Enum):
-        x = 1
-
-    class Kept(Enum):
-        x = 1
-
-    builder = declarations.Declarations()
-    builder.declare(reset_excluded=["Excluded"])
-    reg = builder.build({"Excluded": Excluded, "Kept": Kept})
-    assert reg.devices["Excluded"].reset_excluded
-    assert not reg.devices["Kept"].reset_excluded
-
-
 def test_declare_wires_every_piece():
     class Acme(Enum):
         x = 1
