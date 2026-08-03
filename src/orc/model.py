@@ -326,8 +326,7 @@ class Registry:
     type, so they sit alongside ``devices`` rather than folding into a DeviceType.
     ``state_providers`` are registered by setup hooks (``api.add_state_provider``)
     and called fresh by consumers on each request, so the returned rows reflect live
-    device state; ctx-bound dispatch handlers arrive the same way
-    (``api.add_dispatch_handler``)."""
+    device state."""
 
     devices: dict[str, DeviceType]
     click_hooks: dict[str, str]
