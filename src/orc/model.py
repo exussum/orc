@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 class SnapShot(NamedTuple):
     routine: Configs
     end: datetime
+    label: str = ""
 
 
 class ThemeOverride(NamedTuple):
