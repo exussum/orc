@@ -1,72 +1,42 @@
 import os
 import signal
-from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from types import ModuleType
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from orc import model as m
 from orc.decorators import plugin_config, requires_ctx  # noqa: F401
 
-if TYPE_CHECKING:
-    from orc import Config as OrcConfig
 
-
-@dataclass
-class PluginCtx(m.AppContext):
-    config: OrcConfig
-    api: ModuleType
-    model: ModuleType
-    orc: ModuleType
-
-
-def back_on_schedule(ctx: PluginCtx) -> None:
+def back_on_schedule(ctx: m.AppContext) -> None:
     ctx.api.check_presence(silent=True)
     ctx.api.replay_day(ctx.api.local_now())
 
 
-def build_ctx(orc_ctx: m.AppContext) -> PluginCtx:
-    import orc
-    from orc import api, config, model
-
-    return PluginCtx(
-        snapshot_manager=orc_ctx.snapshot_manager,
-        scheduler=orc_ctx.scheduler,
-        sound_path=orc_ctx.sound_path,
-        version_manager=orc_ctx.version_manager,
-        config=config,
-        api=api,
-        model=model,
-        orc=orc,
-    )
-
-
-def execute_plugin(orc_ctx: m.AppContext, id: str, **params: Any) -> None:
-    ctx = build_ctx(orc_ctx)
+def execute_plugin(ctx: m.AppContext, id: str, **params: Any) -> None:
     ctx.config.plugins[id].func(ctx, **params)
 
 
-def light_test(ctx: PluginCtx) -> None:
+def light_test(ctx: m.AppContext) -> None:
     end = ctx.api.local_now() + timedelta(minutes=10)
     ctx.snapshot_manager.replace_config("light_test", ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end)
     ctx.api.light_test()
     ctx.snapshot_manager.resume("light_test", ctx.config.default_config)
 
 
-def rebuild_jobs(ctx: PluginCtx) -> None:
+def rebuild_jobs(ctx: m.AppContext) -> None:
     ctx.api.rebuild_jobs(ctx)
 
 
-def reboot(ctx: PluginCtx) -> None:
+def reboot(ctx: m.AppContext) -> None:
     os.kill(os.getppid(), signal.SIGTERM)
 
 
-def reboot_hubitat(ctx: PluginCtx) -> None:
+def reboot_hubitat(ctx: m.AppContext) -> None:
     ctx.api.reboot_hubitat()
 
 
-def sound_test(ctx: PluginCtx) -> None:
+def sound_test(ctx: m.AppContext) -> None:
     base = ctx.config.internal_url.rstrip("/") + "/"
     url = f"{base}static/alert.mp3"
     ctx.api.dispatch(ctx.model.Configs(ctx.model.Config(ctx.orc.Chromecast, url)), force=True)

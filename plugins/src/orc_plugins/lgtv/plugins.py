@@ -13,13 +13,12 @@ from typing import TYPE_CHECKING, Any
 from aiowebostv import WebOsClient
 
 from orc.decorators import requires_enabled
-from orc.plugins import PluginCtx
 
 if TYPE_CHECKING:
-    from orc.model import DeviceEnum
+    from orc.model import AppContext, DeviceEnum
 
 # Callers thread in core's ``api.connection`` (a context-manager factory) from their
-# PluginCtx; this module never imports orc.api itself.
+# ctx; this module never imports orc.api itself.
 type Connection = Callable[[], Any]
 
 
@@ -28,7 +27,7 @@ def init_db(connection: Connection) -> None:
         conn.execute("CREATE TABLE IF NOT EXISTS orc_lg_tv (hostname TEXT PRIMARY KEY, client_key TEXT NOT NULL)")
 
 
-def pair_tv(ctx: PluginCtx, *, device: str) -> None:
+def pair_tv(ctx: "AppContext", *, device: str) -> None:
     # Driven by a device-row click, which passes the TV via ?device=<name>.
     pair(ctx.api.connection, ctx.orc.WebOS[device].value)
 
