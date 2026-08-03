@@ -239,7 +239,7 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     entry = _cleanup(sensor, plugin_ctx)
     plugin_ctx.snapshot_manager.replace_config.assert_called_once_with(
-        plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45)
+        plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45), label=plugins.SNAPSHOT_NAME
     )
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
     assert [c.action for c in entry.children] == [sensor.log_shutdown]

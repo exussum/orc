@@ -1,9 +1,9 @@
 class Log:
     BOOT: str = "Boot"
 
-    SNAPSHOT_TAKEN: str = "Snapshot `{name}` until {end:%I:%M}: {items}"
+    SNAPSHOT_TAKEN: str = "Snapshot for `{name}` until {end:%I:%M}: {items}"
     SNAPSHOT_ALL_OFF: str = "all off"
-    SNAPSHOT_RESTORED: str = "Snapshot `{name}` restored"
+    SNAPSHOT_RESTORED: str = "Snapshot for `{name}` restored"
 
     THEME_OVERRIDE_CLEARED: str = "Theme override cleared"
     THEME_OVERRIDE_SET: str = "Theme override set: `{name}` {start}..{end}"

@@ -208,7 +208,7 @@ def resolve_run_action(
         if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
             # Don't stack snapshots
             snap = routine.snapshot
-            return lambda: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap), timedelta()
+            return lambda: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, label=id), timedelta()
         base = (config.reset_config,) if routine.reset else ()
         return lambda: dispatch(m.squish_configs(*base, routine), force=True), routine.delay
     return None
@@ -308,14 +308,14 @@ class SnapshotManager:
         self.snapshots: dict[str, m.SnapShot] = {}
 
     @synchronized
-    def replace_config(self, name: str, target_config: m.Configs, end: datetime) -> None:
+    def replace_config(self, name: str, target_config: m.Configs, end: datetime, label: str) -> None:
 
         if name not in self.snapshots:
-            self.snapshots[name] = m.SnapShot(capture_lights(), end)
+            self.snapshots[name] = m.SnapShot(capture_lights(), end, label)
             # captured light states are always enum members, not the class/set arm
             routine_items = self.snapshots[name].routine.items
             items = ", ".join(f"`{c.what.name}`={c.state}" for c in routine_items if c.state != m.OFF)  # type: ignore[union-attr]
-            log(m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=name, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
+            log(m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         dispatch(target_config, force=True)
 
@@ -338,7 +338,7 @@ class SnapshotManager:
 
         if snapshot:
             routine = snapshot.routine
-            log(m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=name))
+            log(m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
         else:
             routine = target_config
         dispatch(routine, force=True)
