@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 from apscheduler.triggers.date import DateTrigger
 
-from orc.plugins import plugin_config, requires_ctx
+from orc.plugins import requires_ctx
 
 if TYPE_CHECKING:
     from orc import model as m
@@ -16,19 +16,15 @@ if TYPE_CHECKING:
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
+SCHEMA = {
+    "Settings": ("Key", "Value"),
+    "Messages": ("Log", "Message"),
+    "Rules": ("Trigger", "Device", "State"),
+    "Timed": ("Name", "Start", "Stop", "Device", "State"),
+}
 
 
-@plugin_config(
-    "entrance_sensor",
-    schema={
-        "Settings": ("Key", "Value"),
-        "Messages": ("Log", "Message"),
-        "Rules": ("Trigger", "Device", "State"),
-        "Timed": ("Name", "Start", "Stop", "Device", "State"),
-    },
-)
-def setup(ctx: m.AppContext, sensor: SimpleNamespace) -> None:
-    ids = {sensor.entrance_id, sensor.patio_door_id}
+def setup(sensor: SimpleNamespace, ids: set[int], ctx: m.AppContext) -> None:
     ctx.api.add_listener(partial(_on_sensor_event, ctx, sensor, ids))
     ctx.api.add_state_provider("Entrance Sensors", partial(battery_state, ctx, ids))
 
