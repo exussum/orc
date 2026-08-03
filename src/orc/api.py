@@ -168,8 +168,6 @@ def _dispatch_chromecast(w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tupl
 
 
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
-    """Register a state-page section. All providers register at startup — from hooks,
-    like listeners — so ctx-bound and plain providers arrive the same way."""
     config.registry.state_providers[title] = provider
 
 
@@ -185,11 +183,6 @@ def declare_core(declarations: Declarations) -> None:
 def resolve_run_action(
     ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False
 ) -> tuple[Callable[[], None], timedelta] | None:
-    """Resolve a run id to (action, delay), or None if the id is unknown.
-
-    ``hub_origin`` marks runs triggered by the hub (button events; formerly its HTTP
-    callbacks): ad-hoc routines with a snapshot window then record the pre-run state
-    for restore instead of dispatching directly."""
     if id == ORC_SYSTEM_SNAPSHOT:
         return lambda: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
     elif id in config.plugins:
