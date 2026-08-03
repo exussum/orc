@@ -16,7 +16,7 @@ def mock_registry(monkeypatch):
     tests that exercise dispatch without running real registration. Each keyword is
     ``name=(enum_cls, dispatch | None)``; the enum is also attached to ``orc``."""
 
-    def install(**dispatch_by_type):
+    def install(ctx=None, **dispatch_by_type):
         for name, (cls, _) in dispatch_by_type.items():
             monkeypatch.setattr(orc, name, cls, raising=False)
         registry = m.Registry(
@@ -28,6 +28,7 @@ def mock_registry(monkeypatch):
             button_labels={},
             state_providers={},
             setup_hooks=[],
+            ctx=ctx,
         )
         monkeypatch.setattr(orc.config, "registry", registry)
         return registry
@@ -47,7 +48,8 @@ class TestDispatchLGTV:
         class BroadLink(Enum):
             living_room = 1
 
-        mock_registry(LGTV=(LGTV, lgtv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
+        self.ctx = MagicMock()
+        mock_registry(ctx=self.ctx, LGTV=(LGTV, lgtv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lgtv = LGTV.living_room
         self.webos = WebOS.living_room
         self.bl = BroadLink.living_room
@@ -55,22 +57,22 @@ class TestDispatchLGTV:
     def test_off_powers_webos_off(self):
         with patch.object(plugins, "off") as webos_off:
             api.dispatch(m.Config(self.lgtv, m.OFF))
-        webos_off.assert_called_once_with(api.connection, self.webos)
+        webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
-        with patch.object(plugins, "is_off", return_value=True), patch.object(api, "tv_toggle") as toggle:
+        with patch.object(plugins, "is_off", return_value=True):
             api.dispatch(m.Config(self.lgtv, m.ON))
-        toggle.assert_called_once_with(self.bl)
+        self.ctx.api.tv_toggle.assert_called_once_with(self.bl)
 
     def test_on_skips_toggle_when_tv_already_on(self):
-        with patch.object(plugins, "is_off", return_value=False), patch.object(api, "tv_toggle") as toggle:
+        with patch.object(plugins, "is_off", return_value=False):
             api.dispatch(m.Config(self.lgtv, m.ON))
-        toggle.assert_not_called()
+        self.ctx.api.tv_toggle.assert_not_called()
 
     def test_device_command_routes_to_lgtv_handler(self):
         with patch.object(plugins, "off") as webos_off:
             api.device_command("living_room", m.OFF)
-        webos_off.assert_called_once_with(api.connection, self.webos)
+        webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
 
 
 def test_lgtv_registers_with_core():

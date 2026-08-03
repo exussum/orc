@@ -29,15 +29,13 @@ def setup(ctx: "m.AppContext") -> None:
     plugins.init_db(ctx.api.connection)
 
 
-def _dispatch(w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
-    from orc import api
-
+def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
     webos_device, bl_device = _orc.WebOS[w.name], _orc.BroadLink[w.name]
     if rule.state == m.OFF:
-        plugins.off(api.connection, webos_device)
+        plugins.off(ctx.api.connection, webos_device)
     elif rule.state == m.ON:
         if plugins.is_off(webos_device):
-            api.tv_toggle(bl_device)
+            ctx.api.tv_toggle(bl_device)
     else:
         raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
 
