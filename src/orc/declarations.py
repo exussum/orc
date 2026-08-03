@@ -16,6 +16,7 @@ class Declarations:
     reset_excluded_types: set[str] = field(default_factory=set)
     device_icons: dict[str, str] = field(default_factory=dict)
     dispatch_handlers: dict[str, Callable[..., None]] = field(default_factory=dict)
+    state_providers: dict[str, Callable[[], Any]] = field(default_factory=dict)
     setup_hooks: list[Callable[[Any], None]] = field(default_factory=list)
     click_hooks: dict[str, str] = field(default_factory=dict)
     button_labels: dict[str, str] = field(default_factory=dict)
@@ -35,6 +36,7 @@ class Declarations:
         reset_excluded: Iterable[str] = (),
         icons: dict[str, str] | None = None,
         dispatch: dict[str, Callable[..., None]] | None = None,
+        state_providers: dict[str, Callable[[], Any]] | None = None,
         setup: Iterable[Callable[[Any], None]] = (),
         on_click: dict[str, str] | None = None,
         button_labels: dict[str, str] | None = None,
@@ -42,6 +44,7 @@ class Declarations:
         self.reset_excluded_types.update(reset_excluded)
         self.device_icons.update(icons or {})
         self.dispatch_handlers.update(dispatch or {})
+        self.state_providers.update(state_providers or {})
         self.click_hooks.update(on_click or {})
         self.button_labels.update(button_labels or {})
 
@@ -69,7 +72,7 @@ class Declarations:
             devices=devices,
             click_hooks=dict(self.click_hooks),
             button_labels=dict(self.button_labels),
-            state_providers={},  # filled by setup hooks via api.add_state_provider
+            state_providers=dict(self.state_providers),
             setup_hooks=list(self.setup_hooks),
         )
 
