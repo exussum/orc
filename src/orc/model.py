@@ -310,7 +310,6 @@ class DeviceType:
     cls: type[DeviceEnum]
     icon: str
     controllable: bool
-    reset_excluded: bool
     dispatch: Callable[..., None] | None
 
     def handles(self, name: str) -> bool:

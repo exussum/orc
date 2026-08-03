@@ -1,9 +1,10 @@
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from orc_plugins import entrance_sensor
 from orc_plugins.entrance_sensor import plugins
 
 from orc import api
@@ -299,7 +300,8 @@ def test_battery_state_reads_the_device_cache(plugin_ctx):
 
 
 def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
-    plugins.setup(sensor, {16, 56}, plugin_ctx)
+    with patch.object(entrance_sensor, "load_plugin_config", return_value=sensor):
+        entrance_sensor.setup(plugin_ctx)
     plugin_ctx.api.add_listener.assert_called_once()
     title, provider = plugin_ctx.api.add_state_provider.call_args[0]
     assert title == "Entrance Sensors"

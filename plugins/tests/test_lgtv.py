@@ -21,7 +21,7 @@ def mock_registry(monkeypatch):
             monkeypatch.setattr(orc, name, cls, raising=False)
         registry = m.Registry(
             devices={
-                name: m.DeviceType(cls=cls, icon="", controllable=False, reset_excluded=False, dispatch=dispatch)
+                name: m.DeviceType(cls=cls, icon="", controllable=False, dispatch=dispatch)
                 for name, (cls, dispatch) in dispatch_by_type.items()
             },
             click_hooks={},
@@ -89,5 +89,4 @@ def test_lgtv_registers_with_core():
     assert lgtv_dev.dispatch is lgtv._dispatch
     assert lgtv_dev.controllable
     assert lgtv_dev.icon == "tv"
-    assert config.registry.devices["WebOS"].reset_excluded
     assert "Pair LG TV" in config.registry.click_hooks
