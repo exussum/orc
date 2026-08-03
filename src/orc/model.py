@@ -6,6 +6,7 @@ from dataclasses import KW_ONLY, dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, auto
 from itertools import chain
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, NamedTuple, Self
 
 from apscheduler.schedulers.base import BaseScheduler
@@ -14,6 +15,7 @@ from orc.collections import doc_to_sub_tables, doc_to_table, parse_kv
 from orc.security import safe_eval
 
 if TYPE_CHECKING:
+    from orc import Config as OrcConfig
     from orc.api import SnapshotManager
     from orc.view import VersionManager
 
@@ -262,10 +264,18 @@ class Secrets:
 
 @dataclass
 class AppContext:
+    """Everything a plugin may touch, so plugins never import orc internals directly.
+    The module fields are static; they default to lazy imports because this module
+    can't import orc.api at import time (api imports model)."""
+
     snapshot_manager: SnapshotManager
     scheduler: BaseScheduler
     sound_path: str
     version_manager: VersionManager
+    config: "OrcConfig" = field(default_factory=lambda: importlib.import_module("orc").config)
+    api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
+    model: ModuleType = field(default_factory=lambda: importlib.import_module("orc.model"))
+    orc: ModuleType = field(default_factory=lambda: importlib.import_module("orc"))
 
 
 class DeviceEnumMeta(EnumType):
@@ -323,7 +333,7 @@ class Registry:
     click_hooks: dict[str, str]
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]
-    setup_hooks: list[Callable[[Any], None]]  # arg is a PluginCtx; typed loosely to keep the plugin layer out of core
+    setup_hooks: list[Callable[[AppContext], None]]
 
 
 def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:

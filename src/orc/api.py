@@ -175,7 +175,7 @@ def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
 
 def add_dispatch_handler(name: str, handler: Callable[..., None]) -> None:
     """Swap in a device type's dispatch handler at startup, for handlers bound to a
-    PluginCtx that can't exist at config load."""
+    ctx that can't exist at config load."""
     config.registry.devices[name] = replace(config.registry.devices[name], dispatch=handler)
 
 

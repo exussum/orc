@@ -35,7 +35,7 @@ dependencies = [
 
 ## 1. Write the plugin function
 
-A plugin function takes a `PluginCtx` as its first argument. The remaining
+A plugin function takes an `AppContext` as its first argument. The remaining
 arguments depend on which section the plugin is registered under (step 2):
 
 | Section  | Called as                | When                                                      |
@@ -51,14 +51,14 @@ package containing nothing but event-driven plugins needs at least one
 Plugins-table entry to be imported at all. The entrance sensor in
 [`src/orc_plugins/entrance_sensor/plugins.py`](src/orc_plugins/entrance_sensor/plugins.py)
 wires itself in its package ``declare()`` hook — a setup hook receives the
-`PluginCtx` and registers an MQTT device listener (`ctx.api.add_listener`) and a
+context and registers an MQTT device listener (`ctx.api.add_listener`) and a
 state-page section (`ctx.api.add_state_provider`).
 
-### The plugin context
+### The context
 
-`PluginCtx` (defined in `orc/plugins.py`, built by `build_ctx`) is a small
-dataclass that hands a plugin everything it may touch, so plugins never
-import orc internals directly:
+`AppContext` (defined in `orc/model.py`) is a small dataclass that hands a
+plugin everything it may touch, so plugins never import orc internals
+directly:
 
 | Field                  | What it is              | What it provides                                                                                                           |
 |------------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------|
@@ -70,9 +70,8 @@ import orc internals directly:
 | `ctx.orc`              | top-level `orc` package | The devices themselves. The enums used to say which device a config applies to.                                            |
 
 For work scheduled to run later (this plugin queues a follow-up job with
-`ctx.scheduler.add_job`), decorate the job function with `@requires_ctx` and
-rebuild the plugin context inside it with `build_ctx(ctx)` — the scheduler
-injects the raw orc context as a `ctx` keyword argument at run time.
+`ctx.scheduler.add_job`), decorate the job function with `@requires_ctx` —
+the scheduler injects the context as a `ctx` keyword argument at run time.
 
 ## 2. Register it in config.md
 
@@ -109,7 +108,7 @@ per-plugin markdown file and injects the parsed result as the second
 argument, before any section-specific arguments:
 
 ```python
-from orc.plugins import build_ctx, plugin_config, requires_ctx
+from orc.plugins import plugin_config, requires_ctx
 
 @plugin_config(
     "entrance_sensor",

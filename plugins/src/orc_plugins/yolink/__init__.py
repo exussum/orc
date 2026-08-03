@@ -10,7 +10,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from orc.plugins import PluginCtx
+    from orc.model import AppContext
 
 from orc_plugins.yolink import plugins
 
@@ -33,7 +33,7 @@ class Msg:
     ONLINE = "`{name}` online"
 
 
-def _on_transition(ctx: "PluginCtx", name: str, kind: str, old: Any, new: Any) -> None:
+def _on_transition(ctx: "AppContext", name: str, kind: str, old: Any, new: Any) -> None:
     api = ctx.api
     msg = None
     if kind == "connection" and old is not None:
@@ -67,7 +67,7 @@ def _on_transition(ctx: "PluginCtx", name: str, kind: str, old: Any, new: Any) -
         api.play_text(msg.replace("`", ""))
 
 
-def setup(ctx: "PluginCtx") -> None:
+def setup(ctx: "AppContext") -> None:
     ctx.api.add_state_provider("Leak Sensors", leak_state)
     plugins.set_transition_callback(partial(_on_transition, ctx))
     plugins.start()
