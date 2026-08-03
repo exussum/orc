@@ -51,7 +51,7 @@ class Config:
         # Build plugins first so their declare() hooks can append device types
         # (into the fresh registry state) before the enums below are built.
         self.plugins = m.build_plugins(doc, "Plugins")
-        declarations = collect_declarations(p.func.__module__ for p in self.plugins.values())
+        declarations = collect_declarations((p.func.__module__ for p in self.plugins.values()), self.config_dir)
         if "orc.api" in sys.modules:  # bootstrap load runs during `import orc`, before api is importable — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
         # Light and Button rows name hub devices, so they carry the hubitat id_lookup;
