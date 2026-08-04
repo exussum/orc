@@ -33,7 +33,7 @@ class Msg:
     ONLINE = "`{name}` online"
 
 
-def _on_transition(ctx: "AppContext", name: str, kind: str, old: Any, new: Any) -> None:
+def _on_transition(ctx: AppContext, name: str, kind: str, old: Any, new: Any) -> None:
     api = ctx.api
     msg = None
     if kind == "connection" and old is not None:
@@ -67,7 +67,7 @@ def _on_transition(ctx: "AppContext", name: str, kind: str, old: Any, new: Any) 
         api.play_text(msg.replace("`", ""))
 
 
-def setup(ctx: "AppContext") -> None:
+def setup(ctx: AppContext) -> None:
     plugins.set_transition_callback(partial(_on_transition, ctx))
     plugins.start()
 

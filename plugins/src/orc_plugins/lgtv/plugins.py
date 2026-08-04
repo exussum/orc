@@ -27,7 +27,7 @@ def init_db(connection: Connection) -> None:
         conn.execute("CREATE TABLE IF NOT EXISTS orc_lg_tv (hostname TEXT PRIMARY KEY, client_key TEXT NOT NULL)")
 
 
-def pair_tv(ctx: "AppContext", *, device: str) -> None:
+def pair_tv(ctx: AppContext, *, device: str) -> None:
     # Driven by a device-row click, which passes the TV via ?device=<name>.
     pair(ctx.api.connection, ctx.orc.WebOS[device].value)
 
@@ -42,12 +42,12 @@ def pair(connection: Connection, hostname: str) -> str | None:
     return key
 
 
-def is_off(tv: "DeviceEnum") -> bool:
+def is_off(tv: DeviceEnum) -> bool:
     return not asyncio.run(_is_port_open(tv.value, 3000, timeout=0.5))
 
 
 @requires_enabled(None)
-def off(connection: Connection, tv: "DeviceEnum") -> None:
+def off(connection: Connection, tv: DeviceEnum) -> None:
     client_key = _fetch_client_key(connection, tv.value)
     if not client_key:
         raise RuntimeError(f"No client_key for {tv.value} in orc_lg_tv; run the Pair LG TV plugin first")
