@@ -1,13 +1,8 @@
-"""Entrance-sensor integration: motion-triggered scenes plus battery/door state read
-from the central MQTT listener's device documents.
-
-The plugins-module import is deferred into setup() for the same reason as the
-package-level declare(): this package is imported during orc's config load.
-"""
-
 import sys
 from functools import partial
 from typing import TYPE_CHECKING, Any
+
+from orc_plugins.entrance_sensor import plugins
 
 from orc.declarations import load_plugin_config
 
@@ -22,10 +17,17 @@ def declare(declarations: Any) -> None:
 
 
 def setup(ctx: "AppContext") -> None:
-    from orc_plugins.entrance_sensor import plugins
-
     try:
-        sensor = load_plugin_config(CONFIG, ctx.config.plugin_docs, plugins.SCHEMA)
+        sensor = load_plugin_config(
+            CONFIG,
+            ctx.config.plugin_docs,
+            {
+                "Settings": ("Key", "Value"),
+                "Messages": ("Log", "Message"),
+                "Rules": ("Trigger", "Device", "State"),
+                "Timed": ("Name", "Start", "Stop", "Device", "State"),
+            },
+        )
     except Exception as exc:
         print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
         return
