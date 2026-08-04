@@ -15,12 +15,6 @@ if TYPE_CHECKING:
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
-SCHEMA = {
-    "Settings": ("Key", "Value"),
-    "Messages": ("Log", "Message"),
-    "Rules": ("Trigger", "Device", "State"),
-    "Timed": ("Name", "Start", "Stop", "Device", "State"),
-}
 
 
 def _on_sensor_event(
