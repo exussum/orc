@@ -16,7 +16,7 @@ def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup])
 
 
-def setup(ctx: "AppContext") -> None:
+def setup(ctx: AppContext) -> None:
     try:
         sensor = load_plugin_config(
             CONFIG,

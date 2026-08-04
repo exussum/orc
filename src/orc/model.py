@@ -110,7 +110,7 @@ class BatteryLevel(str, Enum):
         return self is BatteryLevel.CRITICAL
 
     @classmethod
-    def from_fraction(cls, value: Any, out_of: int) -> "BatteryLevel":
+    def from_fraction(cls, value: Any, out_of: int) -> BatteryLevel:
         pct = int(value) * 100 // out_of
         if pct <= 10:
             return cls.CRITICAL
@@ -272,7 +272,7 @@ class AppContext:
     scheduler: BaseScheduler
     sound_path: str
     version_manager: VersionManager
-    config: "OrcConfig" = field(default_factory=lambda: importlib.import_module("orc").config)
+    config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
     model: ModuleType = field(default_factory=lambda: importlib.import_module("orc.model"))
     orc: ModuleType = field(default_factory=lambda: importlib.import_module("orc"))
