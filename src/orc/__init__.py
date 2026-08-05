@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from mistletoe import Document
@@ -9,13 +9,12 @@ from mistletoe import Document
 from orc import model as m
 from orc.declarations import collect_declarations
 
-if TYPE_CHECKING:
-    Light: type[m.DeviceEnum]
-    Chromecast: type[m.DeviceEnum]
-    BroadLink: type[m.DeviceEnum]
-    AC: type[m.DeviceEnum]
+Light: type[m.DeviceEnum]
+Chromecast: type[m.DeviceEnum]
+BroadLink: type[m.DeviceEnum]
+AC: type[m.DeviceEnum]
 
-device_enums: "list[type[m.DeviceEnum]]" = []
+device_enums: list[type[m.DeviceEnum]] = []
 
 
 def _parse_doc(path: Path) -> Document:

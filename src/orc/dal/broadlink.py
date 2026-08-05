@@ -1,13 +1,11 @@
 import base64
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import broadlink as bl
 
 from orc.decorators import requires_enabled
-
-if TYPE_CHECKING:
-    from orc.model import DeviceEnum
+from orc.model import DeviceEnum
 
 
 @requires_enabled(None)
