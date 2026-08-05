@@ -7,14 +7,12 @@ top-level import would be circular.
 """
 
 from functools import partial
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from orc.model import AppContext
+from typing import Any
 
 from orc_plugins.yolink import plugins
 
 from orc import model as m
+from orc.model import AppContext
 
 _SIGNAL_WEAK_THRESHOLD = -90
 
