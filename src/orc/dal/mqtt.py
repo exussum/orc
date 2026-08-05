@@ -12,7 +12,6 @@ import os
 import time
 from collections.abc import Callable, Sequence
 from typing import Any
-from urllib.parse import urlsplit
 
 import paho.mqtt.client as mqtt
 
@@ -39,7 +38,7 @@ _client: mqtt.Client | None = None  # the standing client, retained for publishi
 _command_sent: LockedDict[str, float] = LockedDict()  # command topic -> monotonic send time
 
 # External-control detection: publish_light also stamps the device id, and a document
-# whose switch/level changed without a recent stamp is logged as externally controlled
+# whose switch/level changed without a recent stamp fires the external listeners
 # (Google Home, a physical switch). A TTL window rather than a pop, since one command
 # can produce multiple document updates.
 _commanded: LockedDict[int, float] = LockedDict()  # device id -> monotonic send time
@@ -64,6 +63,11 @@ _listeners: list[Listener] = []
 type ButtonListener = Callable[[int, int, str], None]
 _button_listeners: list[ButtonListener] = []
 
+# External-control listeners: fired as (device, attribute, old, new) for each
+# switch/level change with no recent orc command behind it. Same contract as
+# Listener: mqtt thread, keep it fast.
+_external_listeners: list[Listener] = []
+
 
 def add_listener(fn: Listener) -> None:
     _listeners.append(fn)
@@ -71,6 +75,10 @@ def add_listener(fn: Listener) -> None:
 
 def add_button_listener(fn: ButtonListener) -> None:
     _button_listeners.append(fn)
+
+
+def add_external_listener(fn: Listener) -> None:
+    _external_listeners.append(fn)
 
 
 def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message: Callable[..., None], timeout: float) -> mqtt.Client | None:
@@ -173,7 +181,7 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
 
 
 def _mqtt_host() -> str | None:
-    return os.getenv("ORC_MQTT_HOST") or urlsplit(config.hubitat_url or "").hostname
+    return os.getenv("ORC_MQTT_HOST")
 
 
 def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
@@ -236,10 +244,11 @@ def _receive_document(msg: mqtt.MQTTMessage) -> None:
     old, _devices[device.id] = _devices.get(device.id), device
     if old is None or old == device:
         return
-    if any(old.attributes.get(a) != device.attributes.get(a) for a in ("switch", "level")):
-        sent = _commanded.get(device.id)
-        if sent is None or time.monotonic() - sent > _EXTERNAL_WINDOW_SEC:
-            _log.info("mqtt: %s changed externally", device.name)
+    sent = _commanded.get(device.id)
+    if sent is None or time.monotonic() - sent > _EXTERNAL_WINDOW_SEC:
+        for a in ("switch", "level"):
+            if old.attributes.get(a) != device.attributes.get(a):
+                _fire(_external_listeners, msg.topic, device, a, old.attributes.get(a), device.attributes.get(a))
     for attribute, new_value in device.attributes.items():
         _fire(_listeners, msg.topic, device, attribute, old.attributes.get(attribute), new_value)
 
