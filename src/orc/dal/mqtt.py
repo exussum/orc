@@ -38,6 +38,13 @@ _client: mqtt.Client | None = None  # the standing client, retained for publishi
 # Round trips fold into orc_durations, keyed by command topic.
 _command_sent: LockedDict[str, float] = LockedDict()  # command topic -> monotonic send time
 
+# External-control detection: publish_light also stamps the device id, and a document
+# whose switch/level changed without a recent stamp is logged as externally controlled
+# (Google Home, a physical switch). A TTL window rather than a pop, since one command
+# can produce multiple document updates.
+_commanded: LockedDict[int, float] = LockedDict()  # device id -> monotonic send time
+_EXTERNAL_WINDOW_SEC = 5.0
+
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document that represents something happening — battery levels,
 # motion active/inactive, contact open/close, switch state, all attributes alike.
@@ -161,6 +168,7 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
         raise RuntimeError(f"mqtt client not started or hub not yet seen; cannot command {light.name}")
     topic = f"hubitat/{_hub_id}/devices/{light.value}/commands/{command}"
     _command_sent[topic] = time.monotonic()
+    _commanded[light.value] = time.monotonic()
     _client.publish(topic, payload)
 
 
@@ -228,6 +236,10 @@ def _receive_document(msg: mqtt.MQTTMessage) -> None:
     old, _devices[device.id] = _devices.get(device.id), device
     if old is None or old == device:
         return
+    if any(old.attributes.get(a) != device.attributes.get(a) for a in ("switch", "level")):
+        sent = _commanded.get(device.id)
+        if sent is None or time.monotonic() - sent > _EXTERNAL_WINDOW_SEC:
+            _log.info("mqtt: %s changed externally", device.name)
     for attribute, new_value in device.attributes.items():
         _fire(_listeners, msg.topic, device, attribute, old.attributes.get(attribute), new_value)
 
