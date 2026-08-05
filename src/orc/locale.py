@@ -25,3 +25,5 @@ class Log:
     BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
     ROOM_SET: str = "Room: `{id}` {state}"
     DEVICE_SET: str = "Device: `{id}` {state}"
+
+    EXTERNAL_CHANGE: str = "`{device}` {attribute}: {old} → {new}"

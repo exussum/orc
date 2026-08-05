@@ -30,6 +30,7 @@ from orc.dal import broadlink, chromecast, feeds, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.mqtt import add_button_listener  # noqa: F401
+from orc.dal.mqtt import add_external_listener  # noqa: F401
 from orc.dal.mqtt import add_listener  # noqa: F401
 from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
 from orc.dal.mqtt import snapshot as device_states  # noqa: F401
@@ -232,6 +233,18 @@ def wire_buttons(ctx: m.AppContext) -> None:
             log(m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action))
 
     add_button_listener(on_button)
+
+
+def wire_external_log() -> None:
+    def on_external(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
+        action = Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new)
+        last = next(iter(_ACTIVITY_LOG.entries), None)
+        if last is not None and last.source is m.LogSource.EXTERNAL:
+            last.add(m.LogSource.EXTERNAL, action)
+        else:
+            log(m.LogSource.EXTERNAL, action)
+
+    add_external_listener(on_external)
 
 
 @unwrap_rule_container
