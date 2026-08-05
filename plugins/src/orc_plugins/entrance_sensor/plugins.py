@@ -1,14 +1,12 @@
 from datetime import timedelta
 from enum import Enum
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import Any, Sequence
 
 from apscheduler.triggers.date import DateTrigger
 
+from orc import model as m
 from orc.plugins import requires_ctx
-
-if TYPE_CHECKING:
-    from orc import model as m
 
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"

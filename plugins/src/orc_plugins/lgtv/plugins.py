@@ -8,14 +8,12 @@ import asyncio
 import sys
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from aiowebostv import WebOsClient
 
 from orc.decorators import requires_enabled
-
-if TYPE_CHECKING:
-    from orc.model import AppContext, DeviceEnum
+from orc.model import AppContext, DeviceEnum
 
 # Callers thread in core's ``api.connection`` (a context-manager factory) from their
 # ctx; this module never imports orc.api itself.
