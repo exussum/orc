@@ -239,7 +239,11 @@ def wire_external_log() -> None:
     def on_external(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
         action = Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new)
         last = next(iter(_ACTIVITY_LOG.entries), None)
-        if last is not None and last.source is m.LogSource.EXTERNAL:
+        if (
+            last is not None
+            and last.source is m.LogSource.EXTERNAL
+            and local_now() - (last.children or [last])[-1].timestamp < timedelta(seconds=5)
+        ):
             last.add(m.LogSource.EXTERNAL, action)
         else:
             log(m.LogSource.EXTERNAL, action)
