@@ -1,13 +1,11 @@
 import sys
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from orc_plugins.entrance_sensor import plugins
 
 from orc.declarations import load_plugin_config
-
-if TYPE_CHECKING:
-    from orc.model import AppContext
+from orc.model import AppContext
 
 CONFIG = "orc_plugins/entrance_sensor"
 

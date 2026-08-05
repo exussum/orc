@@ -2,13 +2,10 @@ import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from orc.collections import doc_to_sub_tables
-from orc.model import DeviceType, Registry, column_to_value
-
-if TYPE_CHECKING:
-    from orc.model import DeviceEnum
+from orc.model import DeviceEnum, DeviceType, Registry, column_to_value
 
 
 @dataclass
@@ -56,7 +53,7 @@ class Declarations:
             if hook not in self.setup_hooks:
                 self.setup_hooks.append(hook)
 
-    def build(self, enums: "dict[str, type[DeviceEnum]]") -> Registry:
+    def build(self, enums: dict[str, type[DeviceEnum]]) -> Registry:
         devices = {
             name: DeviceType(
                 cls=cls,
