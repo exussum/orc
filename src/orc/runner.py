@@ -45,6 +45,7 @@ def web() -> None:
 
 def _start_services(ctx: m.AppContext) -> None:
     api.wire_buttons(ctx)
+    api.wire_external_log()
     api.start_mqtt()
     ctx.scheduler.resume()
     api.log(m.LogSource.SYSTEM, Log.BOOT)

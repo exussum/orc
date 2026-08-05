@@ -3,7 +3,7 @@
 @source "../templates";
 @source "./*.js";
 /* badge classes are built dynamically in log.html (orc-badge-{{ source }}) */
-@source inline("orc-badge-{calendar,routine,system,plugin,manual}");
+@source inline("orc-badge-{calendar,routine,system,plugin,manual,external}");
 
 @theme {
     --color-orc-bg: #1a1a1a;
@@ -21,6 +21,7 @@
     --color-orc-system: #5f9d3f;
     --color-orc-routine: #b5604a;
     --color-orc-plugin: #fd7e14;
+    --color-orc-external: #8e6bc8;
     --color-orc-selected: #fbbf24;
 }
 
@@ -103,6 +104,10 @@
 
 @utility orc-badge-plugin {
     @apply orc-badge bg-orc-plugin;
+}
+
+@utility orc-badge-external {
+    @apply orc-badge bg-orc-external;
 }
 
 @utility orc-input {
