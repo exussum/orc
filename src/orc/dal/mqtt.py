@@ -42,7 +42,7 @@ _command_sent: LockedDict[str, float] = LockedDict()  # command topic -> monoton
 # (Google Home, a physical switch). A TTL window rather than a pop, since one command
 # can produce multiple document updates.
 _commanded: LockedDict[int, float] = LockedDict()  # device id -> monotonic send time
-_EXTERNAL_WINDOW_SEC = 5.0
+_EXTERNAL_WINDOW_SEC = 10.0
 
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document that represents something happening — battery levels,
