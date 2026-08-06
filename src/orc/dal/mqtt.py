@@ -11,6 +11,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import paho.mqtt.client as mqtt
@@ -37,12 +38,32 @@ _client: mqtt.Client | None = None  # the standing client, retained for publishi
 # Round trips fold into orc_durations, keyed by command topic.
 _command_sent: LockedDict[str, float] = LockedDict()  # command topic -> monotonic send time
 
-# External-control detection: publish_light also stamps the device id, and a document
-# whose switch/level changed without a recent stamp fires the external listeners
-# (Google Home, a physical switch). A TTL window rather than a pop, since one command
-# can produce multiple document updates.
-_commanded: LockedDict[int, float] = LockedDict()  # device id -> monotonic send time
-_EXTERNAL_WINDOW_SEC = 10.0
+_COMMAND_TTL_SEC = 120.0
+
+
+@dataclass(eq=False)
+class _Command:
+    """Equal when the times are within _COMMAND_TTL_SEC and every field both sides
+    carry agrees; levels match within 1 (drivers round through the 0-254 scale)."""
+
+    time: float
+    device_id: int
+    level: Any = None
+    switch: Any = None
+
+    def __eq__(self, other: Any) -> bool:
+        return (
+            other is not None
+            and self.device_id == other.device_id
+            and abs(self.time - other.time) <= _COMMAND_TTL_SEC
+            and (self.switch is None or other.switch is None or self.switch == other.switch)
+            and (self.level is None or other.level is None or abs(int(self.level) - int(other.level)) <= 1)
+        )
+
+
+# External-control detection: a switch/level change that doesn't match the pending
+# _Command fires the external listeners (Google Home, a physical switch).
+_commanded: LockedDict[int, _Command] = LockedDict()  # device id -> expected outcome
 
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document that represents something happening — battery levels,
@@ -162,8 +183,10 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
 
 @requires_enabled(None)
 def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
+    expected = _Command(time.monotonic(), light.value)
     if brightness is not None and m.Capability.change_level in light.capabilities:
         command, payload = "setLevel", str(brightness)
+        expected.level, expected.switch = brightness or None, m.ON if brightness else m.OFF
     else:
         if brightness == 0:
             on = False
@@ -172,11 +195,12 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
         elif brightness is not None:
             raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
         command, payload = (m.ON if on else m.OFF), None
+        expected.switch = command
     if _client is None or _hub_id is None:
         raise RuntimeError(f"mqtt client not started or hub not yet seen; cannot command {light.name}")
     topic = f"hubitat/{_hub_id}/devices/{light.value}/commands/{command}"
     _command_sent[topic] = time.monotonic()
-    _commanded[light.value] = time.monotonic()
+    _commanded[light.value] = expected
     _client.publish(topic, payload)
 
 
@@ -244,11 +268,13 @@ def _receive_document(msg: mqtt.MQTTMessage) -> None:
     old, _devices[device.id] = _devices.get(device.id), device
     if old is None or old == device:
         return
-    sent = _commanded.get(device.id)
-    if sent is None or time.monotonic() - sent > _EXTERNAL_WINDOW_SEC:
-        for a in ("switch", "level"):
-            if old.attributes.get(a) != device.attributes.get(a):
-                _fire(_external_listeners, msg.topic, device, a, old.attributes.get(a), device.attributes.get(a))
+    now, expected = time.monotonic(), _commanded.get(device.id)
+    for a in ("switch", "level"):
+        before, after = (_Command(now, device.id, **{a: d.attributes.get(a)}) for d in (old, device))
+        if before != after != expected:
+            _fire(_external_listeners, msg.topic, device, a, old.attributes.get(a), device.attributes.get(a))
+    if expected == _Command(now, device.id, device.attributes.get("level"), device.attributes.get("switch")):
+        _commanded.pop(device.id)
     for attribute, new_value in device.attributes.items():
         _fire(_listeners, msg.topic, device, attribute, old.attributes.get(attribute), new_value)
 
