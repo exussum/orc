@@ -7,6 +7,7 @@ from typing import Any
 
 from orc import model as m
 from orc.decorators import requires_ctx  # noqa: F401
+from orc.locale import Log
 
 
 def back_on_schedule(ctx: m.AppContext) -> None:
@@ -19,11 +20,23 @@ def execute_plugin(ctx: m.AppContext, id: str, **params: Any) -> None:
 
 
 def light_test(ctx: m.AppContext) -> None:
+    def report(expect_on: bool) -> None:
+        wrong = sorted(
+            c.what.name
+            for c in ctx.api.capture_lights().items
+            if c.what not in ctx.config.virtual_devices and (c.state != ctx.model.OFF) != expect_on
+        )
+        if wrong:
+            template = Log.LIGHT_TEST_STILL_OFF if expect_on else Log.LIGHT_TEST_STILL_ON
+            ctx.api.log(ctx.model.LogSource.PLUGIN, template.format(names=", ".join(wrong)))
+
     end = ctx.api.local_now() + timedelta(minutes=10)
     ctx.snapshot_manager.replace_config("light_test", ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end, "light_test")
     time.sleep(10)
+    report(expect_on=False)
     ctx.api.dispatch(ctx.model.Config(ctx.orc.Light, ctx.model.ON), force=True)
     time.sleep(10)
+    report(expect_on=True)
     ctx.snapshot_manager.resume("light_test", ctx.config.default_config)
 
 
