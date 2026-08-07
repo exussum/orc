@@ -602,11 +602,6 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
             )
 
 
-def light_test() -> None:
-    dispatch(m.Config(orc.Light, m.ON), force=True)
-    time.sleep(10)
-
-
 def replay_day(now: datetime) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
