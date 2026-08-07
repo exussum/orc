@@ -32,6 +32,13 @@ class ThemeOverride(NamedTuple):
     end: date
 
 
+class RetryStats(NamedTuple):
+    id: int
+    failed: int
+    clean: int
+    retried: int
+
+
 SUNRISE = "sunrise"
 SUNSET = "sunset"
 
