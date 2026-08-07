@@ -197,7 +197,7 @@ def resolve_run_action(
         if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
             # Don't stack snapshots
             snap = routine.snapshot
-            return lambda: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, label=id), timedelta()
+            return lambda: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, id), timedelta()
         base = (config.reset_config,) if routine.reset else ()
         return lambda: dispatch(m.squish_configs(*base, routine), force=True), routine.delay
     return None

@@ -88,7 +88,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         msg = sensor.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.snapshot)
-        ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, label=SNAPSHOT_NAME)
+        ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, SNAPSHOT_NAME)
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent))
         msg = sensor.log_shutdown
     log_entry.add(ctx.model.LogSource.PLUGIN, msg)
