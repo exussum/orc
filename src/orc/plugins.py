@@ -1,5 +1,6 @@
 import os
 import signal
+import time
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,8 @@ def execute_plugin(ctx: m.AppContext, id: str, **params: Any) -> None:
 def light_test(ctx: m.AppContext) -> None:
     end = ctx.api.local_now() + timedelta(minutes=10)
     ctx.snapshot_manager.replace_config("light_test", ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end, "light_test")
-    ctx.api.light_test()
+    ctx.api.dispatch(ctx.model.Config(ctx.orc.Light, ctx.model.ON), force=True)
+    time.sleep(30)
     ctx.snapshot_manager.resume("light_test", ctx.config.default_config)
 
 
