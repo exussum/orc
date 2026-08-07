@@ -19,7 +19,7 @@ def execute_plugin(ctx: m.AppContext, id: str, **params: Any) -> None:
 
 def light_test(ctx: m.AppContext) -> None:
     end = ctx.api.local_now() + timedelta(minutes=10)
-    ctx.snapshot_manager.replace_config("light_test", ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end)
+    ctx.snapshot_manager.replace_config("light_test", ctx.model.Config(ctx.orc.Light, ctx.model.OFF), end, "light_test")
     ctx.api.light_test()
     ctx.snapshot_manager.resume("light_test", ctx.config.default_config)
 
