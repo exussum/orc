@@ -105,6 +105,7 @@ def cfg() -> str:
         theme_override=api.current_theme_override(),
         lights=api.capture_lights(),
         sounds=api.capture_sounds(),
+        retry_stats={s.id: s for s in api.fetch_retry_stats()},
         durations=dict(api.fetch_durations()),
         plugin_states=states,
         device_buttons=device_buttons,

@@ -19,6 +19,43 @@
             </div>
         </div>
         <div class="orc-card mb-2">
+            <details open>
+                <summary class="orc-accordion-summary">
+                    Devices
+                </summary>
+                <div class="p-4">
+                    <div class="font-semibold mb-1">Lights</div>
+                    <ul class="list-disc list-inside mb-3">
+                        {% for c in lights.items %}
+                            {% set s = retry_stats.get(c.what.value) %}
+                            <li>{{ c.what.name }}: {{ c.state }}{% if s %} (failed {{ s.failed }}, ok {{ s.clean }}, retried {{ s.retried }}){% endif %}</li>
+                        {% endfor %}
+                    </ul>
+                    <div class="font-semibold mb-1">Sounds</div>
+                    <ul class="list-disc list-inside mb-3">
+                        {% for c in sounds.items %}
+                            <li>{{ c.what.name }}: {{ c.content or '—' }} @ {{ c.volume }}%</li>
+                        {% endfor %}
+                    </ul>
+                    {% for title, rows in plugin_states %}
+                        <div class="font-semibold mb-1">{{ title }}</div>
+                        <ul class="list-disc list-inside mb-3">
+                            {% for row in rows %}
+                                <li>
+                                    {{ row.name }}
+                                    <ul class="list-disc list-inside ml-4">
+                                        {% for k, v in row.items() if k not in ('name', 'action') %}
+                                            <li>{{ k }}: {{ v if v is not none else '—' }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endfor %}
+                </div>
+            </details>
+        </div>
+        <div class="orc-card mb-2">
             <div class="px-4 py-3 border-b border-orc-border">
                 <div class="text-base font-semibold">Internals</div>
             </div>
@@ -49,42 +86,6 @@
                     <li>Tomorrow's theme: {{ tomorrow_theme }}</li>
                 </ul>
             </div>
-        </div>
-        <div class="orc-card mb-2">
-            <details>
-                <summary class="orc-accordion-summary">
-                    Devices
-                </summary>
-                <div class="p-4">
-                    <div class="font-semibold mb-1">Lights</div>
-                    <ul class="list-disc list-inside mb-3">
-                        {% for c in lights.items %}
-                            <li>{{ c.what.name }}: {{ c.state }}</li>
-                        {% endfor %}
-                    </ul>
-                    <div class="font-semibold mb-1">Sounds</div>
-                    <ul class="list-disc list-inside mb-3">
-                        {% for c in sounds.items %}
-                            <li>{{ c.what.name }}: {{ c.content or '—' }} @ {{ c.volume }}%</li>
-                        {% endfor %}
-                    </ul>
-                    {% for title, rows in plugin_states %}
-                        <div class="font-semibold mb-1">{{ title }}</div>
-                        <ul class="list-disc list-inside mb-3">
-                            {% for row in rows %}
-                                <li>
-                                    {{ row.name }}
-                                    <ul class="list-disc list-inside ml-4">
-                                        {% for k, v in row.items() if k not in ('name', 'action') %}
-                                            <li>{{ k }}: {{ v if v is not none else '—' }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endfor %}
-                </div>
-            </details>
         </div>
         <div class="orc-card mb-2">
             <details>
