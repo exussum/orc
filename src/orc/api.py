@@ -28,6 +28,7 @@ from orc import model as m
 from orc import plugins
 from orc.dal import broadlink, chromecast, feeds, mqtt, net, sqlite
 from orc.dal.bws import fetch_secrets  # noqa: F401
+from orc.dal.hubitat import fetch_retry_stats  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.mqtt import add_button_listener  # noqa: F401
 from orc.dal.mqtt import add_external_listener  # noqa: F401
