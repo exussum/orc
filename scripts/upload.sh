@@ -9,7 +9,6 @@ fi
 export TWINE_USERNAME=a
 export TWINE_PASSWORD=a
 export TWINE_REPOSITORY_URL="$ORC_REGISTRY_URL"
-
 TWINE="uv run --no-sync twine upload"
 
 git checkout src/orc/_build.py
@@ -28,7 +27,6 @@ echo data plugins . | xargs -n 1 uv build --wheel --out-dir dist
 uv pip install dist/orc_data-*.whl
 
 $TWINE dist/orc-*.whl dist/orc_plugins-*.whl
-
 
 if [ "$1" = "full" ]; then
     $TWINE dist/orc_data-*.whl
