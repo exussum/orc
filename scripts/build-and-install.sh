@@ -3,5 +3,8 @@ if [ ! -f scripts/deploy.env ]; then
     exit 1
 fi
 . scripts/deploy.env
-sh scripts/upload.sh "$1" && ssh "root@$ORC_DEPLOY_HOST" "ORC_REGISTRY_URL='$ORC_REGISTRY_URL' ORC_TRUSTED_HOST='$ORC_TRUSTED_HOST' bash -s" < scripts/install.sh
+DEPLOY="${ORC_DEPLOY_USER:-root}@$ORC_DEPLOY_HOST"
+sh scripts/upload.sh "$1" \
+    && scp pyproject.toml "$DEPLOY:/tmp/pyproject.toml" \
+    && ssh "$DEPLOY" "ORC_REGISTRY_URL='$ORC_REGISTRY_URL' ORC_TRUSTED_HOST='$ORC_TRUSTED_HOST' bash -s" < scripts/install.sh
 
