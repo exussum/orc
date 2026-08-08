@@ -150,13 +150,16 @@ Two config surfaces:
 
 When `ORC_ENABLED` is set, secrets are pulled from Bitwarden Secrets
 Manager by name. The first three are required — startup fails without them;
-the YoLink pair is optional and only read by the yolink plugin:
+the rest are optional: the MQTT pair credentials the Hubitat MQTT
+connection, and the YoLink pair is only read by the yolink plugin:
 
 | Key                    | Used for                                           |
 |------------------------|----------------------------------------------------|
 | `HUBITAT_ACCESS_TOKEN` | Hubitat Maker API access token (appended as query) |
 | `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates       |
 | `ICS_URL`              | iCal feed URL for calendar-driven routines         |
+| `MQTT_USER`            | Hubitat MQTT broker username (optional)            |
+| `MQTT_PASSWORD`        | Hubitat MQTT broker password (optional)            |
 | `YOLINK_ID`            | Yolink API client ID (optional)                    |
 | `YOLINK_SECRET`        | Yolink API client secret (optional)                |
 

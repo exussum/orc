@@ -20,7 +20,7 @@ _IDENTITY_URL = "https://identity.bitwarden.com"
 _API_URL = "https://api.bitwarden.com"
 
 
-@requires_enabled(lambda: m.Secrets("", "", ""))
+@requires_enabled(lambda: m.Secrets())
 def fetch_secrets() -> m.Secrets:
     raw_token = _get_url_value(os.environ["BWS_ACCESS_TOKEN"])
 
@@ -58,10 +58,12 @@ def fetch_secrets() -> m.Secrets:
     secrets = {_decrypt_enc_string(s["key"], org_key): _decrypt_enc_string(s["value"], org_key) for s in secrets_resp["data"]}
 
     return m.Secrets(
-        access_token="?access_token=" + secrets["HUBITAT_ACCESS_TOKEN"],
-        market_holidays_url=secrets["MARKET_HOLIDAYS_URL"],
-        ics_url=secrets["ICS_URL"],
-        _raw=secrets,
+        hubitat_access_token=secrets.pop("HUBITAT_ACCESS_TOKEN"),
+        market_holidays_url=secrets.pop("MARKET_HOLIDAYS_URL"),
+        ics_url=secrets.pop("ICS_URL"),
+        mqtt_user=secrets.pop("MQTT_USER", ""),
+        mqtt_password=secrets.pop("MQTT_PASSWORD", ""),
+        other=secrets,
     )
 
 
