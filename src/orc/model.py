@@ -259,15 +259,17 @@ class Theme:
 
 @dataclass
 class Secrets:
-    access_token: str
-    market_holidays_url: str
-    ics_url: str
-    # Every secret fetched from the store, so plugins can read their own keys
-    # (e.g. secrets.get("SOME_TOKEN")) without core declaring a typed field for each.
-    _raw: dict[str, str] = field(default_factory=dict)
+    hubitat_access_token: str = ""
+    market_holidays_url: str = ""
+    ics_url: str = ""
+    mqtt_user: str = ""
+    mqtt_password: str = ""
+    # Plugin-consumed secrets; core never reads these. A key with an in-repo
+    # consumer belongs on a typed field instead.
+    other: dict[str, str] = field(default_factory=dict)
 
     def get(self, key: str) -> str:
-        return self._raw.get(key, "")
+        return self.other.get(key, "")
 
 
 @dataclass

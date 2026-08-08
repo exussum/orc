@@ -19,7 +19,7 @@ _STATE_CHANGE = re.compile(r"(?:was turned (?:on|off)(?: \[digital\])?|level was
 
 @requires_enabled(None)
 def reboot() -> None:
-    resp = requests.post(f"{config.hubitat_url}/hub/reboot{config.secrets.access_token}", timeout=config.http_timeout)
+    resp = requests.post(f"{config.hubitat_url}/hub/reboot?access_token={config.secrets.hubitat_access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
 
 
