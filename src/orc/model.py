@@ -71,7 +71,7 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
-_CLASS_SORT = {"Light": 1, "Chromecast": 2, "AC": 3}
+_CLASS_SORT = {"Light": 0, "Chromecast": 1, "AC": 2}
 
 
 class Capability(Enum):
@@ -550,8 +550,8 @@ def _fmt(pairs: Iterable[tuple[Any, Any]]) -> str:
 
 
 def _op_cmp(k: Config) -> tuple[int, int]:
-    # plugin-owned device types aren't in _CLASS_SORT; they default past the core types
-    class_sort = _CLASS_SORT.get(k.what.__class__.__name__, 10)
+    # types never declared controllable tie past everything registered
+    class_sort = _CLASS_SORT.get(k.what.__class__.__name__, len(_CLASS_SORT))
 
     if k.state == STOP:
         sub_sort = _STATE_SORT_STOP

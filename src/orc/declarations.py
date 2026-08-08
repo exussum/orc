@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from orc.collections import doc_to_sub_tables
-from orc.model import DeviceEnum, DeviceType, Registry, column_to_value
+from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry, column_to_value
 
 
 @dataclass
@@ -49,6 +49,7 @@ class Declarations:
         for name in controllable:
             if name not in self.controllable_devices:
                 self.controllable_devices.append(name)
+                _CLASS_SORT.setdefault(name, len(_CLASS_SORT))
         for hook in setup:
             if hook not in self.setup_hooks:
                 self.setup_hooks.append(hook)
