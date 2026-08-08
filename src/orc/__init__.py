@@ -34,7 +34,7 @@ class Config:
         self.lat_long = (float(os.getenv("ORC_LAT", 40.7143)), float(os.getenv("ORC_LONG", -74.0060)))
         self.root_domain = os.getenv("ORC_ROOT_DOMAIN", "example.test")
         self.audio_device = os.getenv("ORC_AUDIO_DEVICE", "")
-        self.load(m.Secrets("", "", ""), {})
+        self.load(m.Secrets(), {})
 
     def load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
         self.secrets = secrets

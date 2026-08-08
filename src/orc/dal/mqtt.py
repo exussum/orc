@@ -110,7 +110,7 @@ def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message:
     replay, never on live forwards); the raw handler is restored before returning.
     None when the host or MQTT_USER/MQTT_PASSWORD secrets are missing (logged)."""
     host = _mqtt_host()
-    user, password = secrets.get("MQTT_USER"), secrets.get("MQTT_PASSWORD")
+    user, password = secrets.mqtt_user, secrets.mqtt_password
     if not (host and user and password):
         _log.warning("mqtt: host or MQTT_USER/MQTT_PASSWORD missing, skipping")
         return None
