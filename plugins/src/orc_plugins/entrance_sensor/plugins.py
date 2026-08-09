@@ -47,23 +47,28 @@ def _on_sensor_event(
 
 
 def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, attribute: str, old: Any, new: Any) -> bool:
-    return attribute == "motion" and old != new and device.id == sensor.entrance_id and new in (sensor.active_event, sensor.inactive_event)
+    return (
+        attribute == "motion"
+        and old != new
+        and device.id == sensor.setting.entrance_id
+        and new in (sensor.setting.active_event, sensor.setting.inactive_event)
+    )
 
 
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
-    if new == sensor.active_event:
+    if new == sensor.setting.active_event:
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(ctx, sensor)
         log_entry.add(ctx.model.LogSource.PLUGIN, f"Applying `{timed_name}` rules")
         ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
-    elif new == sensor.inactive_event:
+    elif new == sensor.setting.inactive_event:
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
-            DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.cleanup_delay_minutes), timezone=ctx.config.tz),
+            DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.tz),
             name="Trigger Sensor",
             id=JOB_ID,
             replace_existing=True,
@@ -80,17 +85,17 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
 
     if present or door_open:
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.present))
-        msg = sensor.log_door_open if door_open else sensor.log_present
+        msg = sensor.message.log_door_open if door_open else sensor.message.log_present
     elif any(s.content for s in ctx.api.capture_sounds().items):
         # Visitor left, pet still listening: restore the pre-visit state
         ctx.snapshot_manager.resume(SNAPSHOT_NAME, ctx.model.Configs())
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent))
-        msg = sensor.log_absent
+        msg = sensor.message.log_absent
     else:
-        end = ctx.api.local_now() + timedelta(minutes=sensor.snapshot)
+        end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
         ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, SNAPSHOT_NAME)
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent))
-        msg = sensor.log_shutdown
+        msg = sensor.message.log_shutdown
     log_entry.add(ctx.model.LogSource.PLUGIN, msg)
 
 
@@ -112,7 +117,7 @@ def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:
     # An open entrance door means someone is around even if presence hasn't seen them.
     # A door never seen over MQTT reads as closed, falling back to the presence-only
     # decision like the old unreachable-hub path.
-    device = _sensor(ctx.api.device_states(), sensor.patio_door_id)
+    device = _sensor(ctx.api.device_states(), sensor.setting.patio_door_id)
     return device is not None and device.attributes.get("contact") == "open"
 
 
@@ -130,7 +135,7 @@ def _timed_rows(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, Sequen
         return t >= row.start or t < row.stop  # window wraps midnight
 
     return next(
-        ((name, rows) for (name, rows) in vars(sensor.timed).items() if rows and in_window(rows[0])),
+        ((name, rows) for (name, rows) in sensor.timed.items() if rows and in_window(rows[0])),
         ("(no window found)", ()),
     )
 

@@ -73,7 +73,6 @@ def _cast(objects: dict[str, Any], key: str, value: Any) -> Any:
     if not isinstance(value, str):
         return value
     elif key == "device":
-        # resolve against the enums built so far in this parse, not the installed package
         try:
             return safe_eval(value, dict(objects.get("enums", {})))
         except NameError as exc:

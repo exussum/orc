@@ -63,7 +63,7 @@ def test_buttons_agree():
 def test_highlights_volumes_people_agree():
     parsed = parse_config(_ORC)
     assert tuple(parsed.button_highlight_configs) == tuple(orc.config.button_highlight_configs)
-    assert parsed.audio_volumes._asdict() == orc.config.audio_volumes
+    assert parsed.audio_volumes == orc.config.audio_volumes
     assert dict(parsed.people) == dict(orc.config.people)
 
 

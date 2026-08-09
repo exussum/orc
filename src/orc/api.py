@@ -490,7 +490,7 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
                 time = sunset
             else:
                 # e.when is a datetime.time here (normalized in __post_init__), not the SUNRISE/SUNSET str
-                time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)  # type: ignore[attr-defined]
+                time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
             if time is None:
                 continue
             result.append((time.astimezone(config.tz), e))
