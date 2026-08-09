@@ -1,16 +1,13 @@
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 from typing import Any
 
-from orc.collections import doc_to_sub_tables
-from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry, column_to_value
+from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry
 
 
 @dataclass
 class Declarations:
-    device_types: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "BroadLink", "AC", "Button"])
     controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
     device_icons: dict[str, str] = field(default_factory=dict)
     dispatch_handlers: dict[str, Callable[..., None]] = field(default_factory=dict)
@@ -19,17 +16,12 @@ class Declarations:
     click_hooks: dict[str, str] = field(default_factory=dict)
     button_labels: dict[str, str] = field(default_factory=dict)
 
-    def declare_device_type(self, name: str) -> None:
-        if name not in self.device_types:
-            self.device_types.append(name)
-
     def declare_dispatch(self, name: str, fn: Callable[..., None]) -> None:
         self.dispatch_handlers[name] = fn
 
     def declare(
         self,
         *,
-        device_types: Iterable[str] = (),
         controllable: Iterable[str] = (),
         icons: dict[str, str] | None = None,
         dispatch: dict[str, Callable[..., None]] | None = None,
@@ -44,8 +36,6 @@ class Declarations:
         self.click_hooks.update(on_click or {})
         self.button_labels.update(button_labels or {})
 
-        for name in device_types:
-            self.declare_device_type(name)
         for name in controllable:
             if name not in self.controllable_devices:
                 self.controllable_devices.append(name)
@@ -86,22 +76,3 @@ def collect_declarations(module_paths: Iterable[str]) -> Declarations:
         if declare is not None:
             declare(declarations)
     return declarations
-
-
-def load_plugin_config(name: str, plugin_docs: dict[str, Any], schema: dict[str, tuple[str, ...]]) -> SimpleNamespace:
-    doc = plugin_docs.get(name)
-    if doc is None:
-        raise FileNotFoundError(f"no config doc 'plugins/{name}.md'")
-
-    attrs: dict[str, Any] = {}
-    for section, columns in schema.items():
-        if len(columns) == 2:
-            col_attr = columns[1].lower()
-            for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value):
-                attrs[trigger] = getattr(rows[0], col_attr)
-        else:
-            attrs[section.lower()] = SimpleNamespace(
-                **{trigger: rows for trigger, rows in doc_to_sub_tables(doc, section, columns, cast=column_to_value)}
-            )
-
-    return SimpleNamespace(**attrs)

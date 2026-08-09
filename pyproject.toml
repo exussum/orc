@@ -16,8 +16,6 @@ dependencies = [
     "gunicorn==26.0.0",
     "icalendar==7.2.2",
     "scapy==2.7.0",
-    "mistletoe==1.6.0",
-    "nh3==0.3.6",
     "orc_data==0.0.1",
     "piper-tts==1.5.0",
     "pychromecast==14.0.10",
