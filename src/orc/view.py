@@ -14,14 +14,12 @@ from flask import current_app as _current_app
 from flask import render_template, request
 from flask.wrappers import Response
 from markupsafe import Markup, escape
-from mistletoe import Document, HtmlRenderer
 
 import orc
 from orc import api, config
 from orc import model as m
 from orc.collections import where
 from orc.locale import Log
-from orc.security import safe_html
 
 
 class OrcFlask(Flask):
@@ -82,11 +80,9 @@ def cfg() -> str:
     plugins_dir = Path(config.config_dir) / "plugins"
     plugin_htmls: dict[str, str] = {}
     if plugins_dir.is_dir():
-        for p in sorted(plugins_dir.glob("**/*.md")):
-            with open(p) as f:
-                plugin_htmls[p.stem] = safe_html(HtmlRenderer().render(Document(f)))
-    with open(Path(config.config_dir) / "config.md") as f:
-        html = safe_html(HtmlRenderer().render(Document(f)))
+        for p in sorted(plugins_dir.glob("**/*.orc")):
+            plugin_htmls[p.stem] = Markup("<pre>{}</pre>").format(p.read_text())
+    html = Markup("<pre>{}</pre>").format((Path(config.config_dir) / "config.orc").read_text())
 
     states = [(title, fn()) for title, fn in config.registry.state_providers.items()]
     # One button per device: each actionable state row whose action is a

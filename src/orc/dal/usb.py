@@ -80,4 +80,5 @@ def _play_stream(chunks: Iterable[bytes], channels: int, src_rate: int, gain: fl
 
 
 def _gain_for(level: str | None) -> float:
-    return config.audio_volumes[level or m.AUDIO_INFO] / 100.0
+    volume = config.audio_volumes.FATAL if level == m.AUDIO_FATAL else config.audio_volumes.INFO
+    return volume / 100.0

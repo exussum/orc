@@ -51,14 +51,14 @@ def ctx():
 # outright; the cleanup job settles the house depending on who is home.
 @pytest.fixture
 def sensor():
-    timed = SimpleNamespace(
-        Day=[_row(Light.day_bulb, 20, start=time(8), stop=time(22))],
-        Night=[
+    timed = {
+        "Day": [_row(Light.day_bulb, 20, start=time(8), stop=time(22))],
+        "Night": [
             _row(Light.night_bulb, 1, start=time(22), stop=time(8)),
             _row(Chromecast.cc, m.STOP),
         ],
-    )
-    rules = SimpleNamespace(
+    }
+    rules = entrance_sensor.Rules(
         enter=[_row(Light.lamp, m.ON), _row(Chromecast.cc, m.PAUSE)],
         inside=[_row(Light.day_bulb, m.OFF), _row(Light.night_bulb, m.OFF)],
         present=[_row(Chromecast.cc, m.STOP)],
@@ -66,16 +66,20 @@ def sensor():
         shutdown=[_row(Light.lamp, m.OFF)],
     )
     return SimpleNamespace(
-        entrance_id=16,
-        patio_door_id=56,
-        active_event="active",
-        inactive_event="inactive",
-        cleanup_delay_minutes=2,
-        snapshot=45,
-        log_present="skip (present)",
-        log_door_open="skip (door open)",
-        log_absent="skip (sounds)",
-        log_shutdown="applying OFF",
+        setting=entrance_sensor.Settings(
+            cleanup_delay_minutes=2,
+            entrance_id=16,
+            patio_door_id=56,
+            active_event="active",
+            inactive_event="inactive",
+            snapshot=45,
+        ),
+        message=entrance_sensor.Messages(
+            log_present="skip (present)",
+            log_door_open="skip (door open)",
+            log_absent="skip (sounds)",
+            log_shutdown="applying OFF",
+        ),
         rules=rules,
         timed=timed,
     )
@@ -100,7 +104,7 @@ def _cleanup(sensor, plugin_ctx):
 def _trigger_sensor(ctx, sensor, device_id, event):
     old = "inactive" if event == "active" else "active"
     device = m.DeviceState(id=int(device_id), name="front door motion sensor", attributes={"motion": event}, last_activity=None)
-    plugins._on_sensor_event(ctx, sensor, {sensor.entrance_id, sensor.patio_door_id}, device, "motion", old, event)
+    plugins._on_sensor_event(ctx, sensor, {sensor.setting.entrance_id, sensor.setting.patio_door_id}, device, "motion", old, event)
     queued = [c for c in ctx.scheduler.add_job.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.add_job.reset_mock()
     for call in queued:
@@ -129,10 +133,10 @@ def test_night_walk_in_dims_entrance_and_stops_media(ctx, sensor):
 
 def test_walk_in_uses_first_window_that_contains_now(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
-    sensor.timed = SimpleNamespace(
-        Afternoon=[_row(Light.night_bulb, 50, start=time(14), stop=time(16))],
-        **vars(sensor.timed),
-    )
+    sensor.timed = {
+        "Afternoon": [_row(Light.night_bulb, 50, start=time(14), stop=time(16))],
+        **sensor.timed,
+    }
     _trigger_sensor(ctx, sensor, "16", "active")
     executed = ctx.api.dispatch.call_args[0][0]
     assert m.Config(Light.night_bulb, 50) in executed.items
@@ -141,7 +145,7 @@ def test_walk_in_uses_first_window_that_contains_now(ctx, sensor):
 
 def test_walk_in_outside_any_window_runs_enter_only(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
-    sensor.timed = SimpleNamespace(Morning=[_row(Light.day_bulb, 20, start=time(8), stop=time(9))])
+    sensor.timed = {"Morning": [_row(Light.day_bulb, 20, start=time(8), stop=time(9))]}
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.PAUSE)), force=True)
 
@@ -215,7 +219,7 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     plugin_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
-    assert [c.action for c in entry.children] == [sensor.log_present]
+    assert [c.action for c in entry.children] == [sensor.message.log_present]
 
 
 def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
@@ -223,7 +227,7 @@ def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
     plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
     entry = _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
-    assert [c.action for c in entry.children] == [sensor.log_absent]
+    assert [c.action for c in entry.children] == [sensor.message.log_absent]
 
 
 def test_pet_home_alone_restores_pre_visit_state(sensor, plugin_ctx):
@@ -241,7 +245,7 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
         plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45), plugins.SNAPSHOT_NAME
     )
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
-    assert [c.action for c in entry.children] == [sensor.log_shutdown]
+    assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
 
 
 def _seed_devices(plugin_ctx, *devices):
@@ -257,21 +261,21 @@ def test_open_door_counts_as_present(sensor, plugin_ctx):
     _seed_devices(plugin_ctx, _door("open"))
     entry = _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
-    assert [c.action for c in entry.children] == [sensor.log_door_open]
+    assert [c.action for c in entry.children] == [sensor.message.log_door_open]
 
 
 def test_closed_door_still_shuts_down(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     _seed_devices(plugin_ctx, _door("closed"))
     entry = _cleanup(sensor, plugin_ctx)
-    assert [c.action for c in entry.children] == [sensor.log_shutdown]
+    assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
 
 
 def test_unseen_door_still_shuts_down(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     _seed_devices(plugin_ctx)
     entry = _cleanup(sensor, plugin_ctx)
-    assert [c.action for c in entry.children] == [sensor.log_shutdown]
+    assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
 
 
 def _device(id=16, name="front door motion sensor", battery="100", attributes=None):
@@ -300,6 +304,7 @@ def test_battery_state_reads_the_device_cache(plugin_ctx):
 
 
 def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
+    sensor.rules = dict(sensor.rules._asdict())
     with patch.object(entrance_sensor, "load_plugin_config", return_value=sensor):
         entrance_sensor.setup(plugin_ctx)
     plugin_ctx.api.add_listener.assert_called_once()
