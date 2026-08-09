@@ -2,7 +2,7 @@
 
 Personal home automation orchestrator. Drives lights, Chromecast speakers,
 an LG webOS TV, and an AC unit on a schedule built from sunrise/sunset,
-calendar events, and a markdown config file.
+calendar events, and a line-based config file.
 
 ## What it does
 
@@ -57,7 +57,7 @@ PYTHONPATH=src:data/src:plugins/src python -c 'from orc.runner import flask; fla
 ```
 
 Open <http://localhost:8000> — the scene, device, schedule, presence, and
-log views are all live, driven by the sample config in `src/config.md`.
+log views are all live, driven by the sample config in `src/config.orc`.
 `PYTHONPATH=src:data/src:plugins/src` makes the dev server run your working
 tree rather than the copy installed in the venv (the sample config registers
 plugins from `plugins/src`, so it must be on the path).
@@ -72,7 +72,7 @@ pre-commit install
 ## Installing it for real
 
 Hardware and services — skip whatever you don't have; devices you leave out
-of `config.md` are never touched:
+of `config.orc` are never touched:
 
 - a Hubitat hub with the Maker API app enabled (lights)
 - Chromecast speakers on the same LAN
@@ -84,16 +84,18 @@ of `config.md` are never touched:
 Steps:
 
 1. **Install** on the target machine (add `./plugins` if you want the
-   bundled plugins — LG TV, YoLink, entrance sensor):
+   bundled plugins — LG TV, YoLink, entrance sensor). The `command-cfg`
+   config parser resolves from the internal package registry, same as the
+   deploy flow:
 
    ```sh
-   pip install ./data . ./plugins
+   pip install ./data . ./plugins --extra-index-url "$ORC_REGISTRY_URL"
    ```
 
-2. **Create a config directory** (e.g. `/etc/orc`) and copy `src/config.md`
+2. **Create a config directory** (e.g. `/etc/orc`) and copy `src/config.orc`
    into it as a starting point. Devices, people, routines, themes, room
    configs, and plugins are all defined there — the sample file demonstrates
-   every table schema. Per-plugin markdown goes in a `plugins/` subdirectory
+   every command. Per-plugin configs go in a `plugins/` subdirectory
    (see `src/plugins/` for examples).
 
 3. **Create the secrets** in Bitwarden Secrets Manager (table below) and put
@@ -121,16 +123,30 @@ Steps:
 
 Two config surfaces:
 
-1. **Markdown config** at `ORC_CONFIG_DIR/config.md` (the in-repo sample is
-   `src/config.md`). Defines devices, routines, themes, room configs, ad-hoc
-   routines, plugins, and button highlights.
+1. **Line-based config** at `ORC_CONFIG_DIR/config.orc` (the in-repo sample
+   is `src/config.orc`). Defines devices, people, routines, themes, room
+   configs, ad-hoc routines, plugins, and button highlights. One command per
+   line with shell-style quoting and `#` comments; a `.` repeats the token in
+   the same position on the line above. The grammar lives in
+   `orc.loader.GRAMMAR` and is parsed by the `command-cfg` package:
+
+   ```
+   device define Light
+   device add    Light BEDROOM_LAMP 'bedroom lamp' --room Bedroom
+   device seal   Light
+
+   routine define ROUTINE_RESET Reset
+   routine append ROUTINE_RESET Light off --trigger SYSTEM
+
+   theme 'work day' ROUTINE_RESET 1:00
+   ```
 2. **Environment variables**:
 
    | Var                     | Purpose                                                          | Default                         |
    |-------------------------|------------------------------------------------------------------|---------------------------------|
    | `ORC_ENABLED`           | Opt-in: talk to real devices/secrets; unset = offline/dry-run    | unset                           |
    | `ORC_HUBITAT_URL`       | Hubitat Maker API base URL                                       | unset                           |
-   | `ORC_CONFIG_DIR`        | Directory containing `config.md`                                 | `src`                           |
+   | `ORC_CONFIG_DIR`        | Directory containing `config.orc`                                | `src`                           |
    | `ORC_DB`                | SQLAlchemy URL for the APScheduler / orc state DB                | `sqlite:////tmp/jobs.sqlite`    |
    | `ORC_TZ`                | IANA timezone                                                    | `America/New_York`              |
    | `ORC_LAT`               | Latitude for sunrise/sunset                                      | `40.7143`                       |
@@ -189,24 +205,25 @@ bounces the `orc` supervisor job.
 
 ## Layout
 
-- `src/orc/__init__.py` — `Config` (env vars + markdown-config loader)
+- `src/orc/__init__.py` — `Config` (env vars + `.orc` config loading and installation)
+- `src/orc/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
-- `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), markdown → config parsing, routine/theme types
-- `src/orc/collections.py` — markdown table parsing (`doc_to_table`, `doc_to_sub_tables`, `LockedDict`)
+- `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), value casting, routine/theme/device types
+- `src/orc/collections.py` — `LockedDict` and `where`
 - `src/orc/dal/` — integrations split by target: `mqtt.py` (Hubitat MQTT
   device cache), `hubitat.py` (Hubitat Maker API), `chromecast.py`,
   `feeds.py` (iCal / market holidays / open-meteo weather), `bws.py`
   (Bitwarden), `usb.py` (pyaudio + piper TTS), `broadlink.py` (IR),
   `net.py` (presence scanning), `sqlite.py`
-- `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `requires_enabled`, `plugin_config`, `synchronized`, `audio_lock`, `silence_fd`
+- `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `requires_enabled`, `synchronized`, `audio_lock`, `silence_fd`
 - `src/orc/declarations.py` — per-config-load plugin declaration collection, built into the device/plugin `Registry`
 - `src/orc/plugins.py` — built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
-- `src/orc/security.py` — `safe_eval` for config expressions, URL allowlisting, HTML sanitizing
+- `src/orc/security.py` — `safe_eval` for config expressions, URL allowlisting
 - `src/orc/_build.py` — build SHA/time stamped at release
 - `src/orc/locale.py` — log-message string constants
 - `src/orc/view.py` + `templates/` + `static/` — Flask UI (schedule, device, presence, log, config views)
-- `src/config.md` — sample device/routine/theme/plugin definitions
-- `src/plugins/` — per-plugin markdown config files
+- `src/config.orc` — sample device/routine/theme/plugin definitions
+- `src/plugins/` — per-plugin config files
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
 - `plugins/` — optional `orc_plugins` plugin package (e.g. `entrance_sensor`) with its own tests
