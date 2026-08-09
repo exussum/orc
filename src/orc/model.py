@@ -248,12 +248,8 @@ class AdhocConfig(Configs):
 @dataclass
 class Routine:
     name: str
-    when: str
+    when: str | time
     items: Sequence[Config]
-
-    def __post_init__(self) -> None:
-        if self.when and not isinstance(self.when, time) and ":" in self.when:
-            self.when = column_to_value("time", self.when)
 
 
 @dataclass
@@ -380,9 +376,7 @@ def column_to_value(col: str, val: Any) -> Any:
         if val in _VALID_SECTIONS:
             return val
         raise ValueError(_ERR_PARAMS.format(col, val))
-    elif col.lower() in ("start", "stop"):  # blank on continuation rows: a group's window lives on its first row
-        return val and column_to_value("time", val)
-    elif col.lower() == "time":
+    elif col.lower() in ("start", "stop", "time"):
         if val in (SUNRISE, SUNSET):
             return val
         parts = val.split(":") if val else []
