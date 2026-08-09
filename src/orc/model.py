@@ -31,6 +31,11 @@ class Person(NamedTuple):
     mac: str
 
 
+class Volume(NamedTuple):
+    INFO: int
+    FATAL: int
+
+
 class ThemeOverride(NamedTuple):
     name: str
     start: date

@@ -38,7 +38,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         handler(objects, SimpleNamespace(**{key: _cast(objects, key, value) for key, value in vars(values).items()}))
 
     serializers: dict[str, Callable[..., Any]] = {
-        "volume": dict,
+        "volume": m.Volume,
         "person": m.Person,
         **{command: partial(run, handler) for command, handler in _COMMANDS.items()},
     }
@@ -64,7 +64,6 @@ def validate(config: SimpleNamespace) -> None:
         ("routines", config.routines.keys(), ("ROUTINE_DEFAULT", "ROUTINE_RESET")),
         ("routine names", {r.name for r in config.routines.values()}, ("Reset",)),
         ("themes", config.themes.keys(), (m.THEME_WORK_DAY, m.THEME_DAY_OFF)),
-        ("volumes", config.audio_volumes.keys(), (m.AUDIO_INFO, m.AUDIO_FATAL)),
     ):
         if missing := set(required) - present:
             raise ConfigError(f"Missing required {label}: {', '.join(sorted(missing))}")
