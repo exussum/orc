@@ -59,7 +59,7 @@ def test_rooms_collect_member_states():
 
 
 def test_volumes_are_bounded_ints():
-    assert parse("core").audio_volumes == {"INFO": 4, "FATAL": 10}
+    assert parse("core").audio_volumes == m.Volume(INFO=4, FATAL=10)
 
 
 def test_validate_accepts_complete_config():
