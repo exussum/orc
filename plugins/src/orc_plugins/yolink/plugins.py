@@ -76,7 +76,7 @@ _TRACKED_FIELDS: tuple[tuple[str, str], ...] = (
 
 def start() -> None:
     if not len(_orc.Leak):
-        _log.info("yolink: no Leak devices in config.md, skipping")
+        _log.info("yolink: no Leak devices in config.orc, skipping")
         return
 
     if not (config.config.secrets.get("YOLINK_ID") and config.config.secrets.get("YOLINK_SECRET")):
