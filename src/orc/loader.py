@@ -211,8 +211,6 @@ def _plugin_cast(key: str, value: Any) -> Any:
     if not isinstance(value, str):
         return value
     try:
-        # column_to_value's device case resolves against the installed package's enums,
-        # which is right here: plugin configs load after Config.load installs them
         return m.column_to_value(key, value)
     except (NameError, AttributeError, SyntaxError) as exc:
         raise ValueError(str(exc)) from None
