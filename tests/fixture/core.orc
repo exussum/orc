@@ -33,3 +33,5 @@ button-map Button.REMOTE 1 pushed 'All Lights Off'
 button-map .             1 held   Silence
 
 highlight Silence 21:00 23:59
+
+plugin 'Test Light' orc.plugins.light_test --section device --icon tv
