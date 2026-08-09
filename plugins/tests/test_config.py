@@ -18,6 +18,8 @@ timed define <name> <start> <stop>
 timed append <name> <device> <state>
 """
 
+Settings = namedtuple("Settings", "entrance_id snapshot")
+Messages = namedtuple("Messages", "log_present")
 Rule = namedtuple("Rule", "device state")
 Timed = namedtuple("Timed", "start stop device state")
 
@@ -40,12 +42,12 @@ def test_entrance_config_loads():
         "entrance",
         {"entrance": (FIXTURE / "entrance_sensor.orc").read_text()},
         GRAMMAR,
-        serializers={"setting": dict, "message": dict, "rules": Rule, "timed": Timed},
+        serializers={"setting": Settings, "message": Messages, "rules": Rule, "timed": Timed},
         scalars=("setting", "message"),
         grouped=("rules", "timed"),
     )
-    assert config.setting == {"entrance_id": 1, "snapshot": 45}
-    assert config.message == {"log_present": "skip (people present)"}
+    assert config.setting == Settings(entrance_id=1, snapshot=45)
+    assert config.message == Messages(log_present="skip (people present)")
     assert config.rules["enter"] == [Rule(device=Light, state="on"), Rule(device=Chromecast, state="pause")]
     assert config.rules["inside"] == [Rule(device=Light, state="off")]
     assert config.timed["Day"] == [Timed(start=time(8, 0), stop=time(22, 0), device=Light, state=20)]
