@@ -1,13 +1,13 @@
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from mistletoe import Document
-
 from orc import model as m
 from orc.declarations import collect_declarations
+from orc.loader import parse_config, validate
 
 Light: type[m.DeviceEnum]
 Chromecast: type[m.DeviceEnum]
@@ -15,11 +15,6 @@ BroadLink: type[m.DeviceEnum]
 AC: type[m.DeviceEnum]
 
 device_enums: list[type[m.DeviceEnum]] = []
-
-
-def _parse_doc(path: Path) -> Document:
-    with open(path) as fh:
-        return Document(fh)
 
 
 class Config:
@@ -38,48 +33,37 @@ class Config:
 
     def load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
         self.secrets = secrets
-        doc, self.plugin_docs = self._parse_config_docs()
+        plugins_dir = Path(self.config_dir) / "plugins"
+        self.plugin_configs = {p.relative_to(plugins_dir).with_suffix("").as_posix(): p.read_text() for p in plugins_dir.glob("**/*.orc")}
 
-        self._install_devices(doc, zigbee_config)
-
-        self.people = m.build_people(doc, "People")
-        self.themes = m.build_themes(doc, "Routines", "Themes", self.people)
-        self.routines = m.build_routines(doc, "Routines", required=("ROUTINE_DEFAULT", "ROUTINE_RESET"))
-        self.room_configs = m.build_config(doc, "Room Configs")
-        self.ad_hoc_routines = m.build_ad_hoc_routines(doc, "Ad-Hoc Routines")
-        self.buttons = m.build_buttons(doc, "Button Mapping")
-        self.button_highlight_configs = m.build_highlights(doc, "Button Highlights")
-        self.audio_volumes = m.build_audio_volumes(doc, "Audio Volumes", required=(m.AUDIO_INFO, m.AUDIO_FATAL))
+        parsed = parse_config((Path(self.config_dir) / "config.orc").read_text(), zigbee_config)
+        validate(parsed)
+        self._install(parsed)
 
         self.default_config = self.routines["ROUTINE_DEFAULT"]
         self.reset_config = self.routines["ROUTINE_RESET"]
         self.schedule_routines = {r.name: r for theme in self.themes.values() for r in theme.configs}
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=m.OFF)
 
-    def _parse_config_docs(self) -> tuple[Document, dict[str, Document]]:
-        plugins_dir = Path(self.config_dir) / "plugins"
-        plugin_docs = {p.relative_to(plugins_dir).with_suffix("").as_posix(): _parse_doc(p) for p in plugins_dir.glob("**/*.md")}
-        return _parse_doc(Path(self.config_dir) / "config.md"), plugin_docs
-
-    def _install_devices(self, doc: Document, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
-        """Build the device enums and registry, installing the enums on this package —
-        every builder that parses a Device column resolves it through ``orc.device_enums``,
-        so this must run before any other section builds."""
-        self.plugins = m.build_plugins(doc, "Plugins")
+    def _install(self, parsed: SimpleNamespace) -> None:
+        self.plugins = parsed.plugins
         declarations = collect_declarations(p.func.__module__ for p in self.plugins.values())
         if "orc.api" in sys.modules:  # bootstrap load runs during `import orc`, before api is importable — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
 
-        enums = {
-            name: m.build_enum(
-                doc, "Devices", name, zigbee_config if name in ("Light", "Button") else None, device_types=declarations.device_types
-            )
-            for name in dict.fromkeys((*declarations.device_types, *m.device_types_in(doc, "Devices")))
-        }
-        globals().update(enums)
-        globals()["device_enums"] = list(enums.values())
-        self.registry = declarations.build(enums)
-        self.virtual_devices = {e for e in enums["Light"] if isinstance(e.value, int) and e.value < 0}
+        globals().update(parsed.enums)
+        globals()["device_enums"] = list(parsed.enums.values())
+        self.registry = declarations.build(parsed.enums)
+        self.virtual_devices = {e for e in parsed.enums["Light"] if isinstance(e.value, int) and e.value < 0}
+
+        self.people = parsed.people
+        self.routines = parsed.routines
+        self.themes = parsed.themes
+        self.room_configs = parsed.room_configs
+        self.ad_hoc_routines = parsed.ad_hoc_routines
+        self.buttons = parsed.buttons
+        self.button_highlight_configs = parsed.button_highlight_configs
+        self.audio_volumes = parsed.audio_volumes
 
 
 config = Config()
