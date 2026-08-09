@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import replace
+from datetime import timedelta
 from functools import partial
 from types import SimpleNamespace
 from typing import Any
@@ -10,11 +11,18 @@ from command_cfg import ConfigError
 from orc import model as m
 from orc.security import safe_eval
 
+_BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
+
 GRAMMAR = """
+ad-hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<device> <state>]
+ad-hoc append <name> <device> <state>
+button-map <device> <button> <event> <action>
 device define <type>
 device add <type> <name> <host> [--room=<room>]
 device only <type> [<name> <host>] [--room=<room>]
 device seal <type>
+highlight <name> <start> <stop>
+person <name> <host> <mac>
 room <name> <device> <state>
 routine define <id> <name>
 routine append <id> <device> <state> [--trigger=<trigger>]
@@ -28,15 +36,24 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         objects.setdefault("zigbee_config", zigbee_config or {})
         handler(objects, SimpleNamespace(**{key: _cast(objects, key, value) for key, value in vars(values).items()}))
 
-    objects = command_cfg.parse(text, GRAMMAR, {command: partial(run, handler) for command, handler in _COMMANDS.items()})
+    serializers: dict[str, Callable[..., Any]] = {
+        "volume": dict,
+        "person": m.Person,
+        **{command: partial(run, handler) for command, handler in _COMMANDS.items()},
+    }
+    objects = command_cfg.parse(text, GRAMMAR, serializers, scalars=("volume",), grouped=("person",), cast=partial(_cast, {}))
     if unsealed := objects.get("_members", {}).keys() - objects.get("enums", {}).keys():
         raise ConfigError(f"Device types defined but never sealed: {sorted(unsealed)}")
     return SimpleNamespace(
-        audio_volumes=objects.get("audio_volumes", {}),
+        ad_hoc_routines=objects.get("ad_hoc_routines", {}),
+        audio_volumes=objects["volume"],
+        button_highlight_configs=objects.get("button_highlight_configs", ()),
+        buttons=objects.get("buttons", {}),
         enums=objects.get("enums", {}),
+        people=objects.get("person", {}),
+        room_configs=objects.get("room_configs", {}),
         routines=objects.get("routines", {}),
         themes=objects.get("themes", {}),
-        room_configs=objects.get("room_configs", {}),
     )
 
 
@@ -107,6 +124,37 @@ def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
     configs.items = (*configs.items, m.Config(args.device, args.state))
 
 
+def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    ad_hoc_routines = objects.setdefault("ad_hoc_routines", {})
+    if args.define:
+        ad_hoc_routines[args.name] = m.AdhocConfig(
+            snapshot=args.snapshot,
+            delay=args.delay or timedelta(),
+            section=args.section or "scene",
+            reset=not args.no_reset,
+        )
+        if args.device is not None:
+            ad_hoc_routines[args.name].items = (m.Config(args.device, args.state),)
+    elif (config := ad_hoc_routines.get(args.name)) is None:
+        raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(ad_hoc_routines)}")
+    else:
+        config.items = (*config.items, m.Config(args.device, args.state))
+
+
+def _button_map(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    if args.event not in _BUTTON_EVENTS:
+        raise ValueError(f"Invalid button event {args.event!r}: expected one of {sorted(_BUTTON_EVENTS)}")
+    elif not args.button.isdigit():
+        raise ValueError(f"Invalid parameter button={args.button!r}")
+    objects.setdefault("buttons", {})[(args.device, int(args.button), args.event)] = args.action
+
+
+def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    if args.name not in objects.get("ad_hoc_routines", {}):
+        raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(objects.get('ad_hoc_routines', {}))}")
+    objects["button_highlight_configs"] = (*objects.get("button_highlight_configs", ()), (args.name, args.start, args.stop))
+
+
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     routines = objects.setdefault("routines", {})
     if args.define:
@@ -114,7 +162,7 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:
-        known = (None, *(t.value for t in m.Trigger), *(w.value for w in m.WeatherCondition))
+        known = (None, *(t.value for t in m.Trigger), *(w.value for w in m.WeatherCondition), *objects.get("person", ()))
         if args.trigger not in known:
             raise ValueError(f"Unknown trigger {args.trigger!r}: expected one of {known[1:]}")
         routine.items = (*routine.items, m.Config(args.device, args.state, trigger=args.trigger))
@@ -128,14 +176,12 @@ def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
     theme.configs = (*theme.configs, replace(routine, when=args.time))
 
 
-def _volume(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    objects.setdefault("audio_volumes", {})[args.log] = args.level
-
-
 _COMMANDS = {
+    "ad-hoc": _ad_hoc,
+    "button-map": _button_map,
     "device": _device,
+    "highlight": _highlight,
     "room": _room,
     "routine": _routine,
     "theme": _theme,
-    "volume": _volume,
 }
