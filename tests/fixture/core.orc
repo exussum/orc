@@ -18,3 +18,18 @@ room Bedroom Light.LAMP on
 
 volume INFO  4
 volume FATAL 10
+
+device only Button REMOTE scene
+
+person Spence host9 aa:bb
+routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger Spence
+
+ad-hoc define Silence          --no-reset Chromecast.CC stop
+ad-hoc define Dog              --delay 7  Chromecast.CC stop
+ad-hoc define 'All Lights Off' --no-reset Light off
+ad-hoc append 'All Lights Off' Chromecast.CC stop
+
+button-map Button.REMOTE 1 pushed 'All Lights Off'
+button-map .             1 held   Silence
+
+highlight Silence 21:00 23:59

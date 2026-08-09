@@ -62,3 +62,46 @@ def test_volumes_are_bounded_ints():
 
 def test_validate_accepts_complete_config():
     validate(parse("core"))
+
+
+def test_ad_hoc_define_with_inline_first_item():
+    parsed = parse("core")
+    silence = parsed.ad_hoc_routines["Silence"]
+    assert silence.items == (m.Config(parsed.enums["Chromecast"]["CC"], "stop"),)
+    assert silence.reset is False
+    assert silence.section == "scene"
+
+
+def test_ad_hoc_delay():
+    from datetime import timedelta
+
+    dog = parse("core").ad_hoc_routines["Dog"]
+    assert dog.delay == timedelta(minutes=7)
+    assert dog.reset is True
+
+
+def test_ad_hoc_append_extends_items():
+    parsed = parse("core")
+    assert parsed.ad_hoc_routines["All Lights Off"].items == (
+        m.Config(parsed.enums["Light"], "off"),
+        m.Config(parsed.enums["Chromecast"]["CC"], "stop"),
+    )
+
+
+def test_button_map_repeats_device_with_ditto():
+    parsed = parse("core")
+    remote = parsed.enums["Button"]["REMOTE"]
+    assert parsed.buttons == {
+        (remote, 1, "pushed"): "All Lights Off",
+        (remote, 1, "held"): "Silence",
+    }
+
+
+def test_highlight_windows_reference_ad_hoc():
+    assert parse("core").button_highlight_configs == (("Silence", time(21, 0), time(23, 59)),)
+
+
+def test_person_becomes_known_trigger():
+    parsed = parse("core")
+    assert parsed.people == {"Spence": [m.Person("host9", "aa:bb")]}
+    assert parsed.routines["ROUTINE_DEFAULT"].items[-1].trigger == "Spence"

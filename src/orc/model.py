@@ -26,6 +26,11 @@ class SnapShot(NamedTuple):
     label: str = ""
 
 
+class Person(NamedTuple):
+    host: str
+    mac: str
+
+
 class ThemeOverride(NamedTuple):
     name: str
     start: date
