@@ -11,35 +11,36 @@ from orc import declarations
 def fake_plugin():
     """A throwaway plugin package exposing a declare(declarations) hook."""
     mod = ModuleType("fake_plugin_pkg")
+    mod.calls = []
 
     def declare(declarations):
-        declarations.declare(device_types=["FakeDevice"], button_labels={"Fake": "Run {device}"})
+        mod.calls.append(1)
+        declarations.declare(button_labels={"Fake": "Run {device}"})
 
     mod.declare = declare
     sys.modules["fake_plugin_pkg"] = mod
     try:
-        yield
+        yield mod
     finally:
         sys.modules.pop("fake_plugin_pkg", None)
 
 
 def test_collect_declarations_invokes_declare_hook(fake_plugin):
     builder = declarations.collect_declarations(["fake_plugin_pkg.plugins.some_fn"])
-    assert "FakeDevice" in builder.device_types
     assert builder.build({}).button_labels["Fake"] == "Run {device}"
 
 
 def test_collect_declarations_dedupes_package(fake_plugin):
-    # A package listed by several plugins registers once, so FakeDevice appears once.
-    builder = declarations.collect_declarations(["fake_plugin_pkg.plugins.a", "fake_plugin_pkg.plugins.b"])
-    assert builder.device_types.count("FakeDevice") == 1
+    # A package listed by several plugins registers once.
+    declarations.collect_declarations(["fake_plugin_pkg.plugins.a", "fake_plugin_pkg.plugins.b"])
+    assert fake_plugin.calls == [1]
 
 
 def test_collect_declarations_skips_core_and_missing_declare():
     # orc.* paths are core plugins (no package declare hook); must be skipped, so the
-    # returned builder carries only the core defaults.
+    # returned builder carries no plugin registrations.
     builder = declarations.collect_declarations(["orc.plugins.light_test"])
-    assert builder.device_types == declarations.Declarations().device_types
+    assert builder.button_labels == {}
 
 
 def test_build_carries_dispatch_and_missing():
@@ -68,11 +69,9 @@ def test_declare_wires_every_piece():
 
     builder = declarations.Declarations()
     builder.declare(
-        device_types=["Acme"],
         dispatch={"Acme": handler},
         setup=[hook],
     )
-    assert "Acme" in builder.device_types
     reg = builder.build({"Acme": Acme})
     assert reg.devices["Acme"].dispatch is handler
     assert reg.state_providers == {}

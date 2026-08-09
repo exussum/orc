@@ -1,8 +1,8 @@
 import importlib
 import re
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import KW_ONLY, dataclass, field, replace
+from collections.abc import Callable, Sequence
+from dataclasses import KW_ONLY, dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, auto
 from itertools import chain
@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Self
 
 from apscheduler.schedulers.base import BaseScheduler
 
-from orc.collections import doc_to_sub_tables, doc_to_table, parse_kv
 from orc.security import safe_eval
 
 if TYPE_CHECKING:
@@ -355,130 +354,6 @@ class Registry:
     ctx: AppContext | None = None  # set once at startup; None during config load
 
 
-def build_ad_hoc_routines(doc: Any, section: str) -> dict[Any, AdhocConfig]:
-    return {
-        t: AdhocConfig(
-            *[Config(r.device, r.state) for r in rows],
-            **rows[0].parameters,
-        )
-        for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State", "Parameters"))
-    }
-
-
-_BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
-
-
-def build_buttons(doc: Any, section: str) -> dict[tuple[Any, int, str], str]:
-    """(device, button number, event) -> run id, from the optional Buttons table."""
-    try:
-        rows = doc_to_table(doc, section, 4)
-    except ValueError:
-        return {}
-    for device, button, event, action in rows:
-        if event not in _BUTTON_EVENTS:
-            raise ValueError(f"Invalid button event {event!r} in section '{section}': expected one of {sorted(_BUTTON_EVENTS)}")
-        if not (button and button.isdigit()):
-            raise ValueError(_ERR_PARAMS.format("button", button))
-    return {(column_to_value("device", device), int(button), event): action for device, button, event, action in rows}
-
-
-def build_audio_volumes(doc: Any, section: str, required: Iterable[str]) -> dict[Any, int]:
-    rows = doc_to_table(doc, section, 2)
-
-    def _valid(s: str | None) -> bool:
-        return s is not None and s.isdigit() and 0 <= int(s) <= 100
-
-    if invalid := [(name, s) for (name, s) in rows if not _valid(s)]:
-        raise ValueError(f"Invalid volume values in section '{section}': {_fmt(invalid)}")
-    result = {name: int(s) for name, s in rows}
-    if missing := set(required) - result.keys():
-        raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
-    return result
-
-
-def build_config(doc: Any, section: str, required: Iterable[str] = ()) -> dict[Any, Configs]:
-    result = {
-        t: Configs(*[Config(r.device, r.state) for r in rows]) for t, rows in _typed_sub_tables(doc, section, ("Type", "Device", "State"))
-    }
-    if missing := set(required) - result.keys():
-        raise ValueError(f"Missing required entries in section '{section}': {', '.join(sorted(missing))}")
-    return result
-
-
-def device_types_in(doc: Any, section: str) -> list[str]:
-    return list(dict.fromkeys(t for t, _ in _typed_sub_tables(doc, section, ("Type", "Name", "Room", "Host"))))
-
-
-def build_enum(
-    doc: Any, section: str, sub_section: str, id_lookup: dict[Any, tuple[Any, ...]] | None = None, *, device_types: Iterable[str]
-) -> type[DeviceEnum]:
-    if sub_section not in device_types:
-        raise ValueError(f"sub_section must be one of {list(device_types)}, got '{sub_section}'")
-
-    rows = next((rows for (type, rows) in _typed_sub_tables(doc, section, ("Type", "Name", "Room", "Host")) if type == sub_section), None)
-    if rows is None:
-        # functional Enum API: mypy checks against the member-level __new__ rather than EnumMeta.__call__
-        return DeviceEnum(sub_section, {}, module="orc")  # type: ignore[call-arg,arg-type,return-value]
-
-    for label, attr in (("names", "name"), ("device id", "host")):
-        vals = [getattr(r, attr) for r in rows if getattr(r, attr) is not None]
-        if duplicates := {v for v in vals if vals.count(v) > 1}:
-            raise ValueError(f"Duplicate {label} in '{sub_section}': {duplicates}")
-
-    members: dict[Any, tuple[Any, ...]] = {}
-    current_room: Any = None
-    for i, r in enumerate(rows):
-        current_room = r.room or current_room
-        if id_lookup is None:
-            members[r.name] = (r.host, frozenset(), current_room)
-        else:
-            members[r.name] = (*id_lookup.get(r.host, (-(i + 1), frozenset())), current_room)
-    # functional Enum API: mypy checks against the member-level __new__ rather than EnumMeta.__call__
-    return DeviceEnum(sub_section, members, module="orc")  # type: ignore[call-arg,arg-type,return-value]
-
-
-def build_highlights(doc: Any, section: str) -> list[tuple[Any, Any, Any]]:
-    return [(name, column_to_value("time", start), column_to_value("time", end)) for (name, start, end) in doc_to_table(doc, section, 3)]
-
-
-def build_people(doc: Any, section: str) -> defaultdict[Any, set[Any]]:
-    people: defaultdict[Any, set[Any]] = defaultdict(set)
-    for name, host, mac in doc_to_table(doc, section, 3):
-        if not mac:
-            raise ValueError(f"Person '{name}' host '{host}' is missing a MAC address")
-        people[name].add((host, mac))
-    return people
-
-
-def build_plugins(doc: Any, section: str) -> dict[Any, Plugin]:
-    return {
-        t: Plugin(func=rows[0].plugin, **rows[0].parameters)
-        for t, rows in doc_to_sub_tables(doc, section, ("Name", "Plugin", "Parameters"), cast=column_to_value)
-    }
-
-
-def build_themes(doc: Any, routine_section: str, theme_section: str, people: Iterable[str] | None = None) -> dict[Any, Theme]:
-    routine_tables = [(t, rows) for t, rows in _typed_sub_tables(doc, routine_section, ("Type", "Name", "Device", "State", "Trigger"))]
-    theme_tables = [(t, rows) for t, rows in _typed_sub_tables(doc, theme_section, ("Type", "Routine", "Time"))]
-
-    _validate_themes(routine_section, theme_section, routine_tables, theme_tables, people)
-
-    routines = {
-        t: Routine(rows[0].name, "", [Config(r.device, r.state, trigger=r.trigger or None) for r in rows]) for t, rows in routine_tables
-    }
-    return {t: Theme(t, *[replace(routines[r.routine], when=r.time) for r in rows]) for t, rows in theme_tables}
-
-
-def build_routines(doc: Any, section: str, required: Iterable[str] = ()) -> dict[str, Routine]:
-    result = {
-        t: Routine(rows[0].name, "", [Config(r.device, r.state, trigger=r.trigger or None) for r in rows])
-        for t, rows in _typed_sub_tables(doc, section, ("Type", "Name", "Device", "State", "Trigger"))
-    }
-    if missing := set(required) - result.keys():
-        raise ValueError(f"Missing required routines in section '{section}': {', '.join(sorted(missing))}")
-    return result
-
-
 def column_to_value(col: str, val: Any) -> Any:
     import orc
 
@@ -505,13 +380,6 @@ def column_to_value(col: str, val: Any) -> Any:
         if val in _VALID_SECTIONS:
             return val
         raise ValueError(_ERR_PARAMS.format(col, val))
-    elif col.lower() == "reset":
-        if val in ("true", "false"):
-            return val == "true"
-        raise ValueError(_ERR_PARAMS.format(col, val))
-    elif col.lower() == "parameters":
-        parsed = {k: column_to_value(k, v) for k, v in parse_kv(val).items()}
-        return {"section": "scene", "delay": timedelta(), **parsed}
     elif col.lower() in ("start", "stop"):  # blank on continuation rows: a group's window lives on its first row
         return val and column_to_value("time", val)
     elif col.lower() == "time":
@@ -557,10 +425,6 @@ def squish_configs(*configs: Configs | Routine, state_override: Any = None) -> C
     return Configs(*flattened)
 
 
-def _fmt(pairs: Iterable[tuple[Any, Any]]) -> str:
-    return ", ".join(f"'{v}' in '{t}'" for t, v in pairs)
-
-
 def _op_cmp(k: Config) -> tuple[int, int]:
     # types never declared controllable tie past everything registered
     class_sort = _CLASS_SORT.get(k.what.__class__.__name__, len(_CLASS_SORT))
@@ -591,28 +455,3 @@ def _squish(items: list[Config]) -> tuple[Config, ...]:
         if isinstance(items[e].state, int):
             return (items[e], last)
     return (last,)
-
-
-def _typed_sub_tables(doc: Any, section: str, columns: tuple[str, ...]) -> Iterator[tuple[Any, list[Any]]]:
-    return doc_to_sub_tables(doc, section, columns, cast=column_to_value)
-
-
-def _validate_themes(
-    routine_section: str,
-    theme_section: str,
-    routine_tables: list[tuple[Any, list[Any]]],
-    theme_tables: list[tuple[Any, list[Any]]],
-    people: Iterable[str] | None,
-) -> None:
-    if missing := {THEME_WORK_DAY, THEME_DAY_OFF} - {t for t, _ in theme_tables}:
-        raise ValueError(f"Missing required themes in section '{theme_section}': {', '.join(sorted(missing))}")
-
-    known_triggers = set(people or {}) | {Trigger.SYSTEM.value, Trigger.ANYONE.value} | {wc.value for wc in WeatherCondition}
-
-    if invalid_trigger := [
-        (t, r.trigger) for t, rows in routine_tables for r in rows if r.trigger not in (None, "") and r.trigger not in known_triggers
-    ]:
-        raise ValueError(f"Unknown trigger names in section '{routine_section}': {_fmt(invalid_trigger)}")
-
-    if missing := {"Reset"} - {r.name for t, rows in routine_tables for r in rows}:
-        raise ValueError(f"Missing required routines in section '{routine_section}': {', '.join(sorted(missing))}")

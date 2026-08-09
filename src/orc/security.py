@@ -2,15 +2,9 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlparse
 
-import nh3
-
 
 def safe_eval(val: str, ns: dict[str, Any]) -> Any:
     return eval(val, ns)  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
-
-
-def safe_html(html: str) -> str:
-    return nh3.clean(html)
 
 
 def safe_domain(url: str, allowed: Iterable[str]) -> str:

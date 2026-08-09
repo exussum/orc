@@ -47,7 +47,6 @@ def tv_state() -> list[dict[str, Any]]:
 
 def declare(declarations: Any) -> None:
     declarations.declare(
-        device_types=["LGTV", "WebOS"],
         controllable=["LGTV"],
         icons={"LGTV": "tv"},
         dispatch={"LGTV": _dispatch},
