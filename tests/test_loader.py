@@ -1,8 +1,11 @@
-from datetime import time
+from collections import namedtuple
+from datetime import time, timedelta
 from pathlib import Path
 
+import pytest
+
 from orc import model as m
-from orc.loader import parse_config, validate
+from orc.loader import load_plugin_config, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
 
@@ -73,8 +76,6 @@ def test_ad_hoc_define_with_inline_first_item():
 
 
 def test_ad_hoc_delay():
-    from datetime import timedelta
-
     dog = parse("core").ad_hoc_routines["Dog"]
     assert dog.delay == timedelta(minutes=7)
     assert dog.reset is True
@@ -105,3 +106,52 @@ def test_person_becomes_known_trigger():
     parsed = parse("core")
     assert parsed.people == {"Spence": [m.Person("host9", "aa:bb")]}
     assert parsed.routines["ROUTINE_DEFAULT"].items[-1].trigger == "Spence"
+
+
+def test_plugin_command_imports_callable():
+    from orc import plugins as core_plugins
+
+    plugin = parse("core").plugins["Test Light"]
+    assert plugin.func is core_plugins.light_test
+    assert plugin.section == "device"
+    assert plugin.icon == "tv"
+    assert plugin.delay == timedelta()
+
+
+_PLUGIN_GRAMMAR = """
+setting <key> <value>
+message <log> <message>
+rules <trigger> <device> <state>
+timed define <name> <start> <stop>
+timed append <name> <device> <state>
+"""
+
+Rule = namedtuple("Rule", "device state")
+Timed = namedtuple("Timed", "start stop device state")
+
+
+def load_plugin(config):
+    return load_plugin_config(
+        "p",
+        {"p": config},
+        _PLUGIN_GRAMMAR,
+        serializers={"setting": dict, "message": dict, "rules": Rule, "timed": Timed},
+        scalars=("setting", "message"),
+        grouped=("rules", "timed"),
+    )
+
+
+def test_load_plugin_config_entrance_style():
+    import orc
+
+    config = load_plugin((FIXTURE / "entrance_sensor.orc").read_text())
+    assert config.setting == {"entrance_id": 1, "snapshot": 45}
+    assert config.message == {"log_present": "skip (people present)"}
+    assert config.rules["enter"] == [Rule(device=orc.Light, state="on"), Rule(device=orc.Chromecast, state="pause")]
+    assert config.rules["inside"] == [Rule(device=orc.Light, state="off")]
+    assert config.timed["Day"] == [Timed(start=time(8, 0), stop=time(22, 0), device=orc.Light, state=20)]
+
+
+def test_load_plugin_config_missing_file():
+    with pytest.raises(FileNotFoundError, match="no config 'plugins/foo.orc'"):
+        load_plugin_config("foo", {}, _PLUGIN_GRAMMAR)

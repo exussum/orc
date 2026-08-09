@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import timedelta
 from functools import partial
@@ -23,6 +23,7 @@ device only <type> [<name> <host>] [--room=<room>]
 device seal <type>
 highlight <name> <start> <stop>
 person <name> <host> <mac>
+plugin <name> <plugin> [--section=<section>] [--icon=<icon>] [--delay=<minutes>]
 room <name> <device> <state>
 routine define <id> <name>
 routine append <id> <device> <state> [--trigger=<trigger>]
@@ -51,6 +52,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         buttons=objects.get("buttons", {}),
         enums=objects.get("enums", {}),
         people=objects.get("person", {}),
+        plugins=objects.get("plugins", {}),
         room_configs=objects.get("room_configs", {}),
         routines=objects.get("routines", {}),
         themes=objects.get("themes", {}),
@@ -155,6 +157,11 @@ def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
     objects["button_highlight_configs"] = (*objects.get("button_highlight_configs", ()), (args.name, args.start, args.stop))
 
 
+def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    params = {key: value for key, value in vars(args).items() if key not in ("name", "plugin") and value is not None}
+    objects.setdefault("plugins", {})[args.name] = m.Plugin(func=args.plugin, **params)
+
+
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     routines = objects.setdefault("routines", {})
     if args.define:
@@ -181,7 +188,33 @@ _COMMANDS = {
     "button-map": _button_map,
     "device": _device,
     "highlight": _highlight,
+    "plugin": _plugin,
     "room": _room,
     "routine": _routine,
     "theme": _theme,
 }
+
+
+def load_plugin_config(
+    name: str,
+    plugin_configs: dict[str, str],
+    grammar: str,
+    serializers: Mapping[str, Callable[..., Any]] | None = None,
+    scalars: Sequence[str] = (),
+    grouped: Sequence[str] = (),
+) -> SimpleNamespace:
+    text = plugin_configs.get(name)
+    if text is None:
+        raise FileNotFoundError(f"no config 'plugins/{name}.orc'")
+    return SimpleNamespace(**command_cfg.parse(text, grammar, serializers, scalars=scalars, grouped=grouped, cast=_plugin_cast))
+
+
+def _plugin_cast(key: str, value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        # column_to_value's device case resolves against the installed package's enums,
+        # which is right here: plugin configs load after Config.load installs them
+        return m.column_to_value(key, value)
+    except (NameError, AttributeError, SyntaxError) as exc:
+        raise ValueError(str(exc)) from None
