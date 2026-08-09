@@ -6,10 +6,9 @@ if [ ! -f scripts/deploy.env ]; then
 fi
 . scripts/deploy.env
 
-export TWINE_USERNAME=a
-export TWINE_PASSWORD=a
-export TWINE_REPOSITORY_URL="$ORC_REGISTRY_URL"
-TWINE="uv run --no-sync twine upload"
+export UV_PUBLISH_USERNAME=a
+export UV_PUBLISH_PASSWORD=a
+export UV_PUBLISH_URL="$ORC_REGISTRY_URL"
 
 git checkout src/orc/_build.py
 rm -rf src/orc/static/tailwind.min.css dist
@@ -26,10 +25,10 @@ printf 'SHA = "%s"\nBUILD_TIME = "%s"\n' "$(git rev-parse --short HEAD)" "$(date
 echo data plugins . | xargs -n 1 uv build --wheel --out-dir dist
 uv pip install dist/orc_data-*.whl
 
-$TWINE dist/orc-*.whl dist/orc_plugins-*.whl
+uv publish dist/orc-*.whl dist/orc_plugins-*.whl
 
 if [ "$1" = "full" ]; then
-    $TWINE dist/orc_data-*.whl
+    uv publish dist/orc_data-*.whl
 fi
 
 git checkout src/orc/_build.py
