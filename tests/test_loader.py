@@ -1,10 +1,11 @@
+import re
 from datetime import time, timedelta
 from pathlib import Path
 
 import pytest
 
 from orc import model as m
-from orc.loader import load_plugin_config, parse_config, validate
+from orc.loader import ConfigError, load_plugin_config, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
 
@@ -120,3 +121,57 @@ def test_plugin_command_imports_callable():
 def test_load_plugin_config_missing_file():
     with pytest.raises(FileNotFoundError, match="no config 'plugins/foo.orc'"):
         load_plugin_config("foo", {}, "setting <key> <value>")
+
+
+_PARSE_ERRORS = [
+    ("device_type_not_defined", "name 'Foo' is not defined — device types must be defined and sealed first"),
+    ("device_type_not_sealed", "name 'Foo' is not defined — device types must be defined and sealed first"),
+    ("unknown_device_member", "type object 'Foo' has no attribute 'B'"),
+    ("device_expression_syntax_error", "'(' was never closed"),
+    ("add_before_define", "Unknown device type 'Foo'"),
+    ("seal_before_define", "Unknown device type 'Foo'"),
+    ("add_after_seal", "Device type 'Foo' is already sealed"),
+    ("define_after_seal", "Device type 'Foo' is already sealed"),
+    ("seal_after_seal", "Device type 'Foo' is already sealed"),
+    ("only_after_seal", "Device type 'Foo' is already sealed"),
+    ("unsealed_at_end", "Device types defined but never sealed: ['Foo']"),
+    ("duplicate_member_names", "Duplicate names in 'Foo': {'A'}"),
+    ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),
+    ("level_out_of_range", "Invalid parameter level='101'"),
+    ("invalid_state", "Invalid state 'wibble'"),
+    ("invalid_delay", "Invalid parameter delay='soon'"),
+    ("invalid_snapshot", "Invalid parameter snapshot='lots'"),
+    ("invalid_section", "Invalid parameter section='weird'"),
+    ("time_not_hh_mm", "Invalid time 'noon'"),
+    ("time_out_of_range", "Invalid time '25:00'"),
+    ("plugin_import_failure", "Cannot load plugin 'not.a.module'"),
+    ("theme_unknown_routine", "Unknown routine 'OTHER'"),
+    ("append_unknown_routine", "Unknown routine 'R'"),
+    ("unknown_trigger", "Unknown trigger 'NOPE'"),
+    ("person_trigger_too_late", "Unknown trigger 'Spence'"),
+    ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
+    ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
+    ("invalid_button_event", "Invalid button event 'clicked'"),
+    ("non_numeric_button", "Invalid parameter button='one'"),
+]
+
+
+@pytest.mark.parametrize("case, error", _PARSE_ERRORS, ids=[case for case, _ in _PARSE_ERRORS])
+def test_parse_error(case, error):
+    with pytest.raises(ConfigError, match=re.escape(error)):
+        parse(case)
+
+
+def test_validate_missing_routines():
+    with pytest.raises(ConfigError, match="Missing required routines: ROUTINE_DEFAULT, ROUTINE_RESET"):
+        validate(parse("validate_missing_routines"))
+
+
+def test_validate_missing_themes():
+    with pytest.raises(ConfigError, match="Missing required themes: day off, work day"):
+        validate(parse("validate_missing_themes"))
+
+
+def test_validate_requires_reset_routine_name():
+    with pytest.raises(ConfigError, match="Missing required routine names: Reset"):
+        validate(parse("validate_missing_reset_name"))
