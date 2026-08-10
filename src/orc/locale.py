@@ -11,7 +11,7 @@ class Log:
     LIGHT_TEST_STILL_ON: str = "Light test: still on: `{names}`"
     LIGHT_TEST_STILL_OFF: str = "Light test: still off: `{names}`"
 
-    RULE_SKIPPED: str = "Skipped `{rule_name}` ({detail})"
+    RULE_SKIPPED: str = "skipped: {detail}"
     RULE_SUPPRESSED: str = "Suppressed by snapshot: {kinds}"
     DISPATCH_FAILED: str = "Dispatch failed for `{device}`: {exc}"
 
