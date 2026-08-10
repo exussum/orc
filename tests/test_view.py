@@ -78,14 +78,14 @@ def test_console_plugin(client, ctx):
 
 
 def test_console_schedule_routine(client):
-    routine = m.Routine("r", "", ())
+    routine = m.Routine("r", "", (m.Config(orc.Light.a, m.OFF, trigger=m.Trigger.SYSTEM),))
     with (
         patch.object(config, "schedule_routines", {"r": routine}),
         patch.object(config, "plugins", {}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(routine, force=True)
+    ex.assert_called_once_with(m.Configs(m.Config(orc.Light.a, m.OFF, trigger=m.Trigger.SYSTEM)), force=True)
 
 
 def test_console_ad_hoc(client):

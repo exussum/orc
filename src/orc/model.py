@@ -395,7 +395,9 @@ def column_to_value(col: str, val: Any) -> Any:
     return val
 
 
-def squish_configs(*configs: Configs | Routine, state_override: Any = None) -> Configs:
+def squish_configs(
+    *configs: Configs | Routine, state_override: Any = None, on_conflict: Callable[[Any, list[Any]], object] = lambda what, states: None
+) -> Configs:
     """
     Take multiple Configs objects, and merge them into one as if they were run sequentially, removing duplicates
     and handling brightness changes.
@@ -413,6 +415,10 @@ def squish_configs(*configs: Configs | Routine, state_override: Any = None) -> C
                         trigger=rule.trigger,
                     )
                 )
+
+    for what, items in rules.items():
+        if {c.state for c in items} - {c.state for c in _squish(items)}:
+            on_conflict(what, [c.state for c in items])
 
     flattened = list(chain.from_iterable(_squish(e) for e in rules.values()))
     flattened.sort(key=_op_cmp)
