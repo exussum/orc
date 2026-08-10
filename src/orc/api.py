@@ -191,7 +191,7 @@ def resolve_run_action(
         params = {"device": device} if device else {}
         return lambda: plugins.execute_plugin(ctx, id, **params), config.plugins[id].delay
     elif id in config.schedule_routines:
-        return lambda: dispatch(config.schedule_routines[id], force=True), timedelta()
+        return lambda: run_schedule_routine(config.schedule_routines[id], m.LogSource.MANUAL, force=True), timedelta()
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
@@ -513,7 +513,10 @@ def next_iot_job(scheduler: BaseScheduler, present_names: set[str]) -> Job | Non
 
 @requires_ctx
 def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
-    rule = job.rule
+    run_schedule_routine(job.rule, m.LogSource.ROUTINE)
+
+
+def run_schedule_routine(rule: m.Routine, source: m.LogSource, force: bool = False) -> None:
     now = local_now()
     pnames = present_names()
     if not (matched := matching_items(rule, now, pnames)):
@@ -522,13 +525,19 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
         else:
             unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
-        log(m.LogSource.ROUTINE, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
+        log(source, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
         return
     elif weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
-        log(m.LogSource.ROUTINE, f"`{rule.name}` (weather: {', '.join(sorted(weather_triggers))})")
-    else:
-        log(m.LogSource.ROUTINE, f"`{rule.name}`")
-    dispatch(replace(rule, items=matched))
+        log(source, f"`{rule.name}` (weather: {', '.join(sorted(weather_triggers))})")
+    elif source is m.LogSource.ROUTINE:
+        log(source, f"`{rule.name}`")
+    dispatch(
+        m.squish_configs(
+            replace(rule, items=matched),
+            on_conflict=lambda what, states: log(source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states)))),
+        ),
+        force=force,
+    )
 
 
 def rebuild_jobs(ctx: m.AppContext) -> None:
