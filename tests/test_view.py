@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from flask import Flask
@@ -85,7 +85,7 @@ def test_console_schedule_routine(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.Configs(m.Config(orc.Light.a, m.OFF, trigger=m.Trigger.SYSTEM)), force=True)
+    ex.assert_called_once_with(m.Configs(m.Config(orc.Light.a, m.OFF, trigger=m.Trigger.SYSTEM)), force=True, entry=ANY)
 
 
 def test_console_ad_hoc(client):
@@ -99,7 +99,7 @@ def test_console_ad_hoc(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True)
+    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True, entry=ANY)
 
 
 def test_console_ad_hoc_no_reset(client):
@@ -111,7 +111,7 @@ def test_console_ad_hoc_no_reset(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish_configs(routine), force=True)
+    ex.assert_called_once_with(m.squish_configs(routine), force=True, entry=ANY)
 
 
 def test_button_ad_hoc_snapshot(ctx):
@@ -148,7 +148,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx):
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
-    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True)
+    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True, entry=ANY)
 
 
 def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
@@ -165,7 +165,7 @@ def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
         client.get("/api/run/r")
     assert api.ORC_SYSTEM_SNAPSHOT not in ctx.snapshot_manager.snapshots
     capture.assert_not_called()
-    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True)
+    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True, entry=ANY)
 
 
 def test_console_unknown_returns_404(client):

@@ -184,22 +184,22 @@ def declare_core(declarations: Declarations) -> None:
 
 def resolve_run_action(
     ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False
-) -> tuple[Callable[[], None], timedelta] | None:
+) -> tuple[Callable[[m.LogEntry], None], timedelta] | None:
     if id == ORC_SYSTEM_SNAPSHOT:
-        return lambda: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
+        return lambda entry: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
     elif id in config.plugins:
         params = {"device": device} if device else {}
-        return lambda: plugins.execute_plugin(ctx, id, **params), config.plugins[id].delay
+        return lambda entry: plugins.execute_plugin(ctx, id, **params), config.plugins[id].delay
     elif id in config.schedule_routines:
-        return lambda: run_schedule_routine(config.schedule_routines[id], m.LogSource.MANUAL, force=True), timedelta()
+        return lambda entry: run_schedule_routine(config.schedule_routines[id], entry, force=True), timedelta()
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
             # Don't stack snapshots
             snap = routine.snapshot
-            return lambda: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, id), timedelta()
+            return lambda entry: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, id), timedelta()
         base = (config.reset_config,) if routine.reset else ()
-        return lambda: dispatch(m.squish_configs(*base, routine), force=True), routine.delay
+        return lambda entry: dispatch(m.squish_configs(*base, routine), force=True, entry=entry), routine.delay
     return None
 
 
@@ -211,8 +211,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
 
     @requires_ctx
     def run(ctx: m.AppContext) -> None:
-        log(m.LogSource.MANUAL, f"`{_RUN_DISPLAY.get(id, id)}`")
-        action()
+        action(log(m.LogSource.MANUAL, f"`{_RUN_DISPLAY.get(id, id)}`"))
 
     with record_duration(id):
         if delay:
@@ -252,7 +251,7 @@ def wire_external_log() -> None:
 
 
 @unwrap_rule_container
-def dispatch(rule: m.Config, force: bool = False) -> None:
+def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = None) -> None:
     if not force and snapshot_manager.intercepts(rule):
         return
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
@@ -269,7 +268,11 @@ def dispatch(rule: m.Config, force: bool = False) -> None:
         try:
             device_type.dispatch(config.registry.ctx, w, rule, stream)
         except Exception as exc:
-            log(m.LogSource.SYSTEM, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
+            action = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
+            if entry is not None:
+                entry.add(m.LogSource.SYSTEM, action)
+            else:
+                log(m.LogSource.SYSTEM, action)
 
     with Pool(max_workers=max(1, len(what))) as ex:
         list(ex.map(one, what))
@@ -513,10 +516,10 @@ def next_iot_job(scheduler: BaseScheduler, present_names: set[str]) -> Job | Non
 
 @requires_ctx
 def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
-    run_schedule_routine(job.rule, m.LogSource.ROUTINE)
+    run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`"))
 
 
-def run_schedule_routine(rule: m.Routine, source: m.LogSource, force: bool = False) -> None:
+def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, force: bool = False) -> None:
     now = local_now()
     pnames = present_names()
     if not (matched := matching_items(rule, now, pnames)):
@@ -525,19 +528,18 @@ def run_schedule_routine(rule: m.Routine, source: m.LogSource, force: bool = Fal
         else:
             unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
-        log(source, Log.RULE_SKIPPED.format(rule_name=rule.name, detail=detail))
+        entry.action += f" — {Log.RULE_SKIPPED.format(detail=detail)}"
         return
     elif weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
-        log(source, f"`{rule.name}` (weather: {', '.join(sorted(weather_triggers))})")
-    elif source is m.LogSource.ROUTINE:
-        log(source, f"`{rule.name}`")
-    dispatch(
-        m.squish_configs(
-            replace(rule, items=matched),
-            on_conflict=lambda what, states: log(source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states)))),
-        ),
-        force=force,
-    )
+        entry.action += f" (weather: {', '.join(sorted(weather_triggers))})"
+    dispatch(_squish_matched(rule, matched, entry), force=force, entry=entry)
+
+
+def _squish_matched(rule: m.Routine, matched: Sequence[m.Config], entry: m.LogEntry) -> m.Configs:
+    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
+        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
+
+    return m.squish_configs(replace(rule, items=matched), on_conflict=log_conflict)
 
 
 def rebuild_jobs(ctx: m.AppContext) -> None:
