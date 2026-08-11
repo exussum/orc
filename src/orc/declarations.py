@@ -1,6 +1,7 @@
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry
@@ -13,7 +14,7 @@ class Declarations:
     dispatch_handlers: dict[str, Callable[..., None]] = field(default_factory=dict)
     state_providers: dict[str, Callable[[], Any]] = field(default_factory=dict)
     setup_hooks: list[Callable[[Any], None]] = field(default_factory=list)
-    click_hooks: dict[str, str] = field(default_factory=dict)
+    scripts: dict[str, Path] = field(default_factory=dict)
     button_labels: dict[str, str] = field(default_factory=dict)
 
     def declare_dispatch(self, name: str, fn: Callable[..., None]) -> None:
@@ -27,13 +28,13 @@ class Declarations:
         dispatch: dict[str, Callable[..., None]] | None = None,
         state_providers: dict[str, Callable[[], Any]] | None = None,
         setup: Iterable[Callable[[Any], None]] = (),
-        on_click: dict[str, str] | None = None,
+        scripts: Iterable[Path | str] = (),
         button_labels: dict[str, str] | None = None,
     ) -> None:
         self.device_icons.update(icons or {})
         self.dispatch_handlers.update(dispatch or {})
         self.state_providers.update(state_providers or {})
-        self.click_hooks.update(on_click or {})
+        self.scripts.update({Path(s).name: Path(s) for s in scripts})
         self.button_labels.update(button_labels or {})
 
         for name in controllable:
@@ -56,7 +57,7 @@ class Declarations:
         }
         return Registry(
             devices=devices,
-            click_hooks=dict(self.click_hooks),
+            scripts=dict(self.scripts),
             button_labels=dict(self.button_labels),
             state_providers=dict(self.state_providers),
             setup_hooks=list(self.setup_hooks),

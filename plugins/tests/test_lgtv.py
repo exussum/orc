@@ -24,7 +24,7 @@ def mock_registry(monkeypatch):
                 name: m.DeviceType(cls=cls, icon="", controllable=False, dispatch=dispatch)
                 for name, (cls, dispatch) in dispatch_by_type.items()
             },
-            click_hooks={},
+            scripts={},
             button_labels={},
             state_providers={},
             setup_hooks=[],
@@ -89,4 +89,4 @@ def test_lgtv_registers_with_core():
     assert lgtv_dev.dispatch is lgtv._dispatch
     assert lgtv_dev.controllable
     assert lgtv_dev.icon == "tv"
-    assert "Pair LG TV" in config.registry.click_hooks
+    assert config.registry.scripts["lgtv.js"].is_file()
