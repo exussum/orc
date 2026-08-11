@@ -47,6 +47,15 @@ def no_cache(response: Response) -> Response:
     return response
 
 
+@bp.route("/hooks.js")
+def hooks() -> Response:
+    static = Path(__file__).parent / "static"
+    gate = static / "hooks" / "are-you-sure.js"
+    core = [static / "hooks.js", gate, *(p for p in (static / "hooks").glob("*.js") if p != gate)]
+    files = [(p.name, p) for p in core] + list(config.registry.scripts.items())
+    return Response("\n".join(f"// --- {name}\n(() => {{\n{path.read_text()}}})();" for name, path in files), mimetype="text/javascript")
+
+
 class VersionManager:
     version = str(random.random())
 
@@ -273,6 +282,11 @@ def room(id: str) -> tuple[dict[str, Any], int]:
             raise Exception("Unknown state")
     api.log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
     return {"version": VersionManager.version}, 200
+
+
+@bp.route("/api/presence/state")
+def presence_state() -> dict[str, Any]:
+    return {"present": bool(api.present_names())}
 
 
 @bp.route("/api/presence/run")

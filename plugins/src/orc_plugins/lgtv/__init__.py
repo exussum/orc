@@ -1,10 +1,11 @@
 """LG WebOS TV integration.
 
 Registers the LGTV/WebOS device types, a dispatch handler (on/off via WebOS, with a
-BroadLink IR toggle to power on), a "TV" state row set, the pairing action's on-click
-notification, and a boot hook to create its DB table.
+BroadLink IR toggle to power on), a "TV" state row set, the pairing button's browser
+plugin (static/lgtv.js), and a boot hook to create its DB table.
 """
 
+from pathlib import Path
 from typing import Any
 
 from orc_plugins.lgtv import plugins
@@ -15,14 +16,6 @@ from orc import model as m
 # orc.LGTV/WebOS/BroadLink are built at runtime from the registered device types; read
 # them through an Any view since mypy can't see the dynamic package attributes.
 _orc: Any = orc
-
-# Client behavior for the "Pair LG TV" button: show a browser notification while pairing.
-PAIRING_JS = """
-const dismiss = await notifyPairing(parseFloat(el.dataset.duration));
-const q = el.dataset.device ? `?device=${encodeURIComponent(el.dataset.device)}` : "";
-await get(`/api/run/Pair LG TV${q}`, el);
-dismiss?.();
-"""
 
 
 def setup(ctx: "m.AppContext") -> None:
@@ -52,6 +45,6 @@ def declare(declarations: Any) -> None:
         dispatch={"LGTV": _dispatch},
         state_providers={"TV": tv_state},
         setup=[setup],
-        on_click={"Pair LG TV": PAIRING_JS},
+        scripts=[Path(__file__).parent / "static" / "lgtv.js"],
         button_labels={"Pair LG TV": "Pair {device}"},
     )

@@ -1,9 +1,9 @@
 async function checkin(el) {
-    if (await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/checkin`, el)) location.reload();
+    if (await get(`/api/presence/${encodeURIComponent(el.dataset.id)}/checkin`, el)) location.reload();
 }
 
 async function expire(el) {
-    if (await get(`/api/presence/${encodeURIComponent(el.dataset.name)}/expire`, el)) location.reload();
+    if (await get(`/api/presence/${encodeURIComponent(el.dataset.id)}/expire`, el)) location.reload();
 }
 
 async function runCheck(el) {
