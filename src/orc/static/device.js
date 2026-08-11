@@ -1,7 +1,7 @@
 const acSelections = {};
 
 function acQuery(group, id) {
-    return document.querySelectorAll(`[data-ac-${group}="${id}"]`);
+    return document.querySelectorAll(`.orc-ac-${group}[data-id="${id}"]`);
 }
 
 function selectOne(group, id, el) {
@@ -20,7 +20,7 @@ function setAcOff(id) {
     resetGroup('mode', id, true);
     resetGroup('fan', id, true);
     acQuery('set', id).forEach(btn => { btn.disabled = true; });
-    const temp = document.querySelector(`input[data-ac-ctrl="${id}"]`);
+    const temp = document.querySelector(`input.orc-ac-ctrl[data-id="${id}"]`);
     if (temp) { temp.disabled = true; temp.classList.remove('orc-selected'); }
 }
 
@@ -29,13 +29,12 @@ function startAcWizard(id) {
     resetGroup('mode', id, false);
     resetGroup('fan', id, true);
     acQuery('set', id).forEach(btn => btn.disabled = true);
-    const temp = document.querySelector(`input[data-ac-ctrl="${id}"]`);
+    const temp = document.querySelector(`input.orc-ac-ctrl[data-id="${id}"]`);
     if (temp) temp.disabled = false;
 }
 
 const acGroups = {
     power: {
-        idKey: 'acPower',
         onSelect(id, el) {
             if (el.dataset.state === 'off') setAcOff(id);
             else startAcWizard(id);
@@ -43,7 +42,6 @@ const acGroups = {
         },
     },
     mode: {
-        idKey: 'acMode',
         onSelect(id, el) {
             const mode = el.dataset.value;
             acSelections[id] = { ...acSelections[id], mode, fan: undefined };
@@ -57,7 +55,6 @@ const acGroups = {
         },
     },
     fan: {
-        idKey: 'acFan',
         onSelect(id, el) {
             acSelections[id] = { ...acSelections[id], fan: el.dataset.value };
             acQuery('set', id).forEach(btn => btn.disabled = false);
@@ -65,42 +62,42 @@ const acGroups = {
     },
 };
 
-Object.entries(acGroups).forEach(([group, { idKey, onSelect }]) => {
-    document.querySelectorAll(`[data-ac-${group}]`).forEach(el => {
-        el.addEventListener('pointerdown', () => selectOne(group, el.dataset[idKey], el));
-        el.addEventListener('click', () => onSelect(el.dataset[idKey], el));
+Object.entries(acGroups).forEach(([group, { onSelect }]) => {
+    document.querySelectorAll(`.orc-ac-${group}`).forEach(el => {
+        el.addEventListener('pointerdown', () => selectOne(group, el.dataset.id, el));
+        el.addEventListener('click', () => onSelect(el.dataset.id, el));
     });
 });
 
-document.querySelectorAll('[data-ac-set]').forEach(el => {
+document.querySelectorAll('.orc-ac-set').forEach(el => {
     el.addEventListener('click', () => {
-        const id = el.dataset.acSet;
-        const temp = document.querySelector(`input[data-ac-ctrl="${id}"]`)?.value;
+        const id = el.dataset.id;
+        const temp = document.querySelector(`input.orc-ac-ctrl[data-id="${id}"]`)?.value;
         const { fan, mode } = acSelections[id] || {};
         get(`/api/device/ac/${id}?state=on&mode=${mode}&fan=${fan}&temp=${temp}`, el);
         ['power', 'fan', 'mode'].forEach(g => acQuery(g, id).forEach(btn => btn.classList.remove('orc-selected')));
     });
 });
 
-document.querySelectorAll("[data-ac-power][data-state='off']").forEach(el => setAcOff(el.dataset.acPower));
+document.querySelectorAll(".orc-ac-power[data-state='off']").forEach(el => setAcOff(el.dataset.id));
 
 document.querySelectorAll(".orc-runner").forEach((el) => {
     el.addEventListener("click", (e) => runAction(e.currentTarget));
 });
 
-document.querySelectorAll('[data-device-input]').forEach(slider => {
-    slider.addEventListener('change', () => get(`/api/device/${slider.dataset.deviceInput}?state=${slider.value}`, slider));
+document.querySelectorAll('.orc-device-slider').forEach(slider => {
+    slider.addEventListener('change', () => get(`/api/device/${slider.dataset.id}?state=${slider.value}`, slider));
 });
 
-document.querySelectorAll('input[data-ac-ctrl]').forEach(slider => {
-    const display = document.querySelector(`[data-ac-temp="${slider.dataset.acCtrl}"]`);
+document.querySelectorAll('input.orc-ac-ctrl').forEach(slider => {
+    const display = document.querySelector(`.orc-ac-temp[data-id="${slider.dataset.id}"]`);
     if (display) slider.addEventListener('input', () => display.textContent = slider.value);
 });
 
-document.querySelectorAll('[data-device-toggle]').forEach(btn => {
+document.querySelectorAll('.orc-device-toggle').forEach(btn => {
     btn.addEventListener('click', async () => {
         const on = btn.dataset.on === '1';
-        if (!await get(`/api/device/${btn.dataset.deviceToggle}?state=${on ? 'off' : 'on'}`, btn)) return;
+        if (!await get(`/api/device/${btn.dataset.id}?state=${on ? 'off' : 'on'}`, btn)) return;
         btn.dataset.on = on ? '' : '1';
         btn.querySelector('use').setAttribute('href', `/static/icons.svg#${btn.dataset.icon}${on ? '-outline' : ''}`);
     });

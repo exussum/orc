@@ -6,6 +6,7 @@ from dataclasses import KW_ONLY, dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, auto
 from itertools import chain
+from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, NamedTuple, Self
 
@@ -336,14 +337,16 @@ class Registry:
     """What plugins registered, built per config load and exposed as
     ``orc.config.registry``.
 
-    ``click_hooks`` and ``button_labels`` are keyed by button/action id, not device
+    ``scripts`` maps served filename to the plugin's JS file on disk; all enabled
+    plugins' files are served in the ``/hooks.js`` bundle and register themselves
+    with the browser hooks. ``button_labels`` are keyed by button/action id, not device
     type, so they sit alongside ``devices`` rather than folding into a DeviceType.
     ``state_providers`` are registered by setup hooks (``api.add_state_provider``)
     and called fresh by consumers on each request, so the returned rows reflect live
     device state."""
 
     devices: dict[str, DeviceType]
-    click_hooks: dict[str, str]
+    scripts: dict[str, Path]
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]
     setup_hooks: list[Callable[[AppContext], None]]

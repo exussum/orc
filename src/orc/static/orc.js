@@ -22,27 +22,10 @@ function startProgress(seconds) {
 }
 
 
-async function notifyPairing(durationSec) {
-    if (!("Notification" in window)) return () => {};
-    let permission = Notification.permission;
-    if (permission === "default") permission = await Notification.requestPermission();
-    if (permission !== "granted") return () => {};
-    const notification = new Notification("Pair LG TV", {
-        body: "Accept the pairing prompt on the TV.",
-        tag: "orc-pair-lg-tv",
-    });
-    notification.onclick = () => notification.close();
-    const timer = setTimeout(() => notification.close(), durationSec * 1000);
-    return () => { clearTimeout(timer); notification.close(); };
-}
-
 async function get(url, el, onFailure = () => {}) {
-    if (new Date().getHours() < 9) {
-        const what = el.dataset.id || el.dataset.deviceToggle || el.dataset.deviceInput || "this device";
-        if (!confirm(`It's after hours.  Go ahead with: ${what}?`)) {
-            onFailure();
-            return false;
-        }
+    if (!(await orcHooks.onCommand(el.dataset.id, el, url))) {
+        onFailure();
+        return false;
     }
     el.disabled = true;
     const container = startProgress(parseFloat(el.dataset.duration || "0"));
@@ -91,12 +74,17 @@ async function checkVersion() {
 }
 
 async function runAction(el) {
+    if (!(await orcHooks.onPress(el.dataset.id, el))) return;
     const params = new URLSearchParams();
     if (el.dataset.state) params.set("state", el.dataset.state);
     if (el.dataset.device) params.set("device", el.dataset.device);
     const query = params.size ? `?${params}` : "";
     await get(`/api/${el.dataset.type || "run"}/${el.dataset.id}${query}`, el);
 }
+
+document.querySelectorAll(".orc-config-runner").forEach((el) => {
+    el.addEventListener("click", (e) => runAction(e.currentTarget));
+});
 
 document.addEventListener("click", (e) => {
     e.target.closest(".orc-log-action")?.classList.toggle("truncate");

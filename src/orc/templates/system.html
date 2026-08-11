@@ -133,21 +133,3 @@
         {% endfor %}
     </div>
 {% endblock %}
-{% block tail %}
-    <script>
-        // Elements with a custom click hook are owned by that hook (which issues its
-        // own request); the generic runner skips them so the click fires exactly once.
-        const hooked = new Set([{% for button_id in registry.click_hooks %}{{ button_id | tojson }},{% endfor %}]);
-        document.querySelectorAll(".orc-config-runner").forEach((el) => {
-            if (hooked.has(el.dataset.id)) return;
-            el.addEventListener("click", (e) => runAction(e.currentTarget));
-        });
-        {% for button_id, js in registry.click_hooks.items() %}
-        document.querySelectorAll('.orc-config-runner[data-id="{{ button_id }}"]').forEach((btn) =>
-            btn.addEventListener("click", async (e) => {
-                const el = e.currentTarget;
-                {{ js|safe }}
-            }));
-        {% endfor %}
-    </script>
-{% endblock %}
