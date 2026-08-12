@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from orc import model as m
+from orc.dal import interfaces
 from orc.loader import ConfigError, load_plugin_config, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -64,7 +65,9 @@ def test_volumes_are_bounded_ints():
 
 
 def test_validate_accepts_complete_config():
-    validate(parse("core"))
+    parsed = parse("core")
+    parsed.providers = parse("provider").providers
+    validate(parsed)
 
 
 def test_ad_hoc_define_with_inline_first_item():
@@ -144,7 +147,7 @@ _PARSE_ERRORS = [
     ("invalid_section", "Invalid parameter section='weird'"),
     ("time_not_hh_mm", "Invalid time 'noon'"),
     ("time_out_of_range", "Invalid time '25:00'"),
-    ("plugin_import_failure", "Cannot load plugin 'not.a.module'"),
+    ("plugin_import_failure", "Cannot load function 'not.a.module'"),
     ("theme_unknown_routine", "Unknown routine 'OTHER'"),
     ("append_unknown_routine", "Unknown routine 'R'"),
     ("unknown_trigger", "Unknown trigger 'NOPE'"),
@@ -160,6 +163,34 @@ _PARSE_ERRORS = [
 def test_parse_error(case, error):
     with pytest.raises(ConfigError, match=re.escape(error)):
         parse(case)
+
+
+def test_provider_imports_backends():
+    from orc.dal.blaster import stub as blaster_stub
+    from orc.dal.calendar import stub as calendar_stub
+    from orc.dal.chromecast import stub as chromecast_stub
+    from orc.dal.holiday import stub as holiday_stub
+    from orc.dal.mqtt import stub as mqtt_stub
+    from orc.dal.secrets import stub as secrets_stub
+    from orc.dal.weather import stub as weather_stub
+
+    providers = parse("provider").providers
+    assert providers.secrets is secrets_stub
+    assert providers.weather is weather_stub
+    assert providers.holiday is holiday_stub
+    assert providers.mqtt is mqtt_stub
+    assert providers.chromecast is chromecast_stub
+    assert providers.calendar is calendar_stub
+    assert providers.blaster is blaster_stub
+
+
+def test_provider_defaults_to_none():
+    assert parse("core").providers == interfaces.Provider()
+
+
+def test_validate_missing_providers():
+    with pytest.raises(ConfigError, match="Missing required providers: secrets, weather, holiday, mqtt, chromecast, calendar, blaster"):
+        validate(parse("core"))
 
 
 def test_validate_missing_routines():

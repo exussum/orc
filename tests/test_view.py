@@ -308,13 +308,12 @@ def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None):
     return job
 
 
-def _get_schedule(client, jobs, present_names=(), weather=False):
+def _get_schedule(client, jobs, present_names=()):
     with (
         patch.object(api, "jobs_by_type", return_value=jobs),
         patch.object(api, "current_theme_override", return_value=None),
         patch.object(api, "present_names", return_value=set(present_names)),
         patch.object(api, "fetch_durations", return_value=[]),
-        patch.object(api, "matched_weather", return_value=(MagicMock(),) if weather else ()),
     ):
         return client.get("/schedule/")
 
@@ -355,5 +354,5 @@ def test_schedule_system_rule_no_presence_badge(client):
 
 
 def test_schedule_weather_rule_shows_weather_badge(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger=m.WeatherCondition.SUNNY)], weather=True)
+    response = _get_schedule(client, [_fake_iot_job(trigger=m.WeatherCondition.SUNNY)])
     assert b"orc-weather-badge" in response.data

@@ -1,3 +1,11 @@
+provider secrets    orc.dal.secrets.bws
+provider weather    orc.dal.weather.open_meteo
+provider holiday    orc.dal.holiday.polygon
+provider mqtt       orc.dal.mqtt.hubitat
+provider chromecast orc.dal.chromecast.google_cast
+provider calendar   orc.dal.calendar.ical
+provider blaster    orc.dal.blaster.broadlink
+
 device define Light
 device add Light BEDROOM_LAMP 'bedroom lamp'     --room Bedroom
 device add Light LIVING_ROOM  'living room desk'
