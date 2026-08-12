@@ -19,6 +19,7 @@ _orc: Any = orc
 
 
 def setup(ctx: "m.AppContext") -> None:
+    plugins.configure(ctx.config.plugin_configs)
     plugins.init_db(ctx.api.connection)
 
 

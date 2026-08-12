@@ -81,6 +81,7 @@ def test_lgtv_registers_with_core():
     assert lgtv.setup in config.registry.setup_hooks
     with patch.object(plugins, "init_db") as init_db:
         ctx = MagicMock()
+        ctx.config.plugin_configs = {}
         lgtv.setup(ctx)
     init_db.assert_called_once_with(ctx.api.connection)
     assert config.registry.state_providers["TV"] is lgtv.tv_state
