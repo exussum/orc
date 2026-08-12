@@ -170,6 +170,7 @@ def test_provider_imports_backends():
     from orc.dal.calendar import stub as calendar_stub
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.holiday import stub as holiday_stub
+    from orc.dal.hubitat import stub as hubitat_stub
     from orc.dal.mqtt import stub as mqtt_stub
     from orc.dal.secrets import stub as secrets_stub
     from orc.dal.weather import stub as weather_stub
@@ -182,6 +183,7 @@ def test_provider_imports_backends():
     assert providers.chromecast is chromecast_stub
     assert providers.calendar is calendar_stub
     assert providers.blaster is blaster_stub
+    assert providers.hubitat is hubitat_stub
 
 
 def test_provider_defaults_to_none():
@@ -189,7 +191,9 @@ def test_provider_defaults_to_none():
 
 
 def test_validate_missing_providers():
-    with pytest.raises(ConfigError, match="Missing required providers: secrets, weather, holiday, mqtt, chromecast, calendar, blaster"):
+    with pytest.raises(
+        ConfigError, match="Missing required providers: secrets, weather, holiday, mqtt, chromecast, calendar, blaster, hubitat"
+    ):
         validate(parse("core"))
 
 

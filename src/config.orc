@@ -5,6 +5,7 @@ provider mqtt       orc.dal.mqtt.hubitat
 provider chromecast orc.dal.chromecast.google_cast
 provider calendar   orc.dal.calendar.ical
 provider blaster    orc.dal.blaster.broadlink
+provider hubitat    orc.dal.hubitat.http
 
 device define Light
 device add Light BEDROOM_LAMP 'bedroom lamp'     --room Bedroom
