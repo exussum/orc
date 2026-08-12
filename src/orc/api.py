@@ -28,8 +28,6 @@ from orc import model as m
 from orc import plugins
 from orc.dal import net, sqlite
 from orc.dal.secrets.bws import fetch_secrets  # noqa: F401
-from orc.dal.hubitat import fetch_retry_stats  # noqa: F401
-from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
@@ -274,6 +272,14 @@ def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = Non
 
     with Pool(max_workers=max(1, len(what))) as ex:
         list(ex.map(one, what))
+
+
+def reboot_hubitat() -> None:
+    config.providers.hubitat.reboot()
+
+
+def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
+    return config.providers.hubitat.fetch_retry_stats()
 
 
 def tv_toggle(bl_device: m.DeviceEnum) -> None:

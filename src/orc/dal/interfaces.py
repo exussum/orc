@@ -9,6 +9,7 @@ from orc.model import (
     DeviceEnum,
     DeviceState,
     Listener,
+    RetryStats,
     Secrets,
     SoundState,
     WeatherCondition,
@@ -58,6 +59,11 @@ class BlasterService(Protocol):
     def ac_off(self, device: DeviceEnum, codes_file: str) -> None: ...
 
 
+class HubitatService(Protocol):
+    def reboot(self) -> None: ...
+    def fetch_retry_stats(self) -> tuple[RetryStats, ...]: ...
+
+
 class Provider(NamedTuple):
     secrets: SecretsService | None = None
     weather: WeatherService | None = None
@@ -66,3 +72,4 @@ class Provider(NamedTuple):
     chromecast: ChromecastService | None = None
     calendar: CalendarService | None = None
     blaster: BlasterService | None = None
+    hubitat: HubitatService | None = None
