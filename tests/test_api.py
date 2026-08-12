@@ -10,6 +10,7 @@ import orc
 from orc import api, config
 from orc import model as m
 from orc.dal import net
+from orc.dal.mqtt import stub as mqtt_stub
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.tz)
 PAST = datetime(2000, 1, 1, tzinfo=config.tz)
@@ -59,7 +60,7 @@ class TestManagingConfig:
         dispatch.assert_not_called()
 
 
-@patch("orc.api.mqtt.publish_light")
+@patch("orc.dal.mqtt.stub.publish_light")
 class TestIntercepts:
     @pytest.fixture(autouse=True)
     def _manager(self):
@@ -328,11 +329,11 @@ class TestPresence:
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self):
         api.mark_present(["Alice"], when=api.local_now())
-        rule = self._routine("sunny-r", "SUNNY")
+        rule = self._routine("cloudy-r", "CLOUDY")
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatch.assert_not_called()
-        assert "SUNNY" in api.log_entries()[0].action
+        assert "CLOUDY" in api.log_entries()[0].action
 
     def test_replay_day_skips_routines_for_absent_people(self):
         past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
@@ -406,7 +407,7 @@ class TestWireButtons:
         captured = {}
         with (
             patch.object(config, "buttons", buttons),
-            patch.object(api, "add_button_listener", side_effect=lambda fn: captured.setdefault("fn", fn)),
+            patch.object(mqtt_stub, "add_button_listener", side_effect=lambda fn: captured.setdefault("fn", fn)),
         ):
             api.wire_buttons(ctx)
         return ctx, captured["fn"]

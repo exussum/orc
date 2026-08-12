@@ -46,15 +46,15 @@ def web() -> None:
 def _start_services(ctx: m.AppContext) -> None:
     api.wire_buttons(ctx)
     api.wire_external_log()
-    api.start_mqtt()
+    config.config.providers.mqtt.start()
     ctx.scheduler.resume()
     api.log(m.LogSource.SYSTEM, Log.BOOT)
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
 def _build_app() -> OrcFlask:
-    secrets = api.fetch_secrets()
-    config.config.load(secrets, api.fetch_hubitat_config(secrets))
+    secrets = config.config.providers.secrets.fetch_secrets()
+    config.config.load(secrets, config.config.providers.mqtt.fetch_hubitat_config(secrets))
     api.init_db()
 
     scheduler = _build_scheduler()
