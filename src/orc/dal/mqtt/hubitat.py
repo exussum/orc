@@ -75,30 +75,28 @@ _commanded: LockedDict[int, _Command] = LockedDict()  # device id -> expected ou
 # document fires every attribute, unchanged ones included (old == new); consumers
 # filter for what they care about. Callbacks run on the mqtt thread; keep them fast
 # and don't block.
-type Listener = Callable[[m.DeviceState, str, Any, Any], None]
-_listeners: list[Listener] = []
+_listeners: list[m.Listener] = []
 
 # Button-event listeners: fired as (device id, button number, event type) for every
 # ``devices/<id>/button/<n>`` publish. Unlike the document topics these are dedicated
 # event messages (not retained, no flood replay), so no staleness filtering applies.
-type ButtonListener = Callable[[int, int, str], None]
-_button_listeners: list[ButtonListener] = []
+_button_listeners: list[m.ButtonListener] = []
 
 # External-control listeners: fired as (device, attribute, old, new) for each
 # switch/level change with no recent orc command behind it. Same contract as
 # Listener: mqtt thread, keep it fast.
-_external_listeners: list[Listener] = []
+_external_listeners: list[m.Listener] = []
 
 
-def add_listener(fn: Listener) -> None:
+def add_listener(fn: m.Listener) -> None:
     _listeners.append(fn)
 
 
-def add_button_listener(fn: ButtonListener) -> None:
+def add_button_listener(fn: m.ButtonListener) -> None:
     _button_listeners.append(fn)
 
 
-def add_external_listener(fn: Listener) -> None:
+def add_external_listener(fn: m.Listener) -> None:
     _external_listeners.append(fn)
 
 
