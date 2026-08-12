@@ -78,11 +78,6 @@ packages = ["src/orc"]
 
 [tool.uv.sources]
 orc_data = { path = "data" }
-command-cfg = { index = "internal" }
-
-[[tool.uv.index]]
-name = "internal"
-url = "http://registry.int.exussum.org"
-explicit = true
+command-cfg = { git = "https://github.com/exussum/command-cfg", rev = "7d08cfbb1d690cef60fece6439b8f7d36e1f77fb" }
 
 
