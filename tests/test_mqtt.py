@@ -7,7 +7,7 @@ import pytest
 import orc
 from orc import model as m
 from orc.collections import LockedDict
-from orc.dal import mqtt
+from orc.dal.mqtt import hubitat as mqtt
 
 
 def _msg(topic, payload, retain=True):

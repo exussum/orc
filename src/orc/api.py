@@ -26,16 +26,10 @@ import orc
 from orc import config
 from orc import model as m
 from orc import plugins
-from orc.dal import broadlink, chromecast, feeds, mqtt, net, sqlite
-from orc.dal.bws import fetch_secrets  # noqa: F401
+from orc.dal import net, sqlite
+from orc.dal.secrets.bws import fetch_secrets  # noqa: F401
 from orc.dal.hubitat import fetch_retry_stats  # noqa: F401
 from orc.dal.hubitat import reboot as reboot_hubitat  # noqa: F401
-from orc.dal.mqtt import add_button_listener  # noqa: F401
-from orc.dal.mqtt import add_external_listener  # noqa: F401
-from orc.dal.mqtt import add_listener  # noqa: F401
-from orc.dal.mqtt import fetch_hubitat_config  # noqa: F401
-from orc.dal.mqtt import snapshot as device_states  # noqa: F401
-from orc.dal.mqtt import start as start_mqtt  # noqa: F401
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
@@ -127,15 +121,23 @@ def log_entries() -> list[m.LogEntry]:
 # --- Device control ---
 
 
+def add_listener(fn: m.Listener) -> None:
+    config.providers.mqtt.add_listener(fn)
+
+
+def device_states() -> list[m.DeviceState]:
+    return config.providers.mqtt.snapshot()
+
+
 def capture_lights() -> m.Configs:
-    return mqtt.fetch_light_states(tuple(orc.Light))
+    return config.providers.mqtt.fetch_light_states(tuple(orc.Light))
 
 
 def capture_sounds() -> m.Configs[m.SoundState]:
     if not len(orc.Chromecast):
         return m.Configs()
     with Pool(max_workers=len(orc.Chromecast)) as ex:
-        return m.Configs(*ex.map(chromecast.fetch_state, orc.Chromecast))
+        return m.Configs(*ex.map(config.providers.chromecast.fetch_state, orc.Chromecast))
 
 
 # Dispatch handlers keyed by device-type name in orc.declarations. Each takes the
@@ -144,29 +146,29 @@ def capture_sounds() -> m.Configs[m.SoundState]:
 # Plugins register their own handlers the same way.
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
-        mqtt.publish_light(w, brightness=rule.state)
+        config.providers.mqtt.publish_light(w, brightness=rule.state)
     else:
-        mqtt.publish_light(w, on=rule.state == m.ON)
+        config.providers.mqtt.publish_light(w, on=rule.state == m.ON)
 
 
 def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
-        chromecast.set_volume(w, rule.state)
+        config.providers.chromecast.set_volume(w, rule.state)
     elif rule.state == m.STOP:
-        chromecast.stop(w)
+        config.providers.chromecast.stop(w)
     elif rule.state == m.PAUSE:
-        chromecast.pause(w)
+        config.providers.chromecast.pause(w)
     elif rule.state == m.RESUME:
-        chromecast.resume(w)
+        config.providers.chromecast.resume(w)
     else:
         if rule.state not in stream:
             # rule.state is a stream URL or YouTube id (str) in this branch; Config.state is typed object
             stream[rule.state] = (
                 (safe_domain(rule.state, _STREAM_DOMAINS), rule.state)
                 if "http" in rule.state
-                else chromecast.fetch_youtube_stream_metadata(rule.state)
+                else config.providers.chromecast.fetch_youtube_stream_metadata(rule.state)
             )
-        chromecast.play(w, *stream[rule.state])
+        config.providers.chromecast.play(w, *stream[rule.state])
 
 
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
@@ -174,10 +176,6 @@ def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
 
 
 def declare_core(declarations: Declarations) -> None:
-    """Declare core's own dispatch handlers. Called from ``Config.load`` (not at
-    import) so all declarations happen on config load, like plugins. Core's state
-    provider and the mqtt client are wired by the runner directly, after the setup
-    hooks."""
     declarations.declare_dispatch("Light", _dispatch_light)
     declarations.declare_dispatch("Chromecast", _dispatch_chromecast)
 
@@ -232,7 +230,7 @@ def wire_buttons(ctx: m.AppContext) -> None:
         if action is not None and not run_action(ctx, action, hub_origin=True):
             log(m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action))
 
-    add_button_listener(on_button)
+    config.providers.mqtt.add_button_listener(on_button)
 
 
 def wire_external_log() -> None:
@@ -247,7 +245,7 @@ def wire_external_log() -> None:
             last = log(m.LogSource.EXTERNAL, Log.EXTERNAL_DETECTED)
         last.add(m.LogSource.EXTERNAL, action)
 
-    add_external_listener(on_external)
+    config.providers.mqtt.add_external_listener(on_external)
 
 
 @unwrap_rule_container
@@ -279,16 +277,16 @@ def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = Non
 
 
 def tv_toggle(bl_device: m.DeviceEnum) -> None:
-    broadlink.tv_toggle(bl_device, _BROADLINK_CODES)
+    config.providers.blaster.tv_toggle(bl_device, _BROADLINK_CODES)
 
 
 def ac_command(
     bl_device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None
 ) -> None:
     if state == m.OFF:
-        broadlink.ac_off(bl_device, _BROADLINK_CODES)
+        config.providers.blaster.ac_off(bl_device, _BROADLINK_CODES)
     else:
-        broadlink.set_ac(bl_device, _BROADLINK_CODES, mode or "cool", fan or "low", temp or 75)
+        config.providers.blaster.set_ac(bl_device, _BROADLINK_CODES, mode or "cool", fan or "low", temp or 75)
 
 
 def device_command(id: str, state: str | None) -> None:
@@ -400,9 +398,7 @@ def calculate_theme(today: date) -> str:
         return override.name
     if today.weekday() in (5, 6):
         return m.THEME_DAY_OFF
-    today_iso = today.strftime("%Y-%m-%d")
-    is_holiday = any(e["date"] == today_iso and e["exchange"] == "NYSE" for e in feeds.fetch_holidays(today.year))
-    return m.THEME_DAY_OFF if is_holiday else m.THEME_WORK_DAY
+    return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
 
 
 def set_theme_override(name: str, start: date, end: date) -> None:
@@ -582,7 +578,11 @@ def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
 
 
 def matched_weather(rule: m.Routine, now: datetime) -> tuple[m.Config, ...]:
-    return tuple(c for c in rule.items if c.trigger in _WEATHER_TRIGGERS and c.trigger in feeds.fetch_weather(now, *config.lat_long))
+    return tuple(
+        c
+        for c in rule.items
+        if c.trigger in _WEATHER_TRIGGERS and c.trigger in config.providers.weather.fetch_weather(now, *config.lat_long)
+    )
 
 
 def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> Sequence[m.Config]:
@@ -640,7 +640,7 @@ def _schedule_cal_tasks(scheduler: BaseScheduler) -> None:
         return
 
     # fetch_ical's `end` is typed as datetime, but recurring_ical_events.between accepts a timedelta window at runtime
-    events = list(itertools.islice(feeds.fetch_ical(now, timedelta(hours=20)), 50))
+    events = list(itertools.islice(config.providers.calendar.fetch_ical(now, timedelta(hours=20)), 50))
     warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
     alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
     calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}

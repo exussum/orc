@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from orc.dal import hubitat
-from orc.dal.chromecast import _strip_googlevideo_params
+from orc.dal.chromecast.google_cast import _strip_googlevideo_params
 from orc.decorators import requires_enabled
 
 

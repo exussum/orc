@@ -44,6 +44,16 @@ def enabled(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _reset_stubs():
+    from orc.dal.chromecast import stub as chromecast_stub
+    from orc.dal.mqtt import stub as mqtt_stub
+
+    mqtt_stub.reset()
+    chromecast_stub.reset()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _orc_state_db(tmp_path, monkeypatch):
     from orc import config
     from orc.dal import sqlite
