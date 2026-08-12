@@ -78,6 +78,6 @@ packages = ["src/orc"]
 
 [tool.uv.sources]
 orc_data = { path = "data" }
-command-cfg = { git = "https://github.com/exussum/command-cfg", rev = "7d08cfbb1d690cef60fece6439b8f7d36e1f77fb" }
+command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v0.0.1" }
 
 
