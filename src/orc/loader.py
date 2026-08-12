@@ -9,6 +9,7 @@ import command_cfg
 from command_cfg import ConfigError
 
 from orc import model as m
+from orc.dal import interfaces
 from orc.security import safe_eval
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
@@ -23,7 +24,8 @@ device only <type> [<name> <host>] [--room=<room>]
 device seal <type>
 highlight <name> <start> <stop>
 person <name> <host> <mac>
-plugin <name> <plugin> [--section=<section>] [--icon=<icon>] [--delay=<minutes>]
+plugin <name> <function> [--section=<section>] [--icon=<icon>] [--delay=<minutes>]
+provider <key> <module>
 room <name> <device> <state>
 routine define <id> <name>
 routine append <id> <device> <state> [--trigger=<trigger>]
@@ -39,10 +41,11 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
 
     serializers: dict[str, Callable[..., Any]] = {
         "volume": m.Volume,
+        "provider": interfaces.Provider,
         "person": m.Person,
         **{command: partial(run, handler) for command, handler in _COMMANDS.items()},
     }
-    objects = command_cfg.parse(text, GRAMMAR, serializers, scalars=("volume",), grouped=("person",), cast=partial(_cast, {}))
+    objects = command_cfg.parse(text, GRAMMAR, serializers, scalars=("volume", "provider"), grouped=("person",), cast=partial(_cast, {}))
     if unsealed := objects.get("_members", {}).keys() - objects.get("enums", {}).keys():
         raise ConfigError(f"Device types defined but never sealed: {sorted(unsealed)}")
     return SimpleNamespace(
@@ -53,6 +56,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         enums=objects.get("enums", {}),
         people=objects.get("person", {}),
         plugins=objects.get("plugins", {}),
+        providers=objects["provider"],
         room_configs=objects.get("room_configs", {}),
         routines=objects.get("routines", {}),
         themes=objects.get("themes", {}),
@@ -67,6 +71,8 @@ def validate(config: SimpleNamespace) -> None:
     ):
         if missing := set(required) - present:
             raise ConfigError(f"Missing required {label}: {', '.join(sorted(missing))}")
+    if unset := [key for key, value in zip(interfaces.Provider._fields, config.providers) if value is None]:
+        raise ConfigError(f"Missing required providers: {', '.join(unset)}")
 
 
 def _cast(objects: dict[str, Any], key: str, value: Any) -> Any:
@@ -156,8 +162,8 @@ def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
 
 
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    params = {key: value for key, value in vars(args).items() if key not in ("name", "plugin") and value is not None}
-    objects.setdefault("plugins", {})[args.name] = m.Plugin(func=args.plugin, **params)
+    params = {key: value for key, value in vars(args).items() if key not in ("name", "function") and value is not None}
+    objects.setdefault("plugins", {})[args.name] = m.Plugin(func=args.function, **params)
 
 
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
