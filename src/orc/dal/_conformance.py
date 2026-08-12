@@ -8,7 +8,7 @@ changed signature) fails type-checking here rather than at load time.
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from orc.dal import bws, interfaces
+    from orc.dal import interfaces
     from orc.dal.blaster import broadlink
     from orc.dal.blaster import stub as blaster_stub
     from orc.dal.calendar import ical
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from orc.dal.holiday import stub as holiday_stub
     from orc.dal.mqtt import hubitat
     from orc.dal.mqtt import stub as mqtt_stub
+    from orc.dal.secrets import bws
     from orc.dal.secrets import stub as secrets_stub
     from orc.dal.weather import open_meteo
     from orc.dal.weather import stub as weather_stub
