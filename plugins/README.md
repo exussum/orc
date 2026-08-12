@@ -76,7 +76,7 @@ the scheduler injects the context as a `ctx` keyword argument at run time.
 ## 2. Register it in config.orc
 
 Add a `plugin` line to `$ORC_CONFIG_DIR/config.orc`: a display name, the
-fully qualified dotted path to the function, and optional flags for the
+fully qualified dotted path of the function, and optional flags for the
 section (defaults to `scene`), icon, and delay:
 
 ```

@@ -125,7 +125,8 @@ Two config surfaces:
 
 1. **Line-based config** at `ORC_CONFIG_DIR/config.orc` (the in-repo sample
    is `src/config.orc`). Defines devices, people, routines, themes, room
-   configs, ad-hoc routines, plugins, and button highlights. One command per
+   configs, ad-hoc routines, plugins, button highlights, and the secrets and
+   weather providers. One command per
    line with shell-style quoting and `#` comments; a `.` repeats the token in
    the same position on the line above. The grammar lives in
    `orc.loader.GRAMMAR` and is parsed by the `command-cfg` package:
