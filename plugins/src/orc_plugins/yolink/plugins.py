@@ -65,14 +65,6 @@ _FLAP_WINDOW_SEC = 60
 _FLAP_THRESHOLD = 3
 _disconnect_times: list[float] = []
 
-_TRACKED_FIELDS: tuple[tuple[str, str], ...] = (
-    ("state", "leak"),
-    ("battery", "battery"),
-    ("signal", "signal"),
-    ("interval", "interval"),
-    ("online", "online"),
-)
-
 
 def start() -> None:
     if not len(_orc.Leak):
@@ -212,19 +204,18 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
     def apply(current: SensorState | None) -> SensorState | None:
         if current is None:
             return None
-        changes = {}
-        for field_name, kind in _TRACKED_FIELDS:
-            new = data.get(field_name)
-            if new is None:
-                continue
-            old = getattr(current, field_name)
-            if old == new:
-                continue
-            changes[field_name] = new
-            captured["transitions"].append((kind, old, new))
+        old = {
+            "state": current.state,
+            "battery": current.battery,
+            "signal": current.signal,
+            "interval": current.interval,
+            "online": current.online,
+        }
+        changes = {f: new for f, prev in old.items() if (new := data.get(f)) is not None and new != prev}
         if not changes:
             return None
         captured["name"] = current.name
+        captured["transitions"] = [("leak" if f == "state" else f, old[f], new) for f, new in changes.items()]
         return dataclasses.replace(current, last_change=datetime.now(tz=config.config.tz), **changes)
 
     _states.update(device_id, apply)
