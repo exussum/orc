@@ -31,6 +31,10 @@ class Person(NamedTuple):
     mac: str
 
 
+type Listener = Callable[[DeviceState, str, Any, Any], None]
+type ButtonListener = Callable[[int, int, str], None]
+
+
 class Volume(NamedTuple):
     INFO: int
     FATAL: int
@@ -71,10 +75,12 @@ _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
 # "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
 # they render no button and are not auto-invoked, unlike the other sections.
 _VALID_SECTIONS = frozenset({"scene", "system", "device"})
-_ERR_PLUGIN = (
-    "Cannot load plugin {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. "
+_ERR_FUNCTION = (
+    "Cannot load function {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. "
     "Ensure the module exists and the function is defined within it."
 )
+
+_ERR_MODULE = "Cannot load module {!r}: {}. Expected an importable module like 'orc.dal.mqtt.stub'."
 
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
@@ -275,7 +281,7 @@ class Secrets:
     other: dict[str, str] = field(default_factory=dict)
 
     def get(self, key: str) -> str:
-        return self.other.get(key, "")
+        return self.other.get(key) or ""
 
 
 @dataclass
@@ -389,12 +395,17 @@ def column_to_value(col: str, val: Any) -> Any:
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             raise ValueError(_ERR_TIME.format(val))
         return time(hour, minute)
-    elif col.lower() == "plugin":
+    elif col.lower() == "module":
+        try:
+            return importlib.import_module(val)  # nosemgrep: non-literal-import
+        except Exception as exc:
+            raise ValueError(_ERR_MODULE.format(val, exc)) from exc
+    elif col.lower() == "function":
         try:
             module_path, fn_name = val.rsplit(".", 1)
             return getattr(importlib.import_module(module_path), fn_name)  # nosemgrep: non-literal-import
         except Exception as exc:
-            raise ValueError(_ERR_PLUGIN.format(val, exc)) from exc
+            raise ValueError(_ERR_FUNCTION.format(val, exc)) from exc
     return val
 
 

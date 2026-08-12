@@ -19,6 +19,9 @@ device_enums: list[type[m.DeviceEnum]] = []
 
 class Config:
     def __init__(self) -> None:
+        # visible as orc.config before the parse below: modules imported by
+        # `plugin`/`provider` config lines read it at import time
+        globals()["config"] = self
         self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
         self.jobs_db = os.getenv("ORC_DB", "sqlite:////tmp/jobs.sqlite")
         self.hubitat_url = os.getenv("ORC_HUBITAT_URL")
@@ -57,6 +60,7 @@ class Config:
         self.virtual_devices = {e for e in parsed.enums["Light"] if isinstance(e.value, int) and e.value < 0}
 
         self.people = parsed.people
+        self.providers = parsed.providers
         self.routines = parsed.routines
         self.themes = parsed.themes
         self.room_configs = parsed.room_configs
