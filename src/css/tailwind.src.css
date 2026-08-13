@@ -162,6 +162,9 @@
 
 @utility orc-job-badges {
     @apply absolute left-1/2 -bottom-1 flex text-xs leading-none whitespace-nowrap;
+    &:not(:empty) {
+        @apply rounded border border-orc-border bg-orc-bg px-0.5 py-px;
+    }
 }
 
 @utility orc-nav-link {
