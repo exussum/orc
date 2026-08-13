@@ -7,10 +7,8 @@ import recurring_ical_events
 import requests
 
 from orc import config
-from orc.decorators import requires_enabled
 
 
-@requires_enabled(lambda *_: iter(()))
 def fetch_ical(start: datetime, end: datetime | timedelta) -> Iterator[Any]:
     ical_string = requests.get(config.secrets.ics_url, timeout=config.http_ical_timeout).content
     a_calendar = icalendar.Calendar.from_ical(ical_string)

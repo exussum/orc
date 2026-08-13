@@ -4,13 +4,11 @@ from functools import lru_cache
 import requests
 
 from orc import config
-from orc.decorators import requires_enabled
 from orc.model import WeatherCondition
 
 _SUNNY_CODES: set[int] = {0, 1}  # WMO 0=clear sky, 1=mainly clear
 
 
-@requires_enabled(frozenset())
 def fetch_weather(now: datetime, lat: float, lon: float) -> frozenset[WeatherCondition]:
     return _fetch_weather(now.replace(minute=0, second=0, microsecond=0), lat, lon)
 

@@ -1,10 +1,7 @@
 from unittest.mock import patch
 
-import pytest
-
 from orc.dal.chromecast.google_cast import _strip_googlevideo_params
 from orc.dal.hubitat import http as hubitat
-from orc.decorators import requires_enabled
 
 
 class TestStripGoogleVideoParams:
@@ -28,36 +25,6 @@ class TestStripGoogleVideoParams:
         assert _strip_googlevideo_params("not a url") == "not a url"
 
 
-class TestRequiresEnabled:
-    def test_disabled_returns_static_stub(self, monkeypatch):
-        monkeypatch.delenv("ORC_ENABLED", raising=False)
-
-        @requires_enabled("STUB")
-        def fn(x):
-            raise AssertionError("should not be called")
-
-        assert fn(1) == "STUB"
-
-    def test_disabled_calls_callable_stub_with_args(self, monkeypatch):
-        monkeypatch.delenv("ORC_ENABLED", raising=False)
-
-        @requires_enabled(lambda x, y: ("stub", x, y))
-        def fn(x, y):
-            raise AssertionError("should not be called")
-
-        assert fn(1, 2) == ("stub", 1, 2)
-
-    def test_enabled_calls_through(self, monkeypatch):
-        monkeypatch.setenv("ORC_ENABLED", "1")
-
-        @requires_enabled("STUB")
-        def fn(x):
-            return ("real", x)
-
-        assert fn(7) == ("real", 7)
-
-
-@pytest.mark.usefixtures("enabled")
 class TestReboot:
     @patch("requests.post")
     def test_reboot_hits_hub_endpoint(self, post):
