@@ -2,7 +2,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import timedelta
 from functools import partial
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import command_cfg
@@ -24,7 +24,7 @@ device only <type> [<name> <host>] [--room=<room>]
 device seal <type>
 highlight <name> <start> <stop>
 person <name> <host> <mac>
-plugin <name> <function> [--section=<section>] [--icon=<icon>] [--delay=<minutes>]
+plugin <name> <module> [--function=<function>] [--section=<section>] [--icon=<icon>] [--delay=<minutes>] [--backend=<module>]
 provider <key> <module>
 room <name> <device> <state>
 routine define <id> <name>
@@ -55,7 +55,8 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         buttons=objects.get("buttons", {}),
         enums=objects.get("enums", {}),
         people=objects.get("person", {}),
-        plugins=objects.get("plugins", {}),
+        plugin_modules=objects.get("plugin_modules", []),
+        plugins=tuple(objects.get("plugins", ())),
         providers=objects["provider"],
         room_configs=objects.get("room_configs", {}),
         routines=objects.get("routines", {}),
@@ -90,6 +91,8 @@ def _cast(objects: dict[str, Any], key: str, value: Any) -> Any:
         if not 0 <= level <= 100:
             raise ValueError(f"Invalid parameter level={value!r}")
         return level
+    elif key == "function":
+        return value
     return m.column_to_value(key, value)
 
 
@@ -162,8 +165,13 @@ def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
 
 
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    params = {key: value for key, value in vars(args).items() if key not in ("name", "function") and value is not None}
-    objects.setdefault("plugins", {})[args.name] = m.Plugin(func=args.function, **params)
+    params = {key: value for key, value in vars(args).items() if key not in ("name", "module", "function") and value is not None}
+    if params.get("backend") is not None:
+        params["backend"] = m.column_to_value("module", params["backend"])
+    objects.setdefault("plugin_modules", []).append(args.module)
+    if args.function:
+        func = m.column_to_value("function", f"{args.module.__name__}.{args.function}")
+        objects.setdefault("plugins", []).append(m.Plugin(name=args.name, func=func, module=args.module, **params))
 
 
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
@@ -220,3 +228,9 @@ def _plugin_cast(key: str, value: Any) -> Any:
         return m.column_to_value(key, value)
     except (NameError, AttributeError, SyntaxError) as exc:
         raise ValueError(str(exc)) from None
+
+
+def resolve_backend(value: ModuleType | None) -> ModuleType:
+    if value is None:
+        raise ConfigError("plugin has no --backend configured")
+    return value

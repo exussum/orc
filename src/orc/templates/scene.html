@@ -29,8 +29,8 @@
                 {% for id in ad_hoc_routines %}
                     {{ btn_stripe(id, "clipboard-check", durations.get(id, 0)) }}
                 {% endfor %}
-                {% for id, plugin in plugins.items() %}
-                    {{ btn_stripe(id, plugin.icon, durations.get(id, 0)) }}
+                {% for plugin in plugins %}
+                    {{ btn_stripe(plugin.name, plugin.icon, durations.get(plugin.name, 0)) }}
                 {% endfor %}
             </div>
         </div>

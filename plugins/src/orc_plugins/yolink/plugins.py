@@ -90,8 +90,7 @@ def snapshot() -> list[SensorState]:
     return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in _orc.Leak]
 
 
-def test_sensor(ctx: AppContext, *, device: str) -> None:
-    # Driven by a device-row click, which passes the sensor via ?device=<name>.
+def test_sensor(ctx: AppContext, device: str) -> None:
     simulate_transition(device)
 
 

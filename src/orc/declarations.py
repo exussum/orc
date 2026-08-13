@@ -1,9 +1,10 @@
-import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
+from orc import plugins as core_plugins
 from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry
 
 
@@ -64,16 +65,12 @@ class Declarations:
         )
 
 
-def collect_declarations(module_paths: Iterable[str]) -> Declarations:
+def collect_declarations(modules: Iterable[ModuleType]) -> Declarations:
     declarations = Declarations()
     seen: set[str] = set()
-    for path in module_paths:
-        package = path.split(".")[0]
-        if package == "orc" or package in seen:
+    for module in modules:
+        if module is core_plugins or module.__name__ in seen:
             continue
-        seen.add(package)
-        module = sys.modules.get(package)
-        declare = getattr(module, "declare", None) if module is not None else None
-        if declare is not None:
-            declare(declarations)
+        seen.add(module.__name__)
+        module.declare(declarations)
     return declarations
