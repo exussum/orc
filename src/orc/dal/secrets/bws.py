@@ -14,13 +14,11 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from cryptography.hazmat.primitives.padding import PKCS7
 
 from orc import model as m
-from orc.decorators import requires_enabled
 
 _IDENTITY_URL = "https://identity.bitwarden.com"
 _API_URL = "https://api.bitwarden.com"
 
 
-@requires_enabled(lambda: m.Secrets())
 def fetch_secrets() -> m.Secrets:
     raw_token = _get_url_value(os.environ["BWS_ACCESS_TOKEN"])
 

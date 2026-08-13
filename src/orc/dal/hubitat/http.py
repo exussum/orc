@@ -10,20 +10,17 @@ import requests
 
 from orc import config
 from orc import model as m
-from orc.decorators import requires_enabled
 
 _FAILED = "failed after 5 retries"
 _RETRIED = "succeeded on retry"
 _STATE_CHANGE = re.compile(r"(?:was turned (?:on|off)(?: \[digital\])?|level was set to \d+%)$")
 
 
-@requires_enabled(None)
 def reboot() -> None:
     resp = requests.post(f"{config.hubitat_url}/hub/reboot?access_token={config.secrets.hubitat_access_token}", timeout=config.http_timeout)
     resp.raise_for_status()
 
 
-@requires_enabled(())
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
     base = urlparse(config.hubitat_url or "")
     resp = requests.get(f"{base.scheme}://{base.netloc}/logs/past/json", timeout=config.http_timeout)

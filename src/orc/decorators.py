@@ -3,7 +3,6 @@
 
 import contextlib
 import os
-import sys
 import threading
 from collections.abc import Callable, Iterator
 from functools import wraps
@@ -24,20 +23,6 @@ def silence_fd(fd: int) -> Iterator[None]:
         finally:
             os.dup2(saved, fd)
             os.close(saved)
-
-
-def requires_enabled[**P, R](stub: Any) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    def deco(fn: Callable[P, R]) -> Callable[P, R]:
-        @wraps(fn)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            if not os.getenv("ORC_ENABLED"):
-                print(f"[disabled] {fn.__name__} args={args} kwargs={kwargs}", file=sys.stderr)
-                return stub(*args, **kwargs) if callable(stub) else stub
-            return fn(*args, **kwargs)
-
-        return wrapper
-
-    return deco
 
 
 def requires_ctx[**P, R](f: Callable[P, R]) -> Callable[P, R]:

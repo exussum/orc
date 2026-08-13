@@ -2,7 +2,6 @@ import contextlib
 import itertools
 import math
 import os
-import sys
 import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
@@ -27,7 +26,6 @@ from orc import config
 from orc import model as m
 from orc import plugins
 from orc.dal import net, sqlite
-from orc.dal.secrets.bws import fetch_secrets  # noqa: F401
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
@@ -253,8 +251,9 @@ def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = Non
     stream: dict[Any, tuple[str, str]] = {}
 
     def one(w: m.DeviceEnum) -> None:
-        if os.getenv("ORC_ENABLED") and w in config.virtual_devices:
-            print("Skipping virtual device:" + w.name, file=sys.stderr)
+        if w in config.virtual_devices:
+            if entry is not None:
+                entry.add(m.LogSource.SYSTEM, Log.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
             return
 
         device_type = config.registry.devices.get(type(w).__name__)
