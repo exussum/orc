@@ -160,12 +160,8 @@
     @apply relative;
 }
 
-@utility orc-weather-badge {
-    @apply absolute -top-1 -right-1 text-xs leading-none;
-}
-
-@utility orc-presence-badge {
-    @apply absolute -top-1 -left-1 text-xs leading-none;
+@utility orc-job-badges {
+    @apply absolute left-1/2 -bottom-1 flex text-xs leading-none whitespace-nowrap;
 }
 
 @utility orc-nav-link {

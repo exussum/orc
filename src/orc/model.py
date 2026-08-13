@@ -260,6 +260,7 @@ class Routine:
     name: str
     when: str | time
     items: Sequence[Config]
+    skip_replay: bool = False
 
 
 @dataclass
