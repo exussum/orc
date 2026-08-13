@@ -27,7 +27,7 @@ person <name> <host> <mac>
 plugin <name> <module> [--function=<function>] [--section=<section>] [--icon=<icon>] [--delay=<minutes>] [--backend=<module>]
 provider <key> <module>
 room <name> <device> <state>
-routine define <id> <name>
+routine define <id> <name> [--skip-replay]
 routine append <id> <device> <state> [--trigger=<trigger>]
 theme <name> <routine> <time>
 volume <log> <level>
@@ -177,7 +177,7 @@ def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     routines = objects.setdefault("routines", {})
     if args.define:
-        routines[args.id] = m.Routine(args.name, "", ())
+        routines[args.id] = m.Routine(args.name, "", (), skip_replay=args.skip_replay)
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:

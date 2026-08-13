@@ -48,6 +48,12 @@ def test_routines_append_devices_and_triggers():
     )
 
 
+def test_routine_skip_replay_flag():
+    routines = parse("core").routines
+    assert routines["ROUTINE_MEETING"].skip_replay is True
+    assert routines["ROUTINE_RESET"].skip_replay is False
+
+
 def test_themes_schedule_routines():
     themes = parse("core").themes
     assert [c.name for c in themes["work day"].configs] == ["Reset"]

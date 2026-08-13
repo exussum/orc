@@ -297,9 +297,9 @@ def test_pause_unknown_job_returns_404(client, scheduler, good_version):
 # --- /schedule/: button colour and badges ---
 
 
-def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None):
+def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
-    rule = m.Routine(name, "", [m.Config(MagicMock(), "on", trigger=trigger)])
+    rule = m.Routine(name, "", [m.Config(MagicMock(), "on", trigger=trigger)], skip_replay=skip_replay)
     job = MagicMock()
     job.id = name
     job.name = name
@@ -357,3 +357,13 @@ def test_schedule_system_rule_no_presence_badge(client):
 def test_schedule_weather_rule_shows_weather_badge(client):
     response = _get_schedule(client, [_fake_iot_job(trigger=m.WeatherCondition.SUNNY)])
     assert b"orc-weather-badge" in response.data
+
+
+def test_schedule_skip_replay_shows_badge(client):
+    response = _get_schedule(client, [_fake_iot_job(skip_replay=True)])
+    assert b"orc-skip-replay-badge" in response.data
+
+
+def test_schedule_no_skip_replay_no_badge(client):
+    response = _get_schedule(client, [_fake_iot_job()])
+    assert b"orc-skip-replay-badge" not in response.data
