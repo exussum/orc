@@ -4,11 +4,9 @@ from typing import Any
 
 import broadlink as bl
 
-from orc.decorators import requires_enabled
 from orc.model import DeviceEnum
 
 
-@requires_enabled(None)
 def set_ac(device: DeviceEnum, codes_file: str, mode: str, fan: str, temp: int) -> None:
     cmds = _codes(codes_file)["ac"]["commands"][mode]
     if mode == "fan_only":
@@ -20,12 +18,10 @@ def set_ac(device: DeviceEnum, codes_file: str, mode: str, fan: str, temp: int) 
     _send(_connect(device), code)
 
 
-@requires_enabled(None)
 def tv_toggle(device: DeviceEnum, codes_file: str) -> None:
     _send(_connect(device), _codes(codes_file)["tv"]["commands"]["toggle"])
 
 
-@requires_enabled(None)
 def ac_off(device: DeviceEnum, codes_file: str) -> None:
     _send(_connect(device), _codes(codes_file)["ac"]["commands"]["off"])
 

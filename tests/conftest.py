@@ -38,11 +38,6 @@ def _core_registry(monkeypatch):
     yield
 
 
-@pytest.fixture
-def enabled(monkeypatch):
-    monkeypatch.setenv("ORC_ENABLED", "1")
-
-
 @pytest.fixture(autouse=True)
 def _reset_stubs():
     from orc.dal.chromecast import stub as chromecast_stub

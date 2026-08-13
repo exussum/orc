@@ -14,6 +14,7 @@ class Log:
     RULE_SKIPPED: str = "skipped: {detail}"
     RULE_SUPPRESSED: str = "Suppressed by snapshot: {kinds}"
     DISPATCH_FAILED: str = "Dispatch failed for `{device}`: {exc}"
+    VIRTUAL_DEVICE_SKIPPED: str = "Skipped `{device}`: virtual device, nothing to dispatch"
 
     PRESENCE_PING_FAILED: str = "Presence ping failed for `{name}`: {exc}"
     PRESENCE_DETECTED: str = "Presence detected: `{name}`"

@@ -20,7 +20,6 @@ from orc import config
 from orc import model as m
 from orc.collections import LockedDict
 from orc.dal import sqlite
-from orc.decorators import requires_enabled
 
 _log = logging.getLogger(__name__)
 
@@ -142,7 +141,6 @@ def snapshot() -> list[m.DeviceState]:
     return sorted(_devices.values(), key=lambda d: d.id)
 
 
-@requires_enabled(lambda lights: m.Configs(*(m.Config(what=light, state=m.OFF) for light in lights)))
 def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
     """Light states from the standing subscriber's device documents (updated on every
     device event, whatever channel commanded it). Virtual devices (negative synthetic
@@ -160,7 +158,6 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
     return m.Configs(*(m.Config(what=light, state=state(light)) for light in lights))
 
 
-@requires_enabled({})
 def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:
     found: dict[str, tuple[int, frozenset[m.Capability]]] = {}
 
@@ -179,7 +176,6 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
     return found
 
 
-@requires_enabled(None)
 def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
     expected = _Command(time.monotonic(), light.value)
     if brightness is not None and m.Capability.change_level in light.capabilities:

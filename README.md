@@ -25,10 +25,11 @@ calendar events, and a line-based config file.
 
 ## Quick start — development, no hardware required
 
-orc runs happily on a laptop with nothing attached: when `ORC_ENABLED` is
-unset, every device and secret integration is stubbed out. Calls that would
-touch hardware are printed to stderr as `[disabled] ...` instead, and the
-whole UI works against the sample config.
+orc runs happily on a laptop with nothing attached: the sample config's
+`provider` lines name the stub backends (`orc.dal.<capability>.stub`), so
+every device and secret integration is faked in memory and the whole UI
+works. A real installation's config names the real backends instead
+(e.g. `provider mqtt orc.dal.mqtt.hubitat`).
 
 You'll need:
 
@@ -105,7 +106,6 @@ Steps:
 4. **Set the environment.** The minimum for a real installation:
 
    ```sh
-   export ORC_ENABLED=1
    export ORC_HUBITAT_URL=http://<hubitat-host>/apps/api/<app-id>
    export ORC_CONFIG_DIR=/etc/orc
    export ORC_DB=sqlite:////var/lib/orc/jobs.sqlite
@@ -145,7 +145,6 @@ Two config surfaces:
 
    | Var                     | Purpose                                                          | Default                         |
    |-------------------------|------------------------------------------------------------------|---------------------------------|
-   | `ORC_ENABLED`           | Opt-in: talk to real devices/secrets; unset = offline/dry-run    | unset                           |
    | `ORC_HUBITAT_URL`       | Hubitat Maker API base URL                                       | unset                           |
    | `ORC_CONFIG_DIR`        | Directory containing `config.orc`                                | `src`                           |
    | `ORC_DB`                | SQLAlchemy URL for the APScheduler / orc state DB                | `sqlite:////tmp/jobs.sqlite`    |
@@ -158,15 +157,15 @@ Two config surfaces:
    | `ORC_INTERNAL_URL`      | LAN-reachable base URL for static audio; its host is allowlisted | `http://example.test`           |
    | `ORC_AUDIO_DEVICE`      | Substring matching the audio output device for TTS/alerts        | `""`                            |
    | `ORC_BROADLINK_CODES`   | Path to BroadLink IR codes JSON                                  | `/etc/orc/broadlink_codes.json` |
-   | `BWS_ACCESS_TOKEN`      | URL whose body is the Bitwarden access token                     | required if `ORC_ENABLED`       |
+   | `BWS_ACCESS_TOKEN`      | URL whose body is the Bitwarden access token                     | required by `orc.dal.secrets.bws` |
 
    `BWS_ACCESS_TOKEN` is a URL (e.g. `data:` or `file://`), not the value
    itself — the body of the URL is read at startup.
 
 ## Secrets (Bitwarden)
 
-When `ORC_ENABLED` is set, secrets are pulled from Bitwarden Secrets
-Manager by name. The first three are required — startup fails without them;
+With `provider secrets orc.dal.secrets.bws`, secrets are pulled from
+Bitwarden Secrets Manager by name. The first three are required — startup fails without them;
 the rest are optional: the MQTT pair credentials the Hubitat MQTT
 connection, and the YoLink pair is only read by the yolink plugin:
 
@@ -217,7 +216,7 @@ bounces the `orc` supervisor job.
   `feeds.py` (iCal / market holidays / open-meteo weather), `bws.py`
   (Bitwarden), `usb.py` (pyaudio + piper TTS), `broadlink.py` (IR),
   `net.py` (presence scanning), `sqlite.py`
-- `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `requires_enabled`, `synchronized`, `audio_lock`, `silence_fd`
+- `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `synchronized`, `audio_lock`, `silence_fd`
 - `src/orc/declarations.py` — per-config-load plugin declaration collection, built into the device/plugin `Registry`
 - `src/orc/plugins.py` — built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
 - `src/orc/security.py` — `safe_eval` for config expressions, URL allowlisting
