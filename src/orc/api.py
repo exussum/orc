@@ -621,7 +621,7 @@ def replay_day(now: datetime) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
     # replace() keeps Routine type; squish_configs only reads .items, which Routine and Configs share
-    configs = (replace(cfg, items=matching_items(cfg, now, present)) for (when, cfg) in jobs if when <= now)
+    configs = (replace(cfg, items=matching_items(cfg, now, present)) for (when, cfg) in jobs if when <= now and not cfg.skip_replay)
     dispatch(m.squish_configs(*configs), force=True)
 
 

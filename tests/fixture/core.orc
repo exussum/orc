@@ -10,6 +10,7 @@ routine append ROUTINE_RESET   Light         off --trigger SYSTEM
 routine append .               Chromecast.CC stop
 routine define ROUTINE_DEFAULT Welcome
 routine append ROUTINE_DEFAULT Light         on
+routine define ROUTINE_MEETING Meeting --skip-replay
 
 theme 'work day' ROUTINE_RESET   1:00
 theme 'day off'  ROUTINE_DEFAULT sunset
