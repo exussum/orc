@@ -9,7 +9,7 @@ import pychromecast
 import yt_dlp
 
 from orc import model as m
-from orc.decorators import requires_enabled, silence_fd
+from orc.decorators import silence_fd
 
 _YDL_OPTS: dict[str, Any] = {
     "format": "bestaudio/best",  # Request the highest quality audio stream
@@ -21,7 +21,6 @@ _YDL_OPTS: dict[str, Any] = {
 _PLAYING_STATES: tuple[str, ...] = ("PLAYING", "BUFFERING", "PAUSED")
 
 
-@requires_enabled(lambda device: m.SoundState(what=device, content=None, volume=0))
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     with _cast(device, timeout=5, tries=1) as cast:
         time.sleep(0.5)
@@ -34,14 +33,12 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
         )
 
 
-@requires_enabled(lambda *_: ("", "Audio Stream"))
 def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
     with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
         info = ydl.extract_info(id, download=False)
         return info["url"], info.get("title", "Audio Stream")
 
 
-@requires_enabled(None)
 def pause(device: m.DeviceEnum) -> None:
     with _cast(device) as cast:
         cast.media_controller.update_status()
@@ -50,7 +47,6 @@ def pause(device: m.DeviceEnum) -> None:
             cast.media_controller.pause()
 
 
-@requires_enabled(None)
 def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
     with _cast(device) as cast:
         mc = cast.media_controller
@@ -65,7 +61,6 @@ def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
         mc.block_until_active(timeout=10)
 
 
-@requires_enabled(None)
 def resume(device: m.DeviceEnum) -> None:
     with _cast(device) as cast:
         cast.media_controller.update_status()
@@ -74,14 +69,12 @@ def resume(device: m.DeviceEnum) -> None:
             cast.media_controller.play()
 
 
-@requires_enabled(None)
 def stop(device: m.DeviceEnum) -> None:
     with _cast(device) as cast:
         cast.quit_app()
         time.sleep(1)
 
 
-@requires_enabled(None)
 def set_volume(device: m.DeviceEnum, lvl: int) -> None:
     with _cast(device) as cast:
         cast.set_volume(lvl / 100)

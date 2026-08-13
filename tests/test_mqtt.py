@@ -79,7 +79,6 @@ class TestOnMessage:
         assert [d.id for d in mqtt.snapshot()] == [1, 54]
 
 
-@pytest.mark.usefixtures("enabled")
 class TestFetchLightStates:
     def _state_of(self, configs, light):
         return next(c for c in configs.items if c.what is light).state
@@ -184,7 +183,6 @@ class TestButtonEvents:
         assert mqtt.snapshot() == []
 
 
-@pytest.mark.usefixtures("enabled")
 class TestPublishLight:
     @pytest.fixture(autouse=True)
     def commanding_client(self, monkeypatch):
@@ -220,7 +218,6 @@ class TestPublishLight:
             mqtt.publish_light(orc.Light.a, on=True)
 
 
-@pytest.mark.usefixtures("enabled")
 class TestFetchHubitatConfig:
     class FakeClient:
         """Replays retained documents through the on_message callback at loop_start,
