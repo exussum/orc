@@ -1,9 +1,11 @@
 import os
 import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from zoneinfo import ZoneInfo
+
+from command_cfg import ConfigError
 
 from orc import model as m
 from orc.declarations import collect_declarations
@@ -48,9 +50,22 @@ class Config:
         self.schedule_routines = {r.name: r for theme in self.themes.values() for r in theme.configs}
         self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=m.OFF)
 
+    def plugin(self, id: str) -> m.Plugin | None:
+        return next((p for p in self.plugins if p.name == id), None)
+
+    def plugins_in(self, section: str) -> tuple[m.Plugin, ...]:
+        return tuple(p for p in self.plugins if p.section == section)
+
+    def plugin_for(self, module: ModuleType) -> m.Plugin:
+        plugin = next((p for p in self.plugins if p.module is module), None)
+        if plugin is None:
+            raise ConfigError(f"No plugin line configured for module {module.__name__!r}")
+        return plugin
+
     def _install(self, parsed: SimpleNamespace) -> None:
         self.plugins = parsed.plugins
-        declarations = collect_declarations(p.func.__module__ for p in self.plugins.values())
+        declarations = collect_declarations(parsed.plugin_modules)
+
         if "orc.api" in sys.modules:  # bootstrap load runs during `import orc`, before api is importable — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
 

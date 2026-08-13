@@ -225,10 +225,13 @@ class Configs[T = Config]:
 
 @dataclass
 class Plugin:
+    name: str
     func: Callable[..., object]
+    module: ModuleType | None = None
     delay: timedelta = field(default_factory=timedelta)
     section: str = "scene"
     icon: str = "rocket-launch"
+    backend: ModuleType | None = None
 
 
 @dataclass
