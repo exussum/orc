@@ -318,6 +318,7 @@ def schedule() -> tuple[str, int, dict[str, str]]:
     absent_by_job = {j.id: api.is_absent(j.args[0].rule, present_names) for j in jobs}
     weather_by_job = {j.id: bool(api.matched_weather(j.args[0].rule, j.trigger.run_date)) for j in jobs}
     presence_by_job = {j.id: bool(api.matched_presence(j.args[0].rule)) for j in jobs}
+    skip_replay_by_job = {j.id: j.args[0].rule.skip_replay for j in jobs}
     jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
 
     return (
@@ -331,6 +332,7 @@ def schedule() -> tuple[str, int, dict[str, str]]:
             absent_by_job=absent_by_job,
             weather_by_job=weather_by_job,
             presence_by_job=presence_by_job,
+            skip_replay_by_job=skip_replay_by_job,
         ),
         200,
         {"Cache-control": "max-age=604800"},

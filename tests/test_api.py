@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from unittest.mock import ANY, call, patch
 
@@ -351,6 +352,15 @@ class TestPresence:
             api.replay_day(api.local_now())
         squished = dispatch.call_args.args[0]
         assert [c.trigger for c in squished.items] == ["Alice"]
+
+    def test_replay_day_skips_skip_replay_routines(self):
+        api.mark_present(["Alice"], when=api.local_now())
+        past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
+        meeting = replace(self._routine("meeting-r", "Alice"), skip_replay=True)
+        with patch.object(api, "get_schedule", return_value=[(past, meeting)]), patch.object(api, "dispatch") as dispatch:
+            api.replay_day(api.local_now())
+        squished = dispatch.call_args.args[0]
+        assert squished.items == ()
 
     def test_check_presence_continues_when_one_host_fails_to_resolve(self):
         with patch.object(config, "people", {"Alice": {("alice.local", "aa:aa:aa:aa:aa:aa")}, "Bob": {("bob.local", "bb:bb:bb:bb:bb:bb")}}):
