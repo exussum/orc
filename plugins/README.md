@@ -35,20 +35,26 @@ dependencies = [
 
 ## 1. Write the plugin function
 
-A plugin function takes an `AppContext` as its first argument. The remaining
-arguments depend on which section the plugin is registered under (step 2):
+A plugin function is called as `fn(ctx, device)`: the `AppContext` and the
+device name from the invocation, `None` when none was passed. Which section
+the plugin is registered under (step 2) decides where its button appears:
 
-| Section  | Called as                | When                                                      |
-|----------|--------------------------|-----------------------------------------------------------|
-| `scene`  | `fn(ctx)`                | user presses its button on the Scene page                 |
-| `system` | `fn(ctx)`                | user presses its button on the System page                |
-| `device` | `fn(ctx, device=<name>)` | clicked from a device row (`/api/run/<id>?device=<name>`) |
+| Section  | Called as          | When                                                      |
+|----------|--------------------|-----------------------------------------------------------|
+| `scene`  | `fn(ctx, None)`    | user presses its button on the Scene page                 |
+| `system` | `fn(ctx, None)`    | user presses its button on the System page                |
+| `device` | `fn(ctx, <name>)`  | clicked from a device row (`/api/run/<id>?device=<name>`) |
 
-Event-driven plugins don't need a `plugin` line of their own, but those
-lines still drive discovery: a package is only imported because some
-function in it appears there, and only then do its `declare()` hooks run. A
-package containing nothing but event-driven plugins needs at least one
-`plugin` line to be imported at all. The entrance sensor in
+Event-driven plugins don't need a `--function` of their own, but `plugin`
+lines still drive discovery: a package is only imported because a `plugin`
+line names it, and only then does its `declare()` hook run. A package
+containing nothing but event-driven plugins gets a bare line:
+
+```
+plugin 'Entrance Sensor' orc_plugins.entrance_sensor
+```
+
+The entrance sensor in
 [`src/orc_plugins/entrance_sensor/plugins.py`](src/orc_plugins/entrance_sensor/plugins.py)
 wires itself in its package ``declare()`` hook — a setup hook receives the
 context and registers an MQTT device listener (`ctx.api.add_listener`) and a
@@ -76,11 +82,13 @@ the scheduler injects the context as a `ctx` keyword argument at run time.
 ## 2. Register it in config.orc
 
 Add a `plugin` line to `$ORC_CONFIG_DIR/config.orc`: a display name, the
-fully qualified dotted path of the function, and optional flags for the
-section (defaults to `scene`), icon, and delay:
+plugin's package, and optional flags for the function (a dotted name
+imported on the package: `--function plugins.pair_tv` resolves
+`orc_plugins.lgtv.plugins.pair_tv`), section (defaults to `scene`), icon,
+and delay:
 
 ```
-plugin 'Pair LG TV' orc_plugins.lgtv.plugins.pair_tv --section device --icon tv
+plugin 'Pair LG TV' orc_plugins.lgtv --function plugins.pair_tv --section device --icon tv
 ```
 
 ## 3. Install it

@@ -3,23 +3,22 @@ import signal
 import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
 
 from orc import model as m
 from orc.decorators import requires_ctx  # noqa: F401
 from orc.locale import Log
 
 
-def back_on_schedule(ctx: m.AppContext) -> None:
+def back_on_schedule(ctx: m.AppContext, device: str | None) -> None:
     ctx.api.check_presence(silent=True)
     ctx.api.replay_day(ctx.api.local_now())
 
 
-def execute_plugin(ctx: m.AppContext, id: str, **params: Any) -> None:
-    ctx.config.plugins[id].func(ctx, **params)
+def execute_plugin(ctx: m.AppContext, plugin: m.Plugin, device: str | None = None) -> None:
+    plugin.func(ctx, device)
 
 
-def light_test(ctx: m.AppContext) -> None:
+def light_test(ctx: m.AppContext, device: str | None) -> None:
     def report(expect_on: bool) -> None:
         wrong = sorted(
             c.what.name
@@ -40,19 +39,19 @@ def light_test(ctx: m.AppContext) -> None:
     ctx.snapshot_manager.resume("light_test", ctx.config.default_config)
 
 
-def rebuild_jobs(ctx: m.AppContext) -> None:
+def rebuild_jobs(ctx: m.AppContext, device: str | None) -> None:
     ctx.api.rebuild_jobs(ctx)
 
 
-def reboot(ctx: m.AppContext) -> None:
+def reboot(ctx: m.AppContext, device: str | None) -> None:
     os.kill(os.getppid(), signal.SIGTERM)
 
 
-def reboot_hubitat(ctx: m.AppContext) -> None:
+def reboot_hubitat(ctx: m.AppContext, device: str | None) -> None:
     ctx.api.reboot_hubitat()
 
 
-def sound_test(ctx: m.AppContext) -> None:
+def sound_test(ctx: m.AppContext, device: str | None) -> None:
     base = ctx.config.internal_url.rstrip("/") + "/"
     url = f"{base}static/alert.mp3"
     ctx.api.dispatch(ctx.model.Configs(ctx.model.Config(ctx.orc.Chromecast, url)), force=True)

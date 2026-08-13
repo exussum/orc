@@ -1,4 +1,3 @@
-import sys
 from enum import Enum
 from types import ModuleType
 
@@ -9,7 +8,7 @@ from orc import declarations
 
 @pytest.fixture
 def fake_plugin():
-    """A throwaway plugin package exposing a declare(declarations) hook."""
+    """A throwaway plugin module exposing a declare(declarations) hook."""
     mod = ModuleType("fake_plugin_pkg")
     mod.calls = []
 
@@ -18,28 +17,23 @@ def fake_plugin():
         declarations.declare(button_labels={"Fake": "Run {device}"})
 
     mod.declare = declare
-    sys.modules["fake_plugin_pkg"] = mod
-    try:
-        yield mod
-    finally:
-        sys.modules.pop("fake_plugin_pkg", None)
+    return mod
 
 
 def test_collect_declarations_invokes_declare_hook(fake_plugin):
-    builder = declarations.collect_declarations(["fake_plugin_pkg.plugins.some_fn"])
+    builder = declarations.collect_declarations([fake_plugin])
     assert builder.build({}).button_labels["Fake"] == "Run {device}"
 
 
-def test_collect_declarations_dedupes_package(fake_plugin):
-    # A package listed by several plugins registers once.
-    declarations.collect_declarations(["fake_plugin_pkg.plugins.a", "fake_plugin_pkg.plugins.b"])
+def test_collect_declarations_dedupes_module(fake_plugin):
+    declarations.collect_declarations([fake_plugin, fake_plugin])
     assert fake_plugin.calls == [1]
 
 
-def test_collect_declarations_skips_core_and_missing_declare():
-    # orc.* paths are core plugins (no package declare hook); must be skipped, so the
-    # returned builder carries no plugin registrations.
-    builder = declarations.collect_declarations(["orc.plugins.light_test"])
+def test_collect_declarations_skips_core_modules():
+    from orc import plugins as core_plugins
+
+    builder = declarations.collect_declarations([core_plugins])
     assert builder.button_labels == {}
 
 

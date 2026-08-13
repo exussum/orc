@@ -68,13 +68,14 @@ def test_versioned_bumps_after_success(client, ctx, good_version):
 
 
 def test_console_plugin(client, ctx):
+    plugin = m.Plugin(name="do-thing", func=lambda ctx, device: None)
     with (
-        patch.object(config, "plugins", {"do-thing": m.Plugin(func=lambda ctx: None)}),
+        patch.object(config, "plugins", (plugin,)),
         patch("orc.plugins.execute_plugin") as exec_plugin,
     ):
         response = client.get("/api/run/do-thing")
     assert response.status_code == 200
-    exec_plugin.assert_called_once_with(ctx, "do-thing")
+    exec_plugin.assert_called_once_with(ctx, plugin, None)
 
 
 def test_console_schedule_routine(client):
