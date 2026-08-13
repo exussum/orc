@@ -47,8 +47,9 @@ ad-hoc define 'All Lights Off' --no-reset Light      off
 button-map Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
 button-map .                         1 held   Silence
 
-plugin 'Pair LG TV'       orc_plugins.lgtv.plugins.pair_tv       --section device
-plugin 'Test Leak Sensor' orc_plugins.yolink.plugins.test_sensor --section device
+plugin 'Pair LG TV'       orc_plugins.lgtv            --function plugins.pair_tv     --section device --backend orc.lgtv.dal.stub
+plugin 'Test Leak Sensor' orc_plugins.yolink          --function plugins.test_sensor --section device
+plugin 'Entrance Sensor'  orc_plugins.entrance_sensor
 
 highlight Silence 21:00 23:59
 

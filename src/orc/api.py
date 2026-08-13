@@ -183,9 +183,8 @@ def resolve_run_action(
 ) -> tuple[Callable[[m.LogEntry], None], timedelta] | None:
     if id == ORC_SYSTEM_SNAPSHOT:
         return lambda entry: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
-    elif id in config.plugins:
-        params = {"device": device} if device else {}
-        return lambda entry: plugins.execute_plugin(ctx, id, **params), config.plugins[id].delay
+    elif (plugin := config.plugin(id)) is not None:
+        return lambda entry: plugins.execute_plugin(ctx, plugin, device), plugin.delay
     elif id in config.schedule_routines:
         return lambda entry: run_schedule_routine(config.schedule_routines[id], entry, force=True), timedelta()
     elif id in config.ad_hoc_routines:

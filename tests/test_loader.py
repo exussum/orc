@@ -114,7 +114,7 @@ def test_person_becomes_known_trigger():
 def test_plugin_command_imports_callable():
     from orc import plugins as core_plugins
 
-    plugin = parse("core").plugins["Test Light"]
+    plugin = next(p for p in parse("core").plugins if p.name == "Test Light")
     assert plugin.func is core_plugins.light_test
     assert plugin.section == "device"
     assert plugin.icon == "tv"
@@ -147,7 +147,7 @@ _PARSE_ERRORS = [
     ("invalid_section", "Invalid parameter section='weird'"),
     ("time_not_hh_mm", "Invalid time 'noon'"),
     ("time_out_of_range", "Invalid time '25:00'"),
-    ("plugin_import_failure", "Cannot load function 'not.a.module'"),
+    ("plugin_import_failure", "Cannot load module 'not.a.module'"),
     ("theme_unknown_routine", "Unknown routine 'OTHER'"),
     ("append_unknown_routine", "Unknown routine 'R'"),
     ("unknown_trigger", "Unknown trigger 'NOPE'"),

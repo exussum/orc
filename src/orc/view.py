@@ -95,14 +95,15 @@ def cfg() -> str:
 
     states = [(title, fn()) for title, fn in config.registry.state_providers.items()]
     # One button per device: each actionable state row whose action is a
-    # device-section plugin (row "action" -> plugin id, "name" -> device).
-    device_buttons = [row for title, rows in states for row in rows if row.get("action") in where(config.plugins, section="device")]
+    # device-section plugin (row "action" -> plugin name, "name" -> device).
+    device_plugins = {p.name: p for p in config.plugins_in("device")}
+    device_buttons = [row for title, rows in states for row in rows if row.get("action") in device_plugins]
 
     return render_template(
         "system.html",
         html=html,
         plugin_htmls=plugin_htmls,
-        plugins=where(config.plugins, section="system"),
+        plugins=config.plugins_in("system"),
         ad_hoc_routines=where(config.ad_hoc_routines, section="system"),
         ctx=app.orc,
         today_theme=api.calculate_theme(today),
@@ -114,7 +115,7 @@ def cfg() -> str:
         durations=dict(api.fetch_durations()),
         plugin_states=states,
         device_buttons=device_buttons,
-        device_plugins=where(config.plugins, section="device"),
+        device_plugins=device_plugins,
         registry=config.registry,
         version=app.orc.version_manager.version,
     )
@@ -181,7 +182,7 @@ def index() -> tuple[str, int, dict[str, str]]:
         render_template(
             "scene.html",
             highlight_configs=[(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlight_configs],
-            plugins=where(config.plugins, section="scene"),
+            plugins=config.plugins_in("scene"),
             room_configs=config.room_configs,
             ad_hoc_routines=where(config.ad_hoc_routines, section="scene"),
             schedule_routines=config.schedule_routines,

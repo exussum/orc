@@ -4,7 +4,6 @@ import orc
 
 
 def test_yolink_registers_with_core():
-    # importing orc runs config load -> orc_plugins.register -> yolink.register
     assert "Leak" in orc.config.registry.devices
     assert hasattr(orc, "Leak")  # enum built from the registered device type
     assert yolink.setup in orc.config.registry.setup_hooks
