@@ -55,11 +55,11 @@ def _find_output_device(name: str) -> tuple[int, Any]:
                 return i, info
     finally:
         pa.terminate()
-    raise RuntimeError(f"No audio output device matching ORC_AUDIO_DEVICE={name!r}")
+    raise RuntimeError(f"No audio output device matching audio_device setting {name!r}")
 
 
 def _play_stream(chunks: Iterable[bytes], channels: int, src_rate: int, gain: float) -> None:
-    idx, info = _find_output_device(config.audio_device)
+    idx, info = _find_output_device(config.settings.audio_device)
     dst_rate = int(info["defaultSampleRate"])
     with audio_lock, silence_fd(2):
         pa = pyaudio.PyAudio()

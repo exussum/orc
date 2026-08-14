@@ -13,8 +13,8 @@ from orc import model as m
 from orc.dal import net
 from orc.dal.mqtt import stub as mqtt_stub
 
-FUTURE = datetime(2100, 1, 1, tzinfo=config.tz)
-PAST = datetime(2000, 1, 1, tzinfo=config.tz)
+FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
+PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
 
 
 @pytest.fixture
@@ -187,7 +187,7 @@ def test_unwrapper_class_single_rule():
     assert calls == [rule]
 
 
-@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
+@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
 class TestActiveOverride:
     OVERRIDE = m.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))
 
@@ -216,7 +216,7 @@ class TestActiveOverride:
 
 
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
-@freeze_time(datetime(2026, 1, 3, 12, tzinfo=config.tz))
+@freeze_time(datetime(2026, 1, 3, 12, tzinfo=config.settings.tz))
 class TestGetSchedule:
     @staticmethod
     def _theme(name, *routine_names):
@@ -261,7 +261,7 @@ class TestGetSchedule:
         assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
 
 
-@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.tz))
+@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
 class TestPresence:
     ctx = object()  # run_iot_job never reads it; requires_ctx only rejects None
 
@@ -280,7 +280,7 @@ class TestPresence:
         assert api.present_names() == set()
 
     def test_stale_entry_outside_12h_window(self):
-        api.mark_present(["Alice"], when=datetime(2026, 1, 4, 23, 30, tzinfo=config.tz))
+        api.mark_present(["Alice"], when=datetime(2026, 1, 4, 23, 30, tzinfo=config.settings.tz))
         assert api.present_names() == set()
 
     def test_run_iot_job_skips_when_presence_absent(self):
@@ -337,7 +337,7 @@ class TestPresence:
         assert "CLOUDY" in api.log_entries()[0].action
 
     def test_replay_day_skips_routines_for_absent_people(self):
-        past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
+        past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
             api.replay_day(api.local_now())
@@ -346,7 +346,7 @@ class TestPresence:
 
     def test_replay_day_runs_routines_for_present_people(self):
         api.mark_present(["Alice"], when=api.local_now())
-        past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
+        past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
             api.replay_day(api.local_now())
@@ -355,7 +355,7 @@ class TestPresence:
 
     def test_replay_day_skips_skip_replay_routines(self):
         api.mark_present(["Alice"], when=api.local_now())
-        past = datetime(2026, 1, 5, 8, tzinfo=config.tz)
+        past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         meeting = replace(self._routine("meeting-r", "Alice"), skip_replay=True)
         with patch.object(api, "get_schedule", return_value=[(past, meeting)]), patch.object(api, "dispatch") as dispatch:
             api.replay_day(api.local_now())
@@ -399,7 +399,7 @@ def test_context_executor_copies_closure_job():
 
     sched = BackgroundScheduler()
     sched.start()
-    job = sched.add_job(make_closure(), DateTrigger(FUTURE, timezone=config.tz))
+    job = sched.add_job(make_closure(), DateTrigger(FUTURE, timezone=config.settings.tz))
     sched.shutdown(wait=False)
 
     captured = []

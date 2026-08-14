@@ -215,7 +215,7 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
             return None
         captured["name"] = current.name
         captured["transitions"] = [("leak" if f == "state" else f, old[f], new) for f, new in changes.items()]
-        return dataclasses.replace(current, last_change=datetime.now(tz=config.config.tz), **changes)
+        return dataclasses.replace(current, last_change=datetime.now(tz=config.config.settings.tz), **changes)
 
     _states.update(device_id, apply)
     for kind, old, new in captured["transitions"]:
@@ -255,7 +255,7 @@ def _transition_to(new_state: str, require: str | None = None) -> Callable[[Sens
     def fn(current: SensorState | None) -> SensorState | None:
         if current is None or (require is not None and current.state != require):
             return None
-        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=config.config.tz))
+        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=config.config.settings.tz))
 
     return fn
 
@@ -295,7 +295,7 @@ def _authenticate() -> tuple[str, int]:
             "client_id": config.config.secrets.get("YOLINK_ID"),
             "client_secret": config.config.secrets.get("YOLINK_SECRET"),
         },
-        timeout=config.config.http_timeout,
+        timeout=config.config.settings.http_timeout,
     )
     response.raise_for_status()
     body = response.json()
@@ -307,7 +307,7 @@ def _api_post(access_token: str, body: dict[str, Any]) -> Any:
         _API_URL,
         json=body,
         headers={"Authorization": f"Bearer {access_token}"},
-        timeout=config.config.http_timeout,
+        timeout=config.config.settings.http_timeout,
     )
     response.raise_for_status()
     return response.json()["data"]
