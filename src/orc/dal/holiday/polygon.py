@@ -15,7 +15,7 @@ def market_holiday(today: date) -> bool:
 
 @lru_cache(maxsize=2)
 def _fetch_holidays(year: int) -> Any:
-    result = requests.get(config.secrets.market_holidays_url, timeout=config.http_timeout).json()
+    result = requests.get(config.secrets.market_holidays_url, timeout=config.settings.http_timeout).json()
     if "error" in result:
         raise RuntimeError(result["error"])
     return result

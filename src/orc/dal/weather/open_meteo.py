@@ -24,9 +24,9 @@ def _fetch_weather(now: datetime, lat: float, lon: float) -> frozenset[WeatherCo
             "hourly": "weather_code",
             "start_date": date_str,
             "end_date": date_str,
-            "timezone": str(config.tz),
+            "timezone": str(config.settings.tz),
         },
-        timeout=config.http_timeout,
+        timeout=config.settings.http_timeout,
     )
     response.raise_for_status()
     code = response.json()["hourly"]["weather_code"][now.hour]

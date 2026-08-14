@@ -19,7 +19,7 @@ from orc.view import OrcFlask, VersionManager, bp
 def flask() -> None:
     app = _build_app()
     _start_services(app.orc)
-    app.run(host="0.0.0.0", port=8000, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
+    app.run(host="0.0.0.0", port=config.config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
 def web() -> None:
@@ -29,7 +29,7 @@ def web() -> None:
             self.cfg.set("threads", 1)
             self.cfg.set("timeout", 120)
             self.cfg.set("loglevel", "warning")
-            self.cfg.set("bind", "0.0.0.0:8000")
+            self.cfg.set("bind", f"0.0.0.0:{config.config.settings.port}")
 
         def load(self) -> OrcFlask:
             try:
@@ -75,11 +75,11 @@ def _build_app() -> OrcFlask:
 def _build_scheduler() -> BackgroundScheduler:
     return BackgroundScheduler(
         jobstores={
-            JOBSTORE_DEFAULT: SQLAlchemyJobStore(url=config.config.jobs_db),
+            JOBSTORE_DEFAULT: SQLAlchemyJobStore(url=config.config.settings.jobs_db),
             JOBSTORE_MEMORY: MemoryJobStore(),
         },
         job_defaults={"misfire_grace_time": 30},
-        timezone=config.config.tz,
+        timezone=config.config.settings.tz,
     )
 
 

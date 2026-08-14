@@ -8,7 +8,6 @@ The hub uuid is captured from the first message rather than configured.
 
 import json
 import logging
-import os
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -99,19 +98,7 @@ def add_external_listener(fn: m.Listener) -> None:
     _external_listeners.append(fn)
 
 
-def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message: Callable[..., None], timeout: float) -> mqtt.Client | None:
-    """A credentialed, connected client wired to the given callbacks, its network loop
-    running on a paho background thread, returned once the retained flood settles or
-    ``timeout`` passes (logged). The flood is watched through a boot-only wrapper
-    counting retained messages (the broker sets the RETAIN flag only on subscription
-    replay, never on live forwards); the raw handler is restored before returning.
-    None when the host or MQTT_USER/MQTT_PASSWORD secrets are missing (logged)."""
-    host = _mqtt_host()
-    user, password = secrets.mqtt_user, secrets.mqtt_password
-    if not (host and user and password):
-        _log.warning("mqtt: host or MQTT_USER/MQTT_PASSWORD missing, skipping")
-        return None
-
+def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message: Callable[..., None], timeout: float) -> mqtt.Client:
     received = 0
 
     def counting(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
@@ -120,11 +107,11 @@ def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message:
         on_message(client, userdata, msg)
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.username_pw_set(user, password)
+    client.username_pw_set(secrets.mqtt_user, secrets.mqtt_password)
     client.on_connect = on_connect
     client.on_message = counting
     client.reconnect_delay_set(min_delay=1, max_delay=60)
-    client.connect_async(host, _MQTT_PORT, keepalive=30)
+    client.connect_async(config.settings.mqtt_host, _MQTT_PORT, keepalive=30)
     client.loop_start()
     if not _wait_settled(lambda: received, timeout):
         _log.warning("mqtt: retained documents still arriving after %.0fs (%d so far)", timeout, received)
@@ -168,9 +155,8 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
             found[device.name] = (device.id, frozenset([m.Capability.change_level]) if dimmable else frozenset())
 
     client = _new_client(secrets, _on_connect, on_message, timeout)
-    if client is not None:
-        client.loop_stop()
-        client.disconnect()
+    client.loop_stop()
+    client.disconnect()
     if not found:
         raise RuntimeError("mqtt: device discovery found no device documents; broker unreachable or MQTT credentials missing")
     return found
@@ -196,10 +182,6 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
     _command_sent[topic] = time.monotonic()
     _commanded[light.value] = expected
     _client.publish(topic, payload)
-
-
-def _mqtt_host() -> str | None:
-    return os.getenv("ORC_MQTT_HOST")
 
 
 def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
