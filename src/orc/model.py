@@ -373,10 +373,10 @@ def column_to_value(col: str, val: Any) -> Any:
         # the eval namespace keyed by class name (== the device-type name).
         return safe_eval(val, {e.__name__: e for e in orc.device_enums})
     elif col.lower() == "state":
-        if val and val.isdigit():
-            return int(val)
         if val in (ON, OFF, STOP, PAUSE, RESUME) or (val and re.match(_YOUTUBE_ID_RE, val)):
             return val
+        if val and val.isdigit():
+            return int(val)
         raise ValueError(_ERR_STATE.format(val))
     elif col.lower() in ("delay", "snapshot"):
         if not val:
