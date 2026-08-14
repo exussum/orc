@@ -1,6 +1,6 @@
-from collections.abc import Iterator, Sequence
-from datetime import date, datetime, timedelta
-from typing import Any, NamedTuple, Protocol
+from collections.abc import Sequence
+from datetime import date, datetime
+from typing import NamedTuple, Protocol
 
 from orc.model import (
     ButtonListener,
@@ -26,10 +26,6 @@ class WeatherService(Protocol):
 
 class HolidayService(Protocol):
     def market_holiday(self, today: date) -> bool: ...
-
-
-class CalendarService(Protocol):
-    def fetch_ical(self, start: datetime, end: datetime | timedelta) -> Iterator[Any]: ...
 
 
 class MqttService(Protocol):
@@ -70,6 +66,5 @@ class Provider(NamedTuple):
     holiday: HolidayService | None = None
     mqtt: MqttService | None = None
     chromecast: ChromecastService | None = None
-    calendar: CalendarService | None = None
     blaster: BlasterService | None = None
     hubitat: HubitatService | None = None
