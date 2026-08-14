@@ -1,7 +1,6 @@
 import contextlib
 import itertools
 import math
-import os
 import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
@@ -46,16 +45,15 @@ from orc.security import safe_domain
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
 
-_BROADLINK_CODES = os.getenv("ORC_BROADLINK_CODES", "/etc/orc/broadlink_codes.json")
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 
-_STREAM_DOMAINS: set[str] = {".googlevideo.com", urlparse(config.internal_url).hostname or "", "." + config.root_domain}
+_STREAM_DOMAINS: set[str] = {".googlevideo.com", urlparse(config.settings.base_url).hostname or "", "." + config.settings.lan_domain}
 
 _TIMESCALE = load.timescale()
 _EPHEMERIS = load_file(str(resources.files("orc_data") / "de421.bsp"))
-_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(*config.lat_long))
+_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(config.settings.lat, config.settings.long))
 
 
 def duration_stats() -> dict[str, tuple[int, float]]:
@@ -103,7 +101,7 @@ def jobs_by_type(scheduler: BaseScheduler, type: type) -> list[Job]:
 
 
 def local_now() -> datetime:
-    return datetime.now(tz=config.tz)
+    return datetime.now(tz=config.settings.tz)
 
 
 def log(source: m.LogSource, action: str) -> m.LogEntry:
@@ -211,7 +209,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
             when = local_now() + delay
             log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
             job_id = f"run-{id}-{when.isoformat()}"
-            ctx.scheduler.add_job(run, DateTrigger(when, timezone=config.tz), id=job_id, jobstore=JOBSTORE_MEMORY)
+            ctx.scheduler.add_job(run, DateTrigger(when, timezone=config.settings.tz), id=job_id, jobstore=JOBSTORE_MEMORY)
         else:
             run(ctx=ctx)
     return True
@@ -281,16 +279,16 @@ def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
 
 
 def tv_toggle(bl_device: m.DeviceEnum) -> None:
-    config.providers.blaster.tv_toggle(bl_device, _BROADLINK_CODES)
+    config.providers.blaster.tv_toggle(bl_device, config.settings.broadlink_codes)
 
 
 def ac_command(
     bl_device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None
 ) -> None:
     if state == m.OFF:
-        config.providers.blaster.ac_off(bl_device, _BROADLINK_CODES)
+        config.providers.blaster.ac_off(bl_device, config.settings.broadlink_codes)
     else:
-        config.providers.blaster.set_ac(bl_device, _BROADLINK_CODES, mode or "cool", fan or "low", temp or 75)
+        config.providers.blaster.set_ac(bl_device, config.settings.broadlink_codes, mode or "cool", fan or "low", temp or 75)
 
 
 def device_command(id: str, state: str | None) -> None:
@@ -464,7 +462,7 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
         now = local_now() + timedelta(days=x)
         today = now.date()
 
-        local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.tz)
+        local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.settings.tz)
         day_start = _TIMESCALE.from_datetime(local_midnight)
         day_end = _TIMESCALE.from_datetime(local_midnight + timedelta(days=1))
 
@@ -496,7 +494,7 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
                 time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
             if time is None:
                 continue
-            result.append((time.astimezone(config.tz), e))
+            result.append((time.astimezone(config.settings.tz), e))
     return result
 
 
@@ -557,7 +555,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
     ):
         ctx.scheduler.add_job(
             func,
-            CronTrigger.from_crontab(crontab, timezone=config.tz),
+            CronTrigger.from_crontab(crontab, timezone=config.settings.tz),
             replace_existing=True,
             id=job_id,
             name=name,
@@ -585,7 +583,8 @@ def matched_weather(rule: m.Routine, now: datetime) -> tuple[m.Config, ...]:
     return tuple(
         c
         for c in rule.items
-        if c.trigger in _WEATHER_TRIGGERS and c.trigger in config.providers.weather.fetch_weather(now, *config.lat_long)
+        if c.trigger in _WEATHER_TRIGGERS
+        and c.trigger in config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
     )
 
 
@@ -608,7 +607,7 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
         if now <= run_at:
             ctx.scheduler.add_job(
                 run_iot_job,
-                DateTrigger(run_at, timezone=config.tz),
+                DateTrigger(run_at, timezone=config.settings.tz),
                 args=[m.IotJob(rule)],
                 name=rule.name,
                 id=f"iot-{rule.name}-{run_at.date().isoformat()}",
@@ -645,8 +644,8 @@ def _schedule_cal_tasks(scheduler: BaseScheduler) -> None:
 
     # fetch_ical's `end` is typed as datetime, but recurring_ical_events.between accepts a timedelta window at runtime
     events = list(itertools.islice(config.providers.calendar.fetch_ical(now, timedelta(hours=20)), 50))
-    warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.tz) for e in events)
-    alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.tz) for e in events)
+    warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.settings.tz) for e in events)
+    alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.settings.tz) for e in events)
     calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
 
     for e in jobs_by_type(scheduler, m.CalendarJob):
@@ -656,7 +655,7 @@ def _schedule_cal_tasks(scheduler: BaseScheduler) -> None:
     for id, event in calendar_by_id.items():
         scheduler.add_job(
             _run_cal_job,
-            DateTrigger(event.datetime, timezone=config.tz),
+            DateTrigger(event.datetime, timezone=config.settings.tz),
             args=[m.CalendarJob(event.type, event.summary)],
             replace_existing=True,
             id=id,

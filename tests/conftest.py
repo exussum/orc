@@ -33,7 +33,6 @@ def _core_registry(monkeypatch):
     api.declare_core(builder)
     monkeypatch.setattr(orc, "Light", Light, raising=False)
     monkeypatch.setattr(orc, "Chromecast", Chromecast, raising=False)
-    monkeypatch.setattr(orc, "device_enums", [Light, Chromecast], raising=False)
     monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast}))
     yield
 
@@ -53,6 +52,6 @@ def _orc_state_db(tmp_path, monkeypatch):
     from orc import config
     from orc.dal import sqlite
 
-    monkeypatch.setattr(config, "jobs_db", f"sqlite:///{tmp_path / 'state.sqlite'}")
+    monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
     sqlite.init_db()
     yield

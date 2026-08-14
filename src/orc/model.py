@@ -9,6 +9,7 @@ from itertools import chain
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, NamedTuple, Self
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.base import BaseScheduler
 
@@ -44,6 +45,39 @@ class ThemeOverride(NamedTuple):
     name: str
     start: date
     end: date
+
+
+class Settings(NamedTuple):
+    """Core settings from ``setting`` config lines. None marks a required key
+    (enforced by loader.validate); the rest default here when the line is omitted."""
+
+    base_url: str | None = None
+    lan_domain: str | None = None
+    jobs_db: str | None = None
+    lat: float | None = None
+    long: float | None = None
+    audio_device: str | None = None
+    broadlink_codes: str | None = None
+    mqtt_host: str | None = None
+    tz: ZoneInfo = ZoneInfo("America/New_York")
+    hubitat_url: str = "http://hubitat.example"
+    http_timeout: int = 5
+    http_ical_timeout: int = 120
+    port: int = 8000
+
+    @classmethod
+    def build(cls, **values: Any) -> Settings:
+        for key, coerce in (
+            ("tz", ZoneInfo),
+            ("lat", float),
+            ("long", float),
+            ("http_timeout", int),
+            ("http_ical_timeout", int),
+            ("port", int),
+        ):
+            if key in values:
+                values[key] = coerce(values[key])
+        return cls(**values)
 
 
 class RetryStats(NamedTuple):
@@ -369,9 +403,8 @@ def column_to_value(col: str, val: Any) -> Any:
     if col.lower() == "value":
         return int(val) if val and val.isdigit() else val
     elif col.lower() == "device":
-        # device enums are populated on the orc package at runtime by Config.load; build
-        # the eval namespace keyed by class name (== the device-type name).
-        return safe_eval(val, {e.__name__: e for e in orc.device_enums})
+        # the registry is populated by Config.load; its device-type names are the enum class names
+        return safe_eval(val, {name: dt.cls for name, dt in orc.config.registry.devices.items()})
     elif col.lower() == "state":
         if val in (ON, OFF, STOP, PAUSE, RESUME) or (val and re.match(_YOUTUBE_ID_RE, val)):
             return val

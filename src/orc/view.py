@@ -236,7 +236,7 @@ def presence() -> tuple[str, int, dict[str, str]]:
             "presence.html",
             version=app.orc.version_manager.version,
             rows=rows,
-            strip_suffix="." + config.root_domain,
+            strip_suffix="." + config.settings.lan_domain,
         ),
         200,
         {"Cache-control": "no-store"},

@@ -70,6 +70,27 @@ def test_volumes_are_bounded_ints():
     assert parse("core").audio_volumes == m.Volume(INFO=4, FATAL=10)
 
 
+def test_settings_typed_and_defaulted():
+    settings = parse("core").settings
+    assert settings.lat == 40.7143
+    assert settings.mqtt_host == "hub.test"
+    assert settings.http_timeout == 5
+    assert str(settings.tz) == "America/New_York"
+
+
+def test_validate_missing_settings():
+    with pytest.raises(
+        ConfigError,
+        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, audio_device, broadlink_codes, mqtt_host",
+    ):
+        validate(parse("validate_missing_settings"))
+
+
+def test_validate_empty_setting():
+    with pytest.raises(ConfigError, match="Missing required settings: mqtt_host"):
+        validate(parse("validate_empty_setting"))
+
+
 def test_validate_accepts_complete_config():
     parsed = parse("core")
     parsed.providers = parse("provider").providers
