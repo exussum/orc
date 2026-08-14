@@ -8,7 +8,9 @@ from orc import config
 
 
 def market_holiday(today: date) -> bool:
-    return any(e["date"] == today.strftime("%Y-%m-%d") and e["exchange"] == "NYSE" for e in _fetch_holidays(today.year))
+    return any(
+        e["date"] == today.strftime("%Y-%m-%d") and e["exchange"] == "NYSE" and e["status"] == "closed" for e in _fetch_holidays(today.year)
+    )
 
 
 @lru_cache(maxsize=2)

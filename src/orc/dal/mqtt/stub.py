@@ -22,7 +22,16 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
 
 
 def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
-    _states[light] = brightness if brightness is not None else (m.ON if on else m.OFF)
+    if brightness is not None and m.Capability.change_level in light.capabilities:
+        _states[light] = brightness or m.OFF
+        return
+    if brightness == 0:
+        on = False
+    elif brightness == 100:
+        on = True
+    elif brightness is not None:
+        raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
+    _states[light] = m.ON if on else m.OFF
 
 
 def snapshot() -> list[m.DeviceState]:
