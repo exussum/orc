@@ -12,7 +12,6 @@ provider weather    orc.dal.weather.stub
 provider holiday    orc.dal.holiday.stub
 provider mqtt       orc.dal.mqtt.stub
 provider chromecast orc.dal.chromecast.stub
-provider calendar   orc.dal.calendar.stub
 provider blaster    orc.dal.blaster.stub
 provider hubitat    orc.dal.hubitat.stub
 
@@ -59,6 +58,7 @@ button-map .                         1 held   Silence
 plugin 'Pair LG TV'       orc_plugins.lgtv            --function plugins.pair_tv     --section device --backend orc.lgtv.dal.stub
 plugin 'Test Leak Sensor' orc_plugins.yolink          --function plugins.test_sensor --section device
 plugin 'Entrance Sensor'  orc_plugins.entrance_sensor
+plugin Calendar           orc_plugins.calendar
 
 highlight Silence 21:00 23:59
 

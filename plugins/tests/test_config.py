@@ -2,7 +2,8 @@ from datetime import time
 from pathlib import Path
 
 import pytest
-from orc_plugins import entrance_sensor
+from orc_plugins import calendar, entrance_sensor
+from orc_plugins.calendar import Feed
 from orc_plugins.entrance_sensor import GRAMMAR, Messages, Rule, Rules, Settings, Timed
 
 import orc
@@ -44,3 +45,23 @@ def test_entrance_config_loads():
     assert rules.enter == [Rule(device=Light, state="on"), Rule(device=Chromecast, state="pause")]
     assert rules.shutdown == [Rule(device=Light, state="off")]
     assert config.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), device=Light, state=1)]
+
+
+def test_calendar_config_loads():
+    config = load_plugin_config(
+        calendar.CONFIG,
+        {calendar.CONFIG: (FIXTURE / "calendar.orc").read_text()},
+        calendar.GRAMMAR,
+        serializers={"setting": calendar.Settings, "feed": Feed},
+        scalars=("setting",),
+        grouped=("feed",),
+    )
+    assert config.setting == calendar.Settings(
+        backend="orc_plugins.calendar.stub",
+        cron="10,25,40,55 8-21 * * *",
+        window_hours=20,
+        max_events=50,
+        warning_minutes=2,
+        http_timeout=120,
+    )
+    assert config.feed == {"work": [Feed("ICS_URL")], "personal": [Feed("ICS_URL_PERSONAL")]}

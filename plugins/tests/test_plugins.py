@@ -96,7 +96,7 @@ def plugin_ctx():
 
 
 def _cleanup(sensor, plugin_ctx):
-    entry = m.LogEntry(_DAYTIME, m.LogSource.PLUGIN, "Entrance sensor triggered")
+    entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, "Entrance sensor triggered")
     plugins._run_trigger_sensor_off.__wrapped__(sensor, entry, ctx=plugin_ctx)
     return entry
 
@@ -184,7 +184,7 @@ def test_walk_in_with_no_pending_cleanup_does_not_cancel(ctx, sensor):
 
 def test_motion_reuses_the_latest_trigger_entry(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
-    entry = m.LogEntry(_DAYTIME, m.LogSource.PLUGIN, plugins.TRIGGER_MSG)
+    entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG)
     ctx.api.log_entries.return_value = [entry]
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.log.assert_not_called()
@@ -285,7 +285,7 @@ def _device(id=16, name="front door motion sensor", battery="100", attributes=No
 def test_critical_battery_report_logs(plugin_ctx, sensor):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(battery="5"), "battery", "5", "5")
-    plugin_ctx.api.log.assert_called_once_with(m.LogSource.PLUGIN, "Low battery on `front door motion sensor` (CRITICAL)")
+    plugin_ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, "Low battery on `front door motion sensor` (CRITICAL)")
 
 
 def test_healthy_battery_report_does_not_log(plugin_ctx, sensor):

@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Sequence
 from dataclasses import KW_ONLY, dataclass, field
 from datetime import date, datetime, time, timedelta
-from enum import Enum, EnumType, auto
+from enum import Enum, EnumType, StrEnum, auto
 from itertools import chain
 from pathlib import Path
 from types import ModuleType
@@ -62,7 +62,6 @@ class Settings(NamedTuple):
     tz: ZoneInfo = ZoneInfo("America/New_York")
     hubitat_url: str = "http://hubitat.example"
     http_timeout: int = 5
-    http_ical_timeout: int = 120
     port: int = 8000
 
     @classmethod
@@ -72,7 +71,6 @@ class Settings(NamedTuple):
             ("lat", float),
             ("long", float),
             ("http_timeout", int),
-            ("http_ical_timeout", int),
             ("port", int),
         ):
             if key in values:
@@ -128,8 +126,29 @@ class Capability(Enum):
     change_level = auto()
 
 
-class LogSource(str, Enum):
-    CALENDAR = "calendar"
+_LOG_SOURCES: dict[str, int] = {}
+
+
+class LogSourceEnum(StrEnum):
+    def __init__(self, value: str) -> None:
+        if value in _LOG_SOURCES:
+            raise ValueError(f"Log source {value!r} is already registered")
+        _LOG_SOURCES[value] = len(_LOG_SOURCES)
+
+    @property
+    def badge_color(self) -> str:
+        # Qualitative-palette construction (hue-spaced, constant chroma):
+        # https://colorspace.r-forge.r-project.org/articles/hcl_palettes.html
+        # with two deviations: hues follow the golden angle instead of 360/n, so
+        # a new source lands in the largest remaining hue gap and never recolors
+        # earlier ones; and lightness alternates between two bands rather than
+        # staying constant, because colorblind vision flattens hue — the
+        # lightness step is what keeps adjacent badges apart.
+        i = _LOG_SOURCES[self]
+        return f"oklch({0.585 if i % 2 else 0.485} 0.10 {i * 137.5 % 360})"
+
+
+class LogSource(LogSourceEnum):
     ROUTINE = "routine"
     MANUAL = "manual"
     SYSTEM = "system"
@@ -183,11 +202,11 @@ class BatteryLevel(str, Enum):
 @dataclass
 class LogEntry:
     timestamp: datetime
-    source: LogSource
+    source: LogSourceEnum
     action: str
     children: list[LogEntry] = field(default_factory=list)
 
-    def add(self, source: LogSource, action: str) -> LogEntry:
+    def add(self, source: LogSourceEnum, action: str) -> LogEntry:
         entry = LogEntry(datetime.now(self.timestamp.tzinfo), source, action)
         self.children.append(entry)
         return entry
@@ -197,36 +216,10 @@ class ActivityLog:
     def __init__(self) -> None:
         self.entries: deque[LogEntry] = deque(maxlen=200)
 
-    def add(self, when: datetime, source: LogSource, action: str) -> LogEntry:
+    def add(self, when: datetime, source: LogSourceEnum, action: str) -> LogEntry:
         entry = LogEntry(when, source, action)
         self.entries.appendleft(entry)
         return entry
-
-
-@dataclass
-class CalendarEvent:
-    WARNING = "warning"
-    ALARM = "alarm"
-
-    uuid: str
-    summary: str
-    datetime: datetime
-    type: str
-
-    @staticmethod
-    def from_cal(cal: Any, type: str, offset: timedelta, tz: Any) -> CalendarEvent:
-        return CalendarEvent(
-            cal.uid.to_ical().decode() + " " + type,
-            cal.summary.to_ical().decode("utf-8"),
-            cal.start.astimezone(tz) + offset,
-            type,
-        )
-
-
-@dataclass
-class CalendarJob:
-    event_type: str
-    summary: str
 
 
 @dataclass
@@ -311,7 +304,6 @@ class Theme:
 class Secrets:
     hubitat_access_token: str = ""
     market_holidays_url: str = ""
-    ics_url: str = ""
     mqtt_user: str = ""
     mqtt_password: str = ""
     # Plugin-consumed secrets; core never reads these. A key with an in-repo

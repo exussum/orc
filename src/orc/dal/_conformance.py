@@ -11,8 +11,6 @@ if TYPE_CHECKING:
     from orc.dal import interfaces
     from orc.dal.blaster import broadlink
     from orc.dal.blaster import stub as blaster_stub
-    from orc.dal.calendar import ical
-    from orc.dal.calendar import stub as calendar_stub
     from orc.dal.chromecast import google_cast
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.holiday import polygon
@@ -32,8 +30,6 @@ if TYPE_CHECKING:
     _weather_stub: interfaces.WeatherService = weather_stub
     _holiday_real: interfaces.HolidayService = polygon
     _holiday_stub: interfaces.HolidayService = holiday_stub
-    _calendar_real: interfaces.CalendarService = ical
-    _calendar_stub: interfaces.CalendarService = calendar_stub
     _mqtt_real: interfaces.MqttService = hubitat
     _mqtt_stub: interfaces.MqttService = mqtt_stub
     _chromecast_real: interfaces.ChromecastService = google_cast
