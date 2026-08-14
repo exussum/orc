@@ -5,7 +5,7 @@ from typing import Any
 import icalendar
 
 
-def fetch_ical(start: datetime, end: datetime | timedelta) -> Iterator[Any]:
+def fetch_ical(start: datetime, end: datetime | timedelta, url: str, timeout: int) -> Iterator[Any]:
     event = icalendar.Event()
     event.add("uid", "stub-event")
     event.add("summary", "Stub Event")

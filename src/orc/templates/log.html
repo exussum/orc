@@ -7,7 +7,7 @@
                 <span class="whitespace-nowrap">{{ child.timestamp.strftime("%I:%M:%S %p") }}</span>
             </td>
             <td class="px-2 py-1">
-                <span class="orc-badge-{{ child.source.value }}">{{ child.source.value }}</span>
+                <span class="orc-badge" style="background-color: {{ child.source.badge_color }}">{{ child.source }}</span>
             </td>
             <td class="px-2 py-1 max-w-0 w-full">
                 <div class="orc-log-action truncate cursor-pointer" style="padding-left: {{ depth * 1.5 }}rem">{{ child.action|codespan }}</div>
@@ -31,7 +31,7 @@
                         <span class="whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</span>
                     </td>
                     <td class="px-2 py-1">
-                        <span class="orc-badge-{{ entry.source.value }}">{{ entry.source.value }}</span>
+                        <span class="orc-badge" style="background-color: {{ entry.source.badge_color }}">{{ entry.source }}</span>
                     </td>
                     <td class="px-2 py-1 max-w-0 w-full">
                         <div class="flex items-center gap-1.5">

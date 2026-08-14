@@ -1,5 +1,4 @@
 import contextlib
-import itertools
 import math
 import threading
 import time
@@ -32,7 +31,7 @@ from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.sqlite import update_avg
-from orc.dal.usb import play_alert, play_text
+from orc.dal.usb import play_alert, play_text  # noqa: F401
 from orc.declarations import Declarations
 from orc.decorators import (
     requires_ctx,
@@ -104,7 +103,7 @@ def local_now() -> datetime:
     return datetime.now(tz=config.settings.tz)
 
 
-def log(source: m.LogSource, action: str) -> m.LogEntry:
+def log(source: m.LogSourceEnum, action: str) -> m.LogEntry:
     return _ACTIVITY_LOG.add(local_now(), source, action)
 
 
@@ -550,7 +549,6 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         rebuild_iot_schedule(ctx=ctx)
     for job_id, func, crontab, name in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
-        ("cal-cron", rebuild_cal_schedule, "10,25,40,55 8-18 * * *", "Calendar Cron"),
         ("presence-cron", _check_presence_job, "5 * * * *", "Presence Cron"),
     ):
         ctx.scheduler.add_job(
@@ -596,11 +594,6 @@ def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> Sequence
 
 
 @requires_ctx
-def rebuild_cal_schedule(ctx: m.AppContext) -> None:
-    _schedule_cal_tasks(ctx.scheduler)
-
-
-@requires_ctx
 def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
     for run_at, rule in get_schedule():
@@ -624,41 +617,5 @@ def replay_day(now: datetime) -> None:
 
 
 @requires_ctx
-def _run_cal_job(job: m.CalendarJob, ctx: m.AppContext) -> None:
-    if job.event_type == m.CalendarEvent.WARNING:
-        play_alert(ctx.sound_path)
-    else:
-        log(m.LogSource.CALENDAR, job.summary)
-        play_text(job.summary)
-
-
-@requires_ctx
 def _check_presence_job(ctx: m.AppContext) -> set[str]:
     return check_presence()
-
-
-def _schedule_cal_tasks(scheduler: BaseScheduler) -> None:
-    now = local_now()
-    if calculate_theme(now.date()) != m.THEME_WORK_DAY:
-        return
-
-    # fetch_ical's `end` is typed as datetime, but recurring_ical_events.between accepts a timedelta window at runtime
-    events = list(itertools.islice(config.providers.calendar.fetch_ical(now, timedelta(hours=20)), 50))
-    warning_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.WARNING, timedelta(minutes=-2), config.settings.tz) for e in events)
-    alarm_events = (m.CalendarEvent.from_cal(e, m.CalendarEvent.ALARM, timedelta(), config.settings.tz) for e in events)
-    calendar_by_id = {e.uuid: e for e in itertools.chain.from_iterable((alarm_events, warning_events))}
-
-    for e in jobs_by_type(scheduler, m.CalendarJob):
-        if e.id not in calendar_by_id:
-            scheduler.remove_job(e.id)
-
-    for id, event in calendar_by_id.items():
-        scheduler.add_job(
-            _run_cal_job,
-            DateTrigger(event.datetime, timezone=config.settings.tz),
-            args=[m.CalendarJob(event.type, event.summary)],
-            replace_existing=True,
-            id=id,
-            name=event.summary,
-            jobstore=JOBSTORE_MEMORY,
-        )
