@@ -13,6 +13,10 @@ JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
 
 
+class Log(m.LogSourceEnum):
+    ENTRANCE = "entrance"
+
+
 def _on_sensor_event(
     ctx: m.AppContext, sensor: SimpleNamespace, sensor_ids: set[int], device: m.DeviceState, attribute: str, old: Any, new: Any
 ) -> None:
@@ -21,7 +25,7 @@ def _on_sensor_event(
     if attribute == "battery":
         level = ctx.model.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
-            ctx.api.log(ctx.model.LogSource.PLUGIN, f"Low battery on `{device.name}` ({level.value})")
+            ctx.api.log(Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})")
     elif _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
@@ -34,7 +38,7 @@ def _on_sensor_event(
         if entries and entries[0].action == TRIGGER_MSG:
             log_entry = entries[0]
         else:
-            log_entry = ctx.api.log(ctx.model.LogSource.PLUGIN, TRIGGER_MSG)
+            log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG)
 
         ctx.scheduler.add_job(
             _run_motion,
@@ -62,7 +66,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(ctx, sensor)
-        log_entry.add(ctx.model.LogSource.PLUGIN, f"Applying `{timed_name}` rules")
+        log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
         ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
     elif new == sensor.setting.inactive_event:
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
@@ -96,7 +100,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, SNAPSHOT_NAME)
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent))
         msg = sensor.message.log_shutdown
-    log_entry.add(ctx.model.LogSource.PLUGIN, msg)
+    log_entry.add(Log.ENTRANCE, msg)
 
 
 def battery_state(ctx: m.AppContext, sensor_ids: set[int]) -> list[dict[str, Any]]:

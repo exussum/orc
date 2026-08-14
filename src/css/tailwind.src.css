@@ -2,8 +2,6 @@
 
 @source "../templates";
 @source "./*.js";
-/* badge classes are built dynamically in log.html (orc-badge-{{ source }}) */
-@source inline("orc-badge-{calendar,routine,system,plugin,manual,external}");
 
 @theme {
     --color-orc-bg: #1a1a1a;
@@ -18,10 +16,6 @@
     --color-orc-secondary-hover-border: #3c3b3b;
     --color-orc-secondary-active: #3c3b3b;
     --color-orc-secondary-active-border: #353535;
-    --color-orc-system: #5f9d3f;
-    --color-orc-routine: #b5604a;
-    --color-orc-plugin: #fd7e14;
-    --color-orc-external: #8e6bc8;
     --color-orc-selected: #fbbf24;
 }
 
@@ -84,30 +78,6 @@
 
 @utility orc-badge {
     @apply inline-block px-2 py-0.5 rounded text-xs font-semibold text-white;
-}
-
-@utility orc-badge-calendar {
-    @apply orc-badge bg-orc-secondary;
-}
-
-@utility orc-badge-routine {
-    @apply orc-badge bg-orc-routine;
-}
-
-@utility orc-badge-system {
-    @apply orc-badge bg-orc-system;
-}
-
-@utility orc-badge-manual {
-    @apply orc-badge bg-orc-primary;
-}
-
-@utility orc-badge-plugin {
-    @apply orc-badge bg-orc-plugin;
-}
-
-@utility orc-badge-external {
-    @apply orc-badge bg-orc-external;
 }
 
 @utility orc-input {
