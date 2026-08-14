@@ -1,6 +1,8 @@
+from datetime import date
 from unittest.mock import patch
 
 from orc.dal.chromecast.google_cast import _strip_googlevideo_params
+from orc.dal.holiday import polygon
 from orc.dal.hubitat import http as hubitat
 
 
@@ -30,3 +32,30 @@ class TestReboot:
     def test_reboot_hits_hub_endpoint(self, post):
         hubitat.reboot()
         assert "/hub/reboot" in post.call_args[0][0]
+
+
+_HOLIDAYS = [
+    {"date": "2026-11-26", "exchange": "NYSE", "status": "closed"},
+    {"date": "2026-11-27", "exchange": "NYSE", "status": "early-close"},
+    {"date": "2026-12-25", "exchange": "NASDAQ", "status": "closed"},
+]
+
+
+class TestMarketHoliday:
+    def _market_holiday(self, day):
+        polygon._fetch_holidays.cache_clear()
+        with patch("requests.get") as get:
+            get.return_value.json.return_value = _HOLIDAYS
+            return polygon.market_holiday(day)
+
+    def test_nyse_closed_day_is_holiday(self):
+        assert self._market_holiday(date(2026, 11, 26)) is True
+
+    def test_early_close_day_is_work_day(self):
+        assert self._market_holiday(date(2026, 11, 27)) is False
+
+    def test_other_exchange_closure_is_work_day(self):
+        assert self._market_holiday(date(2026, 12, 25)) is False
+
+    def test_ordinary_day_is_work_day(self):
+        assert self._market_holiday(date(2026, 11, 30)) is False

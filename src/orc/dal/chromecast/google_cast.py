@@ -24,6 +24,8 @@ _PLAYING_STATES: tuple[str, ...] = ("PLAYING", "BUFFERING", "PAUSED")
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     with _cast(device, timeout=5, tries=1) as cast:
         time.sleep(0.5)
+        if cast.status is None:  # wait() timed out: device unreachable
+            return m.SoundState(what=device, content=None, volume=0)
         ms = cast.media_controller.status
         content = ms.content_id if ms and ms.player_state in _PLAYING_STATES else None
         return m.SoundState(
