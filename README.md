@@ -103,35 +103,35 @@ Steps:
    a machine-account access token where the service can read it, e.g.
    `/etc/orc/bws_access_token`.
 
-4. **Set the environment.** The minimum for a real installation:
+4. **Set the environment.** Two variables:
 
    ```sh
-   export ORC_HUBITAT_URL=http://<hubitat-host>/apps/api/<app-id>
    export ORC_CONFIG_DIR=/etc/orc
-   export ORC_DB=sqlite:////var/lib/orc/jobs.sqlite
    export BWS_ACCESS_TOKEN=file:///etc/orc/bws_access_token
    ```
 
-   See [Configuration](#configuration) for the full list (timezone,
-   lat/long, audio device, …).
+   Everything else (URLs, DB path, timezone, coordinates, audio device, …)
+   is a `setting` line in `config.orc` — see [Configuration](#configuration).
 
 5. **Run `orc`** — installed as a console script, it starts gunicorn on
-   `0.0.0.0:8000`. Use your process manager of choice to keep it up;
-   production here runs it under supervisor.
+   `0.0.0.0:<port>` (the `port` setting, default 8000). Use your process
+   manager of choice to keep it up; production here runs it under supervisor.
 
 ## Configuration
 
 Two config surfaces:
 
 1. **Line-based config** at `ORC_CONFIG_DIR/config.orc` (the in-repo sample
-   is `src/config.orc`). Defines devices, people, routines, themes, room
-   configs, ad-hoc routines, plugins, button highlights, and the secrets and
-   weather providers. One command per
+   is `src/config.orc`). Defines settings, devices, people, routines, themes,
+   room configs, ad-hoc routines, plugins, button highlights, and the secrets
+   and weather providers. One command per
    line with shell-style quoting and `#` comments; a `.` repeats the token in
    the same position on the line above. The grammar lives in
    `orc.loader.GRAMMAR` and is parsed by the `command-cfg` package:
 
    ```
+   setting base_url http://orc.internal.example
+
    device define Light
    device add    Light BEDROOM_LAMP 'bedroom lamp' --room Bedroom
    device seal   Light
@@ -141,23 +141,38 @@ Two config surfaces:
 
    theme 'work day' ROUTINE_RESET 1:00
    ```
-2. **Environment variables**:
 
-   | Var                     | Purpose                                                          | Default                         |
-   |-------------------------|------------------------------------------------------------------|---------------------------------|
-   | `ORC_HUBITAT_URL`       | Hubitat Maker API base URL                                       | unset                           |
-   | `ORC_CONFIG_DIR`        | Directory containing `config.orc`                                | `src`                           |
-   | `ORC_DB`                | SQLAlchemy URL for the APScheduler / orc state DB                | `sqlite:////tmp/jobs.sqlite`    |
-   | `ORC_TZ`                | IANA timezone                                                    | `America/New_York`              |
-   | `ORC_LAT`               | Latitude for sunrise/sunset                                      | `40.7143`                       |
-   | `ORC_LONG`              | Longitude for sunrise/sunset                                     | `-74.0060`                      |
-   | `ORC_HTTP_TIMEOUT`      | Default outbound HTTP timeout (s)                                | `5`                             |
-   | `ORC_HTTP_ICAL_TIMEOUT` | Timeout for the iCal fetch (s)                                   | `120`                           |
-   | `ORC_ROOT_DOMAIN`       | Suffix stripped from presence hostnames; allowlisted for streams | `example.test`                  |
-   | `ORC_INTERNAL_URL`      | LAN-reachable base URL for static audio; its host is allowlisted | `http://example.test`           |
-   | `ORC_AUDIO_DEVICE`      | Substring matching the audio output device for TTS/alerts        | `""`                            |
-   | `ORC_BROADLINK_CODES`   | Path to BroadLink IR codes JSON                                  | `/etc/orc/broadlink_codes.json` |
-   | `BWS_ACCESS_TOKEN`      | URL whose body is the Bitwarden access token                     | required by `orc.dal.secrets.bws` |
+   `setting` lines fill `orc.model.Settings` (exposed as `config.settings`).
+   The required keys fail startup with a named `ConfigError` when a line is
+   missing or its value is empty:
+
+   | Setting           | Purpose                                                          |
+   |-------------------|-------------------------------------------------------------------|
+   | `base_url`        | LAN-reachable base URL for static audio; its host is allowlisted for streams |
+   | `lan_domain`      | Suffix stripped from presence hostnames; subdomains allowlisted for streams |
+   | `jobs_db`         | SQLAlchemy URL for the APScheduler / orc state DB                |
+   | `lat` / `long`    | Coordinates for sunrise/sunset                                   |
+   | `audio_device`    | Substring matching the audio output device for TTS/alerts        |
+   | `broadlink_codes` | Path to BroadLink IR codes JSON                                  |
+   | `mqtt_host`       | Broker host for the Hubitat MQTT export                          |
+
+   The optional keys default when omitted:
+
+   | Setting             | Purpose                            | Default                 |
+   |---------------------|-------------------------------------|-------------------------|
+   | `tz`                | IANA timezone                      | `America/New_York`      |
+   | `hubitat_url`       | Hubitat Maker API base URL         | `http://hubitat.example`|
+   | `http_timeout`      | Default outbound HTTP timeout (s)  | `5`                     |
+   | `http_ical_timeout` | Timeout for the iCal fetch (s)     | `120`                   |
+   | `port`              | HTTP listen port                   | `8000`                  |
+
+2. **Environment variables** — only the bootstrap pair that can't live in
+   the config file:
+
+   | Var                | Purpose                                      | Default                           |
+   |--------------------|-----------------------------------------------|-----------------------------------|
+   | `ORC_CONFIG_DIR`   | Directory containing `config.orc`            | `src`                             |
+   | `BWS_ACCESS_TOKEN` | URL whose body is the Bitwarden access token | required by `orc.dal.secrets.bws` |
 
    `BWS_ACCESS_TOKEN` is a URL (e.g. `data:` or `file://`), not the value
    itself — the body of the URL is read at startup.
@@ -181,7 +196,8 @@ connection, and the YoLink pair is only read by the yolink plugin:
 
 ## Running
 
-Two entry points in `src/orc/runner.py`, both serving on `0.0.0.0:8000`:
+Two entry points in `src/orc/runner.py`, both serving on `0.0.0.0:<port>`
+(the `port` setting, default 8000):
 
 - `web()` — gunicorn; this is what the `orc` console script runs (production)
 - `flask()` — Flask's dev server (development)
@@ -205,7 +221,7 @@ bounces the `orc` supervisor job.
 
 ## Layout
 
-- `src/orc/__init__.py` — `Config` (env vars + `.orc` config loading and installation)
+- `src/orc/__init__.py` — `Config` (`.orc` config loading and installation)
 - `src/orc/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor

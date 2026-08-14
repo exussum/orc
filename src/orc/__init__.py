@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from command_cfg import ConfigError
 
@@ -16,8 +15,6 @@ Chromecast: type[m.DeviceEnum]
 BroadLink: type[m.DeviceEnum]
 AC: type[m.DeviceEnum]
 
-device_enums: list[type[m.DeviceEnum]] = []
-
 
 class Config:
     def __init__(self) -> None:
@@ -25,15 +22,6 @@ class Config:
         # `plugin`/`provider` config lines read it at import time
         globals()["config"] = self
         self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
-        self.jobs_db = os.getenv("ORC_DB", "sqlite:////tmp/jobs.sqlite")
-        self.hubitat_url = os.getenv("ORC_HUBITAT_URL")
-        self.internal_url = os.getenv("ORC_INTERNAL_URL", "http://example.test")
-        self.http_timeout = int(os.getenv("ORC_HTTP_TIMEOUT", 5))
-        self.http_ical_timeout = int(os.getenv("ORC_HTTP_ICAL_TIMEOUT", 120))
-        self.tz = ZoneInfo(os.getenv("ORC_TZ", "America/New_York"))
-        self.lat_long = (float(os.getenv("ORC_LAT", 40.7143)), float(os.getenv("ORC_LONG", -74.0060)))
-        self.root_domain = os.getenv("ORC_ROOT_DOMAIN", "example.test")
-        self.audio_device = os.getenv("ORC_AUDIO_DEVICE", "")
         self.load(m.Secrets(), {})
 
     def load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
@@ -63,6 +51,7 @@ class Config:
         return plugin
 
     def _install(self, parsed: SimpleNamespace) -> None:
+        self.settings = parsed.settings
         self.plugins = parsed.plugins
         declarations = collect_declarations(parsed.plugin_modules)
 
@@ -70,7 +59,6 @@ class Config:
             sys.modules["orc.api"].declare_core(declarations)
 
         globals().update(parsed.enums)
-        globals()["device_enums"] = list(parsed.enums.values())
         self.registry = declarations.build(parsed.enums)
         self.virtual_devices = {e for e in parsed.enums["Light"] if isinstance(e.value, int) and e.value < 0}
 

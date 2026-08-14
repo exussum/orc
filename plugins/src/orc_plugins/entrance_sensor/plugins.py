@@ -38,7 +38,7 @@ def _on_sensor_event(
 
         ctx.scheduler.add_job(
             _run_motion,
-            DateTrigger(ctx.api.local_now(), timezone=ctx.config.tz),
+            DateTrigger(ctx.api.local_now(), timezone=ctx.config.settings.tz),
             name="Entrance Motion",
             misfire_grace_time=None,
             jobstore=ctx.api.JOBSTORE_MEMORY,
@@ -68,7 +68,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
-            DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.tz),
+            DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
             name="Trigger Sensor",
             id=JOB_ID,
             replace_existing=True,

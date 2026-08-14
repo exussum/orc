@@ -52,7 +52,7 @@ def reboot_hubitat(ctx: m.AppContext, device: str | None) -> None:
 
 
 def sound_test(ctx: m.AppContext, device: str | None) -> None:
-    base = ctx.config.internal_url.rstrip("/") + "/"
+    base = ctx.config.settings.base_url.rstrip("/") + "/"
     url = f"{base}static/alert.mp3"
     ctx.api.dispatch(ctx.model.Configs(ctx.model.Config(ctx.orc.Chromecast, url)), force=True)
     ctx.api.play_text("audio test")

@@ -29,6 +29,7 @@ provider <key> <module>
 room <name> <device> <state>
 routine define <id> <name> [--skip-replay]
 routine append <id> <device> <state> [--trigger=<trigger>]
+setting <key> <value>
 theme <name> <routine> <time>
 volume <log> <level>
 """
@@ -42,10 +43,13 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
     serializers: dict[str, Callable[..., Any]] = {
         "volume": m.Volume,
         "provider": interfaces.Provider,
+        "setting": m.Settings.build,
         "person": m.Person,
         **{command: partial(run, handler) for command, handler in _COMMANDS.items()},
     }
-    objects = command_cfg.parse(text, GRAMMAR, serializers, scalars=("volume", "provider"), grouped=("person",), cast=partial(_cast, {}))
+    objects = command_cfg.parse(
+        text, GRAMMAR, serializers, scalars=("volume", "provider", "setting"), grouped=("person",), cast=partial(_cast, {})
+    )
     if unsealed := objects.get("_members", {}).keys() - objects.get("enums", {}).keys():
         raise ConfigError(f"Device types defined but never sealed: {sorted(unsealed)}")
     return SimpleNamespace(
@@ -60,6 +64,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         providers=objects["provider"],
         room_configs=objects.get("room_configs", {}),
         routines=objects.get("routines", {}),
+        settings=objects["setting"],
         themes=objects.get("themes", {}),
     )
 
@@ -74,6 +79,8 @@ def validate(config: SimpleNamespace) -> None:
             raise ConfigError(f"Missing required {label}: {', '.join(sorted(missing))}")
     if unset := [key for key, value in zip(interfaces.Provider._fields, config.providers) if value is None]:
         raise ConfigError(f"Missing required providers: {', '.join(unset)}")
+    if unset := [key for key, value in zip(m.Settings._fields, config.settings) if value in (None, "")]:
+        raise ConfigError(f"Missing required settings: {', '.join(unset)}")
 
 
 def _cast(objects: dict[str, Any], key: str, value: Any) -> Any:

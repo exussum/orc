@@ -22,7 +22,9 @@ class Chromecast(DeviceEnum):
 
 @pytest.fixture(autouse=True)
 def _device_enums(monkeypatch):
-    monkeypatch.setattr(orc, "device_enums", [Light, Chromecast], raising=False)
+    from orc import declarations
+
+    monkeypatch.setattr(orc.config, "registry", declarations.Declarations().build({"Light": Light, "Chromecast": Chromecast}))
 
 
 def test_entrance_config_loads():

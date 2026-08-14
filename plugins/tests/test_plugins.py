@@ -42,7 +42,7 @@ def ctx():
     mock.model = m
     mock.snapshot_manager = api.SnapshotManager()
     mock.api.JOBSTORE_MEMORY = "memory"
-    mock.config.tz = _UTC
+    mock.config.settings.tz = _UTC
     return mock
 
 

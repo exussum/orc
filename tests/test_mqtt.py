@@ -245,13 +245,11 @@ class TestFetchHubitatConfig:
         def disconnect(self):
             pass
 
-    def _fetch(self, monkeypatch, docs, timeout=1.0):
+    def _fetch(self, monkeypatch, docs, timeout=1.0, secrets=None):
         fake = self.FakeClient()
         fake.docs = docs
-        monkeypatch.setenv("ORC_MQTT_HOST", "hub.test")
         monkeypatch.setattr(mqtt.mqtt, "Client", lambda *a, **k: fake)
-        secrets = m.Secrets(mqtt_user="u", mqtt_password="p")
-        return mqtt.fetch_hubitat_config(secrets, timeout=timeout)
+        return mqtt.fetch_hubitat_config(secrets or m.Secrets(mqtt_user="u", mqtt_password="p"), timeout=timeout)
 
     def test_maps_name_to_id_and_infers_dimmable_from_level(self, monkeypatch):
         docs = [
@@ -265,9 +263,8 @@ class TestFetchHubitatConfig:
         }
 
     def test_missing_credentials_fails_boot(self, monkeypatch):
-        monkeypatch.setenv("ORC_MQTT_HOST", "hub.test")
         with pytest.raises(RuntimeError, match="no device documents"):
-            mqtt.fetch_hubitat_config(m.Secrets(), timeout=0.1)
+            self._fetch(monkeypatch, [], timeout=0.1, secrets=m.Secrets())
 
     def test_empty_flood_fails_boot(self, monkeypatch):
         with pytest.raises(RuntimeError, match="no device documents"):
