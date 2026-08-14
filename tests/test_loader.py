@@ -90,6 +90,12 @@ def test_ad_hoc_delay():
     assert dog.reset is True
 
 
+def test_state_youtube_ids_stay_strings():
+    parsed = parse("youtube_state")
+    states = {name: cfg.items[0].state for name, cfg in parsed.ad_hoc_routines.items()}
+    assert states == {"Music": "dQw4w9WgXcQ", "Numbers": "12345678901", "Volume": 40}
+
+
 def test_ad_hoc_append_extends_items():
     parsed = parse("core")
     assert parsed.ad_hoc_routines["All Lights Off"].items == (

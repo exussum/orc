@@ -84,7 +84,7 @@ class VersionManager:
 
 @bp.route("/system/")
 def cfg() -> str:
-    today = date.today()
+    today = api.local_now().date()
     tomorrow = today + timedelta(days=1)
     plugins_dir = Path(config.config_dir) / "plugins"
     plugin_htmls: dict[str, str] = {}
