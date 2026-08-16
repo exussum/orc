@@ -416,7 +416,7 @@ class TestWireButtons:
         ctx = MagicMock()
         captured = {}
         with (
-            patch.object(config, "buttons", buttons),
+            patch.object(config, "remotes", buttons),
             patch.object(mqtt_stub, "add_button_listener", side_effect=lambda fn: captured.setdefault("fn", fn)),
         ):
             api.wire_buttons(ctx)

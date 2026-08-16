@@ -3,7 +3,7 @@
 {% block body %}
     <div class="orc-card mb-2">
         <div class="orc-room-buttons p-4">
-            {% for id in room_configs %}
+            {% for id in rooms %}
                 <div class="text-sm self-center">{{ id }}</div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">

@@ -68,7 +68,7 @@ def test_versioned_bumps_after_success(client, ctx, good_version):
 
 
 def test_console_plugin(client, ctx):
-    plugin = m.Plugin(name="do-thing", func=lambda ctx, device: None)
+    plugin = m.CallablePlugin(name="do-thing", func=lambda ctx, device: None)
     with (
         patch.object(config, "plugins", (plugin,)),
         patch("orc.plugins.execute_plugin") as exec_plugin,
@@ -185,7 +185,7 @@ def test_console_unknown_returns_404(client):
 def test_room_on(client):
     routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
-        patch.object(config, "room_configs", {"Living Room": routine}),
+        patch.object(config, "rooms", {"Living Room": routine}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=on")
@@ -195,7 +195,7 @@ def test_room_on(client):
 def test_room_off_replaces_state(client):
     routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
-        patch.object(config, "room_configs", {"Living Room": routine}),
+        patch.object(config, "rooms", {"Living Room": routine}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=off")
@@ -207,8 +207,8 @@ def test_room_follow(client):
     routine = m.Configs(m.Config(orc.Light.a, m.ON))
     off = m.Configs(m.Config(orc.Light.b, m.OFF))
     with (
-        patch.object(config, "room_configs", {"Living Room": routine}),
-        patch.object(config, "room_configs_off", off),
+        patch.object(config, "rooms", {"Living Room": routine}),
+        patch.object(config, "rooms_off", off),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=follow")
@@ -216,13 +216,13 @@ def test_room_follow(client):
 
 
 def test_room_unknown_state_raises(client):
-    with patch.object(config, "room_configs", {"Living Room": m.Configs()}):
+    with patch.object(config, "rooms", {"Living Room": m.Configs()}):
         response = client.get("/api/room/Living Room?state=bogus")
     assert response.status_code == 500
 
 
 def test_room_unknown_id_returns_404(client):
-    with patch.object(config, "room_configs", {}), patch.object(api, "dispatch") as ex:
+    with patch.object(config, "rooms", {}), patch.object(api, "dispatch") as ex:
         response = client.get("/api/room/nope?state=on")
     assert response.status_code == 404
     ex.assert_not_called()

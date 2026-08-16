@@ -181,9 +181,9 @@ def index() -> tuple[str, int, dict[str, str]]:
     return (
         render_template(
             "scene.html",
-            highlight_configs=[(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlight_configs],
+            highlight_configs=[(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlights],
             plugins=config.plugins_in("scene"),
-            room_configs=config.room_configs,
+            rooms=config.rooms,
             ad_hoc_routines=where(config.ad_hoc_routines, section="scene"),
             schedule_routines=config.schedule_routines,
             next_routine=next_schedule,
@@ -270,15 +270,15 @@ def ac(id: str) -> tuple[dict[str, Any], int]:
 @bp.route("/api/room/<id>")
 def room(id: str) -> tuple[dict[str, Any], int]:
     state = request.args.get("state")
-    if id not in config.room_configs:
+    if id not in config.rooms:
         return {"error": "Unknown room"}, 404
     with api.record_duration(id):
         if state == m.ON:
-            api.dispatch(config.room_configs[id], force=True)
+            api.dispatch(config.rooms[id], force=True)
         elif state == m.OFF:
-            api.dispatch(m.Configs(*(replace(e, state=m.OFF) for e in config.room_configs[id].items)), force=True)
+            api.dispatch(m.Configs(*(replace(e, state=m.OFF) for e in config.rooms[id].items)), force=True)
         elif state == m.FOLLOW:
-            api.dispatch(m.squish_configs(config.room_configs_off, config.room_configs[id]), force=True)
+            api.dispatch(m.squish_configs(config.rooms_off, config.rooms[id]), force=True)
         else:
             raise Exception("Unknown state")
     api.log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
