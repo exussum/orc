@@ -14,7 +14,7 @@ def back_on_schedule(ctx: m.AppContext, device: str | None) -> None:
     ctx.api.replay_day(ctx.api.local_now())
 
 
-def execute_plugin(ctx: m.AppContext, plugin: m.Plugin, device: str | None = None) -> None:
+def execute_plugin(ctx: m.AppContext, plugin: m.CallablePlugin, device: str | None = None) -> None:
     plugin.func(ctx, device)
 
 

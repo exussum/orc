@@ -47,13 +47,13 @@ theme 'day off'  ROUTINE_QUIET      23:00
 room 'Living Room' Light.LIVING_ROOM  on
 room Bedroom       Light.BEDROOM_LAMP on
 
-ad-hoc define Silence          --no-reset Chromecast stop
-ad-hoc define Dog              --delay 7  Chromecast stop
-ad-hoc define 'All Lights On'  --no-reset Light      100
-ad-hoc define 'All Lights Off' --no-reset Light      off
+ad_hoc define Silence          --no-reset Chromecast stop
+ad_hoc define Dog              --delay 7  Chromecast stop
+ad_hoc define 'All Lights On'  --no-reset Light      100
+ad_hoc define 'All Lights Off' --no-reset Light      off
 
-button-map Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
-button-map .                         1 held   Silence
+remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
+remote     .                         1 held   Silence
 
 plugin 'Pair LG TV'       orc_plugins.lgtv            --function plugins.pair_tv     --section device --backend orc.lgtv.dal.stub
 plugin 'Test Leak Sensor' orc_plugins.yolink          --function plugins.test_sensor --section device

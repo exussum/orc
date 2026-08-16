@@ -36,22 +36,22 @@ class Config:
         self.default_config = self.routines["ROUTINE_DEFAULT"]
         self.reset_config = self.routines["ROUTINE_RESET"]
         self.schedule_routines = {r.name: r for theme in self.themes.values() for r in theme.configs}
-        self.room_configs_off = m.squish_configs(*self.room_configs.values(), state_override=m.OFF)
+        self.rooms_off = m.squish_configs(*self.rooms.values(), state_override=m.OFF)
 
-    def plugin(self, id: str) -> m.Plugin | None:
+    def plugin(self, id: str) -> m.CallablePlugin | None:
         return next((p for p in self.plugins if p.name == id), None)
 
-    def plugins_in(self, section: str) -> tuple[m.Plugin, ...]:
+    def plugins_in(self, section: str) -> tuple[m.CallablePlugin, ...]:
         return tuple(p for p in self.plugins if p.section == section)
 
-    def plugin_for(self, module: ModuleType) -> m.Plugin:
+    def plugin_for(self, module: ModuleType) -> m.CallablePlugin:
         plugin = next((p for p in self.plugins if p.module is module), None)
         if plugin is None:
             raise ConfigError(f"No plugin line configured for module {module.__name__!r}")
         return plugin
 
     def _install(self, parsed: SimpleNamespace) -> None:
-        self.settings = parsed.settings
+        self.settings = parsed.setting
         self.plugins = parsed.plugins
         declarations = collect_declarations(parsed.plugin_modules)
 
@@ -62,15 +62,15 @@ class Config:
         self.registry = declarations.build(parsed.enums)
         self.virtual_devices = {e for e in parsed.enums["Light"] if isinstance(e.value, int) and e.value < 0}
 
-        self.people = parsed.people
-        self.providers = parsed.providers
-        self.routines = parsed.routines
-        self.themes = parsed.themes
-        self.room_configs = parsed.room_configs
-        self.ad_hoc_routines = parsed.ad_hoc_routines
-        self.buttons = parsed.buttons
-        self.button_highlight_configs = parsed.button_highlight_configs
-        self.audio_volumes = parsed.audio_volumes
+        self.people = parsed.person
+        self.providers = parsed.provider
+        self.routines = parsed.routine
+        self.themes = parsed.theme
+        self.rooms = parsed.room
+        self.ad_hoc_routines = parsed.ad_hoc
+        self.remotes = parsed.remote
+        self.button_highlights = parsed.highlight
+        self.volumes = parsed.volume
 
 
 config = Config()
