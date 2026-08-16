@@ -1,4 +1,4 @@
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import timedelta
 from functools import partial
@@ -6,7 +6,7 @@ from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import command_cfg
-from command_cfg import ConfigError
+from command_cfg import ConfigError, array, each, group, raw, scalar
 
 from orc import model as m
 from orc.dal import interfaces
@@ -36,20 +36,21 @@ volume <log> <level>
 
 
 def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = None) -> SimpleNamespace:
-    def run(handler: Callable[[dict[str, Any], SimpleNamespace], None], values: SimpleNamespace, objects: dict[str, Any]) -> None:
-        objects.setdefault("zigbee_config", zigbee_config or {})
-        handler(objects, SimpleNamespace(**{key: _cast(objects, key, value) for key, value in vars(values).items()}))
-
-    serializers: dict[str, Callable[..., Any]] = {
-        "volume": m.Volume,
-        "provider": interfaces.Provider,
-        "setting": m.Settings.build,
-        "person": m.Person,
-        **{command: partial(run, handler) for command, handler in _COMMANDS.items()},
+    serializers = {
+        "person": group(m.Person),
+        "device": each(partial(_device, zigbee_config or {})),
+        "room": each(_room),
+        "ad-hoc": each(_ad_hoc),
+        "button-map": each(_button_map),
+        "routine": each(_routine),
+        "highlight": each(_highlight),
+        "theme": each(_theme),
+        "plugin": each(_plugin),
+        "volume": scalar(m.Volume),
+        "provider": scalar(interfaces.Provider),
+        "setting": scalar(m.Settings.build),
     }
-    objects = command_cfg.parse(
-        text, GRAMMAR, serializers, scalars=("volume", "provider", "setting"), grouped=("person",), cast=partial(_cast, {})
-    )
+    objects = command_cfg.parse(text, GRAMMAR, serializers, cast=lambda key, value, built: _cast(built, key, value))
     if unsealed := objects.get("_members", {}).keys() - objects.get("enums", {}).keys():
         raise ConfigError(f"Device types defined but never sealed: {sorted(unsealed)}")
     return SimpleNamespace(
@@ -61,10 +62,10 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         people=objects.get("person", {}),
         plugin_modules=objects.get("plugin_modules", []),
         plugins=tuple(objects.get("plugins", ())),
-        providers=objects["provider"],
+        providers=objects["provider"] or interfaces.Provider(),
         room_configs=objects.get("room_configs", {}),
         routines=objects.get("routines", {}),
-        settings=objects["setting"],
+        settings=objects["setting"] or m.Settings.build(),
         themes=objects.get("themes", {}),
     )
 
@@ -103,21 +104,21 @@ def _cast(objects: dict[str, Any], key: str, value: Any) -> Any:
     return m.column_to_value(key, value)
 
 
-def _build_enum(objects: dict[str, Any], type_name: str) -> type[m.DeviceEnum]:
+def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any, tuple[Any, ...]]) -> type[m.DeviceEnum]:
     rows = objects["_members"][type_name]
     for label, idx in (("names", 0), ("device id", 1)):
         vals = [r[idx] for r in rows]
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{type_name}': {duplicates}")
     if type_name in ("Light", "Button"):
-        members = {name: (*objects["zigbee_config"].get(host, (-(i + 1), frozenset())), room) for i, (name, host, room) in enumerate(rows)}
+        members = {name: (*zigbee_config.get(host, (-(i + 1), frozenset())), room) for i, (name, host, room) in enumerate(rows)}
     else:
         members = {name: (host, frozenset(), room) for name, host, room in rows}
     # functional Enum API: mypy checks against the member-level __new__ rather than EnumMeta.__call__
     return m.DeviceEnum(type_name, members, module="orc")  # type: ignore[call-arg,arg-type,return-value]
 
 
-def _device(objects: dict[str, Any], args: SimpleNamespace) -> None:
+def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], args: SimpleNamespace) -> None:
     members = objects.setdefault("_members", {})
     enums = objects.setdefault("enums", {})
     if args.type in enums:
@@ -126,11 +127,11 @@ def _device(objects: dict[str, Any], args: SimpleNamespace) -> None:
         members[args.type] = []
     elif args.only:
         members[args.type] = [(args.name, args.host, args.room)] if args.name else []
-        enums[args.type] = _build_enum(objects, args.type)
+        enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     elif args.type not in members:
         raise ValueError(f"Unknown device type {args.type!r}: expected one of {list(members)}")
     elif args.seal:
-        enums[args.type] = _build_enum(objects, args.type)
+        enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     else:
         members[args.type].append((args.name, args.host, args.room))
 
@@ -202,33 +203,19 @@ def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
     theme.configs = (*theme.configs, replace(routine, when=args.time))
 
 
-_COMMANDS = {
-    "ad-hoc": _ad_hoc,
-    "button-map": _button_map,
-    "device": _device,
-    "highlight": _highlight,
-    "plugin": _plugin,
-    "room": _room,
-    "routine": _routine,
-    "theme": _theme,
-}
-
-
 def load_plugin_config(
     name: str,
     plugin_configs: dict[str, str],
     grammar: str,
-    serializers: Mapping[str, Callable[..., Any]] | None = None,
-    scalars: Sequence[str] = (),
-    grouped: Sequence[str] = (),
+    serializers: Mapping[str, scalar | group | array | raw | each],
 ) -> SimpleNamespace:
     text = plugin_configs.get(name)
     if text is None:
         raise FileNotFoundError(f"no config 'plugins/{name}.orc'")
-    return SimpleNamespace(**command_cfg.parse(text, grammar, serializers, scalars=scalars, grouped=grouped, cast=_plugin_cast))
+    return SimpleNamespace(**command_cfg.parse(text, grammar, serializers, cast=_plugin_cast))
 
 
-def _plugin_cast(key: str, value: Any) -> Any:
+def _plugin_cast(key: str, value: Any, objects: Mapping[str, Any]) -> Any:
     if not isinstance(value, str):
         return value
     try:
