@@ -34,13 +34,13 @@ device only Button REMOTE scene
 person Spence host9 aa:bb
 routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger Spence
 
-ad-hoc define Silence          --no-reset Chromecast.CC stop
-ad-hoc define Dog              --delay 7  Chromecast.CC stop
-ad-hoc define 'All Lights Off' --no-reset Light off
-ad-hoc append 'All Lights Off' Chromecast.CC stop
+ad_hoc define Silence          --no-reset Chromecast.CC stop
+ad_hoc define Dog              --delay 7  Chromecast.CC stop
+ad_hoc define 'All Lights Off' --no-reset Light off
+ad_hoc append 'All Lights Off' Chromecast.CC stop
 
-button-map Button.REMOTE 1 pushed 'All Lights Off'
-button-map .             1 held   Silence
+remote     Button.REMOTE 1 pushed 'All Lights Off'
+remote     .             1 held   Silence
 
 highlight Silence 21:00 23:59
 

@@ -42,21 +42,21 @@ def test_device_only_defines_and_seals_in_one_line():
 def test_routines_append_devices_and_triggers():
     parsed = parse("core")
     light, cc = parsed.enums["Light"], parsed.enums["Chromecast"]["CC"]
-    assert parsed.routines["ROUTINE_RESET"].name == "Reset"
-    assert parsed.routines["ROUTINE_RESET"].items == (
+    assert parsed.routine["ROUTINE_RESET"].name == "Reset"
+    assert parsed.routine["ROUTINE_RESET"].items == (
         m.Config(light, "off", trigger="SYSTEM"),
         m.Config(cc, "stop"),
     )
 
 
 def test_routine_skip_replay_flag():
-    routines = parse("core").routines
+    routines = parse("core").routine
     assert routines["ROUTINE_MEETING"].skip_replay is True
     assert routines["ROUTINE_RESET"].skip_replay is False
 
 
 def test_themes_schedule_routines():
-    themes = parse("core").themes
+    themes = parse("core").theme
     assert [c.name for c in themes["work day"].configs] == ["Reset"]
     assert themes["work day"].configs[0].when == time(1, 0)
     assert themes["day off"].configs[0].when == m.SUNSET
@@ -64,15 +64,15 @@ def test_themes_schedule_routines():
 
 def test_rooms_collect_member_states():
     parsed = parse("core")
-    assert parsed.room_configs["Bedroom"].items == (m.Config(parsed.enums["Light"]["LAMP"], "on"),)
+    assert parsed.room["Bedroom"].items == (m.Config(parsed.enums["Light"]["LAMP"], "on"),)
 
 
 def test_volumes_are_bounded_ints():
-    assert parse("core").audio_volumes == m.Volume(INFO=4, FATAL=10)
+    assert parse("core").volume == m.Volume(INFO=4, FATAL=10)
 
 
 def test_settings_typed_and_defaulted():
-    settings = parse("core").settings
+    settings = parse("core").setting
     assert settings.lat == 40.7143
     assert settings.mqtt_host == "hub.test"
     assert settings.http_timeout == 5
@@ -94,55 +94,55 @@ def test_validate_empty_setting():
 
 def test_validate_accepts_complete_config():
     parsed = parse("core")
-    parsed.providers = parse("provider").providers
+    parsed.provider = parse("provider").provider
     validate(parsed)
 
 
 def test_ad_hoc_define_with_inline_first_item():
     parsed = parse("core")
-    silence = parsed.ad_hoc_routines["Silence"]
+    silence = parsed.ad_hoc["Silence"]
     assert silence.items == (m.Config(parsed.enums["Chromecast"]["CC"], "stop"),)
     assert silence.reset is False
     assert silence.section == "scene"
 
 
 def test_ad_hoc_delay():
-    dog = parse("core").ad_hoc_routines["Dog"]
+    dog = parse("core").ad_hoc["Dog"]
     assert dog.delay == timedelta(minutes=7)
     assert dog.reset is True
 
 
 def test_state_youtube_ids_stay_strings():
     parsed = parse("youtube_state")
-    states = {name: cfg.items[0].state for name, cfg in parsed.ad_hoc_routines.items()}
+    states = {name: cfg.items[0].state for name, cfg in parsed.ad_hoc.items()}
     assert states == {"Music": "dQw4w9WgXcQ", "Numbers": "12345678901", "Volume": 40}
 
 
 def test_ad_hoc_append_extends_items():
     parsed = parse("core")
-    assert parsed.ad_hoc_routines["All Lights Off"].items == (
+    assert parsed.ad_hoc["All Lights Off"].items == (
         m.Config(parsed.enums["Light"], "off"),
         m.Config(parsed.enums["Chromecast"]["CC"], "stop"),
     )
 
 
-def test_button_map_repeats_device_with_ditto():
+def test_remote_repeats_device_with_ditto():
     parsed = parse("core")
     remote = parsed.enums["Button"]["REMOTE"]
-    assert parsed.buttons == {
+    assert parsed.remote == {
         (remote, 1, "pushed"): "All Lights Off",
         (remote, 1, "held"): "Silence",
     }
 
 
 def test_highlight_windows_reference_ad_hoc():
-    assert parse("core").button_highlight_configs == (("Silence", time(21, 0), time(23, 59)),)
+    assert parse("core").highlight == (("Silence", time(21, 0), time(23, 59)),)
 
 
 def test_person_becomes_known_trigger():
     parsed = parse("core")
-    assert parsed.people == {"Spence": [m.Person("host9", "aa:bb")]}
-    assert parsed.routines["ROUTINE_DEFAULT"].items[-1].trigger == "Spence"
+    assert parsed.person == {"Spence": [m.Person("host9", "aa:bb")]}
+    assert parsed.routine["ROUTINE_DEFAULT"].items[-1].trigger == "Spence"
 
 
 def test_plugin_command_imports_callable():
@@ -207,7 +207,7 @@ def test_provider_imports_backends():
     from orc.dal.secrets import stub as secrets_stub
     from orc.dal.weather import stub as weather_stub
 
-    providers = parse("provider").providers
+    providers = parse("provider").provider
     assert providers.secrets is secrets_stub
     assert providers.weather is weather_stub
     assert providers.holiday is holiday_stub
@@ -218,7 +218,7 @@ def test_provider_imports_backends():
 
 
 def test_provider_defaults_to_none():
-    assert parse("core").providers == interfaces.Provider()
+    assert parse("core").provider == interfaces.Provider()
 
 
 def test_validate_missing_providers():
