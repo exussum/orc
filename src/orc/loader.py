@@ -15,9 +15,9 @@ from orc.security import safe_eval
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 
 GRAMMAR = """
-ad-hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<device> <state>]
-ad-hoc append <name> <device> <state>
-button-map <device> <button> <event> <action>
+ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<device> <state>]
+ad_hoc append <name> <device> <state>
+remote <device> <button> <event> <action>
 device define <type>
 device add <type> <name> <host> [--room=<room>]
 device only <type> [<name> <host>] [--room=<room>]
@@ -38,49 +38,49 @@ volume <log> <level>
 def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = None) -> SimpleNamespace:
     serializers = {
         "person": group(m.Person),
-        "device": each(partial(_device, zigbee_config or {})),
-        "room": each(_room),
-        "ad-hoc": each(_ad_hoc),
-        "button-map": each(_button_map),
-        "routine": each(_routine),
-        "highlight": each(_highlight),
-        "theme": each(_theme),
-        "plugin": each(_plugin),
+        "device": each(partial(_device, zigbee_config or {}), default=lambda: SimpleNamespace(members={}, enums={})),
+        "room": each(_room, default=dict),
+        "ad_hoc": each(_ad_hoc, default=dict),
+        "remote": each(_remote, default=dict),
+        "routine": each(_routine, default=dict),
+        "highlight": each(_highlight, default=tuple),
+        "theme": each(_theme, default=dict),
+        "plugin": each(_plugin, default=list),
         "volume": scalar(m.Volume),
         "provider": scalar(interfaces.Provider),
         "setting": scalar(m.Settings.build),
     }
     objects = command_cfg.parse(text, GRAMMAR, serializers, cast=lambda key, value, built: _cast(built, key, value))
-    if unsealed := objects.get("_members", {}).keys() - objects.get("enums", {}).keys():
+    if unsealed := objects["device"].members.keys() - objects["device"].enums.keys():
         raise ConfigError(f"Device types defined but never sealed: {sorted(unsealed)}")
     return SimpleNamespace(
-        ad_hoc_routines=objects.get("ad_hoc_routines", {}),
-        audio_volumes=objects["volume"],
-        button_highlight_configs=objects.get("button_highlight_configs", ()),
-        buttons=objects.get("buttons", {}),
-        enums=objects.get("enums", {}),
-        people=objects.get("person", {}),
-        plugin_modules=objects.get("plugin_modules", []),
-        plugins=tuple(objects.get("plugins", ())),
-        providers=objects["provider"] or interfaces.Provider(),
-        room_configs=objects.get("room_configs", {}),
-        routines=objects.get("routines", {}),
-        settings=objects["setting"] or m.Settings.build(),
-        themes=objects.get("themes", {}),
+        ad_hoc=objects["ad_hoc"],
+        enums=objects["device"].enums,
+        highlight=objects["highlight"],
+        person=objects["person"],
+        plugin_modules=[p.module for p in objects["plugin"]],
+        plugins=tuple(p for p in objects["plugin"] if isinstance(p, m.CallablePlugin)),
+        provider=objects["provider"] or interfaces.Provider(),
+        remote=objects["remote"],
+        room=objects["room"],
+        routine=objects["routine"],
+        setting=objects["setting"] or m.Settings.build(),
+        theme=objects["theme"],
+        volume=objects["volume"],
     )
 
 
 def validate(config: SimpleNamespace) -> None:
     for label, present, required in (
-        ("routines", config.routines.keys(), ("ROUTINE_DEFAULT", "ROUTINE_RESET")),
-        ("routine names", {r.name for r in config.routines.values()}, ("Reset",)),
-        ("themes", config.themes.keys(), (m.THEME_WORK_DAY, m.THEME_DAY_OFF)),
+        ("routines", config.routine.keys(), ("ROUTINE_DEFAULT", "ROUTINE_RESET")),
+        ("routine names", {r.name for r in config.routine.values()}, ("Reset",)),
+        ("themes", config.theme.keys(), (m.THEME_WORK_DAY, m.THEME_DAY_OFF)),
     ):
         if missing := set(required) - present:
             raise ConfigError(f"Missing required {label}: {', '.join(sorted(missing))}")
-    if unset := [key for key, value in zip(interfaces.Provider._fields, config.providers) if value is None]:
+    if unset := [key for key, value in zip(interfaces.Provider._fields, config.provider) if value is None]:
         raise ConfigError(f"Missing required providers: {', '.join(unset)}")
-    if unset := [key for key, value in zip(m.Settings._fields, config.settings) if value in (None, "")]:
+    if unset := [key for key, value in zip(m.Settings._fields, config.setting) if value in (None, "")]:
         raise ConfigError(f"Missing required settings: {', '.join(unset)}")
 
 
@@ -89,7 +89,7 @@ def _cast(objects: dict[str, Any], key: str, value: Any) -> Any:
         return value
     elif key == "device":
         try:
-            return safe_eval(value, dict(objects.get("enums", {})))
+            return safe_eval(value, dict(objects["device"].enums))
         except NameError as exc:
             raise ValueError(f"{exc} — device types must be defined and sealed first") from None
         except (AttributeError, SyntaxError) as exc:
@@ -105,7 +105,7 @@ def _cast(objects: dict[str, Any], key: str, value: Any) -> Any:
 
 
 def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any, tuple[Any, ...]]) -> type[m.DeviceEnum]:
-    rows = objects["_members"][type_name]
+    rows = objects["device"].members[type_name]
     for label, idx in (("names", 0), ("device id", 1)):
         vals = [r[idx] for r in rows]
         if duplicates := {v for v in vals if vals.count(v) > 1}:
@@ -119,8 +119,8 @@ def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any
 
 
 def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], args: SimpleNamespace) -> None:
-    members = objects.setdefault("_members", {})
-    enums = objects.setdefault("enums", {})
+    members = objects["device"].members
+    enums = objects["device"].enums
     if args.type in enums:
         raise ValueError(f"Device type {args.type!r} is already sealed")
     elif args.define:
@@ -137,12 +137,12 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
 
 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    configs = objects.setdefault("room_configs", {}).setdefault(args.name, m.Configs())
+    configs = objects["room"].setdefault(args.name, m.Configs())
     configs.items = (*configs.items, m.Config(args.device, args.state))
 
 
 def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    ad_hoc_routines = objects.setdefault("ad_hoc_routines", {})
+    ad_hoc_routines = objects["ad_hoc"]
     if args.define:
         ad_hoc_routines[args.name] = m.AdhocConfig(
             snapshot=args.snapshot,
@@ -158,48 +158,48 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
         config.items = (*config.items, m.Config(args.device, args.state))
 
 
-def _button_map(objects: dict[str, Any], args: SimpleNamespace) -> None:
+def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if args.event not in _BUTTON_EVENTS:
         raise ValueError(f"Invalid button event {args.event!r}: expected one of {sorted(_BUTTON_EVENTS)}")
     elif not args.button.isdigit():
         raise ValueError(f"Invalid parameter button={args.button!r}")
-    objects.setdefault("buttons", {})[(args.device, int(args.button), args.event)] = args.action
+    objects["remote"][(args.device, int(args.button), args.event)] = args.action
 
 
 def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    if args.name not in objects.get("ad_hoc_routines", {}):
-        raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(objects.get('ad_hoc_routines', {}))}")
-    objects["button_highlight_configs"] = (*objects.get("button_highlight_configs", ()), (args.name, args.start, args.stop))
+    if args.name not in objects["ad_hoc"]:
+        raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(objects['ad_hoc'])}")
+    objects["highlight"] = (*objects["highlight"], (args.name, args.start, args.stop))
 
 
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
     params = {key: value for key, value in vars(args).items() if key not in ("name", "module", "function") and value is not None}
     if params.get("backend") is not None:
         params["backend"] = m.column_to_value("module", params["backend"])
-    objects.setdefault("plugin_modules", []).append(args.module)
     if args.function:
         func = m.column_to_value("function", f"{args.module.__name__}.{args.function}")
-        objects.setdefault("plugins", []).append(m.Plugin(name=args.name, func=func, module=args.module, **params))
+        objects["plugin"].append(m.CallablePlugin(name=args.name, module=args.module, func=func, **params))
+    else:
+        objects["plugin"].append(m.Plugin(name=args.name, module=args.module, **params))
 
 
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    routines = objects.setdefault("routines", {})
+    routines = objects["routine"]
     if args.define:
         routines[args.id] = m.Routine(args.name, "", (), skip_replay=args.skip_replay)
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:
-        known = (None, *(t.value for t in m.Trigger), *(w.value for w in m.WeatherCondition), *objects.get("person", ()))
+        known = (None, *(t.value for t in m.Trigger), *(w.value for w in m.WeatherCondition), *objects["person"])
         if args.trigger not in known:
             raise ValueError(f"Unknown trigger {args.trigger!r}: expected one of {known[1:]}")
         routine.items = (*routine.items, m.Config(args.device, args.state, trigger=args.trigger))
 
 
 def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    routines = objects.setdefault("routines", {})
-    if (routine := routines.get(args.routine)) is None:
-        raise ValueError(f"Unknown routine {args.routine!r}: expected one of {tuple(routines)}")
-    theme = objects.setdefault("themes", {}).setdefault(args.name, m.Theme(args.name))
+    if (routine := objects["routine"].get(args.routine)) is None:
+        raise ValueError(f"Unknown routine {args.routine!r}: expected one of {tuple(objects['routine'])}")
+    theme = objects["theme"].setdefault(args.name, m.Theme(args.name))
     theme.configs = (*theme.configs, replace(routine, when=args.time))
 
 

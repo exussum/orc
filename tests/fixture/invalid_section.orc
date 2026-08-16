@@ -1,1 +1,1 @@
-ad-hoc define X --section=weird
+ad_hoc define X --section=weird

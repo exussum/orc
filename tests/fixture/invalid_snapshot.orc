@@ -1,1 +1,1 @@
-ad-hoc define X --snapshot=lots
+ad_hoc define X --snapshot=lots
