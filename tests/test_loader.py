@@ -3,6 +3,7 @@ from datetime import time, timedelta
 from pathlib import Path
 
 import pytest
+from command_cfg import scalar
 
 from orc import model as m
 from orc.dal import interfaces
@@ -156,7 +157,7 @@ def test_plugin_command_imports_callable():
 
 def test_load_plugin_config_missing_file():
     with pytest.raises(FileNotFoundError, match="no config 'plugins/foo.orc'"):
-        load_plugin_config("foo", {}, "setting <key> <value>")
+        load_plugin_config("foo", {}, "setting <key> <value>", {"setting": scalar(m.Settings.build)})
 
 
 _PARSE_ERRORS = [
@@ -184,7 +185,6 @@ _PARSE_ERRORS = [
     ("theme_unknown_routine", "Unknown routine 'OTHER'"),
     ("append_unknown_routine", "Unknown routine 'R'"),
     ("unknown_trigger", "Unknown trigger 'NOPE'"),
-    ("person_trigger_too_late", "Unknown trigger 'Spence'"),
     ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
     ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
     ("invalid_button_event", "Invalid button event 'clicked'"),

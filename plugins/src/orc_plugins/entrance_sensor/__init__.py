@@ -3,6 +3,7 @@ from datetime import time
 from functools import partial
 from typing import Any, NamedTuple
 
+from command_cfg import group, scalar
 from orc_plugins.entrance_sensor import plugins
 
 from orc.loader import load_plugin_config
@@ -64,9 +65,7 @@ def setup(ctx: AppContext) -> None:
             CONFIG,
             ctx.config.plugin_configs,
             GRAMMAR,
-            serializers={"setting": Settings, "message": Messages, "rules": Rule, "timed": Timed},
-            scalars=("setting", "message"),
-            grouped=("rules", "timed"),
+            serializers={"setting": scalar(Settings), "message": scalar(Messages), "rules": group(Rule), "timed": group(Timed)},
         )
         sensor.rules = Rules(**sensor.rules)
     except Exception as exc:
