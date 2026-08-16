@@ -1,6 +1,7 @@
 import sys
 from typing import Any, NamedTuple
 
+from command_cfg import array, scalar
 from orc_plugins.calendar import plugins
 
 from orc import model as m
@@ -24,6 +25,7 @@ class Settings(NamedTuple):
 
 
 class Feed(NamedTuple):
+    name: str
     secret: str
 
 
@@ -37,13 +39,10 @@ def setup(ctx: AppContext) -> None:
             CONFIG,
             ctx.config.plugin_configs,
             GRAMMAR,
-            serializers={"setting": Settings, "feed": Feed},
-            scalars=("setting",),
-            grouped=("feed",),
+            serializers={"setting": scalar(Settings), "feed": array(Feed)},
         )
         backend = m.column_to_value("module", calendar.setting.backend)
-        feeds = [(name, feed.secret) for name, rows in calendar.feed.items() for feed in rows]
     except Exception as exc:
         print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
         return
-    plugins.schedule_cron(ctx, backend, calendar.setting, feeds)
+    plugins.schedule_cron(ctx, backend, calendar.setting, calendar.feed)
