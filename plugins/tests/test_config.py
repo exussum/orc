@@ -2,6 +2,7 @@ from datetime import time
 from pathlib import Path
 
 import pytest
+from command_cfg import array, group, scalar
 from orc_plugins import calendar, entrance_sensor
 from orc_plugins.calendar import Feed
 from orc_plugins.entrance_sensor import GRAMMAR, Messages, Rule, Rules, Settings, Timed
@@ -33,9 +34,7 @@ def test_entrance_config_loads():
         entrance_sensor.CONFIG,
         {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor.orc").read_text()},
         GRAMMAR,
-        serializers={"setting": Settings, "message": Messages, "rules": Rule, "timed": Timed},
-        scalars=("setting", "message"),
-        grouped=("rules", "timed"),
+        serializers={"setting": scalar(Settings), "message": scalar(Messages), "rules": group(Rule), "timed": group(Timed)},
     )
     assert config.setting == Settings(
         cleanup_delay_minutes=2, entrance_id=1, patio_door_id=56, active_event="active", inactive_event="inactive", snapshot=45
@@ -52,9 +51,7 @@ def test_calendar_config_loads():
         calendar.CONFIG,
         {calendar.CONFIG: (FIXTURE / "calendar.orc").read_text()},
         calendar.GRAMMAR,
-        serializers={"setting": calendar.Settings, "feed": Feed},
-        scalars=("setting",),
-        grouped=("feed",),
+        serializers={"setting": scalar(calendar.Settings), "feed": array(Feed)},
     )
     assert config.setting == calendar.Settings(
         backend="orc_plugins.calendar.stub",
@@ -64,4 +61,4 @@ def test_calendar_config_loads():
         warning_minutes=2,
         http_timeout=120,
     )
-    assert config.feed == {"work": [Feed("ICS_URL")], "personal": [Feed("ICS_URL_PERSONAL")]}
+    assert config.feed == [Feed("work", "ICS_URL"), Feed("personal", "ICS_URL_PERSONAL")]
