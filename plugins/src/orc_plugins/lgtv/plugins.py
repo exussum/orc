@@ -1,28 +1,16 @@
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, cast
 
 import orc_plugins.lgtv
+from orc_plugins.lgtv.dal.interfaces import WebOsBackend
+from orc_plugins.lgtv.dal.sqlite import Connection
 
 import orc
 from orc.loader import resolve_backend
 from orc.model import AppContext, DeviceEnum
 
-type Connection = Callable[[], Any]
-
-
-class WebOsBackend(Protocol):
-    def init_db(self, connection: Connection) -> None: ...
-    def pair(self, connection: Connection, hostname: str) -> str | None: ...
-    def is_off(self, tv: DeviceEnum) -> bool: ...
-    def off(self, connection: Connection, tv: DeviceEnum) -> None: ...
-
 
 def _backend() -> WebOsBackend:
     return cast(WebOsBackend, resolve_backend(orc.config.plugin_for(orc_plugins.lgtv).backend))
-
-
-def init_db(connection: Connection) -> None:
-    _backend().init_db(connection)
 
 
 def pair(connection: Connection, hostname: str) -> str | None:
@@ -42,7 +30,7 @@ def pair_tv(ctx: AppContext, device: str) -> None:
 
 
 if TYPE_CHECKING:
-    from orc.lgtv.dal import stub, webos
+    from orc_plugins.lgtv.dal.tv import stub, webos
 
     _real: WebOsBackend = webos
     _stub: WebOsBackend = stub

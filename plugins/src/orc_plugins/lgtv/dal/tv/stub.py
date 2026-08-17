@@ -1,13 +1,6 @@
-from collections.abc import Callable
-from typing import Any
+from orc_plugins.lgtv.dal.sqlite import Connection
 
 from orc.model import DeviceEnum
-
-type Connection = Callable[[], Any]
-
-
-def init_db(connection: Connection) -> None:
-    pass
 
 
 def pair(connection: Connection, hostname: str) -> str | None:
