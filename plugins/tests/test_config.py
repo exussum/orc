@@ -54,7 +54,7 @@ def test_calendar_config_loads():
         serializers={"setting": scalar(calendar.Settings), "feed": array(Feed)},
     )
     assert config.setting == calendar.Settings(
-        backend="orc_plugins.calendar.stub",
+        backend="orc_plugins.calendar.dal.feed.stub",
         cron="10,25,40,55 8-21 * * *",
         window_hours=20,
         max_events=50,
