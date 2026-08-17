@@ -1,0 +1,139 @@
+const API = "/api/travel/jobs/";
+const fmt = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+const TEMPLATES = `
+<template id="travel-dialog-tpl">
+    <dialog id="travel-dialog" class="orc-card text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 backdrop:bg-black/50">
+        <h2 class="text-xl font-semibold mb-3">Travel</h2>
+        <ul id="travel-list" class="space-y-1 mb-4"></ul>
+        <form id="travel-form" class="flex flex-col gap-2">
+            <div class="grid grid-cols-2 gap-2">
+                <input name="flight" class="orc-input" placeholder="Flight (e.g. AA657)">
+                <input name="destination" class="orc-input" placeholder="Address" list="travel-places">
+                <datalist id="travel-places"></datalist>
+                <input name="arrive" type="datetime-local" class="orc-input col-span-full">
+                <details class="orc-card px-2 py-1.5 col-span-full">
+                    <summary class="cursor-pointer select-none">Extras</summary>
+                    <div id="travel-extras" class="mt-2 flex flex-col gap-1"></div>
+                </details>
+            </div>
+            <p id="travel-error" class="text-red-400 text-sm hidden"></p>
+            <div class="flex justify-end gap-2">
+                <button type="button" id="travel-cancel" class="orc-btn">Cancel</button>
+                <button id="travel-add" class="orc-btn">Add trip</button>
+            </div>
+        </form>
+    </dialog>
+</template>
+<template id="travel-item-tpl">
+    <li class="flex items-center justify-between border border-white/10 rounded px-2 py-1">
+        <span data-summary></span>
+        <button type="button" data-del class="text-red-400 ml-2" aria-label="Delete">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 002 2h6a2 2 0 002-2V6"/></svg>
+        </button>
+    </li>
+</template>
+<template id="travel-extra-tpl">
+    <label class="flex items-center gap-2"><input type="checkbox" name="extra"><span data-name></span></label>
+</template>`;
+
+let dialog;
+let templates;
+
+function clone(id) {
+    return templates.querySelector(`#${id}`).content.firstElementChild.cloneNode(true);
+}
+
+function placeholder(tag, text) {
+    const el = document.createElement(tag);
+    el.className = "text-gray-400 text-sm";
+    el.textContent = text;
+    return el;
+}
+
+function build() {
+    const holder = document.createElement("div");
+    holder.innerHTML = TEMPLATES;
+    templates = holder;
+    dialog = clone("travel-dialog-tpl");
+    document.body.appendChild(dialog);
+    dialog.querySelector("#travel-cancel").onclick = () => dialog.close();
+    dialog.querySelector("#travel-form").addEventListener("submit", submit);
+}
+
+function renderExtras(extras) {
+    const box = dialog.querySelector("#travel-extras");
+    box.replaceChildren();
+    if (!extras.length) {
+        box.appendChild(placeholder("span", "None configured."));
+        return;
+    }
+    for (const name of extras) {
+        const label = clone("travel-extra-tpl");
+        label.querySelector("input").value = name;
+        label.querySelector("[data-name]").textContent = name;
+        box.appendChild(label);
+    }
+}
+
+function renderPlaces(places) {
+    const list = dialog.querySelector("#travel-places");
+    list.replaceChildren();
+    for (const name of places) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        list.appendChild(opt);
+    }
+}
+
+function renderJobs(jobs) {
+    const list = dialog.querySelector("#travel-list");
+    list.replaceChildren();
+    if (!jobs.length) {
+        list.appendChild(placeholder("li", "No upcoming trips."));
+        return;
+    }
+    for (const j of jobs) {
+        const li = clone("travel-item-tpl");
+        li.querySelector("[data-summary]").textContent = `${j.summary}${j.airport ? " → " + j.airport : ""} · ${fmt(j.arrive)}`;
+        li.querySelector("[data-del]").onclick = async () => {
+            await fetch(API + encodeURIComponent(j.id), { method: "DELETE" });
+            refresh();
+        };
+        list.appendChild(li);
+    }
+}
+
+async function refresh() {
+    const { jobs, extras, places } = await (await fetch(API, { cache: "no-store" })).json();
+    renderExtras(extras || []);
+    renderPlaces(places || []);
+    renderJobs(jobs);
+}
+
+async function submit(e) {
+    e.preventDefault();
+    const err = dialog.querySelector("#travel-error");
+    const fd = new FormData(e.target);
+    const body = {
+        flight: fd.get("flight") || null,
+        destination: fd.get("destination") || null,
+        arrive: fd.get("arrive") ? new Date(fd.get("arrive")).toISOString() : null,
+        extras: fd.getAll("extra"),
+    };
+    const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok) { err.textContent = (await res.json()).error || "Failed"; err.classList.remove("hidden"); return; }
+    e.target.reset();
+    refresh();
+}
+
+orcHooks.register({
+    async onPress(buttonName) {
+        if (buttonName !== "Travel") return true;
+        if (!dialog) build();
+        dialog.querySelector("#travel-error").classList.add("hidden");
+        await refresh();
+        dialog.showModal();
+        return false;
+    },
+});
