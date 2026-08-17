@@ -90,4 +90,6 @@ def _build_flask(ctx: m.AppContext) -> OrcFlask:
     app.orc = ctx
     app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
+    for plugin, namespace, plugin_bp in config.config.registry.blueprints:
+        app.register_blueprint(plugin_bp, url_prefix=f"/api/{plugin}/{namespace}")
     return app

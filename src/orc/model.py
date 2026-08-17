@@ -16,6 +16,8 @@ from apscheduler.schedulers.base import BaseScheduler
 from orc.security import safe_eval
 
 if TYPE_CHECKING:
+    from flask import Blueprint
+
     from orc import Config as OrcConfig
     from orc.api import SnapshotManager
     from orc.view import VersionManager
@@ -390,6 +392,7 @@ class Registry:
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]
     setup_hooks: list[Callable[[AppContext], None]]
+    blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
     ctx: AppContext | None = None  # set once at startup; None during config load
 
 
