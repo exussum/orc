@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from orc_plugins.lgtv import plugins
+from orc_plugins.lgtv.dal import sqlite
 
 import orc
 from orc import model as m
@@ -19,7 +20,7 @@ _orc: Any = orc
 
 
 def setup(ctx: "m.AppContext") -> None:
-    plugins.init_db(ctx.api.connection)
+    sqlite.init_db(ctx.api.connection)
 
 
 def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
