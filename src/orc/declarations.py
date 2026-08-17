@@ -4,6 +4,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from flask import Blueprint
+
 from orc import plugins as core_plugins
 from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry
 
@@ -17,6 +19,8 @@ class Declarations:
     setup_hooks: list[Callable[[Any], None]] = field(default_factory=list)
     scripts: dict[str, Path] = field(default_factory=dict)
     button_labels: dict[str, str] = field(default_factory=dict)
+    blueprints: list[tuple[str, str, Blueprint]] = field(default_factory=list)
+    _current_plugin: str = ""
 
     def declare_dispatch(self, name: str, fn: Callable[..., None]) -> None:
         self.dispatch_handlers[name] = fn
@@ -31,12 +35,14 @@ class Declarations:
         setup: Iterable[Callable[[Any], None]] = (),
         scripts: Iterable[Path | str] = (),
         button_labels: dict[str, str] | None = None,
+        blueprints: dict[str, Blueprint] | None = None,
     ) -> None:
         self.device_icons.update(icons or {})
         self.dispatch_handlers.update(dispatch or {})
         self.state_providers.update(state_providers or {})
         self.scripts.update({Path(s).name: Path(s) for s in scripts})
         self.button_labels.update(button_labels or {})
+        self.blueprints += [(self._current_plugin, ns, bp) for ns, bp in (blueprints or {}).items()]
 
         for name in controllable:
             if name not in self.controllable_devices:
@@ -62,6 +68,7 @@ class Declarations:
             button_labels=dict(self.button_labels),
             state_providers=dict(self.state_providers),
             setup_hooks=list(self.setup_hooks),
+            blueprints=list(self.blueprints),
         )
 
 
@@ -72,5 +79,6 @@ def collect_declarations(modules: Iterable[ModuleType]) -> Declarations:
         if module is core_plugins or module.__name__ in seen:
             continue
         seen.add(module.__name__)
+        declarations._current_plugin = module.__name__.split(".")[-1]
         module.declare(declarations)
     return declarations
