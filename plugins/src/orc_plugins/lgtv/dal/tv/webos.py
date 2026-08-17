@@ -1,19 +1,14 @@
 import asyncio
 import sys
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from aiowebostv import WebOsClient
+from orc_plugins.lgtv.dal import sqlite
+from orc_plugins.lgtv.dal.sqlite import Connection
 
 from orc.model import DeviceEnum
-
-type Connection = Callable[[], Any]
-
-
-def init_db(connection: Connection) -> None:
-    with connection() as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS orc_lg_tv (hostname TEXT PRIMARY KEY, client_key TEXT NOT NULL)")
 
 
 def pair(connection: Connection, hostname: str) -> str | None:
@@ -21,7 +16,7 @@ def pair(connection: Connection, hostname: str) -> str | None:
     if key is None:
         print(f"LG TV pairing not completed for {hostname}", file=sys.stderr)
         return None
-    _insert_client_key(connection, hostname, key)
+    sqlite.insert_client_key(connection, hostname, key)
     return key
 
 
@@ -30,7 +25,7 @@ def is_off(tv: DeviceEnum) -> bool:
 
 
 def off(connection: Connection, tv: DeviceEnum) -> None:
-    client_key = _fetch_client_key(connection, tv.value)
+    client_key = sqlite.fetch_client_key(connection, tv.value)
     if not client_key:
         raise RuntimeError(f"No client_key for {tv.value} in orc_lg_tv; run the Pair LG TV plugin first")
     asyncio.run(_power_off(tv.value, client_key))
@@ -56,21 +51,6 @@ async def _power_off(host: str, client_key: str) -> None:
     except Exception:
         if await _is_port_open(host, 3000, timeout=1.0):
             raise
-
-
-def _fetch_client_key(connection: Connection, hostname: str) -> str | None:
-    with connection() as conn:
-        row = conn.execute("SELECT client_key FROM orc_lg_tv WHERE hostname = ?", (hostname,)).fetchone()
-    return row[0] if row else None
-
-
-def _insert_client_key(connection: Connection, hostname: str, client_key: str) -> None:
-    with connection() as conn:
-        conn.execute(
-            "INSERT INTO orc_lg_tv (hostname, client_key) VALUES (?, ?) "
-            "ON CONFLICT(hostname) DO UPDATE SET client_key=excluded.client_key",
-            (hostname, client_key),
-        )
 
 
 @asynccontextmanager

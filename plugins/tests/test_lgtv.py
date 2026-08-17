@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from orc_plugins import lgtv
 from orc_plugins.lgtv import plugins
+from orc_plugins.lgtv.dal import sqlite
 
 import orc
 from orc import api
@@ -79,7 +80,7 @@ def test_lgtv_registers_with_core():
     from orc import config
 
     assert lgtv.setup in config.registry.setup_hooks
-    with patch.object(plugins, "init_db") as init_db:
+    with patch.object(sqlite, "init_db") as init_db:
         ctx = MagicMock()
         ctx.config.plugin_configs = {}
         lgtv.setup(ctx)
