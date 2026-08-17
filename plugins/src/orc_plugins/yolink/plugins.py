@@ -15,7 +15,7 @@ import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 import paho.mqtt.client as mqtt
 import requests
@@ -29,8 +29,9 @@ from orc.model import AppContext
 # "Leak" device type; mypy can't see the dynamic attribute, so iterate it via an Any view.
 _orc: Any = config
 
-# callback (name, kind, old, new); kind in {"connection", "leak"}; old/new are arbitrary field values
-type TransitionCallback = Callable[[str, str, Any, Any], None]
+# callback (name, kind, old, new); old/new are arbitrary field values
+TransitionKind = Literal["connection", "leak", "battery", "signal", "interval", "online"]
+type TransitionCallback = Callable[[str, TransitionKind, Any, Any], None]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -276,7 +277,7 @@ def _set_connected(connected: bool) -> None:
         _fire("connection", name, old, "connected" if connected else "disconnected")
 
 
-def _fire(kind: str, name: str, old: Any, new: Any) -> None:
+def _fire(kind: TransitionKind, name: str, old: Any, new: Any) -> None:
     if _on_transition and old != new:
         try:
             _on_transition(name, kind, old, new)
