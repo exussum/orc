@@ -1,12 +1,12 @@
 import dataclasses
 from datetime import datetime, timedelta
 from itertools import chain, islice
-from types import ModuleType
 from typing import Any
 
 from apscheduler.events import EVENT_ALL_JOBS_REMOVED
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from orc_plugins.calendar.dal.interfaces import FeedService
 
 from orc import model as m
 from orc.plugins import requires_ctx
@@ -43,14 +43,14 @@ class CalendarJob:
     summary: str
 
 
-def schedule_cron(ctx: m.AppContext, backend: ModuleType, settings: Any, feeds: list[tuple[str, str]]) -> None:
+def schedule_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:
     # api.rebuild_jobs wipes every jobstore and re-adds only core crons; the
     # listener puts this one back whenever that happens.
     ctx.scheduler.add_listener(lambda event: _add_cron(ctx, backend, settings, feeds), EVENT_ALL_JOBS_REMOVED)
     _add_cron(ctx, backend, settings, feeds)
 
 
-def _add_cron(ctx: m.AppContext, backend: ModuleType, settings: Any, feeds: list[tuple[str, str]]) -> None:
+def _add_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:
     ctx.scheduler.add_job(
         _rebuild,
         CronTrigger.from_crontab(settings.cron, timezone=ctx.config.settings.tz),
@@ -63,7 +63,7 @@ def _add_cron(ctx: m.AppContext, backend: ModuleType, settings: Any, feeds: list
 
 
 @requires_ctx
-def _rebuild(backend: ModuleType, settings: Any, feeds: list[tuple[str, str]], *, ctx: m.AppContext) -> None:
+def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], *, ctx: m.AppContext) -> None:
     now: datetime = ctx.api.local_now()
     if ctx.api.calculate_theme(now.date()) != m.THEME_WORK_DAY:
         return
