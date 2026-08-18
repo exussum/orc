@@ -312,12 +312,16 @@ class Secrets:
     market_holidays_url: str = ""
     mqtt_user: str = ""
     mqtt_password: str = ""
+
     # Plugin-consumed secrets; core never reads these. A key with an in-repo
     # consumer belongs on a typed field instead.
     other: dict[str, str] = field(default_factory=dict)
 
-    def get(self, key: str) -> str:
-        return self.other.get(key) or ""
+    def __getitem__(self, key: str) -> str:
+        try:
+            return self.other[key]
+        except KeyError:
+            raise KeyError(f"secret {key!r} is not set (add it to the secrets provider)") from None
 
 
 @dataclass

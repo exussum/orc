@@ -72,10 +72,6 @@ def start() -> None:
         _log.info("yolink: no Leak devices in config.orc, skipping")
         return
 
-    if not (config.config.secrets.get("YOLINK_ID") and config.config.secrets.get("YOLINK_SECRET")):
-        _log.info("yolink: secrets not set, skipping")
-        return
-
     global _states
     _states = LockedDict({device.value: SensorState(name=device.name, device_id=device.value) for device in _orc.Leak})
     threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()
@@ -293,8 +289,8 @@ def _authenticate() -> tuple[str, int]:
         _AUTH_URL,
         data={
             "grant_type": "client_credentials",
-            "client_id": config.config.secrets.get("YOLINK_ID"),
-            "client_secret": config.config.secrets.get("YOLINK_SECRET"),
+            "client_id": config.config.secrets["YOLINK_ID"],
+            "client_secret": config.config.secrets["YOLINK_SECRET"],
         },
         timeout=config.config.settings.http_timeout,
     )
