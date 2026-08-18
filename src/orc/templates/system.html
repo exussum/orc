@@ -8,7 +8,7 @@
             </div>
             <div class="orc-routine-buttons p-4">
                 {% for plugin in plugins %}
-                    {{ btn(plugin.name, plugin.name, plugin.icon, durations.get(plugin.name, 0)) }}
+                    {{ btn(plugin.name, plugin.name, plugin.icon, durations.get(plugin.name, 0), no_func=not plugin.func) }}
                 {% endfor %}
                 {% for id in ad_hoc_routines %}
                     {{ btn(id, id, "clipboard-check", durations.get(id, 0)) }}
