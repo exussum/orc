@@ -39,7 +39,7 @@ def setup(ctx: AppContext) -> None:
             settings=s,
             extras=[Extra(e.name, int(e.minutes)) for e in cfg.extra],
             places=cfg.place,
-            origin=cfg.place[0].address,
+            origin=f"{ctx.config.settings.lat},{ctx.config.settings.long}",
             tomtom_key=ctx.config.secrets[s.tomtom_secret],
             aerodatabox_key=ctx.config.secrets[s.aerodatabox_secret],
         )

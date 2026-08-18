@@ -19,6 +19,7 @@ class Settings(NamedTuple):
     tomtom_secret: str
     aerodatabox_secret: str
     http_timeout: int
+    buffer_minutes: int = 10
 
 
 class Extra(NamedTuple):
@@ -42,10 +43,15 @@ class Runtime(NamedTuple):
     aerodatabox_key: str
 
 
-class Plan(NamedTuple):
-    leave_at: datetime
+class Arrival(NamedTuple):
+    when: datetime
     where: str
     terminal: str | None
+
+
+class Schedule(NamedTuple):
+    leave_at: datetime | None
+    next_fire: datetime | None  # None once it is time to leave
 
 
 class Submission(NamedTuple):
@@ -63,6 +69,7 @@ class TravelJob:
     extras: set[str]
     iata: str | None = None
     airport: str | None = None
+    leave_at: datetime | None = None
 
     @classmethod
     def from_submission(cls, sub: Submission) -> "TravelJob":

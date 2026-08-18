@@ -6,6 +6,7 @@ from orc_plugins.travel.dal.sqlite import Connection
 
 class DriveService(Protocol):
     def drive_minutes(self, connection: Connection, key: str, origin: str, dest: str, timeout: int) -> int: ...
+    def geocode(self, connection: Connection, key: str, address: str, timeout: int) -> bool: ...
 
 
 class FlightService(Protocol):
