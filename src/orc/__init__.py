@@ -39,9 +39,9 @@ class Config:
         self.rooms_off = m.squish_configs(*self.rooms.values(), state_override=m.OFF)
 
     def plugin(self, id: str) -> m.CallablePlugin | None:
-        return next((p for p in self.plugins if p.name == id), None)
+        return next((p for p in self.plugins if p.name == id and isinstance(p, m.CallablePlugin)), None)
 
-    def plugins_in(self, section: str) -> tuple[m.CallablePlugin, ...]:
+    def plugins_in(self, section: str) -> tuple[m.Plugin, ...]:
         return tuple(p for p in self.plugins if p.section == section)
 
     def plugin_for(self, module: ModuleType) -> m.CallablePlugin:
