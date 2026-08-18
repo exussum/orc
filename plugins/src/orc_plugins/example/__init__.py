@@ -48,8 +48,8 @@ def setup(ctx: AppContext) -> None:
             settings=s,
             widgets=cfg.widget,
             zones=[z for zs in cfg.zone.values() for z in zs],
-            foo_key=ctx.config.secrets.get(s.foo_secret),
-            bar_key=ctx.config.secrets.get(s.bar_secret),
+            foo_key=ctx.config.secrets[s.foo_secret],
+            bar_key=ctx.config.secrets[s.bar_secret],
         )
     except Exception as exc:
         print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
