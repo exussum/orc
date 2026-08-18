@@ -1,16 +1,16 @@
-{% macro btn(label, id, icon, duration, device="") -%}
+{% macro btn(label, id, icon, duration, device="", no_func=false) -%}
 <div class="orc-button">
     <div class="orc-button-label">{{ label }}</div>
-    <button class="orc-btn orc-config-runner" data-id="{{ id }}" data-duration="{{ duration }}"{% if device %} data-device="{{ device }}"{% endif %}>
+    <button class="orc-btn orc-config-runner" data-id="{{ id }}" data-duration="{{ duration }}"{% if device %} data-device="{{ device }}"{% endif %}{% if no_func %} data-no-func{% endif %}>
         <svg class="w-5 h-5"><use href="/static/icons.svg#{{ icon }}"/></svg>
     </button>
 </div>
 {%- endmacro %}
 
-{% macro btn_stripe(label, icon, duration) -%}
+{% macro btn_stripe(label, icon, duration, no_func=false) -%}
 <div class="orc-button">
     <div class="orc-button-label">{{ label }}</div>
-    <button class="orc-runner orc-btn" data-type="run" data-id="{{ label }}" data-duration="{{ duration }}">
+    <button class="orc-runner orc-btn" data-type="run" data-id="{{ label }}" data-duration="{{ duration }}"{% if no_func %} data-no-func{% endif %}>
         <svg class="orc-ribbon"><use href="/static/icons.svg#ribbon"/></svg>
         <svg class="w-5 h-5"><use href="/static/icons.svg#{{ icon }}"/></svg>
     </button>

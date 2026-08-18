@@ -30,7 +30,7 @@
                     {{ btn_stripe(id, "clipboard-check", durations.get(id, 0)) }}
                 {% endfor %}
                 {% for plugin in plugins %}
-                    {{ btn_stripe(plugin.name, plugin.icon, durations.get(plugin.name, 0)) }}
+                    {{ btn_stripe(plugin.name, plugin.icon, durations.get(plugin.name, 0), not plugin.func) }}
                 {% endfor %}
             </div>
         </div>

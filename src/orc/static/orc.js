@@ -75,6 +75,13 @@ async function checkVersion() {
 
 async function runAction(el) {
     if (!(await orcHooks.onPress(el.dataset.id, el))) return;
+    if ("noFunc" in el.dataset) {
+        alert(
+            `"${el.dataset.id}" does nothing: its plugin has no server action, and no browser hook handled the press.\n\n` +
+                `Give it a --function on its plugin line in config.orc, or register a hook for it — orcHooks.register({ onPress(name) { ... } }).`,
+        );
+        return;
+    }
     const params = new URLSearchParams();
     if (el.dataset.state) params.set("state", el.dataset.state);
     if (el.dataset.device) params.set("device", el.dataset.device);

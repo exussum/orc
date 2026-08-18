@@ -257,7 +257,7 @@ class Plugin:
     name: str
     module: ModuleType | None = None
     delay: timedelta = field(default_factory=timedelta)
-    section: str = "scene"
+    section: str | None = None  # a section is what renders a button; None = no button
     icon: str = "rocket-launch"
     backend: ModuleType | None = None
 
