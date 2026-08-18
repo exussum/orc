@@ -19,7 +19,13 @@ def upcoming() -> dict:
     jobs.sort(key=lambda j: j.args[0].arrive)
     return {
         "jobs": [
-            {"id": j.id, "summary": j.args[0].summary, "arrive": j.args[0].arrive.isoformat(), "airport": j.args[0].airport}
+            {
+                "id": j.id,
+                "summary": j.args[0].summary,
+                "arrive": j.args[0].arrive.isoformat(),
+                "airport": j.args[0].airport,
+                "leave_at": j.args[0].leave_at.isoformat() if j.args[0].leave_at else None,
+            }
             for j in jobs[:3]
         ],
         "extras": plugins.available_extras(),
@@ -39,6 +45,8 @@ def create() -> tuple[dict, int]:
     )
     try:
         job = TravelJob.from_submission(sub)
+        if sub.flight is None:
+            plugins.validate_place(ctx.api.connection, job.destination)
     except ValueError as exc:
         return {"error": str(exc)}, 400
     plugins.schedule(ctx.scheduler, job, ctx.config.settings.tz)
