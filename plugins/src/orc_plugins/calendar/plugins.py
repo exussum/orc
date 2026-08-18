@@ -71,7 +71,7 @@ def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], 
     tz = ctx.config.settings.tz
     events_by_id: dict[str, CalendarEvent] = {}
     for name, secret in feeds:
-        url = ctx.config.secrets.get(secret)
+        url = ctx.config.secrets[secret]
         events = list(
             islice(backend.fetch_ical(now, timedelta(hours=settings.window_hours), url, settings.http_timeout), settings.max_events)
         )

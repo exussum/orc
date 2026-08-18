@@ -40,8 +40,8 @@ def setup(ctx: AppContext) -> None:
             extras=[Extra(e.name, int(e.minutes)) for e in cfg.extra],
             places=cfg.place,
             origin=cfg.place[0].address,
-            tomtom_key=ctx.config.secrets.get(s.tomtom_secret),
-            aerodatabox_key=ctx.config.secrets.get(s.aerodatabox_secret),
+            tomtom_key=ctx.config.secrets[s.tomtom_secret],
+            aerodatabox_key=ctx.config.secrets[s.aerodatabox_secret],
         )
     except Exception as exc:
         print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
