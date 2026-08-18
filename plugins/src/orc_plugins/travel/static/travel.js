@@ -7,19 +7,17 @@ const TEMPLATES = `
         <h2 class="text-xl font-semibold mb-3">Travel</h2>
         <ul id="travel-list" class="space-y-1 mb-4"></ul>
         <form id="travel-form" class="flex flex-col gap-2">
-            <div class="grid grid-cols-2 gap-2">
-                <input name="flight" class="orc-input" placeholder="Flight (e.g. AA657)">
-                <input name="destination" class="orc-input" placeholder="Address" list="travel-places">
-                <datalist id="travel-places"></datalist>
-                <input name="arrive" type="datetime-local" class="orc-input col-span-full">
-                <details class="orc-card px-2 py-1.5 col-span-full">
-                    <summary class="cursor-pointer select-none">Extras</summary>
-                    <div id="travel-extras" class="mt-2 flex flex-col gap-1"></div>
-                </details>
+            <input name="flight" class="orc-input" placeholder="Flight (e.g. AA657)">
+            <input name="destination" class="orc-input" placeholder="Address" list="travel-places">
+            <datalist id="travel-places"></datalist>
+            <input name="arrive" type="datetime-local" class="orc-input">
+            <div>
+                <p class="mb-1">Extras</p>
+                <div id="travel-extras" class="flex flex-col gap-1"></div>
             </div>
             <p id="travel-error" class="text-red-400 text-sm hidden"></p>
             <div class="flex justify-end gap-2">
-                <button type="button" id="travel-cancel" class="orc-btn">Cancel</button>
+                <button type="button" id="travel-close" class="orc-btn">Close</button>
                 <button id="travel-add" class="orc-btn">Add trip</button>
             </div>
         </form>
@@ -57,7 +55,7 @@ function build() {
     templates = holder;
     dialog = clone("travel-dialog-tpl");
     document.body.appendChild(dialog);
-    dialog.querySelector("#travel-cancel").onclick = () => dialog.close();
+    dialog.querySelector("#travel-close").onclick = () => dialog.close();
     dialog.querySelector("#travel-form").addEventListener("submit", submit);
 }
 

@@ -1,54 +1,43 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
-from command_cfg import array, scalar
 from orc_plugins import travel
+from orc_plugins.travel import model as m
 from orc_plugins.travel import plugins
 from orc_plugins.travel.dal.drive import stub as drive_stub
 from orc_plugins.travel.dal.flight import stub as flight_stub
-from orc_plugins.travel.model import (
-    Extra,
-    Place,
-    Plan,
-    Runtime,
-    Settings,
-    Submission,
-    TravelJob,
-)
 
-from orc.loader import load_plugin_config
 from orc.model import column_to_value
 
 FIXTURE = Path(__file__).parent / "fixture"
 ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
 
 
-def _load():
-    return load_plugin_config(
-        travel.CONFIG,
-        {travel.CONFIG: (FIXTURE / "travel.orc").read_text()},
-        travel.GRAMMAR,
-        serializers={"setting": scalar(Settings), "place": array(Place), "extra": array(Extra)},
-    )
+def _setup_runtime():
+    ctx = MagicMock()
+    ctx.config.plugin_configs = {travel.CONFIG: (FIXTURE / "travel.orc").read_text()}
+    travel.setup(ctx)
+    return plugins._runtime
 
 
-def _runtime(extras):
-    return Runtime(
+def _runtime(extras, buffer=0):
+    return m.Runtime(
         drive=drive_stub,
         flight=flight_stub,
-        settings=Settings("d", "f", "0 6 * * *", 6, "T", "A", 120),
+        settings=m.Settings("d", "f", "0 6 * * *", 6, "T", "A", 120, buffer),
         extras=extras,
         places=[],
-        origin="123 Main St",
+        origin="40.7,-74.0",
         tomtom_key="",
         aerodatabox_key="",
     )
 
 
 def test_travel_config_loads():
-    config = _load()
-    assert config.setting == Settings(
+    rt = _setup_runtime()
+    assert rt.settings == m.Settings(
         drive_backend="orc_plugins.travel.dal.drive.stub",
         flight_backend="orc_plugins.travel.dal.flight.stub",
         cron="0 6 * * *",
@@ -57,8 +46,9 @@ def test_travel_config_loads():
         aerodatabox_secret="AERODATABOX_KEY",
         http_timeout=120,
     )
-    assert config.place == [Place("Home", "123 Main St, Springfield"), Place("Office", "500 Market St, Metropolis")]
-    assert config.extra == [Extra("Coffee", "10"), Extra("Parking", "20")]
+    assert rt.places == [m.Place("Home", "123 Main St, Springfield"), m.Place("Office", "500 Market St, Metropolis")]
+    assert rt.extras == [m.Extra("Coffee", 10), m.Extra("Parking", 20)]
+    assert rt.drive is drive_stub and rt.flight is flight_stub
 
 
 @pytest.mark.parametrize(
@@ -75,38 +65,69 @@ def test_backends_resolve(path, func):
 
 
 def test_from_submission_flight():
-    job = TravelJob.from_submission(Submission(destination="JFK", arrive=ARRIVE, flight="AA1", extras=["Coffee"]))
+    job = m.TravelJob.from_submission(m.Submission(destination="JFK", arrive=ARRIVE, flight="AA1", extras=["Coffee"]))
     assert (job.summary, job.iata, job.airport, job.extras) == ("AA1", "AA1", "JFK", {"Coffee"})
 
 
 def test_from_submission_destination():
-    job = TravelJob.from_submission(Submission(destination="Home", arrive=ARRIVE, flight=None, extras=[]))
+    job = m.TravelJob.from_submission(m.Submission(destination="Home", arrive=ARRIVE, flight=None, extras=[]))
     assert (job.summary, job.destination, job.iata) == ("Home", "Home", None)
 
 
 def test_from_submission_requires_arrive():
     with pytest.raises(ValueError, match="arrive is required"):
-        TravelJob.from_submission(Submission(destination="Home", arrive=None, flight=None, extras=[]))
+        m.TravelJob.from_submission(m.Submission(destination="Home", arrive=None, flight=None, extras=[]))
 
 
 def test_from_submission_requires_destination_or_flight():
     with pytest.raises(ValueError, match="destination is required"):
-        TravelJob.from_submission(Submission(destination=None, arrive=ARRIVE, flight=None, extras=[]))
+        m.TravelJob.from_submission(m.Submission(destination=None, arrive=ARRIVE, flight=None, extras=[]))
 
 
-def test_leave_by_destination_subtracts_drive_time():
-    job = TravelJob("Home", "Home", ARRIVE, set())
-    plan = plugins.leave_by(_runtime([]), job, timezone.utc, lambda: None)
-    assert plan == Plan(ARRIVE - timedelta(minutes=30), "Home", None)
+def test_arrival_flight_uses_backend():
+    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
+    assert plugins._arrival(_runtime([]), job, timezone.utc) == m.Arrival(ARRIVE, "JFK", "1")
 
 
-def test_leave_by_adds_selected_extras():
-    job = TravelJob("Home", "Home", ARRIVE, {"Coffee"})
-    plan = plugins.leave_by(_runtime([Extra("Coffee", 10), Extra("Parking", 20)]), job, timezone.utc, lambda: None)
-    assert plan.leave_at == ARRIVE - timedelta(minutes=40)
+def test_arrival_destination():
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    assert plugins._arrival(_runtime([]), job, timezone.utc) == m.Arrival(ARRIVE, "Home", None)
 
 
-def test_leave_by_flight_uses_arrival_backend():
-    job = TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
-    plan = plugins.leave_by(_runtime([]), job, timezone.utc, lambda: None)
-    assert (plan.where, plan.terminal, plan.leave_at) == ("JFK", "1", ARRIVE - timedelta(minutes=30))
+def test_next_run_signals_leave_now_within_ten_minutes():
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    sched = plugins.next_run(_runtime([]), job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
+    assert sched == m.Schedule(ARRIVE - timedelta(minutes=30), None)
+
+
+def test_next_run_leave_time_includes_selected_extras():
+    job = m.TravelJob("Home", "Home", ARRIVE, {"Coffee"})
+    sched = plugins.next_run(
+        _runtime([m.Extra("Coffee", 10), m.Extra("Parking", 20)]), job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None
+    )
+    assert sched.leave_at == ARRIVE - timedelta(minutes=40)
+
+
+def test_next_run_leave_time_includes_buffer():
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    sched = plugins.next_run(_runtime([], buffer=10), job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
+    assert sched.leave_at == ARRIVE - timedelta(minutes=40)
+
+
+def test_next_run_waits_for_midnight_when_no_arrival():
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    sched = plugins.next_run(_runtime([]), job, ARRIVE - timedelta(days=1), None, lambda: None)
+    assert sched == m.Schedule(None, datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+
+def test_next_run_steps_to_two_hours_before_leave():
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    sched = plugins.next_run(_runtime([]), job, ARRIVE - timedelta(hours=3), m.Arrival(ARRIVE, "Home", None), lambda: None)
+    assert sched.next_fire == ARRIVE - timedelta(minutes=30) - timedelta(hours=2)
+
+
+def test_next_run_rechecks_every_ten_minutes_within_two_hours():
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    now = ARRIVE - timedelta(hours=1)
+    sched = plugins.next_run(_runtime([]), job, now, m.Arrival(ARRIVE, "Home", None), lambda: None)
+    assert sched.next_fire == now + timedelta(minutes=10)

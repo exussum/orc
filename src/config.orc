@@ -1,8 +1,8 @@
 setting base_url        http://orc.internal.example
 setting lan_domain      orc.internal.example
 setting jobs_db         sqlite:////tmp/jobs.sqlite
-setting lat             40.7143
-setting long            -74.0060
+setting lat             42.4440
+setting long            -76.5019
 setting audio_device    'USB Audio'
 setting broadlink_codes /etc/orc/broadlink_codes.json
 setting mqtt_host       hubitat.example
@@ -59,6 +59,7 @@ plugin 'Pair LG TV'       orc_plugins.lgtv            --function plugins.pair_tv
 plugin 'Test Leak Sensor' orc_plugins.yolink          --function plugins.test_sensor --section device
 plugin 'Entrance Sensor'  orc_plugins.entrance_sensor
 plugin Calendar           orc_plugins.calendar
+plugin Travel             orc_plugins.travel         --section scene
 
 highlight Silence 21:00 23:59
 
