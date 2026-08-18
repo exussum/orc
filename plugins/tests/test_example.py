@@ -1,28 +1,26 @@
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
-from command_cfg import array, group, scalar
 from orc_plugins import example
-from orc_plugins.example.model import Settings, Widget, Zone
+from orc_plugins.example import model as m
+from orc_plugins.example import plugins
 
-from orc.loader import load_plugin_config
 from orc.model import column_to_value
 
 FIXTURE = Path(__file__).parent / "fixture"
 
 
-def _load():
-    return load_plugin_config(
-        example.CONFIG,
-        {example.CONFIG: (FIXTURE / "example.orc").read_text()},
-        example.GRAMMAR,
-        serializers={"setting": scalar(Settings), "widget": array(Widget), "zone": group(Zone)},
-    )
+def _setup_runtime():
+    ctx = MagicMock()
+    ctx.config.plugin_configs = {example.CONFIG: (FIXTURE / "example.orc").read_text()}
+    example.setup(ctx)
+    return plugins._runtime
 
 
 def test_example_config_loads():
-    config = _load()
-    assert config.setting == Settings(
+    rt = _setup_runtime()
+    assert rt.settings == m.Settings(
         foo_backend="orc_plugins.example.dal.foo.stub",
         bar_backend="orc_plugins.example.dal.bar.stub",
         cron="0 6 * * *",
@@ -31,9 +29,14 @@ def test_example_config_loads():
         bar_secret="BAR_KEY",
         http_timeout=120,
     )
-    assert config.widget == [Widget("Alpha", 10), Widget("Beta", 20)]
-    assert config.zone["north"] == [Zone("Home", "123 Main St, Springfield"), Zone("Office", "500 Market St, Metropolis")]
-    assert config.zone["south"] == [Zone("Villa", "9 Beach Rd, Seaside")]
+    assert rt.widgets == [m.Widget("Alpha", 10), m.Widget("Beta", 20)]
+    assert rt.zones == [
+        m.Zone("Home", "123 Main St, Springfield"),
+        m.Zone("Office", "500 Market St, Metropolis"),
+        m.Zone("Villa", "9 Beach Rd, Seaside"),
+    ]
+    assert rt.foo is column_to_value("module", "orc_plugins.example.dal.foo.stub")
+    assert rt.bar is column_to_value("module", "orc_plugins.example.dal.bar.stub")
 
 
 @pytest.mark.parametrize(
