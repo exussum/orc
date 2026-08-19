@@ -11,7 +11,10 @@
         <link rel="icon" href="data:,">
         <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
         <link rel="stylesheet" href="/static/tailwind.min.css">
+        <link rel="stylesheet" href="/static/vendor/flatpickr.dark.css">
+        <link rel="stylesheet" href="/static/vendor/flatpickr.orc.css">
         <script>window.orcVersion = {{ version|tojson }};</script>
+        <script src="/static/vendor/flatpickr.min.js" defer></script>
         <script src="/static/orc.js" defer></script>
         <script src="/hooks.js" defer></script>
         {% block head_scripts %}{% endblock %}
