@@ -28,6 +28,13 @@ repos:
         require_serial: true
         exclude: '^src/orc/static/vendor/'
 
+      - id: node-check
+        name: node --check
+        entry: bash -c 'for f in "$@"; do node --check "$f"; done' --
+        language: system
+        files: \.js$
+        exclude: '^src/orc/static/vendor/'
+
   - repo: https://github.com/betterleaks/betterleaks
     rev: v1.6.1
     hooks:
