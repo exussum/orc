@@ -26,6 +26,7 @@ repos:
         language: system
         args: ["--config", "auto", "--error", "--skip-unknown-extensions"]
         require_serial: true
+        exclude: '^src/orc/static/vendor/'
 
   - repo: https://github.com/betterleaks/betterleaks
     rev: v1.6.1

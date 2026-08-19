@@ -4,7 +4,7 @@ from typing import Any
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 from orc_plugins.travel.dal.sqlite import Connection
-from orc_plugins.travel.model import Arrival, Log, Runtime, Schedule, TravelJob
+from orc_plugins.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
 
 from orc.model import AppContext
 from orc.plugins import requires_ctx
@@ -17,8 +17,8 @@ def set_runtime(runtime: Runtime) -> None:
     _runtime = runtime
 
 
-def available_extras() -> list[str]:
-    return [e.name for e in _runtime.extras] if _runtime else []
+def available_extras() -> list[Extra]:
+    return list(_runtime.extras) if _runtime else []
 
 
 def place_names() -> list[str]:
