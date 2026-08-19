@@ -10,7 +10,10 @@
                 <span class="orc-badge" style="background-color: {{ child.source.badge_color }}">{{ child.source }}</span>
             </td>
             <td class="px-2 py-1 max-w-0 w-full">
-                <div class="orc-log-action truncate cursor-pointer" style="padding-left: {{ depth * 1.5 }}rem">{{ child.action|codespan }}</div>
+                <div class="flex items-center gap-1.5" style="padding-left: {{ depth * 1.5 }}rem">
+                    <div class="orc-log-action truncate min-w-0">{{ child.action|codespan }}</div>
+                    <span class="orc-log-caret text-gray-400 invisible cursor-pointer">▾</span>
+                </div>
             </td>
         </tr>
         {{ child_rows(child, parent_id, depth + 1) }}
@@ -35,8 +38,8 @@
                     </td>
                     <td class="px-2 py-1 max-w-0 w-full">
                         <div class="flex items-center gap-1.5">
-                            <div class="orc-log-action truncate cursor-pointer min-w-0">{{ entry.action|codespan }}</div>
-                            <span class="orc-log-caret text-gray-400{% if not entry.children %} invisible{% endif %}">▾</span>
+                            <div class="orc-log-action truncate min-w-0">{{ entry.action|codespan }}</div>
+                            <span class="orc-log-caret text-gray-400 cursor-pointer{% if not entry.children %} invisible{% endif %}">▾</span>
                         </div>
                     </td>
                 </tr>

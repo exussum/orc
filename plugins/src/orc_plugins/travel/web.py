@@ -37,11 +37,17 @@ def upcoming() -> dict:
 def create() -> tuple[dict, int]:
     ctx = app.orc
     data = request.get_json(silent=True) or {}
+    target = (data.get("target") or "").strip()
+    if plugins.is_flight(target):
+        flight, destination = target.replace(" ", "").upper(), None
+    else:
+        flight, destination = None, (target or None)
     sub = Submission(
-        plugins.resolve_place(data.get("destination")),
+        plugins.resolve_place(destination),
         datetime.fromisoformat(data["arrive"]) if data.get("arrive") else None,
-        data.get("flight"),
+        flight,
         data.get("extras", []),
+        destination,
     )
     try:
         job = TravelJob.from_submission(sub)

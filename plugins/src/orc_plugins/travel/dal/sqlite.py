@@ -22,3 +22,8 @@ def insert_geocode(connection: Connection, address: str, lat: float, lon: float)
             "INSERT INTO orc_travel_places (address, lat, lon) VALUES (?, ?, ?) ON CONFLICT(address) DO NOTHING",
             (address, lat, lon),
         )
+
+
+def delete_geocode(connection: Connection, address: str) -> None:
+    with connection() as conn:
+        conn.execute("DELETE FROM orc_travel_places WHERE address = ?", (address,))
