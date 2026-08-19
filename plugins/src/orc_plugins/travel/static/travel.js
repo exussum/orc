@@ -1,5 +1,6 @@
 const API = "/api/travel/jobs/";
 const fmt = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+const fmtTime = (iso) => new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", hour12: true });
 
 const TEMPLATES = `
 <template id="travel-dialog-tpl">
@@ -110,11 +111,14 @@ function renderJobs(jobs) {
     for (const j of jobs) {
         const li = clone("travel-item-tpl");
         const head = j.airport ? `${j.summary} → ${j.airport}` : j.summary;
-        const lines = [head, `Leave ${j.leave_at ? fmt(j.leave_at) : "-"}`, `Arrive ${fmt(j.arrive)}`];
+        const lines = j.late
+            ? [head, "LATE — leave now", `Arrive ~${fmtTime(j.eta)} (delayed)`]
+            : [head, `Leave ${j.leave_at ? fmt(j.leave_at) : "-"}`, `Arrive ${fmt(j.arrive)}`];
         const summary = li.querySelector("[data-summary]");
         summary.replaceChildren(
-            ...lines.map((t) => {
+            ...lines.map((t, i) => {
                 const div = document.createElement("div");
+                if (j.late && i > 0) div.className = "text-red-400";
                 div.textContent = t;
                 return div;
             }),
