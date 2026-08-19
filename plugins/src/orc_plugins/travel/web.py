@@ -28,7 +28,7 @@ def upcoming() -> dict:
             }
             for j in jobs[:3]
         ],
-        "extras": plugins.available_extras(),
+        "extras": [{"name": e.name, "minutes": e.minutes} for e in plugins.available_extras()],
         "places": plugins.place_names(),
     }
 

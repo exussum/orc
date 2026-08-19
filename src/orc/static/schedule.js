@@ -3,6 +3,24 @@ const endEl = document.querySelector("#orc-theme-select-end");
 const selectEl = document.querySelector("#orc-theme-select");
 const scheduleEl = document.querySelectorAll(".orc-theme-schedule");
 
+const startPicker = flatpickr(startEl, {
+    dateFormat: "Y-m-d",
+    minDate: "today",
+    monthSelectorType: "static",
+    onChange: () => {
+        if (startEl.value) {
+            endEl.disabled = false;
+            endPicker.set("minDate", startEl.value);
+            endPicker.setDate(startEl.value);
+        } else {
+            endEl.disabled = true;
+            endPicker.clear();
+        }
+        formUpdated();
+    },
+});
+const endPicker = flatpickr(endEl, { dateFormat: "Y-m-d", monthSelectorType: "static", onChange: formUpdated });
+
 async function set_theme() {
     const el = document.getElementById("orc-theme-submit");
     el.disabled = true;
@@ -27,11 +45,6 @@ async function pause(el) {
     });
 }
 
-function todayDate() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
 function formUpdated() {
     document.querySelector("#orc-theme-submit").disabled = selectEl.value && !(startEl.value && endEl.value);
 }
@@ -44,31 +57,15 @@ document.querySelectorAll(".orc-enable").forEach((el) => {
     el.addEventListener("change", (e) => pause(e.currentTarget));
 });
 
-document.querySelectorAll(".orc-theme-changer").forEach((el) => {
-    el.addEventListener("change", formUpdated);
-});
-
 selectEl.addEventListener("change", (e) => {
     scheduleEl.forEach((el) => {
         el.style.display = e.target.value === "" ? "none" : "block";
     });
     if (e.target.value === "") {
-        startEl.value = "";
-        endEl.value = "";
+        startPicker.clear();
+        endPicker.clear();
     }
 });
 
 selectEl.value = window.orcThemeName;
 selectEl.dispatchEvent(new Event("change"));
-
-startEl.min = todayDate();
-startEl.addEventListener("change", (e) => {
-    if (e.target.value) {
-        endEl.disabled = false;
-        endEl.value = endEl.min = e.target.value;
-    } else {
-        endEl.disabled = true;
-        endEl.value = null;
-    }
-    formUpdated();
-});
