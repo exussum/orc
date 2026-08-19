@@ -24,6 +24,7 @@ from orc import config
 from orc import model as m
 from orc import plugins
 from orc.dal import net, sqlite
+from orc.dal.audio import play_alert, play_text  # noqa: F401
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
@@ -31,7 +32,6 @@ from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
 from orc.dal.sqlite import update_avg
-from orc.dal.usb import play_alert, play_text  # noqa: F401
 from orc.declarations import Declarations
 from orc.decorators import (
     requires_ctx,
