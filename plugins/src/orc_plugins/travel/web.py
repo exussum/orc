@@ -25,6 +25,8 @@ def upcoming() -> dict:
                 "arrive": j.args[0].arrive.isoformat(),
                 "airport": j.args[0].airport,
                 "leave_at": j.args[0].leave_at.isoformat() if j.args[0].leave_at else None,
+                "late": j.args[0].late,
+                "eta": j.args[0].eta.isoformat() if j.args[0].eta else None,
             }
             for j in jobs[:3]
         ],
@@ -51,12 +53,17 @@ def create() -> tuple[dict, int]:
     )
     try:
         job = TravelJob.from_submission(sub)
-        if sub.flight is None:
-            plugins.validate_place(ctx.api.connection, job.destination)
+        _, sched = plugins.evaluate(job, ctx.config.settings.tz, ctx.api.local_now(), ctx.api.connection)
+        job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta
     except ValueError as exc:
         return {"error": str(exc)}, 400
     plugins.schedule(ctx.scheduler, job, ctx.config.settings.tz)
-    return {"id": job.summary}, 201
+    return {
+        "id": job.summary,
+        "leave_at": job.leave_at.isoformat() if job.leave_at else None,
+        "late": job.late,
+        "eta": job.eta.isoformat() if job.eta else None,
+    }, 201
 
 
 @travel_bp.route("/<jid>", methods=["DELETE"])

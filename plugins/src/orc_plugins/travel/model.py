@@ -52,6 +52,8 @@ class Arrival(NamedTuple):
 class Schedule(NamedTuple):
     leave_at: datetime | None
     next_fire: datetime | None  # None once it is time to leave
+    late: bool = False
+    eta: datetime | None = None  # actual arrival if leaving right now; only set when late
 
 
 class Submission(NamedTuple):
@@ -72,6 +74,8 @@ class TravelJob:
     airport: str | None = None
     leave_at: datetime | None = None
     place: str | None = None
+    late: bool = False
+    eta: datetime | None = None
 
     @classmethod
     def from_submission(cls, sub: Submission) -> "TravelJob":
