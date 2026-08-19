@@ -1,5 +1,5 @@
 const API = "/api/travel/jobs/";
-const fmt = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const fmt = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
 
 const TEMPLATES = `
 <template id="travel-dialog-tpl">
@@ -7,14 +7,13 @@ const TEMPLATES = `
         <h2 class="text-xl font-semibold mb-3">Travel</h2>
         <ul id="travel-list" class="space-y-1 mb-4"></ul>
         <form id="travel-form" class="flex flex-col gap-2">
-            <input name="flight" class="orc-input" placeholder="Flight (e.g. AA657)">
-            <input name="destination" class="orc-input" placeholder="Address" list="travel-places">
+            <input name="target" class="orc-input" placeholder="Flight (AA657) or address" list="travel-places">
             <datalist id="travel-places"></datalist>
             <input name="arrive" type="text" class="orc-input" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">
-            <div>
-                <p class="mb-1">Extras</p>
+            <details id="travel-extras-details">
+                <summary class="cursor-pointer mb-1">Extras</summary>
                 <div id="travel-extras" class="flex flex-col gap-1"></div>
-            </div>
+            </details>
             <p id="travel-error" class="text-red-400 text-sm hidden"></p>
             <div class="flex justify-end gap-2">
                 <button type="button" id="travel-close" class="orc-btn">Close</button>
@@ -25,7 +24,7 @@ const TEMPLATES = `
 </template>
 <template id="travel-item-tpl">
     <li class="flex items-center justify-between border border-white/10 rounded px-2 py-1">
-        <span data-summary></span>
+        <div data-summary class="flex flex-col"></div>
         <button type="button" data-del class="text-red-400 ml-2" aria-label="Delete">
             <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 002 2h6a2 2 0 002-2V6"/></svg>
         </button>
@@ -61,14 +60,18 @@ function build() {
     dialog.querySelector("#travel-form").addEventListener("submit", submit);
     arrivePicker = flatpickr(dialog.querySelector("[name=arrive]"), {
         enableTime: true,
-        dateFormat: "Y-m-d H:i",
+        dateFormat: "Y-m-d h:i K",
         defaultDate: "today",
         static: true,
         monthSelectorType: "static",
+        minuteIncrement: 10,
         onOpen: (selected) => {
             arrivePrior = selected[0] || null;
         },
-        onReady: (selected, str, fp) => fp.calendarContainer.appendChild(arriveButtons(fp)),
+        onReady: (selected, str, fp) => {
+            fp.calendarContainer.appendChild(arriveButtons(fp));
+            fp.calendarContainer.querySelectorAll("input.numInput").forEach((el) => (el.readOnly = true));
+        },
     });
 }
 
@@ -106,7 +109,16 @@ function renderJobs(jobs) {
     }
     for (const j of jobs) {
         const li = clone("travel-item-tpl");
-        li.querySelector("[data-summary]").textContent = `${j.summary}${j.airport ? " → " + j.airport : ""} · ${fmt(j.arrive)}`;
+        const head = j.airport ? `${j.summary} → ${j.airport}` : j.summary;
+        const lines = [head, `Leave ${j.leave_at ? fmt(j.leave_at) : "-"}`, `Arrive ${fmt(j.arrive)}`];
+        const summary = li.querySelector("[data-summary]");
+        summary.replaceChildren(
+            ...lines.map((t) => {
+                const div = document.createElement("div");
+                div.textContent = t;
+                return div;
+            }),
+        );
         li.querySelector("[data-del]").onclick = async () => {
             await fetch(API + encodeURIComponent(j.id), { method: "DELETE" });
             refresh();
@@ -116,10 +128,13 @@ function renderJobs(jobs) {
 }
 
 async function refresh() {
-    const { jobs, extras, places } = await (await fetch(API, { cache: "no-store" })).json();
     const now = new Date();
+    now.setSeconds(0, 0);
     arrivePicker.set("minDate", now);
-    arrivePicker.setDate(now);
+    const rounded = new Date(now);
+    rounded.setMinutes(Math.ceil(now.getMinutes() / 10) * 10);
+    arrivePicker.setDate(rounded);
+    const { jobs, extras, places } = await (await fetch(API, { cache: "no-store" })).json();
     renderExtras(extras || []);
     renderPlaces(places || []);
     renderJobs(jobs);
@@ -127,16 +142,19 @@ async function refresh() {
 
 async function submit(e) {
     e.preventDefault();
-    const err = dialog.querySelector("#travel-error");
     const fd = new FormData(e.target);
     const body = {
-        flight: fd.get("flight") || null,
-        destination: fd.get("destination") || null,
+        target: fd.get("target") || null,
         arrive: arrivePicker.selectedDates[0] ? arrivePicker.selectedDates[0].toISOString() : null,
         extras: fd.getAll("extra"),
     };
     const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok) { err.textContent = (await res.json()).error || "Failed"; err.classList.remove("hidden"); return; }
+    if (!res.ok) {
+        const err = dialog.querySelector("#travel-error");
+        err.textContent = (await res.json()).error || "Failed";
+        err.classList.remove("hidden");
+        return;
+    }
     e.target.reset();
     refresh();
 }
