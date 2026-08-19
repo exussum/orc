@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -130,10 +131,56 @@ def test_arrival_destination():
     assert plugins._arrival(_runtime([]), job, timezone.utc) == m.Arrival(ARRIVE, "Home", None)
 
 
+def _boom(msg):
+    def raiser(*args, **kwargs):
+        raise RuntimeError(msg)
+
+    return raiser
+
+
+def test_evaluate_destination_success(monkeypatch):
+    monkeypatch.setattr(plugins, "_runtime", _runtime([]))
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    arrival, sched = plugins.evaluate(job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
+    assert arrival == m.Arrival(ARRIVE, "Home", None)
+    assert sched.leave_at is not None
+
+
+def test_evaluate_destination_failure_bubbles_reason(monkeypatch):
+    monkeypatch.setattr(plugins, "_runtime", _runtime([])._replace(drive=SimpleNamespace(drive_minutes=_boom("route unavailable"))))
+    job = m.TravelJob("Nowhere", "Nowhere", ARRIVE, set())
+    with pytest.raises(ValueError, match="route unavailable"):
+        plugins.evaluate(job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
+
+
+def test_evaluate_flight_same_day_checks_aviation(monkeypatch):
+    monkeypatch.setattr(plugins, "_runtime", _runtime([])._replace(flight=SimpleNamespace(arrival=_boom("no such flight"))))
+    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
+    with pytest.raises(ValueError, match="no such flight"):
+        plugins.evaluate(job, timezone.utc, ARRIVE, lambda: None)
+
+
+def test_evaluate_flight_future_date_skips_check(monkeypatch):
+    monkeypatch.setattr(plugins, "_runtime", _runtime([])._replace(flight=SimpleNamespace(arrival=_boom("should not be called"))))
+    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
+    arrival, sched = plugins.evaluate(job, timezone.utc, ARRIVE - timedelta(days=5), lambda: None)
+    assert arrival is None
+    assert sched.leave_at is None
+
+
 def test_next_run_signals_leave_now_within_ten_minutes():
     job = m.TravelJob("Home", "Home", ARRIVE, set())
-    sched = plugins.next_run(_runtime([]), job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
+    now = ARRIVE - timedelta(minutes=35)
+    sched = plugins.next_run(_runtime([]), job, now, m.Arrival(ARRIVE, "Home", None), lambda: None)
     assert sched == m.Schedule(ARRIVE - timedelta(minutes=30), None)
+
+
+def test_next_run_marks_late_and_computes_eta_if_leaving_now():
+    job = m.TravelJob("Home", "Home", ARRIVE, set())
+    sched = plugins.next_run(_runtime([]), job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
+    assert sched.late is True
+    assert sched.leave_at == ARRIVE - timedelta(minutes=30)
+    assert sched.eta == ARRIVE + timedelta(minutes=30)
 
 
 def test_next_run_leave_time_includes_selected_extras():

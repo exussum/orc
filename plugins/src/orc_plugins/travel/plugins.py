@@ -40,17 +40,6 @@ def resolve_place(dest: str | None) -> str | None:
     return dest
 
 
-def validate_place(connection: Any, address: str) -> None:
-    if _runtime is None:
-        return
-    try:
-        found = _runtime.drive.geocode(connection, _runtime.tomtom_key, address, _runtime.settings.http_timeout)
-    except Exception as exc:
-        raise ValueError(f"Couldn't check '{address}' right now — the address lookup service is unavailable.") from exc
-    if not found:
-        raise ValueError(f"'{address}' isn't a recognized address — check it and try again.")
-
-
 def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
     if job.iata:
         when = job.arrive if job.arrive.tzinfo else job.arrive.replace(tzinfo=tz)
@@ -92,6 +81,8 @@ def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None
     lead += rt.settings.buffer_minutes
     leave_at = arrival.when - timedelta(minutes=lead)
     remaining = leave_at - now
+    if remaining < timedelta(0):
+        return Schedule(leave_at, None, late=True, eta=now + timedelta(minutes=lead))
     if remaining <= timedelta(minutes=10):
         return Schedule(leave_at, None)
     if remaining <= timedelta(hours=2):
@@ -99,13 +90,33 @@ def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None
     return Schedule(leave_at, leave_at - timedelta(hours=2))
 
 
+def evaluate(job: TravelJob, tz: Any, now: datetime, connection: Connection) -> tuple[Arrival | None, Schedule]:
+    """Run a live aviation or TomTom lookup and compute the resulting Schedule in one pass,
+    so a bad flight number or an unroutable destination is caught immediately instead of
+    failing invisibly in the background. Flight data isn't available until the day of
+    arrival, so a future-dated flight gets no arrival check yet (Schedule(None, midnight))."""
+    assert _runtime is not None
+    rt = _runtime
+    if job.iata and now.date() != job.arrive.astimezone(tz).date():
+        arrival = None
+    else:
+        try:
+            arrival = _arrival(rt, job, tz)
+        except Exception as exc:
+            raise ValueError(f"Couldn't verify flight {job.iata}: {exc}") from exc
+    try:
+        sched = next_run(rt, job, now, arrival, connection)
+    except Exception as exc:
+        raise ValueError(f"Couldn't get a travel time to '{arrival.where if arrival else job.destination}': {exc}") from exc
+    return arrival, sched
+
+
 @requires_ctx
 def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     assert _runtime is not None
     rt, tz, now = _runtime, ctx.config.settings.tz, ctx.api.local_now()
-    arrival = _arrival(rt, job, tz) if now.date() == job.arrive.astimezone(tz).date() else None
-    sched = next_run(rt, job, now, arrival, ctx.api.connection)
-    job.leave_at = sched.leave_at
+    arrival, sched = evaluate(job, tz, now, ctx.api.connection)
+    job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta
     if sched.next_fire is not None:
         _reschedule(ctx.scheduler, job, sched.next_fire, tz)
         return
@@ -113,10 +124,15 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     drive = rt.drive.drive_minutes(ctx.api.connection, rt.tomtom_key, rt.origin, arrival.where, rt.settings.http_timeout)
     parts = [f"{drive} min drive"] + [f"{e.minutes} min {e.name}" for e in rt.extras if e.name in job.extras]
     detail = " + ".join(parts)
-    ctx.api.log(Log.TRAVEL, f"{job.summary}: {detail}{f' (Terminal {arrival.terminal})' if arrival.terminal else ''}")
+    late_note = f" — LATE, ETA {sched.eta.astimezone(tz).strftime('%I:%M %p')}" if job.late and sched.eta else ""
+    ctx.api.log(Log.TRAVEL, f"{job.summary}: {detail}{f' (Terminal {arrival.terminal})' if arrival.terminal else ''}{late_note}")
     target: str
     if job.iata:
         target = arrival.where + (f", Terminal {arrival.terminal}" if arrival.terminal else "")
     else:
         target = job.place or job.destination
-    ctx.api.play_text(f"Time to leave for {target}.", level=AUDIO_FATAL)
+    if job.late and sched.eta:
+        eta_str = sched.eta.astimezone(tz).strftime("%I:%M %p")
+        ctx.api.play_text(f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}.", level=AUDIO_FATAL)
+    else:
+        ctx.api.play_text(f"Time to leave for {target}.", level=AUDIO_FATAL)
