@@ -3,7 +3,7 @@ setting lan_domain      orc.internal.example
 setting jobs_db         sqlite:////tmp/jobs.sqlite
 setting lat             42.4440
 setting long            -76.5019
-setting audio_device    'USB Audio'
+setting audio_device    'Speakers'
 setting broadlink_codes /etc/orc/broadlink_codes.json
 setting mqtt_host       hubitat.example
 
