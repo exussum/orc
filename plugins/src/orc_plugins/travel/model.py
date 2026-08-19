@@ -59,6 +59,7 @@ class Submission(NamedTuple):
     arrive: datetime | None
     flight: str | None
     extras: list[str]
+    place: str | None = None
 
 
 @dataclasses.dataclass
@@ -70,6 +71,7 @@ class TravelJob:
     iata: str | None = None
     airport: str | None = None
     leave_at: datetime | None = None
+    place: str | None = None
 
     @classmethod
     def from_submission(cls, sub: Submission) -> "TravelJob":
@@ -79,4 +81,4 @@ class TravelJob:
             return cls(sub.flight, "", sub.arrive, set(sub.extras), iata=sub.flight, airport=sub.destination or None)
         if not sub.destination:
             raise ValueError("destination is required when no flight is given")
-        return cls(sub.destination, sub.destination, sub.arrive, set(sub.extras))
+        return cls(sub.destination, sub.destination, sub.arrive, set(sub.extras), place=sub.place)

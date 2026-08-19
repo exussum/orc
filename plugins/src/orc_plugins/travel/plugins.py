@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, time, timedelta
 from typing import Any
 
@@ -6,7 +7,7 @@ from apscheduler.triggers.date import DateTrigger
 from orc_plugins.travel.dal.sqlite import Connection
 from orc_plugins.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
 
-from orc.model import AppContext
+from orc.model import AUDIO_FATAL, AppContext
 from orc.plugins import requires_ctx
 
 _runtime: Runtime | None = None
@@ -15,6 +16,13 @@ _runtime: Runtime | None = None
 def set_runtime(runtime: Runtime) -> None:
     global _runtime
     _runtime = runtime
+
+
+_FLIGHT_RE = re.compile(r"^(?=.*[A-Za-z])[A-Za-z0-9]{2,3}\s?\d{1,4}$")
+
+
+def is_flight(value: str) -> bool:
+    return bool(_FLIGHT_RE.match(value.strip()))
 
 
 def available_extras() -> list[Extra]:
@@ -106,3 +114,9 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     parts = [f"{drive} min drive"] + [f"{e.minutes} min {e.name}" for e in rt.extras if e.name in job.extras]
     detail = " + ".join(parts)
     ctx.api.log(Log.TRAVEL, f"{job.summary}: {detail}{f' (Terminal {arrival.terminal})' if arrival.terminal else ''}")
+    target: str
+    if job.iata:
+        target = arrival.where + (f", Terminal {arrival.terminal}" if arrival.terminal else "")
+    else:
+        target = job.place or job.destination
+    ctx.api.play_text(f"Time to leave for {target}.", level=AUDIO_FATAL)
