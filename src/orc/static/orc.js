@@ -93,16 +93,27 @@ document.querySelectorAll(".orc-config-runner").forEach((el) => {
     el.addEventListener("click", (e) => runAction(e.currentTarget));
 });
 
-document.addEventListener("click", (e) => {
-    e.target.closest(".orc-log-action")?.classList.toggle("truncate");
-});
+function revealOverflowCarets(root) {
+    for (const action of root.querySelectorAll(".orc-log-action.truncate")) {
+        if (action.scrollWidth > action.clientWidth) {
+            action.parentElement.querySelector(".orc-log-caret")?.classList.remove("invisible");
+        }
+    }
+}
 
 document.addEventListener("click", (e) => {
-    const parent = e.target.closest("tr.orc-log-parent");
-    if (!parent || e.target.closest(".orc-log-action")) return;
-    const open = parent.classList.toggle("orc-log-open");
-    parent.closest("table").querySelectorAll(`[data-log-parent="${parent.dataset.logId}"]`).forEach((row) => row.classList.toggle("hidden", !open));
+    const caret = e.target.closest(".orc-log-caret");
+    if (!caret) return;
+    const row = caret.closest("tr");
+    row.querySelector(".orc-log-action")?.classList.toggle("truncate");
+    if (!row.classList.contains("orc-log-parent")) return;
+    const open = row.classList.toggle("orc-log-open");
+    const table = row.closest("table");
+    table.querySelectorAll(`[data-log-parent="${row.dataset.logId}"]`).forEach((r) => r.classList.toggle("hidden", !open));
+    if (open) revealOverflowCarets(table);
 });
+
+revealOverflowCarets(document);
 
 document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {
     const menu = document.getElementById("admin-navbar-collapse");

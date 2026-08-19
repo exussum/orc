@@ -1,12 +1,16 @@
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 from orc_plugins import travel
 from orc_plugins.travel import model as m
 from orc_plugins.travel import plugins
+from orc_plugins.travel.dal import sqlite as travel_sqlite
 from orc_plugins.travel.dal.drive import stub as drive_stub
+from orc_plugins.travel.dal.drive import tomtom
 from orc_plugins.travel.dal.flight import stub as flight_stub
 
 from orc.model import column_to_value
@@ -62,6 +66,38 @@ def test_travel_config_loads():
 )
 def test_backends_resolve(path, func):
     assert callable(getattr(column_to_value("module", path), func))
+
+
+def test_drive_minutes_deletes_cached_geocode_on_http_error(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    connection = lambda: conn  # noqa: E731
+    travel_sqlite.init_db(connection)
+    travel_sqlite.insert_geocode(connection, "Bad Dest", 1.0, 2.0)
+
+    class FailingResponse:
+        def raise_for_status(self):
+            raise requests.HTTPError("400 Client Error")
+
+    monkeypatch.setattr(tomtom.requests, "get", lambda *a, **k: FailingResponse())
+
+    with pytest.raises(requests.HTTPError):
+        tomtom.drive_minutes(connection, "key", "origin", "Bad Dest", 5)
+
+    assert travel_sqlite.fetch_geocode(connection, "Bad Dest") is None
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("AA657", True),
+        ("BAW185", True),
+        ("123 Main St, Springfield", False),
+        ("11372", False),
+        ("Home", False),
+    ],
+)
+def test_is_flight(value, expected):
+    assert plugins.is_flight(value) is expected
 
 
 def test_from_submission_flight():
