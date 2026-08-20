@@ -2,7 +2,7 @@
 
 @source "../templates";
 @source "./*.js";
-@source "../../plugins/src/orc_plugins";
+@source "../../extras/src/orc_extras";
 
 @theme {
     --color-orc-bg: #1a1a1a;
