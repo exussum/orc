@@ -255,16 +255,21 @@ class Configs[T = Config]:
 @dataclass
 class Plugin:
     name: str
-    module: ModuleType | None = None
-    delay: timedelta = field(default_factory=timedelta)
+    module: ModuleType
     section: str | None = None  # a section is what renders a button; None = no button
     icon: str = "rocket-launch"
     backend: ModuleType | None = None
 
 
 @dataclass
-class CallablePlugin(Plugin):
+class CallablePlugin:
+    name: str
+    module: ModuleType
     func: Callable[..., object] = field(kw_only=True)
+    section: str = "scene"
+    icon: str = "rocket-launch"
+    backend: ModuleType | None = None
+    delay: timedelta = field(default_factory=timedelta)
 
 
 @dataclass

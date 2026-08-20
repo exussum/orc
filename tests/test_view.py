@@ -68,7 +68,7 @@ def test_versioned_bumps_after_success(client, ctx, good_version):
 
 
 def test_console_plugin(client, ctx):
-    plugin = m.CallablePlugin(name="do-thing", func=lambda ctx, device: None)
+    plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device: None)
     with (
         patch.object(config, "plugins", (plugin,)),
         patch("orc.plugins.execute_plugin") as exec_plugin,
