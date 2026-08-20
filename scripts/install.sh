@@ -11,7 +11,7 @@ supervisorctl stop orc || true
 
 $UV pip install -r /tmp/pyproject.toml --no-sources --extra-index-url "$ORC_REGISTRY_URL" --no-cache
 $UV pip install orc==0.0.1 --reinstall-package orc $INSTALL_OPTS
-$UV pip install orc_plugins==0.0.1 --reinstall-package orc_plugins $INSTALL_OPTS
+$UV pip install orc_extras==0.0.1 --reinstall-package orc_extras $INSTALL_OPTS
 
 supervisorctl start orc
 
