@@ -22,13 +22,13 @@ function startProgress(seconds) {
 }
 
 
-async function get(url, el, onFailure = () => {}) {
-    if (!(await orcHooks.onCommand(el.dataset.id, el, url))) {
+async function get(url, el, onFailure = () => {}, useVersion = true) {
+    if (!(await orcHooks.onCommand(el?.dataset.id, el, url))) {
         onFailure();
         return false;
     }
-    el.disabled = true;
-    const container = startProgress(parseFloat(el.dataset.duration || "0"));
+    if (el) el.disabled = true;
+    const container = el ? startProgress(parseFloat(el.dataset.duration || "0")) : null;
     let response = null;
 
     try {
@@ -36,8 +36,9 @@ async function get(url, el, onFailure = () => {}) {
         if (!response.ok) {
             throw Error(`Response status: ${response.status}`);
         }
-        version = (await response.json()).version;
-        return true;
+        const data = await response.json();
+        if (useVersion) version = data.version;
+        return data;
     } catch (error) {
         console.error(error.message);
         if (isInvalidResponse(response)) {
@@ -46,7 +47,7 @@ async function get(url, el, onFailure = () => {}) {
         onFailure();
         return false;
     } finally {
-        el.disabled = false;
+        if (el) el.disabled = false;
         if (container) container.style.display = "none";
     }
 }

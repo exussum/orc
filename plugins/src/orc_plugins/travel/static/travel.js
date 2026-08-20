@@ -2,6 +2,28 @@ const API = "/api/travel/jobs/";
 const fmt = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
 const fmtTime = (iso) => new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", hour12: true });
 
+async function post(url, el, { method = "POST", body } = {}, onFailure = () => {}) {
+    if (el) el.disabled = true;
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+        if (!response.ok) {
+            onFailure((await response.json()).error);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error(error.message);
+        onFailure();
+        return false;
+    } finally {
+        if (el) el.disabled = false;
+    }
+}
+
 const TEMPLATES = `
 <template id="travel-dialog-tpl">
     <dialog id="travel-dialog" class="orc-card text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 overflow-visible backdrop:bg-black/50">
@@ -123,8 +145,9 @@ function renderJobs(jobs) {
                 return div;
             }),
         );
-        li.querySelector("[data-del]").onclick = async () => {
-            await fetch(API + encodeURIComponent(j.id), { method: "DELETE" });
+        const delBtn = li.querySelector("[data-del]");
+        delBtn.onclick = async () => {
+            await post(API + encodeURIComponent(j.id), delBtn, { method: "DELETE" });
             refresh();
         };
         list.appendChild(li);
@@ -138,7 +161,13 @@ async function refresh() {
     const rounded = new Date(now);
     rounded.setMinutes(Math.ceil(now.getMinutes() / 10) * 10);
     arrivePicker.setDate(rounded);
-    const { jobs, extras, places } = await (await fetch(API, { cache: "no-store" })).json();
+    const err = dialog.querySelector("#travel-error");
+    const data = await get(API, null, () => {
+        err.textContent = "Failed to load trips.";
+        err.classList.remove("hidden");
+    }, false);
+    if (!data) return;
+    const { jobs, extras, places } = data;
     renderExtras(extras || []);
     renderPlaces(places || []);
     renderJobs(jobs);
@@ -152,13 +181,12 @@ async function submit(e) {
         arrive: arrivePicker.selectedDates[0] ? arrivePicker.selectedDates[0].toISOString() : null,
         extras: fd.getAll("extra"),
     };
-    const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok) {
-        const err = dialog.querySelector("#travel-error");
-        err.textContent = (await res.json()).error || "Failed";
+    const err = dialog.querySelector("#travel-error");
+    const ok = await post(API, e.submitter, { body }, (message) => {
+        err.textContent = message || "Failed";
         err.classList.remove("hidden");
-        return;
-    }
+    });
+    if (!ok) return;
     e.target.reset();
     refresh();
 }

@@ -70,6 +70,10 @@ def setup(ctx: AppContext) -> None:
     plugins.start()
 
 
+def test_sensor(ctx: AppContext, device: str) -> None:
+    plugins.simulate_transition(device)
+
+
 def leak_state() -> list[dict[str, Any]]:
     """Per-sensor state rows for core's generic state renderer (needs a "name" key).
 
