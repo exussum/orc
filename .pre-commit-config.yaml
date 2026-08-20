@@ -86,7 +86,7 @@ repos:
 
       - id: pytest
         name: pytest
-        entry: sh -c 'uv run --extra test pytest && uv run --extra test pytest plugins'
+        entry: sh -c 'uv run --extra test pytest && uv run --extra test pytest extras'
         language: system
         pass_filenames: false
         files: \.py$
