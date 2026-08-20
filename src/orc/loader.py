@@ -17,20 +17,32 @@ _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 GRAMMAR = """
 ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<device> <state>]
 ad_hoc append <name> <device> <state>
+
 remote <device> <button> <event> <action>
+
 device define <type>
 device add <type> <name> <host> [--room=<room>]
 device only <type> [<name> <host>] [--room=<room>]
 device seal <type>
+
 highlight <name> <start> <stop>
+
 person <name> <host> <mac>
-plugin <name> <module> [--function=<function>] [--section=<section>] [--icon=<icon>] [--delay=<minutes>] [--backend=<module>]
+
+plugin <name> <module> [--section=<section>] [--icon=<icon>] [--backend=<module>]
+plugin <name> <module> <function> --section=<section> [--icon=<icon>] [--backend=<module>]
+
 provider <key> <module>
+
 room <name> <device> <state>
+
 routine define <id> <name> [--skip-replay]
 routine append <id> <device> <state> [--trigger=<trigger>]
+
 setting <key> <value>
+
 theme <name> <routine> <time>
+
 volume <log> <level>
 """
 
@@ -173,7 +185,7 @@ def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
 
 
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    params = {key: value for key, value in vars(args).items() if key not in ("name", "module", "function") and value is not None}
+    params = {key: value for key, value in (("section", args.section), ("icon", args.icon), ("backend", args.backend)) if value is not None}
     if params.get("backend") is not None:
         params["backend"] = m.column_to_value("module", params["backend"])
     if args.function:

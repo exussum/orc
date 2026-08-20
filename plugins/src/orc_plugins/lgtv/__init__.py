@@ -10,6 +10,7 @@ from typing import Any
 
 from orc_plugins.lgtv import plugins
 from orc_plugins.lgtv.dal import sqlite
+from orc_plugins.lgtv.plugins import pair_tv  # noqa: F401
 
 import orc
 from orc import model as m
