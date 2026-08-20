@@ -23,7 +23,6 @@ import requests
 import orc as config
 from orc import model as m
 from orc.collections import LockedDict
-from orc.model import AppContext
 
 # orc.Leak is attached to the orc package at runtime once this plugin registers the
 # "Leak" device type; mypy can't see the dynamic attribute, so iterate it via an Any view.
@@ -85,10 +84,6 @@ def set_transition_callback(fn: TransitionCallback) -> None:
 def snapshot() -> list[SensorState]:
     sensors = _states.copy()
     return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in _orc.Leak]
-
-
-def test_sensor(ctx: AppContext, device: str) -> None:
-    simulate_transition(device)
 
 
 def simulate_transition(name: str) -> bool:
