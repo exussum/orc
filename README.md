@@ -15,7 +15,7 @@ calendar events, and a line-based config file.
   yt-dlp for YouTube audio), and an AC unit (BroadLink IR).
 - Supports weather-condition triggers (e.g. `SUNNY`) via the open-meteo API;
   the schedule UI marks weather-triggered jobs with a ☀ badge.
-- Via the optional `orc_plugins` package (`plugins/`): controls an LG webOS
+- Via the optional `orc_extras` package (`extras/`): controls an LG webOS
   TV (aiowebostv + BroadLink IR), monitors YoLink leak sensors (fatal-level
   audio alert on water detection), and runs the entrance-sensor automation.
 - Tracks network presence of configured devices/people and gates
@@ -52,16 +52,16 @@ python3 -m venv ~/.venv-orc            # this exact path matters:
 source ~/.venv-orc/bin/activate        # scripts/dev.sh sources it
 pip install ./data '.[test]'
 
-pytest && pytest plugins
+pytest && pytest extras
 
-PYTHONPATH=src:data/src:plugins/src python -c 'from orc.runner import flask; flask()'
+PYTHONPATH=src:data/src:extras/src python -c 'from orc.runner import flask; flask()'
 ```
 
 Open <http://localhost:8000> — the scene, device, schedule, presence, and
 log views are all live, driven by the sample config in `src/config.orc`.
-`PYTHONPATH=src:data/src:plugins/src` makes the dev server run your working
+`PYTHONPATH=src:data/src:extras/src` makes the dev server run your working
 tree rather than the copy installed in the venv (the sample config registers
-plugins from `plugins/src`, so it must be on the path).
+plugins from `extras/src`, so it must be on the path).
 
 Before your first commit, install the git hooks (black, isort, flake8,
 opengrep, mypy, both test suites, and more run on every commit):
@@ -84,13 +84,13 @@ of `config.orc` are never touched:
 
 Steps:
 
-1. **Install** on the target machine (add `./plugins` if you want the
+1. **Install** on the target machine (add `./extras` if you want the
    bundled plugins — LG TV, YoLink, entrance sensor). The `command-cfg`
    config parser resolves from the internal package registry, same as the
    deploy flow:
 
    ```sh
-   pip install ./data . ./plugins --extra-index-url "$ORC_REGISTRY_URL"
+   pip install ./data . ./extras --extra-index-url "$ORC_REGISTRY_URL"
    ```
 
 2. **Create a config directory** (e.g. `/etc/orc`) and copy `src/config.orc`
@@ -242,4 +242,4 @@ bounces the `orc` supervisor job.
 - `src/config.orc` — sample device/routine/theme/plugin definitions
 - `src/plugins/` — per-plugin config files
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
-- `plugins/` — optional `orc_plugins` plugin package (e.g. `entrance_sensor`) with its own tests
+- `extras/` — optional `orc_extras` plugin package (e.g. `entrance_sensor`) with its own tests
