@@ -20,9 +20,6 @@ _YDL_OPTS: dict[str, Any] = {
 
 _PLAYING_STATES: tuple[str, ...] = ("PLAYING", "BUFFERING", "PAUSED")
 
-_LOAD_CHECK_TRIES = 5
-_LOAD_CHECK_INTERVAL = 1
-
 
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     with _cast(device, timeout=5, tries=1) as cast:
@@ -54,22 +51,22 @@ def pause(device: m.DeviceEnum) -> None:
 
 def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
     with _cast(device) as cast:
-        mc = cast.media_controller
         # Reset so play_media loads into a fresh receiver. silence_fd(2) swallows
         # pychromecast's "no session is active" warning when nothing is playing.
         with silence_fd(2), suppress(Exception):
-            mc.stop()
+            cast.media_controller.stop()
         if cast.status.app_id:
             cast.quit_app()
             time.sleep(1)
+
+    # Reconnect rather than reusing `cast`/`mc` across the quit_app transition:
+    # block_until_active only reports correctly the first time it's asked on a
+    # given instance (https://github.com/home-assistant-libs/pychromecast/issues/335).
+    with _cast(device) as cast:
+        mc = cast.media_controller
         mc.play_media(stream_url, "audio/mp3", title=title)
         mc.block_until_active(timeout=10)
-        for _ in range(_LOAD_CHECK_TRIES):
-            if mc.status.player_state != "IDLE":
-                return
-            time.sleep(_LOAD_CHECK_INTERVAL)
-            mc.update_status()
-        if mc.status.idle_reason == "ERROR":
+        if mc.status.player_state == "IDLE" and mc.status.idle_reason == "ERROR":
             raise RuntimeError(f"{device.name}: Chromecast failed to load {title!r}")
 
 
