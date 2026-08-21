@@ -53,7 +53,9 @@ def create() -> tuple[dict, int]:
     )
     try:
         job = TravelJob.from_submission(sub)
-        _, sched = plugins.evaluate(job, ctx.config.settings.tz, ctx.api.local_now(), ctx.api.connection)
+        arrival, sched = plugins.evaluate(job, ctx.config.settings.tz, ctx.api.local_now(), ctx.api.connection)
+        if arrival is not None:
+            job.arrive = arrival.when
         job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta
     except ValueError as exc:
         return {"error": str(exc)}, 400

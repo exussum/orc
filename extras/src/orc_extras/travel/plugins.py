@@ -116,6 +116,8 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     assert _runtime is not None
     rt, tz, now = _runtime, ctx.config.settings.tz, ctx.api.local_now()
     arrival, sched = evaluate(job, tz, now, ctx.api.connection)
+    if arrival is not None:
+        job.arrive = arrival.when
     job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta
     if sched.next_fire is not None:
         _reschedule(ctx.scheduler, job, sched.next_fire, tz)
