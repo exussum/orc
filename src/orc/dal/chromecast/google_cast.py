@@ -20,6 +20,9 @@ _YDL_OPTS: dict[str, Any] = {
 
 _PLAYING_STATES: tuple[str, ...] = ("PLAYING", "BUFFERING", "PAUSED")
 
+_LOAD_CHECK_TRIES = 5
+_LOAD_CHECK_INTERVAL = 1
+
 
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     with _cast(device, timeout=5, tries=1) as cast:
@@ -61,6 +64,13 @@ def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
             time.sleep(1)
         mc.play_media(stream_url, "audio/mp3", title=title)
         mc.block_until_active(timeout=10)
+        for _ in range(_LOAD_CHECK_TRIES):
+            if mc.status.player_state != "IDLE":
+                return
+            time.sleep(_LOAD_CHECK_INTERVAL)
+            mc.update_status()
+        if mc.status.idle_reason == "ERROR":
+            raise RuntimeError(f"{device.name}: Chromecast failed to load {title!r}")
 
 
 def resume(device: m.DeviceEnum) -> None:
