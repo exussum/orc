@@ -193,11 +193,13 @@ def resolve_run_action(
     return None
 
 
-def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False) -> bool:
+def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False, skip_delay: bool = False) -> bool:
     resolved = resolve_run_action(ctx, id, device=device, hub_origin=hub_origin)
     if resolved is None:
         return False
     action, delay = resolved
+    if skip_delay:
+        delay = timedelta()
 
     @requires_ctx
     def run(ctx: m.AppContext) -> None:

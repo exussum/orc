@@ -11,7 +11,7 @@
                     {{ btn(plugin.name, plugin.name, plugin.icon, durations.get(plugin.name, 0), no_func=not plugin.func) }}
                 {% endfor %}
                 {% for id in ad_hoc_routines %}
-                    {{ btn(id, id, "clipboard-check", durations.get(id, 0)) }}
+                    {{ btn(id, id, "clipboard-check", durations.get(id, 0), delay=ad_hoc_routines[id].delay) }}
                 {% endfor %}
                 {% for row in device_buttons %}
                     {{ btn(registry.button_labels.get(row.action, "{device}").format(device=row.name), row.action, device_plugins[row.action].icon, durations.get(row.action, 0), device=row.name) }}
