@@ -27,6 +27,12 @@ async function get(url, el, onFailure = () => {}, useVersion = true) {
         onFailure();
         return false;
     }
+    if (el?.dataset.skipDelay) {
+        const parsed = new URL(url, location.origin);
+        parsed.searchParams.set("skip_delay", "1");
+        url = parsed.pathname + parsed.search;
+        delete el.dataset.skipDelay;
+    }
     if (el) el.disabled = true;
     const container = el ? startProgress(parseFloat(el.dataset.duration || "0")) : null;
     let response = null;

@@ -27,10 +27,10 @@
         <div class="p-4">
             <div class="orc-routine-grid">
                 {% for id in ad_hoc_routines %}
-                    {{ btn_stripe(id, "clipboard-check", durations.get(id, 0)) }}
+                    {{ btn_stripe(id, "clipboard-check", durations.get(id, 0), delay=ad_hoc_routines[id].delay) }}
                 {% endfor %}
                 {% for plugin in plugins %}
-                    {{ btn_stripe(plugin.name, plugin.icon, durations.get(plugin.name, 0), not plugin.func) }}
+                    {{ btn_stripe(plugin.name, plugin.icon, durations.get(plugin.name, 0), no_func=not plugin.func) }}
                 {% endfor %}
             </div>
         </div>

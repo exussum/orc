@@ -26,6 +26,28 @@
         <div id="orc-progress" class="orc-progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100">
             <div id="orc-progress-bar" class="h-full bg-orc-primary" style="width: 0%;"></div>
         </div>
+        <dialog id="orc-delay-dialog" class="orc-dialog w-80">
+            <form method="dialog" class="flex flex-col gap-3">
+                <p id="orc-delay-dialog-text"></p>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="orc-delay-dialog-keep" checked>
+                    Keep the normal delay
+                </label>
+                <div class="flex justify-end gap-2">
+                    <button class="orc-btn orc-btn-secondary" value="cancel">Cancel</button>
+                    <button class="orc-btn" value="ok">Run</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="orc-confirm-dialog" class="orc-dialog w-80">
+            <form method="dialog" class="flex flex-col gap-3">
+                <p id="orc-confirm-dialog-text"></p>
+                <div class="flex justify-end gap-2">
+                    <button class="orc-btn orc-btn-secondary" value="cancel">Cancel</button>
+                    <button class="orc-btn" value="ok">Go ahead</button>
+                </div>
+            </form>
+        </dialog>
         {% block page_body %}
             <div class="mx-auto w-full max-w-screen-xl px-4 min-h-screen">
                 <nav class="orc-navbar" role="navigation">

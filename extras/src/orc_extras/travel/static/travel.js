@@ -26,7 +26,7 @@ async function post(url, el, { method = "POST", body } = {}, onFailure = () => {
 
 const TEMPLATES = `
 <template id="travel-dialog-tpl">
-    <dialog id="travel-dialog" class="orc-card text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 overflow-visible backdrop:bg-black/50">
+    <dialog id="travel-dialog" class="orc-dialog w-96">
         <h2 class="text-xl font-semibold mb-3">Travel</h2>
         <ul id="travel-list" class="space-y-1 mb-4"></ul>
         <form id="travel-form" class="flex flex-col gap-2">
