@@ -24,7 +24,7 @@ dependencies = [
     "pyaudio==0.2.14",
     "recurring-ical-events==3.8.2",
     "requests==2.34.2",
-    "yt-dlp==2026.7.4",
+    "yt-dlp==2026.8.19",
     "command-cfg==0.4.0",
 ]
 name = "orc"
