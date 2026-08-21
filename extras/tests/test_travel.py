@@ -214,3 +214,16 @@ def test_next_run_rechecks_every_ten_minutes_within_two_hours():
     now = ARRIVE - timedelta(hours=1)
     sched = plugins.next_run(_runtime([]), job, now, m.Arrival(ARRIVE, "Home", None), lambda: None)
     assert sched.next_fire == now + timedelta(minutes=10)
+
+
+def test_run_job_syncs_arrive_to_live_verified_time(monkeypatch):
+    verified = ARRIVE + timedelta(hours=10)
+    rt = _runtime([])._replace(flight=SimpleNamespace(arrival=lambda *a, **k: (verified, "JFK", None)))
+    monkeypatch.setattr(plugins, "_runtime", rt)
+    monkeypatch.setattr(plugins, "_reschedule", lambda *a, **k: None)
+    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
+    ctx = MagicMock()
+    ctx.config.settings.tz = timezone.utc
+    ctx.api.local_now.return_value = ARRIVE - timedelta(hours=3)
+    plugins.run_job(job, ctx=ctx)
+    assert job.arrive == verified
