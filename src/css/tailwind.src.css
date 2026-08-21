@@ -77,6 +77,15 @@
     --orc-btn-focus-ring: color-mix(in srgb, var(--color-orc-secondary) 50%, transparent);
 }
 
+@utility orc-btn-secondary {
+    --orc-btn-color: var(--color-orc-secondary);
+    --orc-btn-color-hover: var(--color-orc-secondary-hover);
+    --orc-btn-color-hover-border: var(--color-orc-secondary-hover-border);
+    --orc-btn-color-active: var(--color-orc-secondary-active);
+    --orc-btn-color-active-border: var(--color-orc-secondary-active-border);
+    --orc-btn-focus-ring: color-mix(in srgb, var(--color-orc-secondary) 50%, transparent);
+}
+
 @utility orc-badge {
     @apply inline-block px-2 py-0.5 rounded text-xs font-semibold text-white;
 }
@@ -164,6 +173,13 @@
 
 @utility orc-progress {
     @apply fixed top-0 left-0 right-0 h-[3px] z-[1090];
+}
+
+@utility orc-dialog {
+    @apply rounded border bg-orc-bg border-orc-border text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible;
+    &::backdrop {
+        @apply bg-black/50;
+    }
 }
 
 /* dropup menu: a popover anchored above its opener; popover="auto" light-dismisses */
