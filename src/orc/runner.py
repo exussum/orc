@@ -10,7 +10,8 @@ from gunicorn.app.base import BaseApplication
 import orc as config
 from orc import _build, api
 from orc import model as m
-from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY, ContextThreadPoolExecutor
+from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY
+from orc.dal.scheduler import ContextThreadPoolExecutor
 from orc.locale import Log
 from orc.view import OrcFlask, VersionManager, bp
 
@@ -59,7 +60,7 @@ def _build_app() -> OrcFlask:
     scheduler = _build_scheduler()
     ctx = m.AppContext(api.snapshot_manager, scheduler, VersionManager())
     config.config.registry.ctx = ctx
-    scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), JOBSTORE_DEFAULT)
+    scheduler.add_executor(ContextThreadPoolExecutor(ctx), JOBSTORE_DEFAULT)
     scheduler.add_listener(lambda e: ctx.version_manager.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start(paused=True)
 

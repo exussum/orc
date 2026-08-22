@@ -12,11 +12,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.job import Job
 from apscheduler.schedulers.base import BaseScheduler
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -26,6 +23,7 @@ from orc import model as m
 from orc import plugins
 from orc.dal import net, sqlite
 from orc.dal.audio import play_alert, play_text  # noqa: F401
+from orc.dal.scheduler import schedule_cron, schedule_once
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
@@ -72,26 +70,6 @@ def record_duration(name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     update_avg(name, time.perf_counter() - start)
-
-
-class ContextThreadPoolExecutor(ThreadPoolExecutor):
-    def __init__(self, ctx: m.AppContext, max_workers: int = 1) -> None:
-        super().__init__(max_workers=max_workers)
-        self.ctx = ctx
-
-    def _do_submit_job(self, job: Job, run_times: list[datetime]) -> Any:
-        dispatch_job = job.__class__.__new__(job.__class__)
-        for slot in job.__slots__:
-            try:
-                setattr(dispatch_job, slot, getattr(job, slot))
-            except AttributeError:
-                pass
-        dispatch_job._jobstore_alias = job._jobstore_alias
-        dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
-        return super()._do_submit_job(dispatch_job, run_times)
-
-    def run_now(self, job: Job, **extra_kwargs: Any) -> Any:
-        return job.func(*job.args, ctx=self.ctx, **{**job.kwargs, **extra_kwargs})
 
 
 # --- Utilities ---
@@ -213,7 +191,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
             when = local_now() + delay
             log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
             job_id = f"run-{id}-{when.isoformat()}"
-            ctx.scheduler.add_job(run, DateTrigger(when, timezone=config.settings.tz), id=job_id, jobstore=JOBSTORE_MEMORY)
+            schedule_once(ctx.scheduler, run, when, id=job_id, jobstore=JOBSTORE_MEMORY)
         else:
             run(ctx=ctx)
     return True
@@ -556,14 +534,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
         ("presence-cron", _check_presence_job, "5 * * * *", "Presence Cron"),
     ):
-        ctx.scheduler.add_job(
-            func,
-            CronTrigger.from_crontab(crontab, timezone=config.settings.tz),
-            replace_existing=True,
-            id=job_id,
-            name=name,
-            jobstore=JOBSTORE_MEMORY,
-        )
+        schedule_cron(ctx.scheduler, func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
 
 
 def matched_presence(rule: m.Routine, people: set[str] | None = None) -> tuple[m.Config, ...]:
@@ -603,9 +574,10 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
     for run_at, rule in get_schedule():
         if now <= run_at:
-            ctx.scheduler.add_job(
+            schedule_once(
+                ctx.scheduler,
                 run_iot_job,
-                DateTrigger(run_at, timezone=config.settings.tz),
+                run_at,
                 args=[m.IotJob(rule)],
                 name=rule.name,
                 id=f"iot-{rule.name}-{run_at.date().isoformat()}",
