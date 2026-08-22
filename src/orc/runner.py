@@ -1,6 +1,5 @@
 import sys
 import traceback
-from pathlib import Path
 
 from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -58,9 +57,7 @@ def _build_app() -> OrcFlask:
     api.init_db()
 
     scheduler = _build_scheduler()
-    ctx = m.AppContext(
-        api.snapshot_manager, scheduler, (Path(Path(__file__).parent) / "static" / "alert.wav").resolve().as_posix(), VersionManager()
-    )
+    ctx = m.AppContext(api.snapshot_manager, scheduler, VersionManager())
     config.config.registry.ctx = ctx
     scheduler.add_executor(ContextThreadPoolExecutor(ctx, max_workers=1), JOBSTORE_DEFAULT)
     scheduler.add_listener(lambda e: ctx.version_manager.bump_version(), EVENT_JOB_EXECUTED)

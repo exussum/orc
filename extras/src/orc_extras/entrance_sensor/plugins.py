@@ -23,7 +23,7 @@ def _on_sensor_event(
     if device.id not in sensor_ids:
         return
     if attribute == "battery":
-        level = ctx.model.BatteryLevel.from_fraction(new, 100)
+        level = m.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
             ctx.api.log(Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})")
     elif _entrance_motion_changed(sensor, device, attribute, old, new):
@@ -67,9 +67,9 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
-        ctx.api.dispatch(ctx.model.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
+        ctx.api.dispatch(m.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
     elif new == sensor.setting.inactive_event:
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=ctx.model.Trigger.SYSTEM))
+        ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=m.Trigger.SYSTEM))
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
@@ -92,7 +92,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
     elif any(s.content for s in ctx.api.capture_sounds().items):
         # Visitor left, pet still listening: restore the pre-visit state
-        ctx.snapshot_manager.resume(SNAPSHOT_NAME, ctx.model.Configs())
+        ctx.snapshot_manager.resume(SNAPSHOT_NAME, m.Configs())
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent))
         msg = sensor.message.log_absent
     else:
@@ -108,7 +108,7 @@ def battery_state(ctx: m.AppContext, sensor_ids: set[int]) -> list[dict[str, Any
     return [
         {
             "name": d.name,
-            "battery": ctx.model.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
+            "battery": m.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
             "last_activity": d.last_activity,
         }
         for device_id in sorted(sensor_ids)
@@ -148,10 +148,10 @@ def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot
     # The snapshot is captured after the inside rule ran, so its state for those
     # lights is plugin-caused, not household state - don't replay it.
     if snapshot is None:
-        return ctx.model.Configs()
+        return m.Configs()
     inside = {d for r in sensor.rules.inside for d in ((r.device,) if isinstance(r.device, Enum) else r.device)}
-    return ctx.model.Configs(*[c for c in snapshot.routine.items if c.what not in inside])
+    return m.Configs(*[c for c in snapshot.routine.items if c.what not in inside])
 
 
 def _to_configs(ctx: m.AppContext, rows: Sequence[Any], trigger: m.Trigger | None = None) -> m.Configs:
-    return ctx.model.Configs(*[ctx.model.Config(r.device, r.state, trigger=trigger) for r in rows])
+    return m.Configs(*[m.Config(r.device, r.state, trigger=trigger) for r in rows])
