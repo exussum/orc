@@ -8,6 +8,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta
 from enum import Enum
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -43,6 +44,8 @@ from orc.security import safe_domain
 
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
+
+DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
