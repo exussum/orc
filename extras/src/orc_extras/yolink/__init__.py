@@ -70,7 +70,7 @@ def setup(ctx: AppContext) -> None:
     plugins.start()
 
 
-def test_sensor(ctx: AppContext, device: str) -> None:
+def test_sensor(ctx: AppContext, device: str, *, entry: m.LogEntry) -> None:
     plugins.simulate_transition(device)
 
 

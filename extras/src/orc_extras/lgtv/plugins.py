@@ -6,7 +6,7 @@ from orc_extras.lgtv.dal.sqlite import Connection
 
 import orc
 from orc.loader import resolve_backend
-from orc.model import AppContext, DeviceEnum
+from orc.model import AppContext, DeviceEnum, LogEntry
 
 
 def _backend() -> WebOsBackend:
@@ -25,7 +25,7 @@ def off(connection: Connection, tv: DeviceEnum) -> None:
     _backend().off(connection, tv)
 
 
-def pair_tv(ctx: AppContext, device: str) -> None:
+def pair_tv(ctx: AppContext, device: str, *, entry: LogEntry) -> None:
     pair(ctx.api.connection, ctx.orc.WebOS[device].value)
 
 
