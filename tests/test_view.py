@@ -20,7 +20,6 @@ def ctx(scheduler):
     return m.AppContext(
         snapshot_manager=api.SnapshotManager(),
         scheduler=scheduler,
-        sound_path="/tmp/alert.mp3",
         version_manager=VersionManager(),
     )
 
