@@ -337,11 +337,9 @@ class AppContext:
 
     snapshot_manager: SnapshotManager
     scheduler: BaseScheduler
-    sound_path: str
     version_manager: VersionManager
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
-    model: ModuleType = field(default_factory=lambda: importlib.import_module("orc.model"))
     orc: ModuleType = field(default_factory=lambda: importlib.import_module("orc"))
 
 
