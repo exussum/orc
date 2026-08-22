@@ -17,7 +17,7 @@ def mock_registry(monkeypatch):
     tests that exercise dispatch without running real registration. Each keyword is
     ``name=(enum_cls, dispatch | None)``; the enum is also attached to ``orc``."""
 
-    def install(ctx=None, **dispatch_by_type):
+    def install(ctx, **dispatch_by_type):
         for name, (cls, _) in dispatch_by_type.items():
             monkeypatch.setattr(orc, name, cls, raising=False)
         registry = m.Registry(
@@ -31,8 +31,7 @@ def mock_registry(monkeypatch):
             setup_hooks=[],
         )
         monkeypatch.setattr(orc.config, "registry", registry)
-        if ctx is not None:
-            api.set_ctx(ctx)
+        api.set_ctx(ctx)
         return registry
 
     return install
