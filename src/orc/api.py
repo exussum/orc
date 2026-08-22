@@ -45,6 +45,14 @@ _PRESENCE_CRON_JOB_ID = "presence-cron"
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 
+_ctx: m.AppContext | None = None
+
+
+def set_ctx(ctx: m.AppContext) -> None:
+    global _ctx
+    _ctx = ctx
+
+
 _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG = m.ActivityLog()
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
@@ -242,7 +250,7 @@ def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = Non
         if device_type is None or device_type.dispatch is None:
             raise Exception("Unknown type")
         try:
-            device_type.dispatch(config.registry.ctx, w, rule, stream)
+            device_type.dispatch(_ctx, w, rule, stream)
         except Exception as exc:
             action = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
             if entry is not None:
@@ -283,7 +291,7 @@ def device_command(id: str, state: str | None) -> None:
     for device_type in config.registry.devices.values():
         if device_type.dispatch is not None and device_type.handles(id):
             member = device_type.cls[id]
-            device_type.dispatch(config.registry.ctx, member, m.Config(member, parsed), {})
+            device_type.dispatch(_ctx, member, m.Config(member, parsed), {})
             return
     raise Exception(f"Unknown device: {id}")
 
