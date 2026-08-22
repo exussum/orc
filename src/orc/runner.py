@@ -11,7 +11,7 @@ import orc as config
 from orc import _build, api
 from orc import model as m
 from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY
-from orc.dal.scheduler import ContextThreadPoolExecutor
+from orc.dal.scheduler import ContextThreadPoolExecutor, set_scheduler
 from orc.locale import Log
 from orc.view import OrcFlask, VersionManager, bp
 
@@ -58,6 +58,7 @@ def _build_app() -> OrcFlask:
     api.init_db()
 
     scheduler = _build_scheduler()
+    set_scheduler(scheduler)
     ctx = m.AppContext(api.snapshot_manager, scheduler, VersionManager())
     config.config.registry.ctx = ctx
     scheduler.add_executor(ContextThreadPoolExecutor(ctx), JOBSTORE_DEFAULT)
