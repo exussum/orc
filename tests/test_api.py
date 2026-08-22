@@ -10,7 +10,7 @@ from freezegun import freeze_time
 import orc
 from orc import api, config
 from orc import model as m
-from orc.dal import net
+from orc.dal import net, scheduler
 from orc.dal.mqtt import stub as mqtt_stub
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
@@ -389,7 +389,7 @@ class TestPresence:
 def test_context_executor_copies_closure_job():
     """_do_submit_job must not raise for closure callables (Job uses __slots__, not __dict__)."""
     ctx = object()
-    executor = api.ContextThreadPoolExecutor(ctx)
+    executor = scheduler.ContextThreadPoolExecutor(ctx)
 
     def make_closure():
         def run():
@@ -403,7 +403,7 @@ def test_context_executor_copies_closure_job():
     sched.shutdown(wait=False)
 
     captured = []
-    with patch.object(api.ThreadPoolExecutor, "_do_submit_job", lambda s, j, rt: captured.append(j)):
+    with patch.object(scheduler.ThreadPoolExecutor, "_do_submit_job", lambda s, j, rt: captured.append(j)):
         executor._do_submit_job(job, [])
 
     assert captured[0].kwargs["ctx"] is ctx
