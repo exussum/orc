@@ -7,12 +7,15 @@ from flask import Flask
 import orc
 from orc import api, config
 from orc import model as m
+from orc.dal import scheduler as dal_scheduler
 from orc.view import VersionManager, bp
 
 
 @pytest.fixture
 def scheduler():
-    return MagicMock()
+    sched = MagicMock()
+    dal_scheduler.set_scheduler(sched)
+    return sched
 
 
 @pytest.fixture
@@ -310,7 +313,7 @@ def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None, skip_repl
 
 def _get_schedule(client, jobs, present_names=()):
     with (
-        patch.object(api, "jobs_by_type", return_value=jobs),
+        patch.object(api, "fetch_jobs_by_type", return_value=jobs),
         patch.object(api, "current_theme_override", return_value=None),
         patch.object(api, "present_names", return_value=set(present_names)),
         patch.object(api, "fetch_durations", return_value=[]),

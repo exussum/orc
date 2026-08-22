@@ -13,7 +13,6 @@ from typing import Any
 from urllib.parse import urlparse
 
 from apscheduler.job import Job
-from apscheduler.schedulers.base import BaseScheduler
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -21,9 +20,9 @@ import orc
 from orc import config
 from orc import model as m
 from orc import plugins
-from orc.dal import net, sqlite
+from orc.dal import net, scheduler, sqlite
 from orc.dal.audio import play_alert, play_text  # noqa: F401
-from orc.dal.scheduler import schedule_cron, schedule_once
+from orc.dal.scheduler import fetch_jobs_by_type
 from orc.dal.sqlite import connection  # noqa: F401
 from orc.dal.sqlite import init_db  # noqa: F401
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
@@ -42,6 +41,7 @@ from orc.security import safe_domain
 
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
+_PRESENCE_CRON_JOB_ID = "presence-cron"
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 
@@ -75,9 +75,11 @@ def record_duration(name: str) -> Iterator[None]:
 # --- Utilities ---
 
 
-def jobs_by_type(scheduler: BaseScheduler, type: type) -> list[Job]:
-    now = local_now()
-    return [e for e in scheduler.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
+def toggle_job(id: str) -> bool:
+    if not scheduler.job_exists(id):
+        return False
+    scheduler.resume_job(id) if scheduler.is_paused(id) else scheduler.pause_job(id)
+    return True
 
 
 def local_now() -> datetime:
@@ -191,7 +193,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
             when = local_now() + delay
             log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
             job_id = f"run-{id}-{when.isoformat()}"
-            schedule_once(ctx.scheduler, run, when, id=job_id, jobstore=JOBSTORE_MEMORY)
+            scheduler.schedule_once(run, when, id=job_id, jobstore=JOBSTORE_MEMORY)
         else:
             run(ctx=ctx)
     return True
@@ -402,6 +404,12 @@ def delete_all_presence() -> None:
     sqlite.delete_all_presence(local_now())
 
 
+def rerun_presence_check(ctx: m.AppContext) -> None:
+    log(m.LogSource.MANUAL, Log.PRESENCE_RESCAN)
+    delete_all_presence()
+    scheduler.invoke_job(_PRESENCE_CRON_JOB_ID, ctx=ctx)
+
+
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None) -> None:
     now = local_now()
     today = now.date()
@@ -480,8 +488,8 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
     return result
 
 
-def next_iot_job(scheduler: BaseScheduler, present_names: set[str]) -> Job | None:
-    jobs = sorted(jobs_by_type(scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
+def next_iot_job(present_names: set[str]) -> Job | None:
+    jobs = sorted(fetch_jobs_by_type(m.IotJob), key=lambda e: e.trigger.run_date)
     return next(
         (
             j
@@ -523,18 +531,18 @@ def _squish_matched(rule: m.Routine, matched: Sequence[m.Config], entry: m.LogEn
 
 
 def rebuild_jobs(ctx: m.AppContext) -> None:
-    ctx.scheduler.remove_all_jobs()
+    scheduler.remove_all_jobs()
     setup_scheduler(ctx)
 
 
 def setup_scheduler(ctx: m.AppContext) -> None:
-    if not jobs_by_type(ctx.scheduler, m.IotJob):
+    if not fetch_jobs_by_type(m.IotJob):
         rebuild_iot_schedule(ctx=ctx)
     for job_id, func, crontab, name in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
-        ("presence-cron", _check_presence_job, "5 * * * *", "Presence Cron"),
+        (_PRESENCE_CRON_JOB_ID, _check_presence_job, "5 * * * *", "Presence Cron"),
     ):
-        schedule_cron(ctx.scheduler, func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
+        scheduler.schedule_cron(func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
 
 
 def matched_presence(rule: m.Routine, people: set[str] | None = None) -> tuple[m.Config, ...]:
@@ -574,8 +582,7 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
     for run_at, rule in get_schedule():
         if now <= run_at:
-            schedule_once(
-                ctx.scheduler,
+            scheduler.schedule_once(
                 run_iot_job,
                 run_at,
                 args=[m.IotJob(rule)],

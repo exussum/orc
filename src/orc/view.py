@@ -176,7 +176,7 @@ def expire_presence(name: str) -> None:
 @bp.route("/")
 def index() -> tuple[str, int, dict[str, str]]:
     present_names = api.present_names()
-    next_schedule = api.next_iot_job(app.orc.scheduler, present_names)
+    next_schedule = api.next_iot_job(present_names)
 
     return (
         render_template(
@@ -208,13 +208,8 @@ def log() -> tuple[str, int, dict[str, str]]:
 @bp.route("/api/schedule/<id>/pause")
 @VersionManager.versioned
 def pause(id: str) -> tuple[dict[str, Any], int] | None:
-    job = app.orc.scheduler.get_job(id)
-    if job is None:
+    if not api.toggle_job(id):
         return {"error": "Unknown job"}, 404
-    if job.next_run_time:
-        job.pause()
-    else:
-        job.resume()
     return None
 
 
@@ -292,19 +287,13 @@ def presence_state() -> dict[str, Any]:
 
 @bp.route("/api/presence/run")
 @VersionManager.versioned
-def run_presence_check() -> tuple[dict[str, Any], int] | None:
-    job = app.orc.scheduler.get_job("presence-cron")
-    if job is None:
-        return {"error": "Unknown job"}, 404
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_RESCAN)
-    api.delete_all_presence()
-    job.func(ctx=app.orc)
-    return None
+def run_presence_check() -> None:
+    api.rerun_presence_check(app.orc)
 
 
 @bp.route("/schedule/")
 def schedule() -> tuple[str, int, dict[str, str]]:
-    jobs = sorted(api.jobs_by_type(app.orc.scheduler, m.IotJob), key=lambda e: e.trigger.run_date)
+    jobs = sorted(api.fetch_jobs_by_type(m.IotJob), key=lambda e: e.trigger.run_date)
     theme_override = api.current_theme_override()
 
     theme = (
