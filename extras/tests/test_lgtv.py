@@ -29,9 +29,10 @@ def mock_registry(monkeypatch):
             button_labels={},
             state_providers={},
             setup_hooks=[],
-            ctx=ctx,
         )
         monkeypatch.setattr(orc.config, "registry", registry)
+        if ctx is not None:
+            api.set_ctx(ctx)
         return registry
 
     return install

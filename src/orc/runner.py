@@ -60,7 +60,7 @@ def _build_app() -> OrcFlask:
     scheduler = _build_scheduler()
     set_scheduler(scheduler)
     ctx = m.AppContext(api.snapshot_manager, scheduler, VersionManager())
-    config.config.registry.ctx = ctx
+    api.set_ctx(ctx)
     scheduler.add_executor(ContextThreadPoolExecutor(ctx), JOBSTORE_DEFAULT)
     scheduler.add_listener(lambda e: ctx.version_manager.bump_version(), EVENT_JOB_EXECUTED)
     scheduler.start(paused=True)
