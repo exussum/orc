@@ -70,14 +70,14 @@ def test_versioned_bumps_after_success(client, ctx, good_version):
 
 
 def test_console_plugin(client, ctx):
-    plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device: None)
+    plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device, entry: None)
     with (
         patch.object(config, "plugins", (plugin,)),
         patch("orc.plugins.execute_plugin") as exec_plugin,
     ):
         response = client.get("/api/run/do-thing")
     assert response.status_code == 200
-    exec_plugin.assert_called_once_with(ctx, plugin, None)
+    exec_plugin.assert_called_once_with(ctx, plugin, None, entry=ANY)
 
 
 def test_console_schedule_routine(client):
@@ -131,7 +131,7 @@ def test_button_ad_hoc_snapshot(ctx):
     snap = ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
-    ex.assert_called_once_with(routine, force=True)
+    ex.assert_called_once_with(routine, force=True, entry=ANY)
 
 
 def test_button_ad_hoc_snapshot_does_not_stack(ctx):
@@ -191,7 +191,7 @@ def test_room_on(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=on")
-    ex.assert_called_once_with(routine, force=True)
+    ex.assert_called_once_with(routine, force=True, entry=ANY)
 
 
 def test_room_off_replaces_state(client):
@@ -214,7 +214,7 @@ def test_room_follow(client):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=follow")
-    ex.assert_called_once_with(m.squish_configs(off, routine), force=True)
+    ex.assert_called_once_with(m.squish_configs(off, routine), force=True, entry=ANY)
 
 
 def test_room_unknown_state_raises(client):
