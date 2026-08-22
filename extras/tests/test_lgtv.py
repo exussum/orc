@@ -57,17 +57,17 @@ class TestDispatchLGTV:
 
     def test_off_powers_webos_off(self):
         with patch.object(plugins, "off") as webos_off:
-            api.dispatch(m.Config(self.lgtv, m.OFF))
+            api.dispatch(m.Config(self.lgtv, m.OFF), entry=None)
         webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
         with patch.object(plugins, "is_off", return_value=True):
-            api.dispatch(m.Config(self.lgtv, m.ON))
+            api.dispatch(m.Config(self.lgtv, m.ON), entry=None)
         self.ctx.api.tv_toggle.assert_called_once_with(self.bl)
 
     def test_on_skips_toggle_when_tv_already_on(self):
         with patch.object(plugins, "is_off", return_value=False):
-            api.dispatch(m.Config(self.lgtv, m.ON))
+            api.dispatch(m.Config(self.lgtv, m.ON), entry=None)
         self.ctx.api.tv_toggle.assert_not_called()
 
     def test_device_command_routes_to_lgtv_handler(self):

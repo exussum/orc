@@ -67,9 +67,9 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
         timed_name, timed_rows = _timed_rows(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
-        ctx.api.dispatch(m.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True)
+        ctx.api.dispatch(m.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=m.Trigger.SYSTEM))
+        ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=m.Trigger.SYSTEM), entry=log_entry)
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
@@ -88,17 +88,17 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     door_open = not present and _door_open(ctx, sensor)
 
     if present or door_open:
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.present))
+        ctx.api.dispatch(_to_configs(ctx, sensor.rules.present), entry=log_entry)
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
     elif any(s.content for s in ctx.api.capture_sounds().items):
         # Visitor left, pet still listening: restore the pre-visit state
         ctx.snapshot_manager.resume(SNAPSHOT_NAME, m.Configs())
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent))
+        ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent), entry=log_entry)
         msg = sensor.message.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
         ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, SNAPSHOT_NAME)
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent))
+        ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent), entry=log_entry)
         msg = sensor.message.log_shutdown
     log_entry.add(Log.ENTRANCE, msg)
 

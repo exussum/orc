@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -118,7 +118,7 @@ def test_day_walk_in_brightens_entrance_and_pauses_media(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.dispatch.assert_called_once_with(
-        m.Configs(m.Config(Light.day_bulb, 20), m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.PAUSE)), force=True
+        m.Configs(m.Config(Light.day_bulb, 20), m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.PAUSE)), force=True, entry=ANY
     )
 
 
@@ -127,7 +127,7 @@ def test_night_walk_in_dims_entrance_and_stops_media(ctx, sensor):
     ctx.api.local_now.return_value = _NIGHTTIME
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.dispatch.assert_called_once_with(
-        m.Configs(m.Config(Light.night_bulb, 1), m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.STOP)), force=True
+        m.Configs(m.Config(Light.night_bulb, 1), m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.STOP)), force=True, entry=ANY
     )
 
 
@@ -147,7 +147,7 @@ def test_walk_in_outside_any_window_runs_enter_only(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     sensor.timed = {"Morning": [_row(Light.day_bulb, 20, start=time(8), stop=time(9))]}
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.PAUSE)), force=True)
+    ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Light.lamp, m.ON), m.Config(Chromecast.cc, m.PAUSE)), force=True, entry=ANY)
 
 
 def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
@@ -198,7 +198,8 @@ def test_entrance_lights_turn_off_behind_you(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
     ctx.api.dispatch.assert_called_once_with(
-        m.Configs(m.Config(Light.day_bulb, m.OFF, trigger=m.Trigger.SYSTEM), m.Config(Light.night_bulb, m.OFF, trigger=m.Trigger.SYSTEM))
+        m.Configs(m.Config(Light.day_bulb, m.OFF, trigger=m.Trigger.SYSTEM), m.Config(Light.night_bulb, m.OFF, trigger=m.Trigger.SYSTEM)),
+        entry=ANY,
     )
 
 
@@ -218,7 +219,7 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)), entry=ANY)
     assert [c.action for c in entry.children] == [sensor.message.log_present]
 
 
@@ -226,7 +227,7 @@ def test_pet_home_alone_keeps_media_playing(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)), entry=ANY)
     assert [c.action for c in entry.children] == [sensor.message.log_absent]
 
 
@@ -244,7 +245,7 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
     plugin_ctx.snapshot_manager.replace_config.assert_called_once_with(
         plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45), plugins.SNAPSHOT_NAME
     )
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)), entry=ANY)
     assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
 
 
@@ -260,7 +261,7 @@ def test_open_door_counts_as_present(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     _seed_devices(plugin_ctx, _door("open"))
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)))
+    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)), entry=ANY)
     assert [c.action for c in entry.children] == [sensor.message.log_door_open]
 
 

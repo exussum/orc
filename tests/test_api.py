@@ -22,26 +22,31 @@ def snapshot_config():
     return m.Configs(m.Config(orc.Light.a, m.ON), m.Config(orc.Light.b, m.OFF))
 
 
+@pytest.fixture
+def entry():
+    return m.LogEntry(FUTURE, m.LogSource.MANUAL, "test")
+
+
 @patch("orc.api.dispatch")
 class TestManagingConfig:
     def setup_method(self):
         self.target = api.SnapshotManager()
 
-    def test_resume_with_snapshot(self, dispatch, snapshot_config):
+    def test_resume_with_snapshot(self, dispatch, snapshot_config, entry):
         self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=FUTURE)
-        self.target.resume("test", None)
-        assert dispatch.call_args_list == [call(snapshot_config, force=True)]
+        self.target.resume("test", None, entry)
+        assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
 
-    def test_resume_without_snapshot(self, dispatch):
+    def test_resume_without_snapshot(self, dispatch, entry):
         routine = object()
-        self.target.resume("test", routine)
-        assert dispatch.call_args_list == [call(routine, force=True)]
+        self.target.resume("test", routine, entry)
+        assert dispatch.call_args_list == [call(routine, force=True, entry=entry)]
 
-    def test_resume_with_old_snapshot(self, dispatch, snapshot_config):
+    def test_resume_with_old_snapshot(self, dispatch, snapshot_config, entry):
         routine = object()
         self.target.snapshots["test"] = m.SnapShot(routine=snapshot_config, end=PAST)
-        self.target.resume("test", routine)
-        assert dispatch.call_args_list == [call(routine, force=True)]
+        self.target.resume("test", routine, entry)
+        assert dispatch.call_args_list == [call(routine, force=True, entry=entry)]
         assert not self.target.snapshots
 
     def test_get_with_snapshot(self, dispatch, snapshot_config):
@@ -69,12 +74,12 @@ class TestIntercepts:
         with patch.object(api, "snapshot_manager", self.target):
             yield
 
-    def test_snapshot_update_overwrite_set(self, update_light, snapshot_config):
+    def test_snapshot_update_overwrite_set(self, update_light, snapshot_config, entry):
         rule = m.Config(set((orc.Light.b,)), m.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
-        api.dispatch(rule)
-        api.dispatch(rule)
+        api.dispatch(rule, entry=entry)
+        api.dispatch(rule, entry=entry)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
@@ -82,11 +87,11 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
 
-    def test_snapshot_update_add(self, update_light, snapshot_config):
+    def test_snapshot_update_add(self, update_light, snapshot_config, entry):
         rule = m.Config(orc.Light.c, m.ON, trigger=m.Trigger.SYSTEM)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
-        api.dispatch(rule)
+        api.dispatch(rule, entry=entry)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
@@ -95,11 +100,11 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
-    def test_rule_ignored(self, update_light, snapshot_config):
+    def test_rule_ignored(self, update_light, snapshot_config, entry):
         rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
-        api.dispatch(rule)
+        api.dispatch(rule, entry=entry)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
@@ -107,21 +112,21 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == []
 
-    def test_rule_old_snapshot(self, update_light, snapshot_config):
+    def test_rule_old_snapshot(self, update_light, snapshot_config, entry):
         rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=PAST)
-        api.dispatch(rule)
+        api.dispatch(rule, entry=entry)
 
         assert not self.target.snapshots
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
-    def test_snapshot_bypassed(self, update_light, snapshot_config):
+    def test_snapshot_bypassed(self, update_light, snapshot_config, entry):
         rule = m.Config(orc.Light.c, m.ON)
 
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
 
-        api.dispatch(rule, force=True)
+        api.dispatch(rule, force=True, entry=entry)
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),
@@ -129,17 +134,17 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
-    def test_force_off_is_not_recorded_and_resume_relights(self, update_light, snapshot_config):
+    def test_force_off_is_not_recorded_and_resume_relights(self, update_light, snapshot_config, entry):
         self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=snapshot_config, end=FUTURE)
 
-        api.dispatch(m.Config(orc.Light.a, m.OFF), force=True)  # room control during the scene
+        api.dispatch(m.Config(orc.Light.a, m.OFF), force=True, entry=entry)  # room control during the scene
 
         assert self.target.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine.items == (
             m.Config(orc.Light.a, m.ON),  # snapshot still holds the captured ON
             m.Config(orc.Light.b, m.OFF),
         )
 
-        self.target.resume(api.ORC_SYSTEM_SNAPSHOT, None)
+        self.target.resume(api.ORC_SYSTEM_SNAPSHOT, None, entry)
 
         assert update_light.call_args_list == [
             call(orc.Light.a, on=False),  # the deliberate off
@@ -336,29 +341,29 @@ class TestPresence:
         dispatch.assert_not_called()
         assert "CLOUDY" in api.log_entries()[0].action
 
-    def test_replay_day_skips_routines_for_absent_people(self):
+    def test_replay_day_skips_routines_for_absent_people(self, entry):
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
-            api.replay_day(api.local_now())
+            api.replay_day(api.local_now(), entry)
         squished = dispatch.call_args.args[0]
         assert squished.items == ()
 
-    def test_replay_day_runs_routines_for_present_people(self):
+    def test_replay_day_runs_routines_for_present_people(self, entry):
         api.mark_present(["Alice"], when=api.local_now())
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
-            api.replay_day(api.local_now())
+            api.replay_day(api.local_now(), entry)
         squished = dispatch.call_args.args[0]
         assert [c.trigger for c in squished.items] == ["Alice"]
 
-    def test_replay_day_skips_skip_replay_routines(self):
+    def test_replay_day_skips_skip_replay_routines(self, entry):
         api.mark_present(["Alice"], when=api.local_now())
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         meeting = replace(self._routine("meeting-r", "Alice"), skip_replay=True)
         with patch.object(api, "get_schedule", return_value=[(past, meeting)]), patch.object(api, "dispatch") as dispatch:
-            api.replay_day(api.local_now())
+            api.replay_day(api.local_now(), entry)
         squished = dispatch.call_args.args[0]
         assert squished.items == ()
 
