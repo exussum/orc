@@ -400,7 +400,6 @@ class Registry:
     state_providers: dict[str, Callable[[], Any]]
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
-    ctx: AppContext | None = None  # set once at startup; None during config load
 
 
 def column_to_value(col: str, val: Any) -> Any:
