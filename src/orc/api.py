@@ -165,12 +165,12 @@ def declare_core(declarations: Declarations) -> None:
 
 
 def resolve_run_action(
-    ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False
+    ctx: m.AppContext, id: str, *, device: str | None, hub_origin: bool
 ) -> tuple[Callable[[m.LogEntry], None], timedelta] | None:
     if id == ORC_SYSTEM_SNAPSHOT:
-        return lambda entry: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config), timedelta()
+        return lambda entry: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config, entry), timedelta()
     elif (plugin := config.plugin(id)) is not None:
-        return lambda entry: plugins.execute_plugin(ctx, plugin, device), plugin.delay
+        return lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.delay
     elif id in config.schedule_routines:
         return lambda entry: run_schedule_routine(config.schedule_routines[id], entry, force=True), timedelta()
     elif id in config.ad_hoc_routines:
@@ -178,7 +178,10 @@ def resolve_run_action(
         if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
             # Don't stack snapshots
             snap = routine.snapshot
-            return lambda entry: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, id), timedelta()
+            return (
+                lambda entry: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, id, entry),
+                timedelta(),
+            )
         base = (config.reset_config,) if routine.reset else ()
         return lambda entry: dispatch(m.squish_configs(*base, routine), force=True, entry=entry), routine.delay
     return None
@@ -234,7 +237,7 @@ def wire_external_log() -> None:
 
 
 @unwrap_rule_container
-def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = None) -> None:
+def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
     if not force and snapshot_manager.intercepts(rule):
         return
     what = [rule.what] if isinstance(rule.what, Enum) else rule.what
@@ -242,8 +245,7 @@ def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = Non
 
     def one(w: m.DeviceEnum) -> None:
         if w in config.virtual_devices:
-            if entry is not None:
-                entry.add(m.LogSource.SYSTEM, Log.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
+            entry.add(entry.source, Log.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
             return
 
         device_type = config.registry.devices.get(type(w).__name__)
@@ -252,11 +254,7 @@ def dispatch(rule: m.Config, force: bool = False, entry: m.LogEntry | None = Non
         try:
             device_type.dispatch(_ctx, w, rule, stream)
         except Exception as exc:
-            action = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
-            if entry is not None:
-                entry.add(m.LogSource.SYSTEM, action)
-            else:
-                log(m.LogSource.SYSTEM, action)
+            entry.add(entry.source, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
 
     with Pool(max_workers=max(1, len(what))) as ex:
         list(ex.map(one, what))
@@ -308,16 +306,16 @@ class SnapshotManager:
         self.snapshots: dict[str, m.SnapShot] = {}
 
     @synchronized
-    def replace_config(self, name: str, target_config: m.Configs, end: datetime, label: str) -> None:
+    def replace_config(self, name: str, target_config: m.Configs, end: datetime, label: str, entry: m.LogEntry) -> None:
 
         if name not in self.snapshots:
             self.snapshots[name] = m.SnapShot(capture_lights(), end, label)
             # captured light states are always enum members, not the class/set arm
             routine_items = self.snapshots[name].routine.items
             items = ", ".join(f"`{c.what.name}`={c.state}" for c in routine_items if c.state != m.OFF)  # type: ignore[union-attr]
-            log(m.LogSource.SYSTEM, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
+            entry.add(entry.source, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
-        dispatch(target_config, force=True)
+        dispatch(target_config, force=True, entry=entry)
 
     @staticmethod
     def _live(snapshot: m.SnapShot | None) -> bool:
@@ -333,15 +331,15 @@ class SnapshotManager:
         return self._live(self.snapshots.get(name))
 
     @synchronized
-    def resume(self, name: str, target_config: m.Configs) -> None:
+    def resume(self, name: str, target_config: m.Configs, entry: m.LogEntry) -> None:
         snapshot = self.get(name)
 
         if snapshot:
             routine = snapshot.routine
-            log(m.LogSource.SYSTEM, Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
+            entry.add(entry.source, Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
         else:
             routine = target_config
-        dispatch(routine, force=True)
+        dispatch(routine, force=True, entry=entry)
 
     @synchronized
     def update_snapshot(self, name: str, rule: m.Config) -> None:
@@ -412,10 +410,10 @@ def delete_all_presence() -> None:
     sqlite.delete_all_presence(local_now())
 
 
-def rerun_presence_check(ctx: m.AppContext) -> None:
-    log(m.LogSource.MANUAL, Log.PRESENCE_RESCAN)
+def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
+    log(source, Log.PRESENCE_RESCAN)
     delete_all_presence()
-    scheduler.invoke_job(_PRESENCE_CRON_JOB_ID, ctx=ctx)
+    scheduler.invoke_job(_PRESENCE_CRON_JOB_ID, ctx=ctx, source=source)
 
 
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None) -> None:
@@ -423,34 +421,34 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
     today = now.date()
     before = calculate_theme(today)
     if not name:
-        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
+        entry = log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
         clear_theme_override()
     else:
         assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
-        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
+        entry = log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
     after = calculate_theme(today)
     rebuild_jobs(ctx)
     if before != after:
-        replay_day(now)
+        replay_day(now, entry)
 
 
-def check_presence(silent: bool = False) -> set[str]:
+def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
     pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
     if not pairs:
         return present_names()
     before = present_names()
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
-        log(m.LogSource.SYSTEM, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
+        log(source, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
     mark_present(present, local_now())
     after = present_names()
 
     if not silent:
         if detected := sorted(after - before):
-            log(m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
+            log(source, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
         if lost := sorted(before - after):
-            log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
+            log(source, Log.PRESENCE_LOST.format(name=", ".join(lost)))
     return after
 
 
@@ -600,14 +598,14 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
             )
 
 
-def replay_day(now: datetime) -> None:
+def replay_day(now: datetime, entry: m.LogEntry) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
     # replace() keeps Routine type; squish_configs only reads .items, which Routine and Configs share
     configs = (replace(cfg, items=matching_items(cfg, now, present)) for (when, cfg) in jobs if when <= now and not cfg.skip_replay)
-    dispatch(m.squish_configs(*configs), force=True)
+    dispatch(m.squish_configs(*configs), force=True, entry=entry)
 
 
 @requires_ctx
-def _check_presence_job(ctx: m.AppContext) -> set[str]:
-    return check_presence()
+def _check_presence_job(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
+    return check_presence(source=source)

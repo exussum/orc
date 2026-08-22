@@ -267,16 +267,16 @@ def room(id: str) -> tuple[dict[str, Any], int]:
     state = request.args.get("state")
     if id not in config.rooms:
         return {"error": "Unknown room"}, 404
+    entry = api.log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
     with api.record_duration(id):
         if state == m.ON:
-            api.dispatch(config.rooms[id], force=True)
+            api.dispatch(config.rooms[id], force=True, entry=entry)
         elif state == m.OFF:
-            api.dispatch(m.Configs(*(replace(e, state=m.OFF) for e in config.rooms[id].items)), force=True)
+            api.dispatch(m.Configs(*(replace(e, state=m.OFF) for e in config.rooms[id].items)), force=True, entry=entry)
         elif state == m.FOLLOW:
-            api.dispatch(m.squish_configs(config.rooms_off, config.rooms[id]), force=True)
+            api.dispatch(m.squish_configs(config.rooms_off, config.rooms[id]), force=True, entry=entry)
         else:
             raise Exception("Unknown state")
-    api.log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
     return {"version": VersionManager.version}, 200
 
 
