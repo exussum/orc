@@ -87,14 +87,14 @@ wheels = [
 
 [[package]]
 name = "aiowebostv"
-version = "0.7.5"
+version = "0.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/80/9d/ac6ecbc122141a979a7e25caa36ccce8389290a3b8b02aefbafde0effcb6/aiowebostv-0.7.5.tar.gz", hash = "sha256:88406409ce2fdbe7193f88df06db86304058135e13885847101b19e973f5b9b9", size = 19814, upload-time = "2025-08-12T17:56:16.779Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/74/ff/2146f9c8b959c0ee32ba414b149872e0d13ece941e2560b88a47477dba4c/aiowebostv-0.9.1.tar.gz", hash = "sha256:3968478fd56f32cea151ca2a3729b70be9269314f398a2ec00e0a09081ad8675", size = 20011, upload-time = "2026-08-06T14:37:53.833Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4e/37/4a63f38aca2139562c92bad3b2faa702d65368dd97f0ae184431ef7453ff/aiowebostv-0.7.5-py3-none-any.whl", hash = "sha256:a900621298be87325ee2a40f46009d4cac5deb520b0c0a5e601ec86038b44c37", size = 19665, upload-time = "2025-08-12T17:56:15.663Z" },
+    { url = "https://files.pythonhosted.org/packages/76/83/cb056a46536adc06e29ec9de05abc2759b3be8476ca2d878be3822b63eee/aiowebostv-0.9.1-py3-none-any.whl", hash = "sha256:ad6c179c2343ee352793dda73c3580877bcfb5b3c456415dfcec4e24afa1fefc", size = 19821, upload-time = "2026-08-06T14:37:52.738Z" },
 ]
 
 [[package]]
@@ -896,7 +896,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiowebostv", specifier = "==0.7.5" },
+    { name = "aiowebostv", specifier = "==0.9.1" },
     { name = "apscheduler", specifier = "==3.11.3" },
     { name = "audioop-lts", marker = "python_full_version >= '3.13'", specifier = "==0.2.2" },
     { name = "black", marker = "extra == 'lint'", specifier = "==26.5.1" },
@@ -911,7 +911,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'lint'", specifier = "==2.3.0" },
     { name = "orc-data", directory = "data" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
-    { name = "piper-tts", specifier = "==1.5.0" },
+    { name = "piper-tts", specifier = "==1.6.1" },
     { name = "pyaudio", specifier = "==0.2.14" },
     { name = "pychromecast", specifier = "==14.0.10" },
     { name = "pyflakes", marker = "extra == 'lint'", specifier = "==3.4.0" },
@@ -919,7 +919,7 @@ requires-dist = [
     { name = "recurring-ical-events", specifier = "==3.8.2" },
     { name = "requests", specifier = "==2.34.2" },
     { name = "scapy", specifier = "==2.7.0" },
-    { name = "skyfield", specifier = "==1.54" },
+    { name = "skyfield", specifier = "==1.55" },
     { name = "sqlalchemy", specifier = "==2.0.51" },
     { name = "yt-dlp", specifier = "==2026.8.19" },
 ]
@@ -968,19 +968,19 @@ wheels = [
 
 [[package]]
 name = "piper-tts"
-version = "1.5.0"
+version = "1.6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "onnxruntime" },
     { name = "pathvalidate" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/d0/379043e3445b9cca71853282694b68ab5daecb728ff19112da3c93825df7/piper_tts-1.5.0.tar.gz", hash = "sha256:6053a505a61bbc8fa16dc06498355ae202c3470d0571397afa54e2d106ef5259", size = 4424497, upload-time = "2026-07-17T20:06:23.622Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/b4/ca1567b991df8117e5a2ca7b0be660a32add64faed22edbeb807261da34f/piper_tts-1.6.1.tar.gz", hash = "sha256:4a01e73e4607947708638a035bf5c4fb463312a7606cad30ffaf9d0dafdccf88", size = 24261764, upload-time = "2026-08-13T15:24:00.93Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/0f/e0e7660853da1369124138b14b2916e102820e4c3f2244b864db4cd30a24/piper_tts-1.5.0-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:7f6db2990c9d27afd360352938efdcc67acdaed33216b40bfe683658266c6b4a", size = 14265832, upload-time = "2026-07-17T20:06:09.07Z" },
-    { url = "https://files.pythonhosted.org/packages/39/80/b09f69bd8cde608f5e6f5068910ecb354291faeb2943501c4980bb11a971/piper_tts-1.5.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:0ceb8548cac9700d1919f9ed69aeb10319cd74ace577667a57528f9538441980", size = 14273787, upload-time = "2026-07-17T20:06:12.129Z" },
-    { url = "https://files.pythonhosted.org/packages/2f/a2/1b75060b5966bc2954b6bde157ce6b0784d5e78b8ee071f5e0daf001d1e4/piper_tts-1.5.0-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:475c7c177edd58250324cfe4b67987f5ecab38940e14e827eb4bfa23f3fc595f", size = 14285756, upload-time = "2026-07-17T20:06:15.069Z" },
-    { url = "https://files.pythonhosted.org/packages/cc/e9/362668ab5c7ec53615fce4f71c9fbba2c0727e867dedffbe94d5e9ee3813/piper_tts-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c3c88342559ab0c859163649f0ab77e31c123e4265516e72973ac9a265887de6", size = 14285445, upload-time = "2026-07-17T20:06:17.903Z" },
-    { url = "https://files.pythonhosted.org/packages/15/98/bc24aa72dca6514af02d8d92a774f690a48912b8a626fa3496ac0a3c7492/piper_tts-1.5.0-cp39-abi3-win_amd64.whl", hash = "sha256:d05f0985143f180046d2765eed505a1f5ea1fc30cee4c9c18edb68ef58cce204", size = 14273715, upload-time = "2026-07-17T20:06:20.755Z" },
+    { url = "https://files.pythonhosted.org/packages/01/ec/64ce79474e8623ec5854ffd58cc910dac3a84f060afc0b52a3e15c50aed1/piper_tts-1.6.1-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:a08da11fbe14cdf4582c6a8c79e181dc69fc4d529c4204f68ae75c81d4136343", size = 34101356, upload-time = "2026-08-13T15:23:44.309Z" },
+    { url = "https://files.pythonhosted.org/packages/34/e4/a7c9b78fd7434f33380a9c6685e784592b5da194f5f5f521addce6184c22/piper_tts-1.6.1-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:c19f94181a72d0968a588778bc13a6e7361aec87519e226b0296ad611b4cfe6b", size = 34109315, upload-time = "2026-08-13T15:23:47.551Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/77/0e23f8b4484734e9445b289d29de27972e71f006dc61ea5f915ddb460d21/piper_tts-1.6.1-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:95e5b54a6b336c1f7fa084752e13444dca99a6244ffc92cf99e0065d88bdbe15", size = 34121327, upload-time = "2026-08-13T15:23:50.907Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/d4/3ed594147f673fbab25775be4568510706cbd47d7a58145485f26fc599d9/piper_tts-1.6.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c586e71e7923360bc530e411a6d10636bc0c31de37caeddb27731671889ece79", size = 34121020, upload-time = "2026-08-13T15:23:54.329Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/9e/972aa29e47417c7557b221d43f9817b1bcd3d16464e8b18713a5160ad5ac/piper_tts-1.6.1-cp39-abi3-win_amd64.whl", hash = "sha256:30e5203d2fceb4baa5c95ead6f408847fb5970540d840478dc8e6d397679cefc", size = 34109166, upload-time = "2026-08-13T15:23:57.823Z" },
 ]
 
 [[package]]
@@ -1220,7 +1220,7 @@ wheels = [
 
 [[package]]
 name = "skyfield"
-version = "1.54"
+version = "1.55"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -1228,9 +1228,9 @@ dependencies = [
     { name = "numpy" },
     { name = "sgp4" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c9/8c/98bf5d9042218580fc10c4ba0c51b9af26bc73b614ce64341c0dfad39074/skyfield-1.54.tar.gz", hash = "sha256:bf8b79d6dbbe1add0327aca485d6388bb6a13cab70528d015913a9b07a1d6903", size = 346829, upload-time = "2026-01-18T19:16:15.114Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/50/d491b746eb3d6155d8206d86415b02d900567d463579173a518debaa4e1f/skyfield-1.55.tar.gz", hash = "sha256:05dce8aafbff3f007f01cabcd2eb1858c43d7465f58c13d22c5a828a6d2fc14b", size = 347730, upload-time = "2026-08-07T20:16:49.772Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/8a/f196038b2bea40c372d900803dac0d5e4eab578cb05b92ff7172ced4c1cf/skyfield-1.54-py3-none-any.whl", hash = "sha256:c9b313185448963ea7fa4cf8e4298ba028b179b80ebd4c5675497519f21c04a2", size = 370380, upload-time = "2026-01-18T19:16:13.806Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/5a/c4cc09d4421de255ca0504485efceb3646a4e5381bfb665647e39bea5cb1/skyfield-1.55-py3-none-any.whl", hash = "sha256:9f98964855067460c94aa81a337194136f4a97a62ba8bbbfac1b8556f2b66ad4", size = 371137, upload-time = "2026-08-07T20:16:50.825Z" },
 ]
 
 [[package]]
