@@ -413,7 +413,7 @@ def column_to_value(col: str, val: Any) -> Any:
     elif col.lower() == "state":
         if val in (ON, OFF, STOP, PAUSE, RESUME) or (val and re.match(_YOUTUBE_ID_RE, val)):
             return val
-        if val and val.isdigit():
+        elif val and val.isdigit():
             return int(val)
         raise ValueError(_ERR_STATE.format(val))
     elif col.lower() in ("delay", "snapshot"):
