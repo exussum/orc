@@ -17,7 +17,7 @@ dependencies = [
     "icalendar==7.2.2",
     "scapy==2.7.0",
     "orc_data==0.0.1",
-    "piper-tts==1.6.1",
+    "piper-tts==1.7.0",
     "pychromecast==14.0.10",
     "paho-mqtt==2.1.0",
     "audioop-lts==0.2.2; python_version >= '3.13'",
@@ -39,7 +39,7 @@ test = [
 lint = [
     "black==26.5.1",
     "isort==8.0.1",
-    "mypy==2.3.0",
+    "mypy==2.3.1",
     "pyflakes==3.4.0",
 ]
 
