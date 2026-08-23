@@ -85,7 +85,7 @@ def _build_scheduler() -> BackgroundScheduler:
 def _build_flask(ctx: m.AppContext) -> OrcFlask:
     app = OrcFlask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
-    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
     app.orc = ctx
     app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
