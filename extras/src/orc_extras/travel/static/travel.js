@@ -26,7 +26,7 @@ async function post(url, el, { method = "POST", body } = {}, onFailure = () => {
 
 const TEMPLATES = `
 <template id="travel-dialog-tpl">
-    <dialog id="travel-dialog" class="orc-dialog w-96" style="top:2rem;translate:-50% 0;max-height:calc(100vh - 4rem);overflow-y:auto">
+    <dialog id="travel-dialog" class="orc-dialog w-96" style="top:2rem;translate:-50% 0;max-height:calc(100vh - 4rem);overflow:visible">
         <h2 class="text-xl font-semibold mb-3">Travel</h2>
         <ul id="travel-list" class="space-y-1 mb-4"></ul>
         <form id="travel-form" class="flex flex-col gap-2">
@@ -88,6 +88,7 @@ function build() {
         static: true,
         monthSelectorType: "static",
         minuteIncrement: 10,
+        disableMobile: true,
         onOpen: (selected) => {
             arrivePrior = selected[0] || null;
         },
