@@ -196,8 +196,8 @@ orcHooks.register({
         if (buttonName !== "Travel") return true;
         if (!dialog) build();
         dialog.querySelector("#travel-error").classList.add("hidden");
-        await refresh();
         dialog.showModal();
+        await refresh();
         return false;
     },
 });
