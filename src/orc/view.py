@@ -191,7 +191,7 @@ def index() -> tuple[str, int, dict[str, str]]:
             version=app.orc.version_manager.version,
         ),
         200,
-        {"Cache-control": "max-age=604800"},
+        {"Cache-control": "max-age=3600"},
     )
 
 
@@ -324,7 +324,7 @@ def schedule() -> tuple[str, int, dict[str, str]]:
             skip_replay_by_job=skip_replay_by_job,
         ),
         200,
-        {"Cache-control": "max-age=604800"},
+        {"Cache-control": "max-age=3600"},
     )
 
 
