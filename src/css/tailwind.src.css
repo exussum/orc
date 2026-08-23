@@ -223,6 +223,8 @@
         display: inline-block;
         transition: transform 0.15s;
         transform: rotate(-90deg);
+        padding: 0.5rem;
+        margin: -0.5rem;
     }
 
     .orc-log-open .orc-log-caret {
