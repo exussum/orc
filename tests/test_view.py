@@ -270,7 +270,10 @@ def test_durations_returns_config(client):
     with patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}):
         response = client.get("/api/durations")
     assert response.status_code == 200
-    assert response.get_json() == {"TV Lights": {"avg": 3.0, "samples": 4}, "Reset": {"avg": 0.5, "samples": 2}}
+    assert response.get_json() == {
+        "TV Lights": {"avg": 3.0, "samples": 4, "delay": "0:00:00"},
+        "Reset": {"avg": 0.5, "samples": 2, "delay": "0:00:00"},
+    }
 
 
 # --- /api/schedule/<id>/pause: toggles pause/resume ---
