@@ -51,7 +51,7 @@
         {% block page_body %}
             <div class="mx-auto w-full max-w-screen-xl px-4 min-h-screen">
                 <nav class="orc-navbar" role="navigation">
-                    <div class="text-xl font-semibold mr-4">ORChestration{% if internal_host and request.host.split(":")[0] == internal_host %} 🏠{% endif %}</div>
+                    <div class="text-xl font-semibold mr-4">{% if internal_host %}{% if request.host.split(":")[0] == internal_host %}🏠 {% else %}📡 {% endif %}{% endif %}ORChestration</div>
                     <button id="orc-navbar-toggle" class="lg:hidden ml-auto p-1.5 border border-white/20 rounded" type="button" aria-controls="admin-navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
                         <svg class="h-6 w-6"><use href="/static/icons.svg#bars-3"/></svg>
                     </button>
