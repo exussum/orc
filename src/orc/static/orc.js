@@ -64,7 +64,6 @@ async function checkVersion() {
     spinner.style.display = "block";
     try {
         const response = await fetch("/api/version", {
-            signal: AbortSignal.timeout(2000),
             redirect: "manual",
         });
         if (isInvalidResponse(response) || response.type === "opaqueredirect") {
