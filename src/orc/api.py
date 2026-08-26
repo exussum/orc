@@ -74,6 +74,14 @@ def fetch_durations() -> list[tuple[str, int]]:
     return [(name, math.ceil(avg)) for name, (_, avg) in duration_stats().items()]
 
 
+def action_delay(id: str) -> timedelta:
+    if (plugin := config.plugin(id)) is not None:
+        return plugin.delay
+    if id in config.ad_hoc_routines:
+        return config.ad_hoc_routines[id].delay
+    return timedelta()
+
+
 @contextlib.contextmanager
 def record_duration(name: str) -> Iterator[None]:
     start = time.perf_counter()
