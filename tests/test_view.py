@@ -1,7 +1,9 @@
 from datetime import date, datetime, timedelta
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, create_autospec, patch
 
 import pytest
+from apscheduler.job import Job
+from apscheduler.schedulers.base import BaseScheduler
 from flask import Flask
 
 import orc
@@ -13,7 +15,7 @@ from orc.view import VersionManager, bp
 
 @pytest.fixture
 def scheduler():
-    sched = MagicMock()
+    sched = create_autospec(BaseScheduler, instance=True)
     dal_scheduler.set_scheduler(sched)
     return sched
 
@@ -42,7 +44,7 @@ def good_version(ctx):
 
 
 def _fake_job(name="job", next_run_time=True):
-    job = MagicMock()
+    job = create_autospec(Job, instance=True)
     job.id = name
     job.name = name
     job.next_run_time = next_run_time
@@ -302,7 +304,7 @@ def test_pause_unknown_job_returns_404(client, scheduler, good_version):
 def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
     rule = m.Routine(name, "", [m.Config(MagicMock(), "on", trigger=trigger)], skip_replay=skip_replay)
-    job = MagicMock()
+    job = create_autospec(Job, instance=True)
     job.id = name
     job.name = name
     job.next_run_time = run_date

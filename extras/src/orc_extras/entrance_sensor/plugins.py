@@ -92,12 +92,12 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
     elif any(s.content for s in ctx.api.capture_sounds().items):
         # Visitor left, pet still listening: restore the pre-visit state
-        ctx.snapshot_manager.resume(SNAPSHOT_NAME, m.Configs())
+        ctx.snapshot_manager.resume(SNAPSHOT_NAME, m.Configs(), log_entry)
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent), entry=log_entry)
         msg = sensor.message.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
-        ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, SNAPSHOT_NAME)
+        ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, SNAPSHOT_NAME, log_entry)
         ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent), entry=log_entry)
         msg = sensor.message.log_shutdown
     log_entry.add(Log.ENTRANCE, msg)
