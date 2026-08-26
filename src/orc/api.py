@@ -2,6 +2,7 @@ import contextlib
 import math
 import threading
 import time
+from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
@@ -55,7 +56,8 @@ def set_ctx(ctx: m.AppContext) -> None:
 
 
 _PRESENCE_WINDOW = timedelta(hours=9)
-_ACTIVITY_LOG = m.ActivityLog()
+_ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
+_NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 
 _STREAM_DOMAINS: set[str] = {".googlevideo.com", urlparse(config.settings.base_url).hostname or "", "." + config.settings.lan_domain}
@@ -103,12 +105,22 @@ def local_now() -> datetime:
     return datetime.now(tz=config.settings.tz)
 
 
-def log(source: m.LogSourceEnum, action: str) -> m.LogEntry:
-    return _ACTIVITY_LOG.add(local_now(), source, action)
+def notify(entry: m.LogEntry, *, level: str | None = None) -> m.LogEntry:
+    _NOTIFICATIONS.appendleft(entry)
+    play_text(entry.action.replace("`", ""), level=level)
+    return entry
+
+
+def log(source: m.LogSourceEnum, action: str, *, notify_level: str | None = None) -> m.LogEntry:
+    entry = m.LogEntry(local_now(), source, action)
+    _ACTIVITY_LOG.appendleft(entry)
+    if notify_level is not None:
+        notify(entry, level=notify_level)
+    return entry
 
 
 def log_entries() -> list[m.LogEntry]:
-    return list(_ACTIVITY_LOG.entries)
+    return list(_ACTIVITY_LOG)
 
 
 # --- Device control ---
@@ -225,7 +237,7 @@ def wire_buttons(ctx: m.AppContext) -> None:
     def on_button(device_id: int, button: int, event_type: str) -> None:
         action = mapping.get((device_id, button, event_type))
         if action is not None and not run_action(ctx, action, hub_origin=True):
-            log(m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action))
+            log(m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action), notify_level=m.AUDIO_INFO)
 
     config.providers.mqtt.add_button_listener(on_button)
 
@@ -233,7 +245,7 @@ def wire_buttons(ctx: m.AppContext) -> None:
 def wire_external_log() -> None:
     def on_external(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
         action = Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new)
-        last = next(iter(_ACTIVITY_LOG.entries), None)
+        last = next(iter(_ACTIVITY_LOG), None)
         if not (
             last is not None
             and last.source is m.LogSource.EXTERNAL
@@ -263,7 +275,7 @@ def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
         try:
             device_type.dispatch(_ctx, w, rule, stream)
         except Exception as exc:
-            entry.add(entry.source, Log.DISPATCH_FAILED.format(device=w.name, exc=exc))
+            notify(entry.add(entry.source, Log.DISPATCH_FAILED.format(device=w.name, exc=exc)))
 
     with Pool(max_workers=max(1, len(what))) as ex:
         list(ex.map(one, what))
@@ -449,7 +461,7 @@ def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.S
     before = present_names()
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
-        log(source, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc))
+        log(source, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc), notify_level=m.AUDIO_INFO)
     mark_present(present, local_now())
     after = present_names()
 
