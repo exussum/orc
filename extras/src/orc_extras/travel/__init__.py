@@ -8,8 +8,7 @@ from orc_extras.travel.dal import sqlite
 from orc_extras.travel.model import Extra, Place, Runtime, Settings
 from orc_extras.travel.web import travel_bp
 
-from orc import model as m
-from orc.loader import load_plugin_config
+from orc.loader import Cast, load_plugin_config
 from orc.model import AppContext
 
 CONFIG = "orc_extras/travel"
@@ -18,6 +17,8 @@ setting <key> <value>
 place <name> <address>
 extra <name> <minutes>
 """
+
+_SETTING_TYPES = {"window_hours": int, "http_timeout": int, "buffer_minutes": int}
 
 
 def declare(declarations: Any) -> None:
@@ -30,14 +31,14 @@ def setup(ctx: AppContext) -> None:
             CONFIG,
             ctx.config.plugin_configs,
             GRAMMAR,
-            {"setting": scalar(Settings), "place": array(Place), "extra": array(Extra)},
+            {"setting": scalar(Settings, types=_SETTING_TYPES), "place": array(Place), "extra": array(Extra, types={"minutes": int})},
         )
         s = cfg.setting
         runtime = Runtime(
-            drive=m.column_to_value("module", s.drive_backend),
-            flight=m.column_to_value("module", s.flight_backend),
+            drive=Cast.module(s.drive_backend),
+            flight=Cast.module(s.flight_backend),
             settings=s,
-            extras=[Extra(e.name, int(e.minutes)) for e in cfg.extra],
+            extras=cfg.extra,
             places=cfg.place,
             origin=f"{ctx.config.settings.lat},{ctx.config.settings.long}",
             tomtom_key=ctx.config.secrets[s.tomtom_secret],

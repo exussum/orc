@@ -8,8 +8,7 @@ from orc_extras.example.dal import sqlite
 from orc_extras.example.model import Runtime, Settings, Widget, Zone
 from orc_extras.example.web import example_bp
 
-from orc import model as m
-from orc.loader import load_plugin_config
+from orc.loader import Cast, load_plugin_config
 from orc.model import AppContext
 
 CONFIG = "orc_extras/example"
@@ -18,6 +17,9 @@ setting <key> <value>
 widget <name> <value>
 zone <group> <name> <value>
 """
+
+_SETTING_TYPES = {"window_hours": int, "http_timeout": int}
+_WIDGET_TYPES = {"value": int}
 
 
 def declare(declarations: Any) -> None:
@@ -39,12 +41,12 @@ def setup(ctx: AppContext) -> None:
             CONFIG,
             ctx.config.plugin_configs,
             GRAMMAR,
-            {"setting": scalar(Settings), "widget": array(Widget), "zone": group(Zone)},
+            {"setting": scalar(Settings, types=_SETTING_TYPES), "widget": array(Widget, types=_WIDGET_TYPES), "zone": group(Zone)},
         )
         s = cfg.setting
         runtime = Runtime(
-            foo=m.column_to_value("module", s.foo_backend),
-            bar=m.column_to_value("module", s.bar_backend),
+            foo=Cast.module(s.foo_backend),
+            bar=Cast.module(s.bar_backend),
             settings=s,
             widgets=cfg.widget,
             zones=[z for zs in cfg.zone.values() for z in zs],

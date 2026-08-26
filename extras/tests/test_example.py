@@ -1,18 +1,20 @@
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 
 import pytest
 from orc_extras import example
 from orc_extras.example import model as m
 from orc_extras.example import plugins
 
-from orc.model import column_to_value
+from orc import api
+from orc.loader import Cast
 
 FIXTURE = Path(__file__).parent / "fixture"
 
 
 def _setup_runtime():
     ctx = MagicMock()
+    ctx.api = create_autospec(api)
     ctx.config.plugin_configs = {example.CONFIG: (FIXTURE / "example.orc").read_text()}
     example.setup(ctx)
     return plugins._runtime
@@ -35,8 +37,8 @@ def test_example_config_loads():
         m.Zone("Office", "500 Market St, Metropolis"),
         m.Zone("Villa", "9 Beach Rd, Seaside"),
     ]
-    assert rt.foo is column_to_value("module", "orc_extras.example.dal.foo.stub")
-    assert rt.bar is column_to_value("module", "orc_extras.example.dal.bar.stub")
+    assert rt.foo is Cast.module("orc_extras.example.dal.foo.stub")
+    assert rt.bar is Cast.module("orc_extras.example.dal.bar.stub")
 
 
 @pytest.mark.parametrize(
@@ -49,4 +51,4 @@ def test_example_config_loads():
     ],
 )
 def test_backends_resolve(path, func):
-    assert callable(getattr(column_to_value("module", path), func))
+    assert callable(getattr(Cast.module(path), func))
