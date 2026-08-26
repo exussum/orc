@@ -108,15 +108,20 @@ function revealOverflowCarets(root) {
 }
 
 document.addEventListener("click", (e) => {
-    const caret = e.target.closest(".orc-log-caret");
-    if (!caret) return;
-    const row = caret.closest("tr");
-    row.querySelector(".orc-log-action")?.classList.toggle("truncate");
-    if (!row.classList.contains("orc-log-parent")) return;
+    const row = e.target.closest("tr");
+    if (!row) return;
+    if (!row.classList.contains("orc-log-parent")) {
+        row.querySelector(".orc-log-action")?.classList.toggle("truncate");
+        return;
+    }
     const open = row.classList.toggle("orc-log-open");
     const table = row.closest("table");
-    table.querySelectorAll(`[data-log-parent="${row.dataset.logId}"]`).forEach((r) => r.classList.toggle("hidden", !open));
-    if (open) revealOverflowCarets(table);
+    const descendants = table.querySelectorAll(`[data-log-parent="${row.dataset.logId}"]`);
+    descendants.forEach((r) => r.classList.toggle("hidden", !open));
+    if (open) {
+        [row, ...descendants].forEach((r) => r.querySelector(".orc-log-action")?.classList.remove("truncate"));
+        revealOverflowCarets(table);
+    }
 });
 
 revealOverflowCarets(document);
