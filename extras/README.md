@@ -45,7 +45,7 @@ the plugin is registered under (step 2) decides where its button appears:
 | `system` | `fn(ctx, None)`    | user presses its button on the System page                |
 | `device` | `fn(ctx, <name>)`  | clicked from a device row (`/api/run/<id>?device=<name>`) |
 
-Event-driven plugins don't need a `--function` of their own, but `plugin`
+Event-driven plugins don't need a `<function>` of their own, but `plugin`
 lines still drive discovery: a package is only imported because a `plugin`
 line names it, and only then does its `declare()` hook run. A package
 containing nothing but event-driven plugins gets a bare line:
@@ -56,9 +56,10 @@ plugin 'Entrance Sensor' orc_extras.entrance_sensor
 
 The entrance sensor in
 [`src/orc_extras/entrance_sensor/plugins.py`](src/orc_extras/entrance_sensor/plugins.py)
-wires itself in its package ``declare()`` hook — a setup hook receives the
-context and registers an MQTT device listener (`ctx.api.add_listener`) and a
-state-page section (`ctx.api.add_state_provider`).
+wires itself in its package's `setup()` hook, registered by `declare()` — it
+receives the context and registers an MQTT device listener
+(`ctx.api.add_listener`) and a state-page section
+(`ctx.api.add_state_provider`).
 
 ### The context
 
@@ -82,13 +83,13 @@ the scheduler injects the context as a `ctx` keyword argument at run time.
 ## 2. Register it in config.orc
 
 Add a `plugin` line to `$ORC_CONFIG_DIR/config.orc`: a display name, the
-plugin's package, and optional flags for the function (a dotted name
-imported on the package: `--function plugins.pair_tv` resolves
-`orc_extras.lgtv.plugins.pair_tv`), section (defaults to `scene`), icon,
-and delay:
+plugin's package, an optional function name (imported from the package
+itself, so it must be re-exported there — for example
+`from orc_extras.lgtv.plugins import pair_tv` makes the bare name `pair_tv`
+resolve), section (defaults to `scene`), icon, and delay:
 
 ```
-plugin 'Pair LG TV' orc_extras.lgtv --function plugins.pair_tv --section device --icon tv
+plugin 'Pair LG TV' orc_extras.lgtv pair_tv --section device --icon tv
 ```
 
 ## 3. Install it
@@ -108,13 +109,15 @@ trigger time.
 ## Optional: give it a config file
 
 Call `load_plugin_config` from the package's setup hook with a grammar
-describing the file's commands, which commands are scalar vs grouped, and a
-factory per declared command:
+describing the file's commands and a `command_cfg` serializer — `scalar()`,
+`group()`, or `array()` — wrapping a factory per declared command:
 
 ```python
 from typing import Any, NamedTuple
 
-from orc.loader import load_plugin_config
+from command_cfg import group, scalar
+from orc.loader import load_plugin_config, resolve_device
+from orc.model import resolve_state
 
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
@@ -124,6 +127,8 @@ rules <trigger> <device> <state>
 timed define <name> <start> <stop>
 timed append <name> <device> <state>
 """
+
+_SETTING_TYPES = {"entrance_id": int, "snapshot": int}
 
 
 class Settings(NamedTuple):
@@ -136,30 +141,43 @@ class Rule(NamedTuple):
     state: Any
 
 
+def _rule(**values: Any) -> Rule:
+    return Rule(device=resolve_device(values["device"], _devices()), state=resolve_state(values["state"]))
+
+
 def setup(ctx):
     sensor = load_plugin_config(
         CONFIG,
         ctx.config.plugin_configs,
         GRAMMAR,
-        serializers={"setting": Settings, "message": Messages, "rules": Rule, "timed": Timed},
-        scalars=("setting", "message"),
-        grouped=("rules", "timed"),
+        serializers={
+            "setting": scalar(Settings, types=_SETTING_TYPES),
+            "message": scalar(Messages),
+            "rules": group(_rule),
+            "timed": group(_timed),
+        },
     )
 ```
 
-The grammar is one docopt pattern per line; the first word is the command.
-Values are cast by placeholder name: `<value>` becomes an int when numeric,
-`<start>`/`<stop>` become times, `<device>` resolves against the device
-enums, `<state>` is validated. Every command is declared in `scalars` or
-`grouped`, and every object in the result is built by a factory the plugin
-supplies:
+(Abbreviated: `Messages`, `Timed`, `_timed`, and `_devices()` are omitted,
+and `Settings`/`Rule` are shown with fewer fields than the real ones — see
+[`src/orc_extras/entrance_sensor/__init__.py`](src/orc_extras/entrance_sensor/__init__.py)
+for the full plugin.)
 
-- **`scalars` commands** (`setting`, `message`) take exactly two
+The grammar is one docopt pattern per line; the first word is the command.
+Values arrive as strings; a serializer's `types=` mapping (field name to
+callable) coerces the ones that need it — here `entrance_id`/`snapshot`
+become `int`. Anything not listed in `types=` stays a string, so a factory
+that needs a non-primitive value (`<device>` resolved against the device
+enums, `<state>` validated, `<start>`/`<stop>` parsed into times) does that
+conversion itself, as `_rule`/`_timed` do above:
+
+- **`scalar(...)` commands** (`setting`, `message`) take exactly two
   placeholders. Their key/value pairs accumulate across the file (a repeated
   key is an error) and the factory is called once at the end with them as
   keyword arguments: `sensor.setting.entrance_id`. A `NamedTuple` factory
   makes every field required, so a missing setting fails at load.
-- **`grouped` commands** (`rules`, `timed`) call their factory once per
+- **`group(...)` commands** (`rules`, `timed`) call their factory once per
   line with the line's fields as keyword arguments; rows collect in dicts of
   lists keyed by the first placeholder: `sensor.rules["enter"]`. A grouped
   command with `define`/`append` patterns hoists shared values: `define`
@@ -187,15 +205,29 @@ The in-repo sample is
 [`../src/plugins/orc_extras/entrance_sensor.orc`](../src/plugins/orc_extras/entrance_sensor.orc):
 
 ```
-setting entrance_id 1
-setting snapshot    45
+setting cleanup_delay_minutes 2
+setting entrance_id           1
+setting patio_door_id         56
+setting active_event          active
+setting inactive_event        inactive
+setting snapshot              45
 
-rules enter  Light      on
-rules enter  Chromecast pause
-rules inside Light      off
+message log_present   'Trigger sensor off: skip (people present)'
+message log_door_open 'Trigger sensor off: skip (patio door open)'
+message log_absent    'Trigger sensor off: skip (sounds playing)'
+message log_shutdown  'Trigger sensor off: applying OFF'
 
-timed define Day 8:00  22:00
-timed append Day Light 20
+rules enter    Light      on
+rules enter    Chromecast pause
+rules inside   Light      off
+rules present  Chromecast stop
+rules absent   Chromecast resume
+rules shutdown Light      off
+
+timed define Day   8:00  22:00
+timed append Day   Light 20
+timed define Night 22:00 8:00
+timed append Night Light 1
 ```
 
 The config loads once at startup in `setup()`; if the file is missing or
@@ -204,10 +236,10 @@ crashing orc.
 
 ## Tests
 
-Tests run standalone from this directory — `pyproject.toml` puts the parent
-`orc` sources on `pythonpath`, so no install is needed:
+Tests run standalone from this directory (`extras/`) — `pyproject.toml` puts
+the parent `orc` sources on `pythonpath`, so no install is needed:
 
 ```sh
-cd plugins
+cd extras
 pytest
 ```

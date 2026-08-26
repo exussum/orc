@@ -6,18 +6,18 @@ calendar events, and a line-based config file.
 
 ## What it does
 
-- Runs themed daily routines (e.g. *work day* / *day off*) with events tied to
-  wall-clock times or sun position at a configured lat/long.
-- Pulls calendar events from an iCal feed and schedules audio alerts /
-  routines around them.
-- Skips market-holiday rules via a configurable holidays endpoint.
+- Runs themed daily routines (for example, *work day* / *day off*) with
+  events tied to wall-clock times or sun position at a configured lat/long.
+- Skips market-holiday rules using a configurable holidays endpoint.
 - Controls Hubitat lights (MQTT/REST), Chromecast speakers (pychromecast +
   yt-dlp for YouTube audio), and an AC unit (BroadLink IR).
-- Supports weather-condition triggers (e.g. `SUNNY`) via the open-meteo API;
-  the schedule UI marks weather-triggered jobs with a ☀ badge.
-- Via the optional `orc_extras` package (`extras/`): controls an LG webOS
-  TV (aiowebostv + BroadLink IR), monitors YoLink leak sensors (fatal-level
-  audio alert on water detection), and runs the entrance-sensor automation.
+- Supports weather-condition triggers (for example, `SUNNY`) through the
+  open-meteo API; the schedule UI marks weather-triggered jobs with a ☀ badge.
+- Via the optional `orc_extras` package (`extras/`): pulls calendar events
+  from an iCal feed and schedules alerts/routines around them, controls an
+  LG webOS TV (aiowebostv + BroadLink IR), monitors YoLink leak sensors
+  (fatal-level audio alert on water detection), and runs the
+  entrance-sensor automation.
 - Tracks network presence of configured devices/people and gates
   person-specific routine steps on who is currently home.
 - Serves a small Flask UI for manual control, schedule inspection, theme
@@ -29,13 +29,13 @@ orc runs happily on a laptop with nothing attached: the sample config's
 `provider` lines name the stub backends (`orc.dal.<capability>.stub`), so
 every device and secret integration is faked in memory and the whole UI
 works. A real installation's config names the real backends instead
-(e.g. `provider mqtt orc.dal.mqtt.hubitat`).
+(for example, `provider mqtt orc.dal.mqtt.hubitat`).
 
 You'll need:
 
 - **Python 3.14+** (what CI and production use)
 - **git LFS** — the TTS voice model, ephemeris, and compiled CSS are LFS
-  objects; without it you'll get pointer files and confusing failures
+  objects; without it you'll get pointer files and confusing failures.
 - **PortAudio**, to build the `pyaudio` dependency:
   `brew install portaudio` (macOS) or
   `sudo apt-get install portaudio19-dev` (Debian/Ubuntu)
@@ -70,7 +70,7 @@ opengrep, mypy, both test suites, and more run on every commit):
 pre-commit install
 ```
 
-## Installing it for real
+## Install it for real
 
 Hardware and services — skip whatever you don't have; devices you leave out
 of `config.orc` are never touched:
@@ -84,8 +84,8 @@ of `config.orc` are never touched:
 
 Steps:
 
-1. **Install** on the target machine (add `./extras` if you want the
-   bundled plugins — LG TV, YoLink, entrance sensor). The `command-cfg`
+1. **Install it on the target machine.** Add `./extras` if you want the
+   bundled plugins — LG TV, YoLink, entrance sensor. The `command-cfg`
    config parser resolves from the internal package registry, same as the
    deploy flow:
 
@@ -93,14 +93,15 @@ Steps:
    pip install ./data . ./extras --extra-index-url "$ORC_REGISTRY_URL"
    ```
 
-2. **Create a config directory** (e.g. `/etc/orc`) and copy `src/config.orc`
-   into it as a starting point. Devices, people, routines, themes, room
-   configs, and plugins are all defined there — the sample file demonstrates
-   every command. Per-plugin configs go in a `plugins/` subdirectory
-   (see `src/plugins/` for examples).
+2. **Create a config directory, for example `/etc/orc`.** Copy
+   `src/config.orc` into it as a starting point. Devices, people, routines,
+   themes, room configs, and plugins are all defined there — the sample
+   file demonstrates every command. Per-plugin configs go in a `plugins/`
+   subdirectory (see `src/plugins/` for examples).
 
-3. **Create the secrets** in Bitwarden Secrets Manager (table below) and put
-   a machine-account access token where the service can read it, e.g.
+3. **Create the secrets in Bitwarden Secrets Manager.** See
+   [Secrets (Bitwarden)](#secrets-bitwarden), and put a machine-account
+   access token where the service can read it — for example,
    `/etc/orc/bws_access_token`.
 
 4. **Set the environment.** Two variables:
@@ -113,9 +114,10 @@ Steps:
    Everything else (URLs, DB path, timezone, coordinates, audio device, …)
    is a `setting` line in `config.orc` — see [Configuration](#configuration).
 
-5. **Run `orc`** — installed as a console script, it starts gunicorn on
-   `0.0.0.0:<port>` (the `port` setting, default 8000). Use your process
-   manager of choice to keep it up; production here runs it under supervisor.
+5. **Run `orc`.** It's installed as a console script and starts `gunicorn`
+   on `0.0.0.0:<port>` (the `port` setting, default 8000). Use your process
+   manager of choice to keep it up; production here runs it under
+   `supervisor`.
 
 ## Configuration
 
@@ -163,7 +165,6 @@ Two config surfaces:
    | `tz`                | IANA timezone                      | `America/New_York`      |
    | `hubitat_url`       | Hubitat Maker API base URL         | `http://hubitat.example`|
    | `http_timeout`      | Default outbound HTTP timeout (s)  | `5`                     |
-   | `http_ical_timeout` | Timeout for the iCal fetch (s)     | `120`                   |
    | `port`              | HTTP listen port                   | `8000`                  |
 
 2. **Environment variables** — only the bootstrap pair that can't live in
@@ -174,25 +175,24 @@ Two config surfaces:
    | `ORC_CONFIG_DIR`   | Directory containing `config.orc`            | `src`                             |
    | `BWS_ACCESS_TOKEN` | URL whose body is the Bitwarden access token | required by `orc.dal.secrets.bws` |
 
-   `BWS_ACCESS_TOKEN` is a URL (e.g. `data:` or `file://`), not the value
+   `BWS_ACCESS_TOKEN` is a URL (for example, `data:` or `file://`), not the value
    itself — the body of the URL is read at startup.
 
 ## Secrets (Bitwarden)
 
 With `provider secrets orc.dal.secrets.bws`, secrets are pulled from
-Bitwarden Secrets Manager by name. The first three are required — startup fails without them;
-the rest are optional: the MQTT pair credentials the Hubitat MQTT
-connection, and the YoLink pair is only read by the yolink plugin:
+Bitwarden Secrets Manager by name. The first two are required — startup fails
+without them; the rest are optional: the MQTT pair credentials the Hubitat
+MQTT connection. Any other key is read on demand by whichever plugin config
+names it (for example, `YOLINK_ID`/`YOLINK_SECRET` for the yolink plugin, or
+a calendar feed's secret):
 
 | Key                    | Used for                                           |
-|------------------------|----------------------------------------------------|
+|------------------------|-----------------------------------------------------|
 | `HUBITAT_ACCESS_TOKEN` | Hubitat Maker API access token (appended as query) |
 | `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates       |
-| `ICS_URL`              | iCal feed URL for calendar-driven routines         |
 | `MQTT_USER`            | Hubitat MQTT broker username (optional)            |
 | `MQTT_PASSWORD`        | Hubitat MQTT broker password (optional)            |
-| `YOLINK_ID`            | Yolink API client ID (optional)                    |
-| `YOLINK_SECRET`        | Yolink API client secret (optional)                |
 
 ## Running
 
@@ -205,7 +205,7 @@ Two entry points in `src/orc/runner.py`, both serving on `0.0.0.0:<port>`
 ## Deploy
 
 This is the author's deploy flow — it targets a private package registry, so
-if you're installing elsewhere, use [Installing it for real](#installing-it-for-real)
+if you're installing elsewhere, use [Install it for real](#install-it-for-real)
 instead.
 
 `sh scripts/upload.sh` builds and publishes to the internal package registry.
@@ -222,16 +222,18 @@ bounces the `orc` supervisor job.
 ## Layout
 
 - `src/orc/__init__.py` — `Config` (`.orc` config loading and installation)
-- `src/orc/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`
+- `src/orc/loader.py` — the config grammar, `parse_config`/`validate`, the `Cast` value coercions, and plugin config loading, all on `command-cfg`
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
-- `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), value casting, routine/theme/device types
+- `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), state/time parsing (`resolve_state`, `resolve_time`), routine/theme/device types
 - `src/orc/collections.py` — `LockedDict` and `where`
-- `src/orc/dal/` — integrations split by target: `mqtt.py` (Hubitat MQTT
-  device cache), `hubitat.py` (Hubitat Maker API), `chromecast.py`,
-  `feeds.py` (iCal / market holidays / open-meteo weather), `bws.py`
-  (Bitwarden), `usb.py` (pyaudio + piper TTS), `broadlink.py` (IR),
-  `net.py` (presence scanning), `sqlite.py`
+- `src/orc/dal/` — integrations split by capability, each a package with a
+  real backend plus a `stub.py` for development: `mqtt/` (Hubitat MQTT
+  device cache), `hubitat/` (Hubitat Maker API), `chromecast/`,
+  `holiday/` (market holidays), `weather/` (open-meteo), `blaster/`
+  (BroadLink IR), `secrets/` (Bitwarden). Plus `audio.py` (pyaudio + piper
+  TTS), `net.py` (presence scanning), `scheduler.py`, `sqlite.py`,
+  `interfaces.py` (the `Provider` capability contracts)
 - `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `synchronized`, `audio_lock`, `silence_fd`
 - `src/orc/declarations.py` — per-config-load plugin declaration collection, built into the device/plugin `Registry`
 - `src/orc/plugins.py` — built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
@@ -242,4 +244,4 @@ bounces the `orc` supervisor job.
 - `src/config.orc` — sample device/routine/theme/plugin definitions
 - `src/plugins/` — per-plugin config files
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
-- `extras/` — optional `orc_extras` plugin package (e.g. `entrance_sensor`) with its own tests
+- `extras/` — optional `orc_extras` plugin package (for example, `entrance_sensor`) with its own tests

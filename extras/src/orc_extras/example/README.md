@@ -51,32 +51,32 @@ if the plugin persists nothing.
 
 ## Choosing a backend pattern
 
-Both resolve the dotted path via `column_to_value("module", …)`; they differ only
-in where the backend is declared.
+Both resolve the dotted path via `Cast.module(...)` (`orc.loader.Cast`); they
+differ only in where the backend is declared.
 
 **A — `setting backend` in the plugin's own config** (`example`, `calendar`,
 `travel`): one setting per capability, resolved in `setup()`.
 ```
 # example.orc
 setting foo_backend  orc_extras.example.dal.foo.acme
-# setup(): m.column_to_value("module", s.foo_backend) -> stored on Runtime, typed FooService
+# setup(): Cast.module(s.foo_backend) -> stored on Runtime, typed FooService
 ```
 
 **B — `--backend` on the `plugin` line** (`lgtv`): for a plugin with no config
 file of its own; fetched via `orc.config.plugin_for(...).backend`.
 ```
-plugin 'Pair LG TV' orc_extras.lgtv --function plugins.pair_tv --section device --backend orc_extras.lgtv.dal.tv.webos
+plugin 'Pair LG TV' orc_extras.lgtv pair_tv --section device --backend orc_extras.lgtv.dal.tv.webos
 ```
 
 Prefer A unless the backend naturally belongs to a `plugin` line.
 
 ## Value coercion
 
-By **column name** (`column_to_value`), not the field annotation. `value` →
-`int` when all-digits; so `widget <name> <value>` gives `Widget(name, value=int)`
-free. Other names (`size`, `minutes`) stay strings — convert in `setup()`
-(`int(e.minutes)`).
-
-> **TODO:** make casting a per-plugin option (annotation-driven, or a per-column
-> cast passed with the serializers) so a `size` column yields `int` without
-> touching core or manual `int()`.
+By an explicit `types=` mapping (field name to callable) passed to the
+`command_cfg` serializer — not the field annotation, and not automatic on
+all-digit strings. `widget <name> <value>` gives `Widget(name, value=int)`
+because `example`'s `_WIDGET_TYPES = {"value": int}` is passed as
+`array(Widget, types=_WIDGET_TYPES)`. A field left out of `types=` stays a
+string; convert it in `setup()` instead, or in the row factory for
+`group()`/`array()` commands that need a non-primitive value (device/state
+lookups, time parsing).
