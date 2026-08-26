@@ -1,6 +1,6 @@
 import importlib
 import re
-from collections import defaultdict, deque
+from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import KW_ONLY, dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -199,16 +199,6 @@ class LogEntry:
     def add(self, source: LogSourceEnum, action: str) -> LogEntry:
         entry = LogEntry(datetime.now(self.timestamp.tzinfo), source, action)
         self.children.append(entry)
-        return entry
-
-
-class ActivityLog:
-    def __init__(self) -> None:
-        self.entries: deque[LogEntry] = deque(maxlen=200)
-
-    def add(self, when: datetime, source: LogSourceEnum, action: str) -> LogEntry:
-        entry = LogEntry(when, source, action)
-        self.entries.appendleft(entry)
         return entry
 
 

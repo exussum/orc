@@ -48,6 +48,14 @@ def _reset_stubs():
 
 
 @pytest.fixture(autouse=True)
+def _stub_audio(monkeypatch):
+    from orc import api
+
+    monkeypatch.setattr(api, "play_text", lambda *a, **k: None)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _orc_state_db(tmp_path, monkeypatch):
     from orc import config
     from orc.dal import sqlite
