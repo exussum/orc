@@ -2,9 +2,8 @@ import dataclasses
 from datetime import datetime
 from typing import NamedTuple
 
-from orc_extras.example.dal.interfaces import BarService, FooService
-
 from orc import model as m
+from orc_extras.example.dal.interfaces import BarService, FooService
 
 
 class Log(m.LogSourceEnum):

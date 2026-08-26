@@ -4,11 +4,11 @@ from typing import Any
 
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
-from orc_extras.travel.dal.sqlite import Connection
-from orc_extras.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
 
 from orc.model import AUDIO_FATAL, AppContext
 from orc.plugins import requires_ctx
+from orc_extras.travel.dal.sqlite import Connection
+from orc_extras.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
 
 _runtime: Runtime | None = None
 

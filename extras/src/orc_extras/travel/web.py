@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, cast
 
 from apscheduler.jobstores.base import JobLookupError
 from flask import Blueprint, current_app, request
+
 from orc_extras.travel import plugins
 from orc_extras.travel.model import Submission, TravelJob
 

@@ -9,10 +9,9 @@ top-level import would be circular.
 from functools import partial
 from typing import Any
 
-from orc_extras.yolink import plugins
-
 from orc import model as m
 from orc.model import AppContext
+from orc_extras.yolink import plugins
 
 _SIGNAL_WEAK_THRESHOLD = -90
 

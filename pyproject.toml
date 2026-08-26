@@ -29,7 +29,7 @@ dependencies = [
 ]
 name = "orc"
 version = "0.0.1"
-requires-python = ">=3.14"
+requires-python = ">=3.14,<3.15"
 
 [project.optional-dependencies]
 test = [
@@ -37,27 +37,22 @@ test = [
     "pytest==9.1.1",
 ]
 lint = [
-    "black==26.5.1",
-    "isort==8.0.1",
     "mypy==2.3.0",
-    "pyflakes==3.4.0",
+    "ruff==0.16.4",
 ]
 
 [project.scripts]
 orc = "orc.runner:web"
 
-[tool.black]
+[tool.ruff]
 line-length = 140
-target-version = ["py314"]
+target-version = "py314"
 
-[tool.isort]
-profile = "black"
-src_paths = ["src/orc"]
-known_third_party = ["apscheduler"]
+[tool.ruff.lint]
+select = ["E", "F", "I"]
 
-[tool.flake8]
-max-line-length = 140
-extend-ignore = ["E203", "W503"]
+[tool.ruff.lint.isort]
+known-third-party = ["apscheduler"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -78,5 +73,6 @@ packages = ["src/orc"]
 
 [tool.uv.sources]
 orc_data = { path = "data" }
+command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v0.5.0" }
 
 

@@ -1,5 +1,4 @@
 import array
-import audioop
 import wave
 from collections.abc import Iterable
 from functools import lru_cache
@@ -7,6 +6,7 @@ from importlib import resources  # nosemgrep
 from importlib.resources.abc import Traversable  # nosemgrep
 from typing import Any
 
+import audioop
 import pyaudio
 
 from orc import config

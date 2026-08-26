@@ -2,9 +2,8 @@ import dataclasses
 from datetime import datetime
 from typing import NamedTuple
 
-from orc_extras.travel.dal.interfaces import DriveService, FlightService
-
 from orc import model as m
+from orc_extras.travel.dal.interfaces import DriveService, FlightService
 
 
 class Log(m.LogSourceEnum):

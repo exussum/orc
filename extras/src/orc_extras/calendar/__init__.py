@@ -2,10 +2,10 @@ import sys
 from typing import Any, NamedTuple
 
 from command_cfg import array, scalar
-from orc_extras.calendar import plugins
 
 from orc.loader import Cast, load_plugin_config
 from orc.model import AppContext
+from orc_extras.calendar import plugins
 
 CONFIG = "orc_extras/calendar"
 GRAMMAR = """
