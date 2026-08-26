@@ -58,8 +58,6 @@ def sound_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> N
     original = ctx.api.capture_sounds()
     ctx.api.dispatch(m.Configs(*(m.Config(s.what, 0) for s in original.items)), force=True, entry=entry)
 
-    base = ctx.config.settings.base_url.rstrip("/") + "/"
-    url = f"{base}static/alert.mp3"
-    ctx.api.dispatch(m.Configs(m.Config(ctx.orc.Chromecast, url)), force=True, entry=entry)
+    ctx.api.dispatch(m.Configs(m.Config(ctx.orc.Chromecast, "RdYsLC0GELo")), force=True, entry=entry)
 
     ctx.api.dispatch(m.Configs(*(m.Config(s.what, s.volume) for s in original.items)), force=True, entry=entry)
