@@ -9,9 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from flask import Blueprint, Flask
+from flask import Blueprint, Flask, render_template, request
 from flask import current_app as _current_app
-from flask import render_template, request
 from flask.wrappers import Response
 from markupsafe import Markup, escape
 
