@@ -6,8 +6,8 @@ from typing import Any, NamedTuple
 from command_cfg import group, scalar
 from orc_extras.entrance_sensor import plugins
 
-from orc.loader import load_plugin_config
-from orc.model import AppContext
+from orc.loader import Cast, load_plugin_config, resolve_device
+from orc.model import AppContext, resolve_state
 
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
@@ -17,6 +17,14 @@ rules <trigger> <device> <state>
 timed define <name> <start> <stop>
 timed append <name> <device> <state>
 """
+
+_SETTING_TYPES = {"cleanup_delay_minutes": int, "entrance_id": int, "patio_door_id": int, "snapshot": int}
+
+
+def _devices() -> dict[str, type]:
+    import orc
+
+    return {name: dt.cls for name, dt in orc.config.registry.devices.items()}
 
 
 class Settings(NamedTuple):
@@ -40,6 +48,10 @@ class Rule(NamedTuple):
     state: Any
 
 
+def _rule(**values: Any) -> Rule:
+    return Rule(device=resolve_device(values["device"], _devices()), state=resolve_state(values["state"]))
+
+
 class Rules(NamedTuple):
     enter: list[Rule]
     inside: list[Rule]
@@ -55,6 +67,15 @@ class Timed(NamedTuple):
     state: Any
 
 
+def _timed(**values: Any) -> Timed:
+    return Timed(
+        start=Cast.clock(values["start"]),
+        stop=Cast.clock(values["stop"]),
+        device=resolve_device(values["device"], _devices()),
+        state=resolve_state(values["state"]),
+    )
+
+
 def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup])
 
@@ -65,7 +86,12 @@ def setup(ctx: AppContext) -> None:
             CONFIG,
             ctx.config.plugin_configs,
             GRAMMAR,
-            serializers={"setting": scalar(Settings), "message": scalar(Messages), "rules": group(Rule), "timed": group(Timed)},
+            serializers={
+                "setting": scalar(Settings, types=_SETTING_TYPES),
+                "message": scalar(Messages),
+                "rules": group(_rule),
+                "timed": group(_timed),
+            },
         )
         sensor.rules = Rules(**sensor.rules)
     except Exception as exc:
