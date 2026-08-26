@@ -420,7 +420,6 @@ def squish_configs(
     rules: defaultdict[Any, list[Config]] = defaultdict(list)
     for routine in configs:
         for rule in routine.items:
-
             what = [rule.what] if isinstance(rule.what, Enum) else rule.what
             for e in what:
                 rules[e].append(

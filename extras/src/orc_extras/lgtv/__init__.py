@@ -8,12 +8,11 @@ plugin (static/lgtv.js), and a boot hook to create its DB table.
 from pathlib import Path
 from typing import Any
 
+import orc
+from orc import model as m
 from orc_extras.lgtv import plugins
 from orc_extras.lgtv.dal import sqlite
 from orc_extras.lgtv.plugins import pair_tv  # noqa: F401
-
-import orc
-from orc import model as m
 
 # orc.LGTV/WebOS/BroadLink are built at runtime from the registered device types; read
 # them through an Any view since mypy can't see the dynamic package attributes.

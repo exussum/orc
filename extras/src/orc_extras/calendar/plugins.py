@@ -6,10 +6,10 @@ from typing import Any
 from apscheduler.events import EVENT_ALL_JOBS_REMOVED
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from orc_extras.calendar.dal.interfaces import FeedService
 
 from orc import model as m
 from orc.plugins import requires_ctx
+from orc_extras.calendar.dal.interfaces import FeedService
 
 WARNING = "warning"
 ALARM = "alarm"

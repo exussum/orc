@@ -3,13 +3,13 @@ from pathlib import Path
 from typing import Any
 
 from command_cfg import array, group, scalar
+
+from orc.loader import Cast, load_plugin_config
+from orc.model import AppContext
 from orc_extras.example import plugins
 from orc_extras.example.dal import sqlite
 from orc_extras.example.model import Runtime, Settings, Widget, Zone
 from orc_extras.example.web import example_bp
-
-from orc.loader import Cast, load_plugin_config
-from orc.model import AppContext
 
 CONFIG = "orc_extras/example"
 GRAMMAR = """

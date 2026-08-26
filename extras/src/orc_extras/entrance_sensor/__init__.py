@@ -4,10 +4,10 @@ from functools import partial
 from typing import Any, NamedTuple
 
 from command_cfg import group, scalar
-from orc_extras.entrance_sensor import plugins
 
 from orc.loader import Cast, load_plugin_config, resolve_device
 from orc.model import AppContext, resolve_state
+from orc_extras.entrance_sensor import plugins
 
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
