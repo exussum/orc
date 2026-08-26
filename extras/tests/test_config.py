@@ -1,6 +1,6 @@
 from datetime import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 from orc_extras import calendar, entrance_sensor
@@ -8,6 +8,7 @@ from orc_extras.calendar import Feed
 from orc_extras.entrance_sensor import Rule, Settings, Timed
 
 import orc
+from orc import api
 from orc.model import DeviceEnum
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -30,6 +31,7 @@ def _device_enums(monkeypatch):
 
 def test_entrance_config_loads():
     ctx = MagicMock()
+    ctx.api = create_autospec(api)
     ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor.orc").read_text()}
     entrance_sensor.setup(ctx)
     sensor = ctx.api.add_listener.call_args.args[0].args[1]
@@ -44,6 +46,7 @@ def test_entrance_config_loads():
 
 def test_calendar_config_loads():
     ctx = MagicMock()
+    ctx.api = create_autospec(api)
     ctx.config.plugin_configs = {calendar.CONFIG: (FIXTURE / "calendar.orc").read_text()}
     with patch.object(calendar.plugins, "schedule_cron") as schedule_cron:
         calendar.setup(ctx)

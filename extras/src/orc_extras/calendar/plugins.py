@@ -79,7 +79,7 @@ def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], 
         alarm_events = (CalendarEvent.from_cal(e, name, ALARM, timedelta(), tz) for e in events)
         events_by_id.update({e.uuid: e for e in chain(alarm_events, warning_events)})
 
-    for job in ctx.api.jobs_by_type(ctx.scheduler, CalendarJob):
+    for job in ctx.api.fetch_jobs_by_type(CalendarJob):
         if job.id not in events_by_id:
             ctx.scheduler.remove_job(job.id)
 
