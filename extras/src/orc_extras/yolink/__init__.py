@@ -38,8 +38,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
     elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         if new == plugins.STATE_WET:
-            api.log(m.LogSource.PLUGIN, msg)
-            api.play_text(msg.replace("`", ""), level=m.AUDIO_FATAL)
+            api.log(m.LogSource.PLUGIN, msg, notify_level=m.AUDIO_FATAL)
             return
     elif kind == "battery":
         old_critical = old is not None and old.is_critical
@@ -60,8 +59,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
         msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
 
     if msg:
-        api.log(m.LogSource.PLUGIN, msg)
-        api.play_text(msg.replace("`", ""))
+        api.log(m.LogSource.PLUGIN, msg, notify_level=m.AUDIO_INFO)
 
 
 def setup(ctx: AppContext) -> None:

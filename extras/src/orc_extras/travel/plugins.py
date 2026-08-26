@@ -114,7 +114,7 @@ def evaluate(job: TravelJob, tz: Any, now: datetime, connection: Connection) -> 
 @requires_ctx
 def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     assert _runtime is not None
-    rt, tz, now = _runtime, ctx.config.settings.tz, ctx.api.local_now()
+    tz, now = ctx.config.settings.tz, ctx.api.local_now()
     arrival, sched = evaluate(job, tz, now, ctx.api.connection)
     if arrival is not None:
         job.arrive = arrival.when
@@ -123,18 +123,13 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
         _reschedule(ctx.scheduler, job, sched.next_fire, tz)
         return
     assert arrival is not None
-    drive = rt.drive.drive_minutes(ctx.api.connection, rt.tomtom_key, rt.origin, arrival.where, rt.settings.http_timeout)
-    parts = [f"{drive} min drive"] + [f"{e.minutes} min {e.name}" for e in rt.extras if e.name in job.extras]
-    detail = " + ".join(parts)
-    late_note = f" — LATE, ETA {sched.eta.astimezone(tz).strftime('%I:%M %p')}" if job.late and sched.eta else ""
-    ctx.api.log(Log.TRAVEL, f"{job.summary}: {detail}{f' (Terminal {arrival.terminal})' if arrival.terminal else ''}{late_note}")
-    target: str
     if job.iata:
         target = arrival.where + (f", Terminal {arrival.terminal}" if arrival.terminal else "")
     else:
         target = job.place or job.destination
     if job.late and sched.eta:
         eta_str = sched.eta.astimezone(tz).strftime("%I:%M %p")
-        ctx.api.play_text(f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}.", level=AUDIO_FATAL)
+        message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
     else:
-        ctx.api.play_text(f"Time to leave for {target}.", level=AUDIO_FATAL)
+        message = f"Time to leave for {target}."
+    ctx.api.log(Log.TRAVEL, message, notify_level=AUDIO_FATAL)
