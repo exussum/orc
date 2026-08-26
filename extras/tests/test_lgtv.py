@@ -1,5 +1,5 @@
 from enum import Enum
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 from orc_extras import lgtv
@@ -50,6 +50,7 @@ class TestDispatchLGTV:
             living_room = 1
 
         self.ctx = MagicMock()
+        self.ctx.api = create_autospec(api)
         mock_registry(ctx=self.ctx, LGTV=(LGTV, lgtv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lgtv = LGTV.living_room
         self.webos = WebOS.living_room
@@ -82,6 +83,7 @@ def test_lgtv_registers_with_core():
     assert lgtv.setup in config.registry.setup_hooks
     with patch.object(sqlite, "init_db") as init_db:
         ctx = MagicMock()
+        ctx.api = create_autospec(api)
         ctx.config.plugin_configs = {}
         lgtv.setup(ctx)
     init_db.assert_called_once_with(ctx.api.connection)

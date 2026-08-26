@@ -1,9 +1,10 @@
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, create_autospec, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from apscheduler.schedulers.base import BaseScheduler
 from orc_extras import entrance_sensor
 from orc_extras.entrance_sensor import plugins
 
@@ -41,6 +42,8 @@ def ctx():
     mock = MagicMock()
     mock.model = m
     mock.snapshot_manager = api.SnapshotManager()
+    mock.api = create_autospec(api)
+    mock.scheduler = create_autospec(BaseScheduler, instance=True)
     mock.api.JOBSTORE_MEMORY = "memory"
     mock.config.settings.tz = _UTC
     return mock
@@ -89,6 +92,8 @@ def sensor():
 def plugin_ctx():
     mock = MagicMock()
     mock.model = m
+    mock.api = create_autospec(api)
+    mock.snapshot_manager = create_autospec(api.SnapshotManager, instance=True)
     mock.api.last_seen.return_value = []
     mock.api.check_presence.return_value = set()
     mock.api.capture_sounds.return_value = MagicMock(items=[])
@@ -235,15 +240,15 @@ def test_pet_home_alone_restores_pre_visit_state(sensor, plugin_ctx):
     # An undetected visitor left: put the lights back how the dog had them
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.capture_sounds.return_value = MagicMock(items=[MagicMock(content="audio")])
-    _cleanup(sensor, plugin_ctx)
-    plugin_ctx.snapshot_manager.resume.assert_called_once_with(plugins.SNAPSHOT_NAME, m.Configs())
+    entry = _cleanup(sensor, plugin_ctx)
+    plugin_ctx.snapshot_manager.resume.assert_called_once_with(plugins.SNAPSHOT_NAME, m.Configs(), entry)
 
 
 def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     entry = _cleanup(sensor, plugin_ctx)
     plugin_ctx.snapshot_manager.replace_config.assert_called_once_with(
-        plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45), plugins.SNAPSHOT_NAME
+        plugins.SNAPSHOT_NAME, m.Configs(m.Config(Light.lamp, m.OFF)), _DAYTIME + timedelta(minutes=45), plugins.SNAPSHOT_NAME, entry
     )
     plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.RESUME)), entry=ANY)
     assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
