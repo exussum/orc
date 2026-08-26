@@ -1,4 +1,5 @@
 from enum import Enum
+from unittest.mock import create_autospec
 
 import pytest
 
@@ -7,7 +8,7 @@ from orc.model import DeviceEnum
 
 
 @pytest.fixture(autouse=True)
-def _core_registry(monkeypatch):
+def core_registry(monkeypatch):
     """Install a registry built from lightweight test enums for the duration of each
     core test; monkeypatch restores what was there before at teardown.
 
@@ -38,7 +39,7 @@ def _core_registry(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _reset_stubs():
+def reset_stubs():
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.mqtt import stub as mqtt_stub
 
@@ -48,15 +49,16 @@ def _reset_stubs():
 
 
 @pytest.fixture(autouse=True)
-def _stub_audio(monkeypatch):
+def mute_speakers(monkeypatch):
     from orc import api
 
-    monkeypatch.setattr(api, "play_text", lambda *a, **k: None)
+    monkeypatch.setattr(api, "play_text", create_autospec(api.play_text))
+    monkeypatch.setattr(api, "play_alert", create_autospec(api.play_alert))
     yield
 
 
 @pytest.fixture(autouse=True)
-def _orc_state_db(tmp_path, monkeypatch):
+def orc_state_db(tmp_path, monkeypatch):
     from orc import config
     from orc.dal import sqlite
 
