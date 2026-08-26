@@ -1,12 +1,11 @@
 from typing import TYPE_CHECKING, cast
 
-import orc_extras.lgtv
-from orc_extras.lgtv.dal.interfaces import WebOsBackend
-from orc_extras.lgtv.dal.sqlite import Connection
-
 import orc
+import orc_extras.lgtv
 from orc.loader import resolve_backend
 from orc.model import AppContext, DeviceEnum, LogEntry
+from orc_extras.lgtv.dal.interfaces import WebOsBackend
+from orc_extras.lgtv.dal.sqlite import Connection
 
 
 def _backend() -> WebOsBackend:

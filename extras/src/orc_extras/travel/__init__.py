@@ -3,13 +3,13 @@ from pathlib import Path
 from typing import Any
 
 from command_cfg import array, scalar
+
+from orc.loader import Cast, load_plugin_config
+from orc.model import AppContext
 from orc_extras.travel import plugins
 from orc_extras.travel.dal import sqlite
 from orc_extras.travel.model import Extra, Place, Runtime, Settings
 from orc_extras.travel.web import travel_bp
-
-from orc.loader import Cast, load_plugin_config
-from orc.model import AppContext
 
 CONFIG = "orc_extras/travel"
 GRAMMAR = """
