@@ -2,7 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 
 import pytest
 import requests
@@ -14,7 +14,8 @@ from orc_extras.travel.dal.drive import stub as drive_stub
 from orc_extras.travel.dal.drive import tomtom
 from orc_extras.travel.dal.flight import stub as flight_stub
 
-from orc.model import column_to_value
+from orc import api
+from orc.loader import Cast
 
 FIXTURE = Path(__file__).parent / "fixture"
 ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
@@ -22,6 +23,7 @@ ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
 
 def _setup_runtime():
     ctx = MagicMock()
+    ctx.api = create_autospec(api)
     ctx.config.plugin_configs = {travel.CONFIG: (FIXTURE / "travel.orc").read_text()}
     travel.setup(ctx)
     return plugins._runtime
@@ -66,7 +68,7 @@ def test_travel_config_loads():
     ],
 )
 def test_backends_resolve(path, func):
-    assert callable(getattr(column_to_value("module", path), func))
+    assert callable(getattr(Cast.module(path), func))
 
 
 def test_drive_minutes_deletes_cached_geocode_on_http_error(monkeypatch):
@@ -223,6 +225,7 @@ def test_run_job_syncs_arrive_to_live_verified_time(monkeypatch):
     monkeypatch.setattr(plugins, "_reschedule", lambda *a, **k: None)
     job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
     ctx = MagicMock()
+    ctx.api = create_autospec(api)
     ctx.config.settings.tz = timezone.utc
     ctx.api.local_now.return_value = ARRIVE - timedelta(hours=3)
     plugins.run_job(job, ctx=ctx)

@@ -174,10 +174,10 @@ _PARSE_ERRORS = [
     ("unsealed_at_end", "Device types defined but never sealed: ['Foo']"),
     ("duplicate_member_names", "Duplicate names in 'Foo': {'A'}"),
     ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),
-    ("level_out_of_range", "Invalid parameter level='101'"),
+    ("level_out_of_range", "Invalid parameter level=101"),
     ("invalid_state", "Invalid state 'wibble'"),
-    ("invalid_delay", "Invalid parameter delay='soon'"),
-    ("invalid_snapshot", "Invalid parameter snapshot='lots'"),
+    ("invalid_delay", "invalid literal for int() with base 10: 'soon'"),
+    ("invalid_snapshot", "invalid literal for int() with base 10: 'lots'"),
     ("invalid_section", "Invalid parameter section='weird'"),
     ("time_not_hh_mm", "Invalid time 'noon'"),
     ("time_out_of_range", "Invalid time '25:00'"),
@@ -188,7 +188,7 @@ _PARSE_ERRORS = [
     ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
     ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
     ("invalid_button_event", "Invalid button event 'clicked'"),
-    ("non_numeric_button", "Invalid parameter button='one'"),
+    ("non_numeric_button", "invalid literal for int() with base 10: 'one'"),
 ]
 
 

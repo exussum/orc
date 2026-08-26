@@ -4,8 +4,7 @@ from typing import Any, NamedTuple
 from command_cfg import array, scalar
 from orc_extras.calendar import plugins
 
-from orc import model as m
-from orc.loader import load_plugin_config
+from orc.loader import Cast, load_plugin_config
 from orc.model import AppContext
 
 CONFIG = "orc_extras/calendar"
@@ -13,6 +12,8 @@ GRAMMAR = """
 setting <key> <value>
 feed <name> <secret>
 """
+
+_SETTING_TYPES = {"window_hours": int, "max_events": int, "warning_minutes": int, "http_timeout": int}
 
 
 class Settings(NamedTuple):
@@ -39,9 +40,9 @@ def setup(ctx: AppContext) -> None:
             CONFIG,
             ctx.config.plugin_configs,
             GRAMMAR,
-            serializers={"setting": scalar(Settings), "feed": array(Feed)},
+            serializers={"setting": scalar(Settings, types=_SETTING_TYPES), "feed": array(Feed)},
         )
-        backend = m.column_to_value("module", calendar.setting.backend)
+        backend = Cast.module(calendar.setting.backend)
     except Exception as exc:
         print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
         return

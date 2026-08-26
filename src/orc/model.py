@@ -13,8 +13,6 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.base import BaseScheduler
 
-from orc.security import safe_eval
-
 if TYPE_CHECKING:
     from flask import Blueprint
 
@@ -42,6 +40,13 @@ class Volume(NamedTuple):
     INFO: int
     FATAL: int
 
+    @classmethod
+    def build(cls, **values: Any) -> Volume:
+        for key, level in values.items():
+            if not 0 <= level <= 100:
+                raise ValueError(f"Invalid parameter level={level!r}")
+        return cls(**values)
+
 
 class ThemeOverride(NamedTuple):
     name: str
@@ -68,15 +73,8 @@ class Settings(NamedTuple):
 
     @classmethod
     def build(cls, **values: Any) -> Settings:
-        for key, coerce in (
-            ("tz", ZoneInfo),
-            ("lat", float),
-            ("long", float),
-            ("http_timeout", int),
-            ("port", int),
-        ):
-            if key in values:
-                values[key] = coerce(values[key])
+        if "tz" in values:
+            values["tz"] = ZoneInfo(values["tz"])
         return cls(**values)
 
 
@@ -104,17 +102,7 @@ AUDIO_FATAL = "FATAL"
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
 _ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
-_ERR_PARAMS = "Invalid parameter {}={!r}"
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
-# "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
-# they render no button and are not auto-invoked, unlike the other sections.
-_VALID_SECTIONS = frozenset({"scene", "system", "device"})
-_ERR_FUNCTION = (
-    "Cannot load function {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. "
-    "Ensure the module exists and the function is defined within it."
-)
-
-_ERR_MODULE = "Cannot load module {!r}: {}. Expected an importable module like 'orc.dal.mqtt.stub'."
 
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
@@ -402,53 +390,24 @@ class Registry:
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
 
 
-def column_to_value(col: str, val: Any) -> Any:
-    import orc
+def resolve_state(value: str) -> Any:
+    if value in (ON, OFF, STOP, PAUSE, RESUME) or re.match(_YOUTUBE_ID_RE, value):
+        return value
+    elif value.isdigit():
+        return int(value)
+    raise ValueError(_ERR_STATE.format(value))
 
-    if col.lower() == "value":
-        return int(val) if val and val.isdigit() else val
-    elif col.lower() == "device":
-        # the registry is populated by Config.load; its device-type names are the enum class names
-        return safe_eval(val, {name: dt.cls for name, dt in orc.config.registry.devices.items()})
-    elif col.lower() == "state":
-        if val in (ON, OFF, STOP, PAUSE, RESUME) or (val and re.match(_YOUTUBE_ID_RE, val)):
-            return val
-        elif val and val.isdigit():
-            return int(val)
-        raise ValueError(_ERR_STATE.format(val))
-    elif col.lower() in ("delay", "snapshot"):
-        if not val:
-            return timedelta()
-        elif val.isdigit():
-            return timedelta(minutes=int(val))
-        else:
-            raise ValueError(_ERR_PARAMS.format(col, val))
-    elif col.lower() == "section":
-        if val in _VALID_SECTIONS:
-            return val
-        raise ValueError(_ERR_PARAMS.format(col, val))
-    elif col.lower() in ("start", "stop", "time"):
-        if val in (SUNRISE, SUNSET):
-            return val
-        parts = val.split(":") if val else []
-        if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
-            raise ValueError(_ERR_TIME.format(val))
-        hour, minute = int(parts[0]), int(parts[1])
-        if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            raise ValueError(_ERR_TIME.format(val))
-        return time(hour, minute)
-    elif col.lower() == "module":
-        try:
-            return importlib.import_module(val)  # nosemgrep: non-literal-import
-        except Exception as exc:
-            raise ValueError(_ERR_MODULE.format(val, exc)) from exc
-    elif col.lower() == "function":
-        try:
-            module_path, fn_name = val.rsplit(".", 1)
-            return getattr(importlib.import_module(module_path), fn_name)  # nosemgrep: non-literal-import
-        except Exception as exc:
-            raise ValueError(_ERR_FUNCTION.format(val, exc)) from exc
-    return val
+
+def resolve_time(value: str) -> time | str:
+    if value in (SUNRISE, SUNSET):
+        return value
+    parts = value.split(":")
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        raise ValueError(_ERR_TIME.format(value))
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(_ERR_TIME.format(value))
+    return time(hour, minute)
 
 
 def squish_configs(
