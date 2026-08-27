@@ -6,6 +6,7 @@ setting long            -74.0060
 setting audio_device    'NO_AUDIO_DEVICE_IN_TESTS'
 setting broadlink_codes /etc/orc/broadlink_codes.json
 setting mqtt_host       hubitat.example
+setting announce_device Chromecast.LIVING_ROOM
 
 provider secrets    orc.dal.secrets.stub
 provider weather    orc.dal.weather.stub

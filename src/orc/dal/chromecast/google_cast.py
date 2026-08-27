@@ -9,6 +9,7 @@ import pychromecast
 import yt_dlp
 
 from orc import model as m
+from orc.dal.chromecast import MAX_CHARS
 from orc.decorators import silence_fd
 
 _YDL_OPTS: dict[str, Any] = {
@@ -26,11 +27,17 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
         time.sleep(0.5)
         if cast.status is None:  # wait() timed out: device unreachable
             return m.SoundState(what=device, content=None, volume=0)
+        # A fresh connection doesn't reliably get an unsolicited media status broadcast
+        # in time; request one explicitly and give it a moment to arrive.
+        cast.media_controller.update_status()
+        time.sleep(0.5)
         ms = cast.media_controller.status
-        content = ms.content_id if ms and ms.player_state in _PLAYING_STATES else None
+        content = None
+        if ms and ms.player_state in _PLAYING_STATES:
+            content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
         return m.SoundState(
             what=device,
-            content=_strip_googlevideo_params(content) if content else None,
+            content=content,
             volume=int(cast.status.volume_level * 100),
         )
 
@@ -39,6 +46,17 @@ def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
     with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
         info = ydl.extract_info(id, download=False)
         return info["url"], info.get("title", "Audio Stream")
+
+
+def announce(device: m.DeviceEnum, text: str) -> None:
+    if len(text) > MAX_CHARS:
+        raise ValueError(f"Announcement text exceeds {MAX_CHARS} characters: {len(text)}")
+    url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
+    # Fire-and-forget: block_until_active would wait for the device to finish fetching and
+    # start playing, holding the HTTP response open for as long as that takes. play_media()
+    # only needs to hand off the LOAD command over the socket; the device fetches url itself.
+    with _cast(device) as cast:
+        cast.media_controller.play_media(url, "audio/mp3", title=text)
 
 
 def pause(device: m.DeviceEnum) -> None:

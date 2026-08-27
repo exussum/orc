@@ -1,7 +1,9 @@
 from orc import model as m
+from orc.dal.chromecast import MAX_CHARS
 
 _volumes: dict[m.DeviceEnum, int] = {}
 _content: dict[m.DeviceEnum, str] = {}
+_announced: list[str] = []
 
 
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
@@ -10,6 +12,13 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
 
 def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
     return ("", "Audio Stream")
+
+
+def announce(device: m.DeviceEnum, text: str) -> None:
+    if len(text) > MAX_CHARS:
+        raise ValueError(f"Announcement text exceeds {MAX_CHARS} characters: {len(text)}")
+    _announced.append(text)
+    _content[device] = text
 
 
 def pause(device: m.DeviceEnum) -> None:
@@ -35,3 +44,4 @@ def set_volume(device: m.DeviceEnum, lvl: int) -> None:
 def reset() -> None:
     _volumes.clear()
     _content.clear()
+    _announced.clear()

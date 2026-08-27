@@ -111,6 +111,11 @@ def notify(entry: m.LogEntry, *, level: str | None = None) -> m.LogEntry:
     return entry
 
 
+def announce(text: str) -> None:
+    assert config.settings.announce_device is not None
+    config.providers.chromecast.announce(config.settings.announce_device, text)
+
+
 def log(source: m.LogSourceEnum, action: str, *, notify_level: str | None = None) -> m.LogEntry:
     entry = m.LogEntry(local_now(), source, action)
     _ACTIVITY_LOG.appendleft(entry)

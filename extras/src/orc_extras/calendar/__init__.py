@@ -13,7 +13,7 @@ setting <key> <value>
 feed <name> <secret>
 """
 
-_SETTING_TYPES = {"window_hours": int, "max_events": int, "warning_minutes": int, "http_timeout": int}
+_SETTING_TYPES = {"window_hours": Cast.int, "max_events": Cast.int, "warning_minutes": Cast.int, "http_timeout": Cast.int}
 
 
 class Settings(NamedTuple):
