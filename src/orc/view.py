@@ -338,6 +338,12 @@ def set_theme() -> None:
     api.apply_theme_change(app.orc, name, start, end)
 
 
+@bp.route("/api/announce", methods=["POST"])
+@VersionManager.versioned
+def announce() -> None:
+    api.announce(request.form["text"])
+
+
 @bp.route("/api/version")
 def version() -> tuple[dict[str, Any], int]:
     return {"version": app.orc.version_manager.version}, 200

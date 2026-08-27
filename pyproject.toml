@@ -25,7 +25,7 @@ dependencies = [
     "recurring-ical-events==3.8.2",
     "requests==2.34.2",
     "yt-dlp==2026.8.19",
-    "command-cfg==0.5.0",
+    "command-cfg==0.6.0",
 ]
 name = "orc"
 version = "0.0.1"
@@ -73,6 +73,6 @@ packages = ["src/orc"]
 
 [tool.uv.sources]
 orc_data = { path = "data" }
-command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v0.5.0" }
+command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v0.6.0" }
 
 

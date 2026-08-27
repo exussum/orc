@@ -6,6 +6,7 @@ setting long            -74.0060
 setting audio_device    'USB Audio'
 setting broadlink_codes /etc/orc/codes.json
 setting mqtt_host       hub.test
+setting announce_device Chromecast.CC
 
 device define Light
 device add Light LAMP h1 --room Bedroom

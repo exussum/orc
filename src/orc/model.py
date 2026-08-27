@@ -66,6 +66,7 @@ class Settings(NamedTuple):
     audio_device: str | None = None
     broadlink_codes: str | None = None
     mqtt_host: str | None = None
+    announce_device: "DeviceEnum | None" = None
     tz: ZoneInfo = ZoneInfo("America/New_York")
     hubitat_url: str = "http://hubitat.example"
     http_timeout: int = 5

@@ -18,7 +18,7 @@ widget <name> <value>
 zone <group> <name> <value>
 """
 
-_SETTING_TYPES = {"window_hours": int, "http_timeout": int}
+_SETTING_TYPES = {"window_hours": Cast.int, "http_timeout": Cast.int}
 _WIDGET_TYPES = {"value": int}
 
 
