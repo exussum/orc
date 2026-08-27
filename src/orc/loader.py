@@ -3,7 +3,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import time, timedelta
 from functools import partial
-from types import ModuleType, SimpleNamespace
+from types import MappingProxyType, ModuleType, SimpleNamespace
 from typing import Any
 
 import command_cfg
@@ -14,6 +14,7 @@ from orc.dal import interfaces
 from orc.security import safe_eval
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
+_NO_OBJECTS: Mapping[str, Any] = MappingProxyType({})
 
 GRAMMAR = """
 ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<device> <state>]
@@ -59,9 +60,18 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         "highlight": each(_highlight, default=tuple, types={"start": Cast.when, "stop": Cast.when}),
         "theme": each(_theme, default=dict, types={"time": Cast.when}),
         "plugin": each(_plugin, default=list, types={"module": Cast.module, "backend": Cast.module}),
-        "volume": scalar(m.Volume.build, types={"INFO": int, "FATAL": int}),
+        "volume": scalar(m.Volume.build, types={"INFO": Cast.int, "FATAL": Cast.int}),
         "provider": scalar(interfaces.Provider, types={field: Cast.module for field in interfaces.Provider._fields}),
-        "setting": scalar(m.Settings.build, types={"lat": float, "long": float, "http_timeout": int, "port": int}),
+        "setting": scalar(
+            m.Settings.build,
+            types={
+                "lat": Cast.float,
+                "long": Cast.float,
+                "http_timeout": Cast.int,
+                "port": Cast.int,
+                "announce_device": Cast.announce_device,
+            },
+        ),
     }
     objects = command_cfg.parse(text, GRAMMAR, serializers)
     if unsealed := objects["device"].members.keys() - objects["device"].enums.keys():
@@ -108,12 +118,16 @@ _ERR_FUNCTION = (
 _ERR_MODULE = "Cannot load module {!r}: {}. Expected an importable module like 'orc.dal.mqtt.stub'."
 
 
-def resolve_device(value: str, devices: Mapping[str, type]) -> Any:
+def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> Any:
     try:
         return safe_eval(value, dict(devices))
     except NameError as exc:
         raise ValueError(f"{exc} — device types must be defined and sealed first") from None
-    except (AttributeError, SyntaxError) as exc:
+    except AttributeError:
+        type_name, _, member = value.partition(".")
+        options = sorted(devices[type_name].__members__) if type_name in devices else []
+        raise ValueError(f"Unknown {type_name} device {member!r}: expected one of {options}") from None
+    except SyntaxError as exc:
         raise ValueError(str(exc)) from None
 
 
@@ -137,12 +151,26 @@ class Cast:
             raise ValueError(f"Invalid time {value!r}: expected HH:MM")
         return parsed
 
+    # module/float/int/announce_device take an optional trailing `objects` so the same
+    # caster works both for each()'s 1-arg coerce() and scalar()'s 2-arg (value, objects) call.
     @staticmethod
-    def module(value: str) -> ModuleType:
+    def module(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> ModuleType:
         try:
             return importlib.import_module(value)  # nosemgrep: non-literal-import
         except Exception as exc:
             raise ValueError(_ERR_MODULE.format(value, exc)) from exc
+
+    @staticmethod
+    def float(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> float:
+        return float(value)
+
+    @staticmethod
+    def int(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> int:
+        return int(value)
+
+    @staticmethod
+    def announce_device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> Any:
+        return resolve_device(value, objects["device"].enums)
 
     @staticmethod
     def section(value: str | None) -> str | None:

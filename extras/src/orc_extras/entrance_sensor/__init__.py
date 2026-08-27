@@ -18,7 +18,7 @@ timed define <name> <start> <stop>
 timed append <name> <device> <state>
 """
 
-_SETTING_TYPES = {"cleanup_delay_minutes": int, "entrance_id": int, "patio_door_id": int, "snapshot": int}
+_SETTING_TYPES = {"cleanup_delay_minutes": Cast.int, "entrance_id": Cast.int, "patio_door_id": Cast.int, "snapshot": Cast.int}
 
 
 def _devices() -> dict[str, type]:
