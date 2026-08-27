@@ -52,11 +52,14 @@ def announce(device: m.DeviceEnum, text: str) -> None:
     if len(text) > MAX_CHARS:
         raise ValueError(f"Announcement text exceeds {MAX_CHARS} characters: {len(text)}")
     url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
-    # Fire-and-forget: block_until_active would wait for the device to finish fetching and
-    # start playing, holding the HTTP response open for as long as that takes. play_media()
-    # only needs to hand off the LOAD command over the socket; the device fetches url itself.
     with _cast(device) as cast:
-        cast.media_controller.play_media(url, "audio/mp3", title=text)
+        mc = cast.media_controller
+        for attempt in range(2):
+            mc.play_media(url, "audio/mp3", title=text)
+            mc.block_until_active(timeout=5)
+            if mc.status.player_state != "IDLE" or mc.status.idle_reason != "ERROR":
+                return
+        raise RuntimeError(f"{device.name}: Chromecast failed to load announcement {text!r}")
 
 
 def pause(device: m.DeviceEnum) -> None:
