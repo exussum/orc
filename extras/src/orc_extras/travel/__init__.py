@@ -18,7 +18,7 @@ place <name> <address>
 extra <name> <minutes>
 """
 
-_SETTING_TYPES = {"window_hours": int, "http_timeout": int, "buffer_minutes": int}
+_SETTING_TYPES = {"window_hours": Cast.int, "http_timeout": Cast.int, "buffer_minutes": Cast.int}
 
 
 def declare(declarations: Any) -> None:

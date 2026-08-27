@@ -82,7 +82,8 @@ def test_settings_typed_and_defaulted():
 def test_validate_missing_settings():
     with pytest.raises(
         ConfigError,
-        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, audio_device, broadlink_codes, mqtt_host",
+        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, audio_device, broadlink_codes, mqtt_host, "
+        "announce_device",
     ):
         validate(parse("validate_missing_settings"))
 
@@ -163,7 +164,7 @@ def test_load_plugin_config_missing_file():
 _PARSE_ERRORS = [
     ("device_type_not_defined", "name 'Foo' is not defined — device types must be defined and sealed first"),
     ("device_type_not_sealed", "name 'Foo' is not defined — device types must be defined and sealed first"),
-    ("unknown_device_member", "type object 'Foo' has no attribute 'B'"),
+    ("unknown_device_member", "Unknown Foo device 'B': expected one of ['A']"),
     ("device_expression_syntax_error", "'(' was never closed"),
     ("add_before_define", "Unknown device type 'Foo'"),
     ("seal_before_define", "Unknown device type 'Foo'"),
