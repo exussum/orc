@@ -5,7 +5,7 @@ from typing import Any
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 
-from orc.model import AUDIO_FATAL, AppContext
+from orc.model import AppContext
 from orc.plugins import requires_ctx
 from orc_extras.travel.dal.sqlite import Connection
 from orc_extras.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
@@ -132,4 +132,5 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
         message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
     else:
         message = f"Time to leave for {target}."
-    ctx.api.log(Log.TRAVEL, message, notify_level=AUDIO_FATAL)
+    ctx.api.log(Log.TRAVEL, message)
+    ctx.api.announce(message)
