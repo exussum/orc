@@ -53,7 +53,7 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
     probes: list = [Ether(dst=mac) / ARP(pdst=ip, hwdst=mac) for ip, (_, mac) in targets.items()]
     probes.append(
         Ether(dst="01:00:5e:00:00:fb")
-        / IP(dst="224.0.0.251")
+        / IP(dst="224.0.0.251", ttl=255)
         / UDP(sport=5353, dport=5353)
         / DNS(rd=0, qd=DNSQR(qname="_services._dns-sd._udp.local", qtype="PTR"))
     )
