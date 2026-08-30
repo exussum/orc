@@ -136,7 +136,7 @@ def device() -> str:
             type=type(d).__name__,
             icon=config.registry.devices[type(d).__name__].icon,
             capabilities=capabilities,
-            toggle=type(d).__name__ not in ("AC", "Chromecast") and "change_level" not in capabilities,
+            toggle=type(d).__name__ not in ("AC", "Chromecast", "USB") and "change_level" not in capabilities,
             level=level,
             on=level > 0,
             volume=sound_states.get(d.name, 0),
@@ -341,7 +341,7 @@ def set_theme() -> None:
 @bp.route("/api/announce", methods=["POST"])
 @VersionManager.versioned
 def announce() -> None:
-    api.announce(request.form["text"])
+    api.speak(config.settings.announce_device, request.form["text"])
 
 
 @bp.route("/api/version")
