@@ -45,6 +45,7 @@ JOBSTORE_MEMORY = "memory"
 _PRESENCE_CRON_JOB_ID = "presence-cron"
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
+_EMERGENCY_VOLUME = 80
 
 _ctx: m.AppContext | None = None
 
@@ -107,16 +108,6 @@ def local_now() -> datetime:
 def notify(entry: m.LogEntry) -> m.LogEntry:
     _NOTIFICATIONS.appendleft(entry)
     return entry
-
-
-def speak(device: m.DeviceEnum, text: str) -> None:
-    (config.providers.audio if isinstance(device, orc.USB) else config.providers.chromecast).speak(device, text)
-
-
-def alert(device: m.DeviceEnum, path: str) -> None:
-    if not isinstance(device, orc.USB):
-        raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
-    config.providers.audio.alert(device, path)
 
 
 def log(source: m.LogSourceEnum, action: str, *, should_notify: bool = False) -> m.LogEntry:
@@ -261,7 +252,7 @@ def wire_buttons(ctx: m.AppContext) -> None:
         if action is not None and not run_action(ctx, action, hub_origin=True):
             msg = Log.BUTTON_ACTION_UNKNOWN.format(id=action)
             entry = log(m.LogSource.SYSTEM, msg, should_notify=True)
-            dispatch_speak(config.settings.alert_device, msg, entry=entry)
+            alert(m.Alarm.ATTENTION, text=msg, entry=entry)
 
     config.providers.mqtt.add_button_listener(on_button)
 
@@ -302,7 +293,7 @@ def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
             msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
             notify(entry.add(entry.source, msg))
             try:
-                config.providers.audio.speak(config.settings.alert_device, m.Speak(msg))
+                config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
             except Exception:
                 pass  # already recorded via notify() above; don't let error-reporting itself crash the worker
 
@@ -310,8 +301,26 @@ def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
         list(ex.map(one, what))
 
 
-def dispatch_speak(device: m.DeviceEnum, text: str, *, entry: m.LogEntry) -> None:
-    dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
+_ALARM_SETTINGS = {
+    m.Alarm.WARNING: "warning_device",
+    m.Alarm.ATTENTION: "attention_device",
+    m.Alarm.EMERGENCY: "emergency_device",
+}
+
+
+def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, entry: m.LogEntry) -> None:
+    if (text is None) == (path is None):
+        raise ValueError("alert() requires exactly one of text or path")
+    device = getattr(config.settings, _ALARM_SETTINGS[severity])
+    if path is not None and not isinstance(device, orc.USB):
+        raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
+    if severity is m.Alarm.EMERGENCY:
+        (config.providers.audio if isinstance(device, orc.USB) else config.providers.chromecast).set_volume(device, _EMERGENCY_VOLUME)
+    if text is not None:
+        dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
+    else:
+        assert path is not None
+        dispatch(m.Config(device, path), force=True, entry=entry)
 
 
 def reboot_hubitat() -> None:
@@ -496,7 +505,7 @@ def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.S
     for name, exc in errors:
         msg = Log.PRESENCE_PING_FAILED.format(name=name, exc=exc)
         entry = log(source, msg, should_notify=True)
-        dispatch_speak(config.settings.alert_device, msg, entry=entry)
+        alert(m.Alarm.ATTENTION, text=msg, entry=entry)
     mark_present(present, local_now())
     after = present_names()
 

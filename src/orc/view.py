@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from flask import Blueprint, Flask, render_template, request
+from flask import Blueprint, Flask, render_template, request, send_file
 from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
@@ -341,7 +341,14 @@ def set_theme() -> None:
 @bp.route("/api/announce", methods=["POST"])
 @VersionManager.versioned
 def announce() -> None:
-    api.speak(config.settings.announce_device, request.form["text"])
+    text = request.form["text"]
+    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text))
+    api.alert(m.Alarm.WARNING, text=text, entry=entry)
+
+
+@bp.route("/api/alert.wav")
+def alert_wav() -> Response:
+    return send_file(api.DEFAULT_ALERT_PATH)
 
 
 @bp.route("/api/version")

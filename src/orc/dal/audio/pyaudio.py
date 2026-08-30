@@ -48,7 +48,7 @@ def _find_output_device(name: str) -> tuple[int, Any]:
                 return i, info
     finally:
         pa.terminate()
-    raise RuntimeError(f"No audio output device matching alert_device setting {name!r}")
+    raise RuntimeError(f"No audio output device matching {name!r}")
 
 
 def _play_stream(device: m.DeviceEnum, chunks: Iterable[bytes], channels: int, src_rate: int) -> None:
