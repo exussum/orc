@@ -1,5 +1,4 @@
 from enum import Enum
-from unittest.mock import create_autospec
 
 import pytest
 
@@ -44,24 +43,13 @@ def core_registry(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def reset_stubs():
+    from orc.dal.audio import stub as audio_stub
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.mqtt import stub as mqtt_stub
 
     mqtt_stub.reset()
     chromecast_stub.reset()
-    yield
-
-
-@pytest.fixture(autouse=True)
-def mute_speakers(monkeypatch):
-    from orc import api
-    from orc.dal import audio
-
-    monkeypatch.setattr(api, "speak", create_autospec(api.speak))
-    monkeypatch.setattr(api, "alert", create_autospec(api.alert))
-    monkeypatch.setattr(audio, "speak", create_autospec(audio.speak))
-    monkeypatch.setattr(audio, "set_volume", create_autospec(audio.set_volume))
-    monkeypatch.setattr(audio, "alert", create_autospec(audio.alert))
+    audio_stub.reset()
     yield
 
 
