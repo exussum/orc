@@ -29,7 +29,11 @@ orc runs happily on a laptop with nothing attached: the sample config's
 `provider` lines name the stub backends (`orc.dal.<capability>.stub`), so
 every device and secret integration is faked in memory and the whole UI
 works. A real installation's config names the real backends instead
-(for example, `provider mqtt orc.dal.mqtt.hubitat`).
+(for example, `provider mqtt orc.dal.mqtt.hubitat`) — though `secrets`,
+`hubitat`, `mqtt`, `chromecast`, and `audio` default to their real backend
+when the `provider` line is omitted entirely, so a production config only
+needs to name `weather`, `holiday`, and `blaster` explicitly. An explicit
+`provider` line, stub or real, always overrides the default.
 
 You'll need:
 
@@ -180,12 +184,13 @@ Two config surfaces:
 
 ## Secrets (Bitwarden)
 
-With `provider secrets orc.dal.secrets.bws`, secrets are pulled from
-Bitwarden Secrets Manager by name. The first two are required — startup fails
-without them; the rest are optional: the MQTT pair credentials the Hubitat
-MQTT connection. Any other key is read on demand by whichever plugin config
-names it (for example, `YOLINK_ID`/`YOLINK_SECRET` for the yolink plugin, or
-a calendar feed's secret):
+With the default `secrets` provider (`orc.dal.secrets.bws`), secrets are
+pulled from Bitwarden Secrets Manager by name. The first two are
+required — startup fails without them; the rest are optional: the MQTT
+pair credentials the Hubitat MQTT connection. Any other key is read on
+demand by whichever plugin config names it (for example,
+`YOLINK_ID`/`YOLINK_SECRET` for the yolink plugin, or a calendar feed's
+secret):
 
 | Key                    | Used for                                           |
 |------------------------|-----------------------------------------------------|

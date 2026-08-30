@@ -2,6 +2,11 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from typing import NamedTuple, Protocol
 
+from orc.dal.audio import pyaudio as _audio_default
+from orc.dal.chromecast import pychromecast as _chromecast_default
+from orc.dal.hubitat import http as _hubitat_default
+from orc.dal.mqtt import hubitat as _mqtt_default
+from orc.dal.secrets import bws as _secrets_default
 from orc.model import (
     ButtonListener,
     Capability,
@@ -68,11 +73,11 @@ class HubitatService(Protocol):
 
 
 class Provider(NamedTuple):
-    secrets: SecretsService | None = None
+    secrets: SecretsService | None = _secrets_default
     weather: WeatherService | None = None
     holiday: HolidayService | None = None
-    mqtt: MqttService | None = None
-    chromecast: ChromecastService | None = None
+    mqtt: MqttService | None = _mqtt_default
+    chromecast: ChromecastService | None = _chromecast_default
     blaster: BlasterService | None = None
-    hubitat: HubitatService | None = None
-    audio: AudioService | None = None
+    hubitat: HubitatService | None = _hubitat_default
+    audio: AudioService | None = _audio_default

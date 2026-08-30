@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy.engine.url import make_url
 
-from orc import config
+import orc
 
 _ALPHA: float = 0.3
 
@@ -87,7 +87,7 @@ def fetch_durations() -> list[Any]:
 @contextmanager
 def connection() -> Iterator[sqlite3.Connection]:
     # Public DB connection context manager; plugins use it to own their own tables.
-    db_path = make_url(config.settings.jobs_db).database
+    db_path = make_url(orc.config.settings.jobs_db).database
     assert db_path is not None  # a configured sqlite URL always includes a path
     conn = sqlite3.connect(db_path)
     try:
