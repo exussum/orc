@@ -14,7 +14,7 @@ def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
     return ("", "Audio Stream")
 
 
-def announce(device: m.DeviceEnum, text: str) -> None:
+def speak(device: m.DeviceEnum, text: str) -> None:
     if len(text) > MAX_CHARS:
         raise ValueError(f"Announcement text exceeds {MAX_CHARS} characters: {len(text)}")
     _announced.append(text)

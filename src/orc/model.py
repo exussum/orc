@@ -36,18 +36,6 @@ type Listener = Callable[[DeviceState, str, Any, Any], None]
 type ButtonListener = Callable[[int, int, str], None]
 
 
-class Volume(NamedTuple):
-    INFO: int
-    FATAL: int
-
-    @classmethod
-    def build(cls, **values: Any) -> Volume:
-        for key, level in values.items():
-            if not 0 <= level <= 100:
-                raise ValueError(f"Invalid parameter level={level!r}")
-        return cls(**values)
-
-
 class ThemeOverride(NamedTuple):
     name: str
     start: date
@@ -63,7 +51,7 @@ class Settings(NamedTuple):
     jobs_db: str | None = None
     lat: float | None = None
     long: float | None = None
-    audio_device: str | None = None
+    alert_device: "DeviceEnum | None" = None
     broadlink_codes: str | None = None
     mqtt_host: str | None = None
     announce_device: "DeviceEnum | None" = None
@@ -97,8 +85,6 @@ PAUSE = "pause"
 FOLLOW = "follow"
 THEME_WORK_DAY = "work day"
 THEME_DAY_OFF = "day off"
-AUDIO_INFO = "INFO"
-AUDIO_FATAL = "FATAL"
 
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 
@@ -206,6 +192,15 @@ class LogEntry:
 @dataclass
 class IotJob:
     rule: Routine
+
+
+class Speak(str):
+    """Config.state value meaning 'speak this text aloud' — distinct from a plain str
+    (a file path or stream URL) and an int (volume). Log messages use backticks for
+    markdown emphasis in the log view; strip them here since TTS shouldn't say them."""
+
+    def __new__(cls, text: str) -> "Speak":
+        return super().__new__(cls, text.replace("`", ""))
 
 
 @dataclass

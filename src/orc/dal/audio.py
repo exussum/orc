@@ -1,7 +1,6 @@
-import array
 import wave
 from collections.abc import Iterable
-from functools import lru_cache
+from functools import cache
 from importlib import resources  # nosemgrep
 from importlib.resources.abc import Traversable  # nosemgrep
 from typing import Any
@@ -9,8 +8,8 @@ from typing import Any
 import audioop
 import pyaudio
 
-from orc import config
 from orc import model as m
+from orc.dal import system_volume
 from orc.decorators import audio_lock, silence_fd
 
 _MODEL_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx"
@@ -22,29 +21,23 @@ with silence_fd(2):
     _VOICE: Any = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
 
 
-def play_alert(path: str, level: str | None = None) -> None:
+def alert(device: m.DeviceEnum, path: str) -> None:
     with wave.open(path, "rb") as wf:
         channels, rate = wf.getnchannels(), wf.getframerate()
         chunks = iter(lambda: wf.readframes(4096), b"")
-        _play_stream(chunks, channels, rate, _gain_for(level))
+        _play_stream(device, chunks, channels, rate)
 
 
-def play_text(text: str, level: str | None = None) -> None:
+def speak(device: m.DeviceEnum, text: str) -> None:
     chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
-    _play_stream(chunks, 1, _VOICE.config.sample_rate, _gain_for(level))
+    _play_stream(device, chunks, 1, _VOICE.config.sample_rate)
 
 
-def _scale_int16(frames: bytes, gain: float) -> bytes:
-    if gain == 1.0:
-        return frames
-    samples = array.array("h", frames)
-    for i, s in enumerate(samples):
-        v = int(s * gain)
-        samples[i] = -32768 if v < -32768 else 32767 if v > 32767 else v
-    return samples.tobytes()
+def set_volume(device: m.DeviceEnum, lvl: int) -> None:
+    system_volume.set_volume(device.value, lvl)
 
 
-@lru_cache(maxsize=1)
+@cache
 def _find_output_device(name: str) -> tuple[int, Any]:
     with silence_fd(2):
         pa = pyaudio.PyAudio()
@@ -55,11 +48,11 @@ def _find_output_device(name: str) -> tuple[int, Any]:
                 return i, info
     finally:
         pa.terminate()
-    raise RuntimeError(f"No audio output device matching audio_device setting {name!r}")
+    raise RuntimeError(f"No audio output device matching alert_device setting {name!r}")
 
 
-def _play_stream(chunks: Iterable[bytes], channels: int, src_rate: int, gain: float) -> None:
-    idx, info = _find_output_device(config.settings.audio_device)
+def _play_stream(device: m.DeviceEnum, chunks: Iterable[bytes], channels: int, src_rate: int) -> None:
+    idx, info = _find_output_device(device.value)
     dst_rate = int(info["defaultSampleRate"])
     with audio_lock, silence_fd(2):
         pa = pyaudio.PyAudio()
@@ -68,17 +61,11 @@ def _play_stream(chunks: Iterable[bytes], channels: int, src_rate: int, gain: fl
             try:
                 state = None
                 for chunk in chunks:
-                    scaled = _scale_int16(chunk, gain)
                     if src_rate != dst_rate:
-                        scaled, state = audioop.ratecv(scaled, 2, channels, src_rate, dst_rate, state)
-                    stream.write(scaled)
+                        chunk, state = audioop.ratecv(chunk, 2, channels, src_rate, dst_rate, state)
+                    stream.write(chunk)
             finally:
                 stream.stop_stream()
                 stream.close()
         finally:
             pa.terminate()
-
-
-def _gain_for(level: str | None) -> float:
-    volume = config.volumes.FATAL if level == m.AUDIO_FATAL else config.volumes.INFO
-    return volume / 100.0

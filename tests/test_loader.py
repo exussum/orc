@@ -67,10 +67,6 @@ def test_rooms_collect_member_states():
     assert parsed.room["Bedroom"].items == (m.Config(parsed.enums["Light"]["LAMP"], "on"),)
 
 
-def test_volumes_are_bounded_ints():
-    assert parse("core").volume == m.Volume(INFO=4, FATAL=10)
-
-
 def test_settings_typed_and_defaulted():
     settings = parse("core").setting
     assert settings.lat == 40.7143
@@ -82,7 +78,7 @@ def test_settings_typed_and_defaulted():
 def test_validate_missing_settings():
     with pytest.raises(
         ConfigError,
-        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, audio_device, broadlink_codes, mqtt_host, "
+        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, alert_device, broadlink_codes, mqtt_host, "
         "announce_device",
     ):
         validate(parse("validate_missing_settings"))
@@ -175,7 +171,6 @@ _PARSE_ERRORS = [
     ("unsealed_at_end", "Device types defined but never sealed: ['Foo']"),
     ("duplicate_member_names", "Duplicate names in 'Foo': {'A'}"),
     ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),
-    ("level_out_of_range", "Invalid parameter level=101"),
     ("invalid_state", "Invalid state 'wibble'"),
     ("invalid_delay", "invalid literal for int() with base 10: 'soon'"),
     ("invalid_snapshot", "invalid literal for int() with base 10: 'lots'"),

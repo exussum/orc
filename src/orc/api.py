@@ -20,8 +20,7 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config, plugins
 from orc import model as m
-from orc.dal import net, scheduler, sqlite
-from orc.dal.audio import play_alert, play_text  # noqa: F401
+from orc.dal import audio, net, scheduler, sqlite
 from orc.dal.scheduler import fetch_jobs_by_type
 from orc.dal.sqlite import (
     connection,  # noqa: F401
@@ -105,22 +104,26 @@ def local_now() -> datetime:
     return datetime.now(tz=config.settings.tz)
 
 
-def notify(entry: m.LogEntry, *, level: str | None = None) -> m.LogEntry:
+def notify(entry: m.LogEntry) -> m.LogEntry:
     _NOTIFICATIONS.appendleft(entry)
-    play_text(entry.action.replace("`", ""), level=level)
     return entry
 
 
-def announce(text: str) -> None:
-    assert config.settings.announce_device is not None
-    config.providers.chromecast.announce(config.settings.announce_device, text)
+def speak(device: m.DeviceEnum, text: str) -> None:
+    (audio if isinstance(device, orc.USB) else config.providers.chromecast).speak(device, text)
 
 
-def log(source: m.LogSourceEnum, action: str, *, notify_level: str | None = None) -> m.LogEntry:
+def alert(device: m.DeviceEnum, path: str) -> None:
+    if not isinstance(device, orc.USB):
+        raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
+    audio.alert(device, path)
+
+
+def log(source: m.LogSourceEnum, action: str, *, should_notify: bool = False) -> m.LogEntry:
     entry = m.LogEntry(local_now(), source, action)
     _ACTIVITY_LOG.appendleft(entry)
-    if notify_level is not None:
-        notify(entry, level=notify_level)
+    if should_notify:
+        notify(entry)
     return entry
 
 
@@ -150,10 +153,6 @@ def capture_sounds() -> m.Configs[m.SoundState]:
         return m.Configs(*ex.map(config.providers.chromecast.fetch_state, orc.Chromecast))
 
 
-# Dispatch handlers keyed by device-type name in orc.declarations. Each takes the
-# AppContext, the device, the rule, and a per-dispatch `stream` cache (shared across
-# the devices in one dispatch call so a stream's metadata is fetched only once).
-# Plugins register their own handlers the same way.
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
         config.providers.mqtt.publish_light(w, brightness=rule.state)
@@ -164,6 +163,8 @@ def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: 
 def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
         config.providers.chromecast.set_volume(w, rule.state)
+    elif isinstance(rule.state, m.Speak):
+        config.providers.chromecast.speak(w, rule.state)
     elif rule.state == m.STOP:
         config.providers.chromecast.stop(w)
     elif rule.state == m.PAUSE:
@@ -181,6 +182,17 @@ def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, str
         config.providers.chromecast.play(w, *stream[rule.state])
 
 
+def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, int):
+        audio.set_volume(w, rule.state)
+    elif isinstance(rule.state, m.Speak):
+        audio.speak(w, rule.state)
+    elif rule.state in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
+        raise ValueError(f"USB devices don't support state {rule.state!r}")
+    else:
+        audio.alert(w, rule.state)
+
+
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
     config.registry.state_providers[title] = provider
 
@@ -188,6 +200,11 @@ def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
 def declare_core(declarations: Declarations) -> None:
     declarations.declare_dispatch("Light", _dispatch_light)
     declarations.declare_dispatch("Chromecast", _dispatch_chromecast)
+    declarations.declare_dispatch("USB", _dispatch_usb)
+    declarations.controllable_devices.append("Light")
+    declarations.controllable_devices.append("Chromecast")
+    declarations.controllable_devices.append("AC")
+    declarations.controllable_devices.append("USB")
 
 
 def resolve_run_action(
@@ -242,7 +259,9 @@ def wire_buttons(ctx: m.AppContext) -> None:
     def on_button(device_id: int, button: int, event_type: str) -> None:
         action = mapping.get((device_id, button, event_type))
         if action is not None and not run_action(ctx, action, hub_origin=True):
-            log(m.LogSource.SYSTEM, Log.BUTTON_ACTION_UNKNOWN.format(id=action), notify_level=m.AUDIO_INFO)
+            msg = Log.BUTTON_ACTION_UNKNOWN.format(id=action)
+            entry = log(m.LogSource.SYSTEM, msg, should_notify=True)
+            dispatch_speak(config.settings.alert_device, msg, entry=entry)
 
     config.providers.mqtt.add_button_listener(on_button)
 
@@ -280,10 +299,19 @@ def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
         try:
             device_type.dispatch(_ctx, w, rule, stream)
         except Exception as exc:
-            notify(entry.add(entry.source, Log.DISPATCH_FAILED.format(device=w.name, exc=exc)))
+            msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
+            notify(entry.add(entry.source, msg))
+            try:
+                audio.speak(config.settings.alert_device, m.Speak(msg))
+            except Exception:
+                pass  # already recorded via notify() above; don't let error-reporting itself crash the worker
 
     with Pool(max_workers=max(1, len(what))) as ex:
         list(ex.map(one, what))
+
+
+def dispatch_speak(device: m.DeviceEnum, text: str, *, entry: m.LogEntry) -> None:
+    dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
 
 
 def reboot_hubitat() -> None:
@@ -466,7 +494,9 @@ def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.S
     before = present_names()
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
-        log(source, Log.PRESENCE_PING_FAILED.format(name=name, exc=exc), notify_level=m.AUDIO_INFO)
+        msg = Log.PRESENCE_PING_FAILED.format(name=name, exc=exc)
+        entry = log(source, msg, should_notify=True)
+        dispatch_speak(config.settings.alert_device, msg, entry=entry)
     mark_present(present, local_now())
     after = present_names()
 
