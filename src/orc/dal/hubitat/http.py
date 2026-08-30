@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from orc import config
+import orc
 from orc import model as m
 
 _STATS_WINDOW = timedelta(days=2)
@@ -20,16 +20,17 @@ _STATE_CHANGE = re.compile(r"(?:was turned (?:on|off)(?: \[digital\])?|level was
 
 def reboot() -> None:
     resp = requests.post(
-        f"{config.settings.hubitat_url}/hub/reboot?access_token={config.secrets.hubitat_access_token}", timeout=config.settings.http_timeout
+        f"{orc.config.settings.hubitat_url}/hub/reboot?access_token={orc.config.secrets.hubitat_access_token}",
+        timeout=orc.config.settings.http_timeout,
     )
     resp.raise_for_status()
 
 
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
-    base = urlparse(config.settings.hubitat_url or "")
-    resp = requests.get(f"{base.scheme}://{base.netloc}/logs/past/json", timeout=config.settings.http_timeout)
+    base = urlparse(orc.config.settings.hubitat_url or "")
+    resp = requests.get(f"{base.scheme}://{base.netloc}/logs/past/json", timeout=orc.config.settings.http_timeout)
     resp.raise_for_status()
-    cutoff = datetime.now(config.settings.tz).replace(tzinfo=None) - _STATS_WINDOW
+    cutoff = datetime.now(orc.config.settings.tz).replace(tzinfo=None) - _STATS_WINDOW
     failed: Counter[int] = Counter()
     retried: Counter[int] = Counter()
     changes: Counter[int] = Counter()

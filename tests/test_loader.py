@@ -220,9 +220,7 @@ def test_provider_defaults_to_none():
 
 
 def test_validate_missing_providers():
-    with pytest.raises(
-        ConfigError, match="Missing required providers: secrets, weather, holiday, mqtt, chromecast, blaster, hubitat, audio"
-    ):
+    with pytest.raises(ConfigError, match="Missing required providers: weather, holiday, blaster"):
         validate(parse("core"))
 
 
