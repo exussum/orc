@@ -20,7 +20,7 @@ from skyfield.api import load, load_file, wgs84
 import orc
 from orc import config, plugins
 from orc import model as m
-from orc.dal import audio, net, scheduler, sqlite
+from orc.dal import net, scheduler, sqlite
 from orc.dal.scheduler import fetch_jobs_by_type
 from orc.dal.sqlite import (
     connection,  # noqa: F401
@@ -110,13 +110,13 @@ def notify(entry: m.LogEntry) -> m.LogEntry:
 
 
 def speak(device: m.DeviceEnum, text: str) -> None:
-    (audio if isinstance(device, orc.USB) else config.providers.chromecast).speak(device, text)
+    (config.providers.audio if isinstance(device, orc.USB) else config.providers.chromecast).speak(device, text)
 
 
 def alert(device: m.DeviceEnum, path: str) -> None:
     if not isinstance(device, orc.USB):
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
-    audio.alert(device, path)
+    config.providers.audio.alert(device, path)
 
 
 def log(source: m.LogSourceEnum, action: str, *, should_notify: bool = False) -> m.LogEntry:
@@ -184,13 +184,13 @@ def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, str
 
 def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
-        audio.set_volume(w, rule.state)
+        config.providers.audio.set_volume(w, rule.state)
     elif isinstance(rule.state, m.Speak):
-        audio.speak(w, rule.state)
+        config.providers.audio.speak(w, rule.state)
     elif rule.state in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
         raise ValueError(f"USB devices don't support state {rule.state!r}")
     else:
-        audio.alert(w, rule.state)
+        config.providers.audio.alert(w, rule.state)
 
 
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
@@ -302,7 +302,7 @@ def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
             msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
             notify(entry.add(entry.source, msg))
             try:
-                audio.speak(config.settings.alert_device, m.Speak(msg))
+                config.providers.audio.speak(config.settings.alert_device, m.Speak(msg))
             except Exception:
                 pass  # already recorded via notify() above; don't let error-reporting itself crash the worker
 
