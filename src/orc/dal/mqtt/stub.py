@@ -2,6 +2,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from orc import model as m
+from orc.dal import warn_stub
+
+warn_stub("mqtt")
 
 _states: dict[m.DeviceEnum, Any] = {}
 _listeners: list[m.Listener] = []
