@@ -1,5 +1,8 @@
 from orc import model as m
+from orc.dal import warn_stub
 from orc.dal.chromecast import MAX_CHARS
+
+warn_stub("chromecast")
 
 _volumes: dict[m.DeviceEnum, int] = {}
 _content: dict[m.DeviceEnum, str] = {}

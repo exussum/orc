@@ -1,4 +1,7 @@
 from orc import model as m
+from orc.dal import warn_stub
+
+warn_stub("secrets")
 
 
 class _StubSecrets(dict[str, str]):
