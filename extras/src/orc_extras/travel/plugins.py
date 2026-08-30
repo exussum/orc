@@ -5,7 +5,7 @@ from typing import Any
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.date import DateTrigger
 
-from orc.model import AppContext
+from orc.model import Alarm, AppContext
 from orc.plugins import requires_ctx
 from orc_extras.travel.dal.sqlite import Connection
 from orc_extras.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
@@ -133,4 +133,4 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     else:
         message = f"Time to leave for {target}."
     entry = ctx.api.log(Log.TRAVEL, message)
-    ctx.api.dispatch_speak(ctx.config.settings.announce_device, message, entry=entry)
+    ctx.api.alert(Alarm.WARNING, text=message, entry=entry)
