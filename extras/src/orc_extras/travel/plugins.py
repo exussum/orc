@@ -132,5 +132,5 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
         message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
     else:
         message = f"Time to leave for {target}."
-    ctx.api.log(Log.TRAVEL, message)
-    ctx.api.announce(message)
+    entry = ctx.api.log(Log.TRAVEL, message)
+    ctx.api.dispatch_speak(ctx.config.settings.announce_device, message, entry=entry)

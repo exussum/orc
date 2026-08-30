@@ -17,6 +17,3 @@ routine append ROUTINE_DEFAULT Light on
 
 theme 'work day' ROUTINE_RESET   1:00
 theme 'day off'  ROUTINE_DEFAULT sunset
-
-volume INFO  4
-volume FATAL 10

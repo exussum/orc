@@ -10,10 +10,11 @@ from orc import model as m
 from orc.declarations import collect_declarations
 from orc.loader import parse_config, validate
 
-Light: type[m.DeviceEnum]
-Chromecast: type[m.DeviceEnum]
-BroadLink: type[m.DeviceEnum]
-AC: type[m.DeviceEnum]
+Light: type[m.DeviceEnum] = m.DeviceEnum("Light", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
+Chromecast: type[m.DeviceEnum] = m.DeviceEnum("Chromecast", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
+BroadLink: type[m.DeviceEnum] = m.DeviceEnum("BroadLink", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
+AC: type[m.DeviceEnum] = m.DeviceEnum("AC", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
+USB: type[m.DeviceEnum] = m.DeviceEnum("USB", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 
 
 class Config:
@@ -70,7 +71,6 @@ class Config:
         self.ad_hoc_routines = parsed.ad_hoc
         self.remotes = parsed.remote
         self.button_highlights = parsed.highlight
-        self.volumes = parsed.volume
 
 
 config = Config()

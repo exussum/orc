@@ -153,6 +153,31 @@ class TestIntercepts:
         ]
 
 
+def test_dispatch_usb_sets_volume(entry):
+    from orc.dal import audio
+
+    api.dispatch(m.Config(orc.USB.speaker, 50), force=True, entry=entry)
+
+    audio.set_volume.assert_called_once_with(orc.USB.speaker, 50)
+
+
+def test_dispatch_usb_plays_alert_path(entry):
+    from orc.dal import audio
+
+    api.dispatch(m.Config(orc.USB.speaker, "/tmp/alert.wav"), force=True, entry=entry)
+
+    audio.alert.assert_called_once_with(orc.USB.speaker, "/tmp/alert.wav")
+
+
+def test_dispatch_usb_rejects_on_off_state(entry):
+    from orc.dal import audio
+
+    api.dispatch(m.Config(orc.USB.speaker, m.ON), force=True, entry=entry)
+
+    audio.speak.assert_called_once()
+    assert "USB devices don't support state" in audio.speak.call_args.args[1]
+
+
 def test_unwrapper_function_single_rule():
     calls = []
     rule = m.Config(orc.Light.a, m.ON)

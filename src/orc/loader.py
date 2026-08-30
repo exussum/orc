@@ -44,8 +44,6 @@ routine append <id> <device> <state> [--trigger=<trigger>]
 setting <key> <value>
 
 theme <name> <routine> <time>
-
-volume <log> <level>
 """
 
 
@@ -60,7 +58,6 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         "highlight": each(_highlight, default=tuple, types={"start": Cast.when, "stop": Cast.when}),
         "theme": each(_theme, default=dict, types={"time": Cast.when}),
         "plugin": each(_plugin, default=list, types={"module": Cast.module, "backend": Cast.module}),
-        "volume": scalar(m.Volume.build, types={"INFO": Cast.int, "FATAL": Cast.int}),
         "provider": scalar(interfaces.Provider, types={field: Cast.module for field in interfaces.Provider._fields}),
         "setting": scalar(
             m.Settings.build,
@@ -69,7 +66,8 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
                 "long": Cast.float,
                 "http_timeout": Cast.int,
                 "port": Cast.int,
-                "announce_device": Cast.announce_device,
+                "alert_device": Cast.device,
+                "announce_device": Cast.device,
             },
         ),
     }
@@ -89,7 +87,6 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         routine=objects["routine"],
         setting=objects["setting"] or m.Settings.build(),
         theme=objects["theme"],
-        volume=objects["volume"],
     )
 
 
@@ -133,7 +130,7 @@ def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> Any
 
 class Cast:
     @staticmethod
-    def device(objects: dict[str, Any], value: str) -> Any:
+    def device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> Any:
         return resolve_device(value, objects["device"].enums)
 
     @staticmethod
@@ -151,7 +148,7 @@ class Cast:
             raise ValueError(f"Invalid time {value!r}: expected HH:MM")
         return parsed
 
-    # module/float/int/announce_device take an optional trailing `objects` so the same
+    # module/float/int/device take an optional trailing `objects` so the same
     # caster works both for each()'s 1-arg coerce() and scalar()'s 2-arg (value, objects) call.
     @staticmethod
     def module(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> ModuleType:
@@ -169,10 +166,6 @@ class Cast:
         return int(value)
 
     @staticmethod
-    def announce_device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> Any:
-        return resolve_device(value, objects["device"].enums)
-
-    @staticmethod
     def section(value: str | None) -> str | None:
         if value is None:
             return None
@@ -182,7 +175,7 @@ class Cast:
 
 
 def _config(objects: dict[str, Any], args: SimpleNamespace, **extra: Any) -> m.Config:
-    return m.Config(Cast.device(objects, args.device), Cast.state(args.state), **extra)
+    return m.Config(Cast.device(args.device, objects), Cast.state(args.state), **extra)
 
 
 def _resolve_function(value: str) -> Callable[..., Any]:
@@ -250,7 +243,7 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if args.event not in _BUTTON_EVENTS:
         raise ValueError(f"Invalid button event {args.event!r}: expected one of {sorted(_BUTTON_EVENTS)}")
-    objects["remote"][(Cast.device(objects, args.device), args.button, args.event)] = args.action
+    objects["remote"][(Cast.device(args.device, objects), args.button, args.event)] = args.action
 
 
 def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:

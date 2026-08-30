@@ -28,13 +28,17 @@ def core_registry(monkeypatch):
     class Chromecast(Enum):
         x = 1
 
+    class USB(Enum):
+        speaker = "Speaker"
+
     # Register core dispatch into a fresh builder, then build the registry from the test
     # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.
     builder = declarations.Declarations()
     api.declare_core(builder)
     monkeypatch.setattr(orc, "Light", Light, raising=False)
     monkeypatch.setattr(orc, "Chromecast", Chromecast, raising=False)
-    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast}))
+    monkeypatch.setattr(orc, "USB", USB, raising=False)
+    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast, "USB": USB}))
     yield
 
 
@@ -51,9 +55,13 @@ def reset_stubs():
 @pytest.fixture(autouse=True)
 def mute_speakers(monkeypatch):
     from orc import api
+    from orc.dal import audio
 
-    monkeypatch.setattr(api, "play_text", create_autospec(api.play_text))
-    monkeypatch.setattr(api, "play_alert", create_autospec(api.play_alert))
+    monkeypatch.setattr(api, "speak", create_autospec(api.speak))
+    monkeypatch.setattr(api, "alert", create_autospec(api.alert))
+    monkeypatch.setattr(audio, "speak", create_autospec(audio.speak))
+    monkeypatch.setattr(audio, "set_volume", create_autospec(audio.set_volume))
+    monkeypatch.setattr(audio, "alert", create_autospec(audio.alert))
     yield
 
 

@@ -797,6 +797,7 @@ dependencies = [
     { name = "orc-data" },
     { name = "paho-mqtt" },
     { name = "piper-tts" },
+    { name = "pyalsaaudio", marker = "sys_platform == 'linux'" },
     { name = "pyaudio" },
     { name = "pychromecast" },
     { name = "recurring-ical-events" },
@@ -833,6 +834,7 @@ requires-dist = [
     { name = "orc-data", directory = "data" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "piper-tts", specifier = "==1.6.1" },
+    { name = "pyalsaaudio", marker = "sys_platform == 'linux'", specifier = "==0.11.0" },
     { name = "pyaudio", specifier = "==0.2.14" },
     { name = "pychromecast", specifier = "==14.0.10" },
     { name = "pytest", marker = "extra == 'test'", specifier = "==9.1.1" },
@@ -970,6 +972,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0a/19/8d0cb6f20a1ef7b18f1c8986ad5783f22f84cce39c6ce9a6e645ea55192e/protobuf-7.35.1-cp310-abi3-win_amd64.whl", hash = "sha256:230a75ddfc2de4806e56696ce9640c1cdfdb6543b7cfce98d42a4c0a0e7bdb87", size = 439996, upload-time = "2026-06-11T21:55:38.123Z" },
     { url = "https://files.pythonhosted.org/packages/19/c7/5f7c636ec43e0c545e28d1f1db71990108306f7bdcb89f069ba97e428e7f/protobuf-7.35.1-py3-none-any.whl", hash = "sha256:4bc97768d8fe4ad6743c8a19403e314511ed9f6d13205b687e52421c023ac1b9", size = 171659, upload-time = "2026-06-11T21:55:39.155Z" },
 ]
+
+[[package]]
+name = "pyalsaaudio"
+version = "0.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/a6/3d833079b030d449345e35ce0e2874e330d3612135734f07b9ceace25bcf/pyalsaaudio-0.11.0.tar.gz", hash = "sha256:a78a9dca33524b2c9064b34e21f5ab874272313cf324a9a77592f396a5e0fddc", size = 311152, upload-time = "2024-05-30T21:35:57.928Z" }
 
 [[package]]
 name = "pyaudio"

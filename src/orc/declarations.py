@@ -12,7 +12,7 @@ from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry
 
 @dataclass
 class Declarations:
-    controllable_devices: list[str] = field(default_factory=lambda: ["Light", "Chromecast", "AC"])
+    controllable_devices: list[str] = field(default_factory=list)
     device_icons: dict[str, str] = field(default_factory=dict)
     dispatch_handlers: dict[str, Callable[..., None]] = field(default_factory=dict)
     state_providers: dict[str, Callable[[], Any]] = field(default_factory=dict)
