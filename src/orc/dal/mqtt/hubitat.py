@@ -15,7 +15,7 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
-from orc import config
+import orc
 from orc import model as m
 from orc.collections import LockedDict
 from orc.dal import sqlite
@@ -111,7 +111,7 @@ def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message:
     client.on_connect = on_connect
     client.on_message = counting
     client.reconnect_delay_set(min_delay=1, max_delay=60)
-    client.connect_async(config.settings.mqtt_host, _MQTT_PORT, keepalive=30)
+    client.connect_async(orc.config.settings.mqtt_host, _MQTT_PORT, keepalive=30)
     client.loop_start()
     if not _wait_settled(lambda: received, timeout):
         _log.warning("mqtt: retained documents still arriving after %.0fs (%d so far)", timeout, received)
@@ -121,7 +121,7 @@ def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message:
 
 def start() -> None:
     global _client
-    _client = _new_client(config.secrets, _on_connect, _on_message, 3.0)
+    _client = _new_client(orc.config.secrets, _on_connect, _on_message, 3.0)
 
 
 def snapshot() -> list[m.DeviceState]:
