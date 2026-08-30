@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from orc.dal import interfaces
+    from orc.dal.audio import pyaudio
+    from orc.dal.audio import stub as audio_stub
     from orc.dal.blaster import broadlink
     from orc.dal.blaster import stub as blaster_stub
-    from orc.dal.chromecast import google_cast
+    from orc.dal.chromecast import pychromecast
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.holiday import polygon
     from orc.dal.holiday import stub as holiday_stub
@@ -32,9 +34,11 @@ if TYPE_CHECKING:
     _holiday_stub: interfaces.HolidayService = holiday_stub
     _mqtt_real: interfaces.MqttService = hubitat
     _mqtt_stub: interfaces.MqttService = mqtt_stub
-    _chromecast_real: interfaces.ChromecastService = google_cast
+    _chromecast_real: interfaces.ChromecastService = pychromecast
     _chromecast_stub: interfaces.ChromecastService = chromecast_stub
     _blaster_real: interfaces.BlasterService = broadlink
     _blaster_stub: interfaces.BlasterService = blaster_stub
     _hubitat_real: interfaces.HubitatService = hubitat_http
     _hubitat_stub: interfaces.HubitatService = hubitat_stub
+    _audio_real: interfaces.AudioService = pyaudio
+    _audio_stub: interfaces.AudioService = audio_stub

@@ -1,7 +1,7 @@
 from datetime import date
 from unittest.mock import patch
 
-from orc.dal.chromecast.google_cast import _strip_googlevideo_params
+from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.holiday import polygon
 from orc.dal.hubitat import http as hubitat
 
