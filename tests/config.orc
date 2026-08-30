@@ -1,12 +1,13 @@
-setting base_url        http://orc.internal.example
-setting lan_domain      orc.internal.example
-setting jobs_db         sqlite:////tmp/jobs.sqlite
-setting lat             40.7143
-setting long            -74.0060
-setting alert_device    USB.TEST
-setting broadlink_codes /etc/orc/broadlink_codes.json
-setting mqtt_host       hubitat.example
-setting announce_device Chromecast.LIVING_ROOM
+setting base_url         http://orc.internal.example
+setting lan_domain       orc.internal.example
+setting jobs_db          sqlite:////tmp/jobs.sqlite
+setting lat              40.7143
+setting long             -74.0060
+setting broadlink_codes  /etc/orc/broadlink_codes.json
+setting mqtt_host        hubitat.example
+setting warning_device   Chromecast.LIVING_ROOM
+setting attention_device USB.TEST
+setting emergency_device USB.TEST
 
 provider secrets    orc.dal.secrets.stub
 provider weather    orc.dal.weather.stub

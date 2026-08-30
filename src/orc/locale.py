@@ -33,3 +33,5 @@ class Log:
     EXTERNAL_DETECTED: str = "External change detected"
     EXTERNAL_CHANGE: str = "`{device}` {attribute}: {old} → {new}"
     CONFLICTING_ARMS: str = "`{device}` given conflicting states in one run: {states}"
+
+    ANNOUNCE: str = "Announce: {text}"

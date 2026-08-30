@@ -1,12 +1,13 @@
-setting base_url        http://orc.test
-setting lan_domain      orc.test
-setting jobs_db         sqlite:////tmp/jobs.sqlite
-setting lat             40.7143
-setting long            -74.0060
-setting alert_device    USB.AUDIO
-setting broadlink_codes /etc/orc/codes.json
-setting mqtt_host       hub.test
-setting announce_device Chromecast.CC
+setting base_url         http://orc.test
+setting lan_domain       orc.test
+setting jobs_db          sqlite:////tmp/jobs.sqlite
+setting lat              40.7143
+setting long             -74.0060
+setting broadlink_codes  /etc/orc/codes.json
+setting mqtt_host        hub.test
+setting warning_device   Chromecast.CC
+setting attention_device USB.AUDIO
+setting emergency_device USB.AUDIO
 
 device define Light
 device add Light LAMP h1 --room Bedroom

@@ -39,7 +39,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         if new == plugins.STATE_WET:
             entry = api.log(m.LogSource.PLUGIN, msg, should_notify=True)
-            api.dispatch_speak(ctx.config.settings.alert_device, msg, entry=entry)
+            api.alert(m.Alarm.EMERGENCY, text=msg, entry=entry)
             return
     elif kind == "battery":
         old_critical = old is not None and old.is_critical
@@ -61,7 +61,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
 
     if msg:
         entry = api.log(m.LogSource.PLUGIN, msg, should_notify=True)
-        api.dispatch_speak(ctx.config.settings.alert_device, msg, entry=entry)
+        api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)
 
 
 def setup(ctx: AppContext) -> None:
