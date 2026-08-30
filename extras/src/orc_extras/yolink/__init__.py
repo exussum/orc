@@ -38,7 +38,8 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
     elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         if new == plugins.STATE_WET:
-            api.log(m.LogSource.PLUGIN, msg, notify_level=m.AUDIO_FATAL)
+            entry = api.log(m.LogSource.PLUGIN, msg, should_notify=True)
+            api.dispatch_speak(ctx.config.settings.alert_device, msg, entry=entry)
             return
     elif kind == "battery":
         old_critical = old is not None and old.is_critical
@@ -59,7 +60,8 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
         msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
 
     if msg:
-        api.log(m.LogSource.PLUGIN, msg, notify_level=m.AUDIO_INFO)
+        entry = api.log(m.LogSource.PLUGIN, msg, should_notify=True)
+        api.dispatch_speak(ctx.config.settings.alert_device, msg, entry=entry)
 
 
 def setup(ctx: AppContext) -> None:

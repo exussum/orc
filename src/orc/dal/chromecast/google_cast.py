@@ -48,7 +48,7 @@ def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
         return info["url"], info.get("title", "Audio Stream")
 
 
-def announce(device: m.DeviceEnum, text: str) -> None:
+def speak(device: m.DeviceEnum, text: str) -> None:
     if len(text) > MAX_CHARS:
         raise ValueError(f"Announcement text exceeds {MAX_CHARS} characters: {len(text)}")
     url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})

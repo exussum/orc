@@ -3,7 +3,7 @@ setting lan_domain      orc.internal.example
 setting jobs_db         sqlite:////tmp/jobs.sqlite
 setting lat             40.7143
 setting long            -74.0060
-setting audio_device    'NO_AUDIO_DEVICE_IN_TESTS'
+setting alert_device    USB.TEST
 setting broadlink_codes /etc/orc/broadlink_codes.json
 setting mqtt_host       hubitat.example
 setting announce_device Chromecast.LIVING_ROOM
@@ -20,6 +20,10 @@ device define Light
 device add Light BEDROOM_LAMP 'bedroom lamp'     --room Bedroom
 device add Light LIVING_ROOM  'living room desk'
 device seal Light
+
+device define USB
+device add USB TEST 'NO_AUDIO_DEVICE_IN_TESTS'
+device seal USB
 
 device only Chromecast LIVING_ROOM        'Living room mini' --room Living
 device only Button     LIVING_ROOM_REMOTE scene              --room Living
@@ -63,5 +67,3 @@ plugin Calendar           orc_extras.calendar
 
 highlight Silence 21:00 23:59
 
-volume INFO  4
-volume FATAL 10
