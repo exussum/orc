@@ -5,4 +5,5 @@ provider mqtt       orc.dal.mqtt.stub
 provider chromecast orc.dal.chromecast.stub
 provider blaster    orc.dal.blaster.stub
 provider hubitat    orc.dal.hubitat.stub
+provider audio      orc.dal.audio.stub
 
