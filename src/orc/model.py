@@ -51,10 +51,11 @@ class Settings(NamedTuple):
     jobs_db: str | None = None
     lat: float | None = None
     long: float | None = None
-    alert_device: "DeviceEnum | None" = None
     broadlink_codes: str | None = None
     mqtt_host: str | None = None
-    announce_device: "DeviceEnum | None" = None
+    warning_device: "DeviceEnum | None" = None
+    attention_device: "DeviceEnum | None" = None
+    emergency_device: "DeviceEnum | None" = None
     tz: ZoneInfo = ZoneInfo("America/New_York")
     hubitat_url: str = "http://hubitat.example"
     http_timeout: int = 5
@@ -141,6 +142,12 @@ class Trigger(str, Enum):
 class WeatherCondition(str, Enum):
     SUNNY = "SUNNY"
     CLOUDY = "CLOUDY"
+
+
+class Alarm(str, Enum):
+    WARNING = "WARNING"
+    ATTENTION = "ATTENTION"
+    EMERGENCY = "EMERGENCY"
 
 
 @dataclass(frozen=True)

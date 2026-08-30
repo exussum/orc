@@ -78,8 +78,8 @@ def test_settings_typed_and_defaulted():
 def test_validate_missing_settings():
     with pytest.raises(
         ConfigError,
-        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, alert_device, broadlink_codes, mqtt_host, "
-        "announce_device",
+        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, broadlink_codes, mqtt_host, "
+        "warning_device, attention_device, emergency_device",
     ):
         validate(parse("validate_missing_settings"))
 

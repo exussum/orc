@@ -1,12 +1,13 @@
-setting base_url        http://orc.internal.example
-setting lan_domain      orc.internal.example
-setting jobs_db         sqlite:////tmp/jobs.sqlite
-setting lat             42.4440
-setting long            -76.5019
-setting alert_device    USB.Speakers
-setting broadlink_codes /etc/orc/broadlink_codes.json
-setting mqtt_host       hubitat.example
-setting announce_device Chromecast.LIVING_ROOM
+setting base_url         http://orc.internal.example
+setting lan_domain       orc.internal.example
+setting jobs_db          sqlite:////tmp/jobs.sqlite
+setting lat              42.4440
+setting long             -76.5019
+setting broadlink_codes  /etc/orc/broadlink_codes.json
+setting mqtt_host        hubitat.example
+setting warning_device   Chromecast.LIVING_ROOM
+setting attention_device USB.Speakers
+setting emergency_device Chromecast.BEDROOM
 
 provider secrets    orc.dal.secrets.stub
 provider weather    orc.dal.weather.stub
@@ -26,8 +27,12 @@ device define USB
 device add USB Speakers 'Speakers'
 device seal USB
 
-device only Chromecast LIVING_ROOM        'Living room mini' --room Living
-device only Button     LIVING_ROOM_REMOTE scene              --room Living
+device define Chromecast
+device add Chromecast LIVING_ROOM 'Living room mini' --room Living
+device add Chromecast BEDROOM     'Bedroom mini'      --room Bedroom
+device seal Chromecast
+
+device only Button LIVING_ROOM_REMOTE scene --room Living
 device only BroadLink
 device only AC
 device only LGTV

@@ -51,7 +51,5 @@ def reboot_hubitat(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) 
 
 
 def sound_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
-    for d in ctx.orc.USB:
-        ctx.api.speak(d, "sound test")
-
-    ctx.api.dispatch(m.Configs(m.Config(ctx.orc.Chromecast, "RdYsLC0GELo")), force=True, entry=entry)
+    for severity in m.Alarm:
+        ctx.api.alert(severity, text="Test", entry=entry)
