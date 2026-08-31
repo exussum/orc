@@ -98,7 +98,7 @@ def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], 
 @requires_ctx
 def _run_event(job: CalendarJob, *, ctx: m.AppContext) -> None:
     if job.event_type == WARNING:
-        entry = ctx.api.log(Log.CALENDAR, job.summary)
+        entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, job.summary)
         ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
     else:
         entry = ctx.api.log(Log.CALENDAR, job.summary)
