@@ -138,10 +138,16 @@ def capture_lights() -> m.Configs:
 
 
 def capture_sounds() -> m.Configs[m.SoundState]:
-    if not len(orc.Chromecast):
+    devices: tuple[m.DeviceEnum, ...] = (*orc.Chromecast, *orc.USB)
+    if not devices:
         return m.Configs()
-    with Pool(max_workers=len(orc.Chromecast)) as ex:
-        return m.Configs(*ex.map(config.providers.chromecast.fetch_state, orc.Chromecast))
+
+    def fetch(w: m.DeviceEnum) -> m.SoundState:
+        provider = config.providers.chromecast if isinstance(w, orc.Chromecast) else config.providers.audio
+        return provider.fetch_state(w)
+
+    with Pool(max_workers=len(devices)) as ex:
+        return m.Configs(*ex.map(fetch, devices))
 
 
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:

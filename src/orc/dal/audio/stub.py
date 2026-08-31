@@ -20,6 +20,10 @@ def set_volume(device: m.DeviceEnum, lvl: int) -> None:
     _volumes[device] = lvl
 
 
+def fetch_state(device: m.DeviceEnum) -> m.SoundState:
+    return m.SoundState(what=device, content=None, volume=_volumes.get(device, 0))
+
+
 def reset() -> None:
     _spoken.clear()
     _alerted.clear()
