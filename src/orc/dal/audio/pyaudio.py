@@ -42,17 +42,34 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
 
 
 @cache
-def _find_output_device(name: str) -> tuple[int, Any]:
+def _find_output_device(serial: str) -> tuple[int, Any]:
+    card_idx = system_volume.card_index_for_serial(serial)
+    marker = f"(hw:{card_idx},"
     with silence_fd(2):
         pa = pyaudio.PyAudio()
     try:
         for i in range(pa.get_device_count()):
             info = pa.get_device_info_by_index(i)
-            if name in info["name"] and info["maxOutputChannels"] > 0:
+            if marker in info["name"] and info["maxOutputChannels"] > 0:
                 return i, info
     finally:
         pa.terminate()
-    raise RuntimeError(f"No audio output device matching {name!r}")
+    raise RuntimeError(f"No audio output device for ALSA card {card_idx} (serial {serial!r})")
+
+
+def list_devices_cli() -> None:
+    with silence_fd(2):
+        pa = pyaudio.PyAudio()
+    try:
+        infos = [pa.get_device_info_by_index(i) for i in range(pa.get_device_count())]
+    finally:
+        pa.terminate()
+    pa_names = [info["name"] for info in infos if info["maxOutputChannels"] > 0]
+
+    for dev in system_volume.list_usb_audio_devices():
+        marker = f"(hw:{dev.card_index},"
+        pa_name = next((name for name in pa_names if marker in name), "?")
+        print(f"card {dev.card_index:<2} serial={dev.serial or '(none)':<20} alsa={dev.card:<15} portaudio={pa_name}")
 
 
 def _play_stream(device: m.DeviceEnum, chunks: Iterable[bytes], channels: int, src_rate: int) -> None:
