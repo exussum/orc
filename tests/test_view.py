@@ -97,10 +97,7 @@ def test_console_ad_hoc(client):
     reset = m.Configs(m.Config(orc.Light.a, m.OFF))
     routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON))
     with (
-        patch.object(config, "plugins", {}),
-        patch.object(config, "schedule_routines", {}),
-        patch.object(config, "ad_hoc_routines", {"r": routine}),
-        patch.object(config, "reset_config", reset),
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
@@ -110,9 +107,7 @@ def test_console_ad_hoc(client):
 def test_console_ad_hoc_no_reset(client):
     routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), reset=False)
     with (
-        patch.object(config, "plugins", {}),
-        patch.object(config, "schedule_routines", {}),
-        patch.object(config, "ad_hoc_routines", {"r": routine}),
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
@@ -123,9 +118,7 @@ def test_button_ad_hoc_snapshot(ctx):
     routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
     captured = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
-        patch.object(config, "plugins", {}),
-        patch.object(config, "schedule_routines", {}),
-        patch.object(config, "ad_hoc_routines", {"r": routine}),
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "capture_lights", return_value=captured),
         patch.object(api, "dispatch") as ex,
     ):
@@ -142,10 +135,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx):
     existing = m.Configs(m.Config(orc.Light.a, m.ON))
     ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
     with (
-        patch.object(config, "plugins", {}),
-        patch.object(config, "schedule_routines", {}),
-        patch.object(config, "ad_hoc_routines", {"r": routine}),
-        patch.object(config, "reset_config", reset),
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "capture_lights") as capture,
         patch.object(api, "dispatch") as ex,
     ):
@@ -160,10 +150,7 @@ def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
     routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
     reset = m.Configs(m.Config(orc.Light.a, m.OFF))
     with (
-        patch.object(config, "plugins", {}),
-        patch.object(config, "schedule_routines", {}),
-        patch.object(config, "ad_hoc_routines", {"r": routine}),
-        patch.object(config, "reset_config", reset),
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "capture_lights") as capture,
         patch.object(api, "dispatch") as ex,
     ):
@@ -174,11 +161,7 @@ def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
 
 
 def test_console_unknown_returns_404(client):
-    with (
-        patch.object(config, "plugins", {}),
-        patch.object(config, "schedule_routines", {}),
-        patch.object(config, "ad_hoc_routines", {}),
-    ):
+    with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={}):
         response = client.get("/api/run/nope")
     assert response.status_code == 404
 
@@ -211,8 +194,7 @@ def test_room_follow(client):
     routine = m.Configs(m.Config(orc.Light.a, m.ON))
     off = m.Configs(m.Config(orc.Light.b, m.OFF))
     with (
-        patch.object(config, "rooms", {"Living Room": routine}),
-        patch.object(config, "rooms_off", off),
+        patch.multiple(config, rooms={"Living Room": routine}, rooms_off=off),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=follow")
@@ -317,11 +299,12 @@ def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None, skip_repl
 
 
 def _get_schedule(client, jobs, present_names=()):
-    with (
-        patch.object(api, "fetch_jobs_by_type", return_value=jobs),
-        patch.object(api, "current_theme_override", return_value=None),
-        patch.object(api, "present_names", return_value=set(present_names)),
-        patch.object(api, "fetch_durations", return_value=[]),
+    with patch.multiple(
+        api,
+        fetch_jobs_by_type=MagicMock(return_value=jobs),
+        current_theme_override=MagicMock(return_value=None),
+        present_names=MagicMock(return_value=set(present_names)),
+        fetch_durations=MagicMock(return_value=[]),
     ):
         return client.get("/schedule/")
 
