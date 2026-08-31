@@ -14,11 +14,15 @@ from orc.decorators import audio_lock, silence_fd
 
 _MODEL_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
-with silence_fd(2):
-    from piper import PiperVoice
 
-    # resources.files() yields a concrete Path here; piper's stub only accepts str | Path, not the broader Traversable
-    _VOICE: Any = PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
+
+@cache
+def _voice() -> Any:
+    with silence_fd(2):
+        from piper import PiperVoice
+
+        # resources.files() yields a concrete Path here; piper's stub only accepts str | Path, not the broader Traversable
+        return PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
 
 
 def alert(device: m.DeviceEnum, path: str) -> None:
@@ -29,8 +33,9 @@ def alert(device: m.DeviceEnum, path: str) -> None:
 
 
 def speak(device: m.DeviceEnum, text: str) -> None:
-    chunks = (a.audio_int16_bytes for a in _VOICE.synthesize(text))
-    _play_stream(device, chunks, 1, _VOICE.config.sample_rate)
+    voice = _voice()
+    chunks = (a.audio_int16_bytes for a in voice.synthesize(text))
+    _play_stream(device, chunks, 1, voice.config.sample_rate)
 
 
 def set_volume(device: m.DeviceEnum, lvl: int) -> None:
