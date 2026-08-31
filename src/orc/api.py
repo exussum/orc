@@ -242,8 +242,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
         if delay:
             when = local_now() + delay
             log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
-            job_id = f"run-{id}-{when.isoformat()}"
-            scheduler.schedule_once(run, when, id=job_id, jobstore=JOBSTORE_MEMORY)
+            scheduler.schedule_once(run, when, id=f"run-{id}", replace_existing=True, jobstore=JOBSTORE_MEMORY)
         else:
             run(ctx=ctx)
     return True
