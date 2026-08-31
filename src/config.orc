@@ -25,7 +25,7 @@ device add Light LIVING_ROOM  'living room desk'
 device seal Light
 
 device define USB
-device add USB Speakers 'Speakers'
+device add USB Speakers 'Speakers' --room Office
 device seal USB
 
 device define Chromecast
