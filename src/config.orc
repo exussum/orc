@@ -8,6 +8,7 @@ setting mqtt_host        hubitat.example
 setting warning_device   Chromecast.LIVING_ROOM
 setting attention_device USB.Speakers
 setting emergency_device Chromecast.BEDROOM
+setting emergency_volume 50
 
 provider secrets    orc.dal.secrets.stub
 provider weather    orc.dal.weather.stub

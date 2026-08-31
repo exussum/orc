@@ -45,7 +45,6 @@ JOBSTORE_MEMORY = "memory"
 _PRESENCE_CRON_JOB_ID = "presence-cron"
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
-_EMERGENCY_VOLUME = 80
 
 _ctx: m.AppContext | None = None
 
@@ -321,7 +320,9 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
     if path is not None and not isinstance(device, orc.USB):
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
     if severity is m.Alarm.EMERGENCY:
-        (config.providers.audio if isinstance(device, orc.USB) else config.providers.chromecast).set_volume(device, _EMERGENCY_VOLUME)
+        (config.providers.audio if isinstance(device, orc.USB) else config.providers.chromecast).set_volume(
+            device, config.settings.emergency_volume
+        )
     if text is not None:
         dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
     else:
