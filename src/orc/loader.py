@@ -66,6 +66,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
                 "long": Cast.float,
                 "http_timeout": Cast.int,
                 "port": Cast.int,
+                "emergency_volume": Cast.int,
                 "warning_device": Cast.device,
                 "attention_device": Cast.device,
                 "emergency_device": Cast.device,
