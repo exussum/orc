@@ -39,11 +39,11 @@ A plugin function is called as `fn(ctx, device)`: the `AppContext` and the
 device name from the invocation, `None` when none was passed. Which section
 the plugin is registered under (step 2) decides where its button appears:
 
-| Section  | Called as          | When                                                      |
-|----------|--------------------|-----------------------------------------------------------|
-| `scene`  | `fn(ctx, None)`    | user presses its button on the Scene page                 |
-| `system` | `fn(ctx, None)`    | user presses its button on the System page                |
-| `device` | `fn(ctx, <name>)`  | clicked from a device row (`/api/run/<id>?device=<name>`) |
+| Section  | Called as         | When                                                      |
+| -------- | ----------------- | --------------------------------------------------------- |
+| `scene`  | `fn(ctx, None)`   | user presses its button on the Scene page                 |
+| `system` | `fn(ctx, None)`   | user presses its button on the System page                |
+| `device` | `fn(ctx, <name>)` | clicked from a device row (`/api/run/<id>?device=<name>`) |
 
 Event-driven plugins don't need a `<function>` of their own, but `plugin`
 lines still drive discovery: a package is only imported because a `plugin`
@@ -68,10 +68,10 @@ plugin everything it may touch, so plugins never import orc internals
 directly:
 
 | Field                  | What it is              | What it provides                                                                                                           |
-|------------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| ---------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `ctx.api`              | `orc.api` module        | The verbs of the system. Everything a plugin does to the outside world goes through this module.                           |
 | `ctx.model`            | `orc.model` module      | The vocabulary. The data types and constants that the api functions accept and return.                                     |
-| `ctx.config`           | runtime configuration   | What the operator decided. The parsed `config.orc` plus environment settings.                                               |
+| `ctx.config`           | runtime configuration   | What the operator decided. The parsed `config.orc` plus environment settings.                                              |
 | `ctx.snapshot_manager` | snapshot manager        | Undo for device state. Records what devices looked like before a plugin changes them, so that state can be restored later. |
 | `ctx.scheduler`        | APScheduler instance    | Deferred work. Lets a plugin queue a follow-up job to run at a later time instead of acting immediately.                   |
 | `ctx.orc`              | top-level `orc` package | The devices themselves. The enums used to say which device a config applies to.                                            |
