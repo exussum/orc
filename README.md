@@ -83,7 +83,10 @@ of `config.orc` are never touched:
 - Chromecast speakers on the same LAN
 - an LG webOS TV, plus a BroadLink IR blaster for power-on and AC control
 - a YoLink hub with leak sensors
-- a USB audio output on the machine running orc (spoken announcements)
+- a USB audio output on the machine running orc (spoken announcements) — the
+  `device add USB <name> <host>` line's `host` must be that device's USB
+  serial number (Linux only); run `orc-audio-devices` after install to list
+  each card's index, serial, and matching ALSA/PortAudio names
 - a Bitwarden Secrets Manager account holding the runtime secrets
 
 Steps:
@@ -152,30 +155,30 @@ Two config surfaces:
    The required keys fail startup with a named `ConfigError` when a line is
    missing or its value is empty:
 
-   | Setting           | Purpose                                                          |
-   |-------------------|-------------------------------------------------------------------|
-   | `base_url`        | LAN-reachable base URL for static audio; its host is allowlisted for streams |
-   | `lan_domain`      | Suffix stripped from presence hostnames; subdomains allowlisted for streams |
-   | `jobs_db`         | SQLAlchemy URL for the APScheduler / orc state DB                |
-   | `lat` / `long`    | Coordinates for sunrise/sunset                                   |
-   | `audio_device`    | Substring matching the audio output device for TTS/alerts        |
-   | `broadlink_codes` | Path to BroadLink IR codes JSON                                  |
-   | `mqtt_host`       | Broker host for the Hubitat MQTT export                          |
+   | Setting                                                    | Purpose                                                                      |
+   | ---------------------------------------------------------- | ---------------------------------------------------------------------------- |
+   | `base_url`                                                 | LAN-reachable base URL for static audio; its host is allowlisted for streams |
+   | `lan_domain`                                               | Suffix stripped from presence hostnames; subdomains allowlisted for streams  |
+   | `jobs_db`                                                  | SQLAlchemy URL for the APScheduler / orc state DB                            |
+   | `lat` / `long`                                             | Coordinates for sunrise/sunset                                               |
+   | `warning_device` / `attention_device` / `emergency_device` | `USB.*`/`Chromecast.*` device for each Alarm severity's TTS/alerts           |
+   | `broadlink_codes`                                          | Path to BroadLink IR codes JSON                                              |
+   | `mqtt_host`                                                | Broker host for the Hubitat MQTT export                                      |
 
    The optional keys default when omitted:
 
-   | Setting             | Purpose                            | Default                 |
-   |---------------------|-------------------------------------|-------------------------|
-   | `tz`                | IANA timezone                      | `America/New_York`      |
-   | `hubitat_url`       | Hubitat Maker API base URL         | `http://hubitat.example`|
-   | `http_timeout`      | Default outbound HTTP timeout (s)  | `5`                     |
-   | `port`              | HTTP listen port                   | `8000`                  |
+   | Setting        | Purpose                           | Default                  |
+   | -------------- | --------------------------------- | ------------------------ |
+   | `tz`           | IANA timezone                     | `America/New_York`       |
+   | `hubitat_url`  | Hubitat Maker API base URL        | `http://hubitat.example` |
+   | `http_timeout` | Default outbound HTTP timeout (s) | `5`                      |
+   | `port`         | HTTP listen port                  | `8000`                   |
 
 2. **Environment variables** — only the bootstrap pair that can't live in
    the config file:
 
    | Var                | Purpose                                      | Default                           |
-   |--------------------|-----------------------------------------------|-----------------------------------|
+   | ------------------ | -------------------------------------------- | --------------------------------- |
    | `ORC_CONFIG_DIR`   | Directory containing `config.orc`            | `src`                             |
    | `BWS_ACCESS_TOKEN` | URL whose body is the Bitwarden access token | required by `orc.dal.secrets.bws` |
 
@@ -193,7 +196,7 @@ demand by whichever plugin config names it (for example,
 secret):
 
 | Key                    | Used for                                           |
-|------------------------|-----------------------------------------------------|
+| ---------------------- | -------------------------------------------------- |
 | `HUBITAT_ACCESS_TOKEN` | Hubitat Maker API access token (appended as query) |
 | `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates       |
 | `MQTT_USER`            | Hubitat MQTT broker username (optional)            |
