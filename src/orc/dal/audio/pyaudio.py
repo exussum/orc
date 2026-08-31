@@ -37,6 +37,10 @@ def set_volume(device: m.DeviceEnum, lvl: int) -> None:
     system_volume.set_volume(device.value, lvl)
 
 
+def fetch_state(device: m.DeviceEnum) -> m.SoundState:
+    return m.SoundState(what=device, content=None, volume=system_volume.get_volume(device.value))
+
+
 @cache
 def _find_output_device(name: str) -> tuple[int, Any]:
     with silence_fd(2):
