@@ -44,6 +44,7 @@ lint = [
 
 [project.scripts]
 orc = "orc.runner:web"
+orc-audio-devices = "orc.dal.audio.pyaudio:list_devices_cli"
 
 [tool.ruff]
 line-length = 140
