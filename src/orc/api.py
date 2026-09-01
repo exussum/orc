@@ -114,6 +114,8 @@ def render_alert_video(text: str) -> bytes:
                 "[a]",
                 "-c:v",
                 "libx264",
+                "-preset",
+                "ultrafast",
                 "-tune",
                 "stillimage",
                 "-pix_fmt",
