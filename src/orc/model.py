@@ -60,7 +60,7 @@ class Settings(NamedTuple):
     hubitat_url: str = "http://hubitat.example"
     http_timeout: int = 5
     port: int = 8000
-    emergency_volume: int = 50
+    emergency_routine: str | None = None
 
     @classmethod
     def build(cls, **values: Any) -> Settings:
