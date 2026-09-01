@@ -131,7 +131,7 @@ def device() -> str:
         level = _to_level(light_states.get(d.name))
         capabilities = {c.name for c in d.capabilities}
         return SimpleNamespace(
-            name=d.label or d.name,
+            name=d.label,
             id=d.name,
             type=type(d).__name__,
             icon=config.registry.devices[type(d).__name__].icon,
