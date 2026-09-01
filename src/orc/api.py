@@ -1,8 +1,11 @@
 import contextlib
 import io
 import math
+import subprocess
+import tempfile
 import threading
 import time
+import urllib.request
 from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
@@ -12,7 +15,7 @@ from enum import Enum
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from apscheduler.job import Job
 from PIL import Image, ImageDraw, ImageFont, ImageText
@@ -23,6 +26,7 @@ import orc
 from orc import config, plugins
 from orc import model as m
 from orc.dal import net, scheduler, sqlite
+from orc.dal.chromecast import MAX_CHARS
 from orc.dal.scheduler import fetch_jobs_by_type
 from orc.dal.sqlite import (
     connection,  # noqa: F401
@@ -51,7 +55,7 @@ _ALERT_MARGIN = 80
 _ALERT_MIN_FONT_SIZE = 24
 
 
-def render_alert_image(text: str) -> bytes:
+def _render_alert_image(text: str) -> bytes:
     image = Image.new("RGB", ALERT_IMAGE_SIZE, color=(178, 24, 24))
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default(size=128)
@@ -65,6 +69,70 @@ def render_alert_image(text: str) -> bytes:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
+
+
+_ALERT_VIDEO_SECONDS = 300
+_ALERT_LOOP_SECONDS = 20
+_TTS_SAMPLE_RATE = 24000
+
+
+def _tts_mp3(text: str) -> bytes:
+    url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:  # nosemgrep
+        return resp.read()
+
+
+def render_alert_video(text: str) -> bytes:
+    if len(text) > MAX_CHARS:
+        raise ValueError(f"Alert text exceeds {MAX_CHARS} characters: {len(text)}")
+    with tempfile.TemporaryDirectory() as d:
+        png, mp3, mp4 = Path(d) / "a.png", Path(d) / "a.mp3", Path(d) / "a.mp4"
+        png.write_bytes(_render_alert_image(text))
+        mp3.write_bytes(_tts_mp3(text))
+        # Pad the speech to a fixed period and loop it so the announcement repeats
+        # every _ALERT_LOOP_SECONDS with silence between, over the full video.
+        loop_samples = _ALERT_LOOP_SECONDS * _TTS_SAMPLE_RATE
+        audio = f"[1:a]aresample={_TTS_SAMPLE_RATE},apad=whole_dur={_ALERT_LOOP_SECONDS},aloop=loop=-1:size={loop_samples}[a]"
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-loop",
+                "1",
+                "-i",
+                str(png),
+                "-i",
+                str(mp3),
+                "-filter_complex",
+                audio,
+                "-map",
+                "0:v",
+                "-map",
+                "[a]",
+                "-c:v",
+                "libx264",
+                "-tune",
+                "stillimage",
+                "-pix_fmt",
+                "yuv420p",
+                "-r",
+                "5",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                "-t",
+                str(_ALERT_VIDEO_SECONDS),
+                "-movflags",
+                "+faststart",
+                str(mp4),
+            ],
+            check=True,
+        )
+        return mp4.read_bytes()
 
 
 _ctx: m.AppContext | None = None
@@ -180,7 +248,7 @@ def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, str
         config.providers.chromecast.set_volume(w, rule.state)
     elif isinstance(rule.state, m.Speak):
         config.providers.chromecast.speak(w, rule.state)
-    elif isinstance(rule.state, m.ShowImage):
+    elif isinstance(rule.state, m.AlertVideo):
         config.providers.chromecast.play(w, rule.state, "Alert")
     elif isinstance(rule.state, m.YouTubeId):
         if rule.state not in stream:
@@ -337,12 +405,15 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
     device = getattr(config.settings, _ALARM_SETTINGS[severity])
     if path is not None and not isinstance(device, orc.USB):
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
+
     if severity is m.Alarm.EMERGENCY:
         dispatch(config.routines[config.settings.emergency_routine], force=True, entry=entry)
         if text is not None:
-            alert_url = m.ShowImage(f"{config.settings.base_url}/api/alert.png?text={quote(text)}")
-            dispatch(m.Config(orc.Chromecast, alert_url), force=True, entry=entry)
-    if text is not None:
+            video_url = m.AlertVideo(f"{config.settings.base_url}/api/alert.mp4?text={quote(text)}")
+            dispatch(m.Config(orc.Chromecast, video_url), force=True, entry=entry)
+            if not isinstance(device, orc.Chromecast):
+                dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
+    elif text is not None:
         dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
     else:
         assert path is not None
