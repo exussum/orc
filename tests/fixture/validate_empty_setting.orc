@@ -8,6 +8,7 @@ setting mqtt_host        ''
 setting warning_device   Chromecast.CC
 setting attention_device USB.AUDIO
 setting emergency_device USB.AUDIO
+setting emergency_routine ROUTINE_EMERGENCY
 
 provider secrets    orc.dal.secrets.stub
 provider weather    orc.dal.weather.stub

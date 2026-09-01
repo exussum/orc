@@ -319,9 +319,7 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
     if path is not None and not isinstance(device, orc.USB):
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
     if severity is m.Alarm.EMERGENCY:
-        (config.providers.audio if isinstance(device, orc.USB) else config.providers.chromecast).set_volume(
-            device, config.settings.emergency_volume
-        )
+        dispatch(config.ad_hoc_routines[config.settings.emergency_routine], force=True, entry=entry)
     if text is not None:
         dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
     else:
