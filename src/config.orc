@@ -30,7 +30,7 @@ device seal USB
 
 device define Chromecast
 device add Chromecast LIVING_ROOM 'Living room mini' --room Living
-device add Chromecast BEDROOM     'Bedroom mini'      --room Bedroom
+device add Chromecast BEDROOM     'Bedroom mini'     --room Bedroom
 device seal Chromecast
 
 device only Button LIVING_ROOM_REMOTE scene --room Living
@@ -42,12 +42,16 @@ device only Leak
 
 routine define ROUTINE_RESET      Reset
 routine append ROUTINE_RESET      Light      off  --trigger SYSTEM
+
 routine define ROUTINE_LIGHTS_ON  'Lights On'
 routine append ROUTINE_LIGHTS_ON  Light      on   --trigger SYSTEM
+
 routine define ROUTINE_LIGHTS_OFF 'Lights Off'
 routine append ROUTINE_LIGHTS_OFF Light      off  --trigger SYSTEM
+
 routine define ROUTINE_QUIET      Quiet
 routine append ROUTINE_QUIET      Chromecast stop --trigger SYSTEM
+
 routine define ROUTINE_DEFAULT    Welcome
 routine append ROUTINE_DEFAULT    Light      on   --trigger SYSTEM
 
