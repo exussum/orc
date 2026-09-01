@@ -103,14 +103,16 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     log_entry.add(Log.ENTRANCE, msg)
 
 
-def battery_state(ctx: m.AppContext, sensor_ids: set[int]) -> list[dict[str, Any]]:
+def battery_state(ctx: m.AppContext, sensor_ids: set[int]) -> list[m.DeviceStatus]:
     devices = ctx.api.device_states()
     return [
-        {
-            "name": d.name,
-            "battery": m.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
-            "last_activity": d.last_activity,
-        }
+        m.DeviceStatus(
+            name=d.name,
+            details={
+                "battery": m.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
+                "last_activity": d.last_activity,
+            },
+        )
         for device_id in sorted(sensor_ids)
         if (d := _sensor(devices, device_id)) is not None
         for battery in (d.attributes.get("battery"),)
