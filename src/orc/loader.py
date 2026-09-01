@@ -26,8 +26,8 @@ ad_hoc append <name> <device> <state>
 remote <device> <button> <event> <action>
 
 device define <type>
-device add <type> <name> <host> [--room=<room>]
-device only <type> [<name> <host>] [--room=<room>]
+device add <type> <id> <host> [--room=<room>] [--name=<name>]
+device only <type> [<id> <host>] [--room=<room>] [--name=<name>]
 device seal <type>
 
 highlight <name> <start> <stop>
@@ -205,9 +205,11 @@ def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{type_name}': {duplicates}")
     if type_name in ("Light", "Button"):
-        members = {name: (*zigbee_config.get(host, (-(i + 1), frozenset())), room) for i, (name, host, room) in enumerate(rows)}
+        members = {
+            name: (*zigbee_config.get(host, (-(i + 1), frozenset())), room, label) for i, (name, host, room, label) in enumerate(rows)
+        }
     else:
-        members = {name: (host, frozenset(), room) for name, host, room in rows}
+        members = {name: (host, frozenset(), room, label) for name, host, room, label in rows}
     # functional Enum API: mypy checks against the member-level __new__ rather than EnumMeta.__call__
     return m.DeviceEnum(type_name, members, module="orc")  # type: ignore[call-arg,arg-type,return-value]
 
@@ -220,14 +222,14 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
     elif args.define:
         members[args.type] = []
     elif args.only:
-        members[args.type] = [(args.name, args.host, args.room)] if args.name else []
+        members[args.type] = [(args.id, args.host, args.room, args.name)] if args.id else []
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     elif args.type not in members:
         raise ValueError(f"Unknown device type {args.type!r}: expected one of {list(members)}")
     elif args.seal:
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     else:
-        members[args.type].append((args.name, args.host, args.room))
+        members[args.type].append((args.id, args.host, args.room, args.name))
 
 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:

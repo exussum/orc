@@ -345,17 +345,22 @@ class DeviceEnumMeta(EnumType):
 class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
     capabilities: frozenset[Capability]
     room: str | None
+    label: str | None
 
-    def __new__(cls, value: Any, capabilities: frozenset[Capability] = frozenset(), room: str | None = None) -> Self:
+    def __new__(
+        cls, value: Any, capabilities: frozenset[Capability] = frozenset(), room: str | None = None, label: str | None = None
+    ) -> Self:
         obj = object.__new__(cls)
         if isinstance(value, tuple):
             obj._value_ = value[0]
             obj.capabilities = value[1] if len(value) > 1 else frozenset()
             obj.room = value[2] if len(value) > 2 else None
+            obj.label = value[3] if len(value) > 3 else None
         else:
             obj._value_ = value
             obj.capabilities = capabilities
             obj.room = room
+            obj.label = label
         return obj
 
 
