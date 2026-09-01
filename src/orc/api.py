@@ -87,13 +87,15 @@ def render_alert_video(text: str) -> bytes:
     if len(text) > MAX_CHARS:
         raise ValueError(f"Alert text exceeds {MAX_CHARS} characters: {len(text)}")
     with tempfile.TemporaryDirectory() as d:
-        png, mp3, mp4 = Path(d) / "a.png", Path(d) / "a.mp3", Path(d) / "a.mp4"
+        png, mp3 = Path(d) / "a.png", Path(d) / "a.mp3"
+        seg, mp4 = Path(d) / "seg.mp4", Path(d) / "a.mp4"
         png.write_bytes(_render_alert_image(text))
         mp3.write_bytes(_tts_mp3(text))
-        # Pad the speech to a fixed period and loop it so the announcement repeats
-        # every _ALERT_LOOP_SECONDS with silence between, over the full video.
-        loop_samples = _ALERT_LOOP_SECONDS * _TTS_SAMPLE_RATE
-        audio = f"[1:a]aresample={_TTS_SAMPLE_RATE},apad=whole_dur={_ALERT_LOOP_SECONDS},aloop=loop=-1:size={loop_samples}[a]"
+        # Encode a single _ALERT_LOOP_SECONDS segment (the speech padded to one
+        # loop period), then stream-copy it end to end to fill the full video.
+        # Encoding one period at 1fps is the only expensive step; the loop-copy
+        # re-encodes nothing, so ARM CPUs handle the whole thing quickly.
+        audio = f"[1:a]aresample={_TTS_SAMPLE_RATE},apad=whole_dur={_ALERT_LOOP_SECONDS}[a]"
         subprocess.run(
             [
                 "ffmpeg",
@@ -121,11 +123,29 @@ def render_alert_video(text: str) -> bytes:
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
-                "5",
+                "1",
                 "-c:a",
                 "aac",
                 "-b:a",
                 "64k",
+                "-t",
+                str(_ALERT_LOOP_SECONDS),
+                str(seg),
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-stream_loop",
+                "-1",
+                "-i",
+                str(seg),
+                "-c",
+                "copy",
                 "-t",
                 str(_ALERT_VIDEO_SECONDS),
                 "-movflags",
