@@ -79,7 +79,7 @@ def test_validate_missing_settings():
     with pytest.raises(
         ConfigError,
         match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, broadlink_codes, mqtt_host, "
-        "warning_device, attention_device, emergency_device",
+        "warning_device, attention_device, emergency_device, emergency_routine",
     ):
         validate(parse("validate_missing_settings"))
 
@@ -87,6 +87,11 @@ def test_validate_missing_settings():
 def test_validate_empty_setting():
     with pytest.raises(ConfigError, match="Missing required settings: mqtt_host"):
         validate(parse("validate_empty_setting"))
+
+
+def test_validate_unknown_emergency_routine():
+    with pytest.raises(ConfigError, match=r"Unknown ad-hoc routine 'ROUTINE_EMERGENCY': expected one of \(\)"):
+        validate(parse("validate_unknown_emergency_routine"))
 
 
 def test_validate_accepts_complete_config():
