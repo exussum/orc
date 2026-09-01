@@ -59,12 +59,15 @@ def _render_alert_image(text: str) -> bytes:
     image = Image.new("RGB", ALERT_IMAGE_SIZE, color=(178, 24, 24))
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default(size=128)
+    width, height = ALERT_IMAGE_SIZE[0] - 2 * _ALERT_MARGIN, ALERT_IMAGE_SIZE[1] - 2 * _ALERT_MARGIN
     wrapped = ImageText.Text(text, font=font)
-    wrapped.wrap(
-        ALERT_IMAGE_SIZE[0] - 2 * _ALERT_MARGIN,
-        ALERT_IMAGE_SIZE[1] - 2 * _ALERT_MARGIN,
-        scaling=("shrink", _ALERT_MIN_FONT_SIZE),
-    )
+    wrapped.wrap(width, height, scaling=("shrink", _ALERT_MIN_FONT_SIZE))
+    if "\n" not in wrapped.text:
+        # scaling wrap early-returns without writing the wrapped lines back when the
+        # text fits at the starting size. Drop this once the early return in the
+        # scaling=="shrink" branch of ImageText.Text.wrap is fixed upstream:
+        # https://github.com/python-pillow/Pillow/pull/9286 (present through 12.3.0).
+        wrapped.wrap(width, height)
     draw.text((ALERT_IMAGE_SIZE[0] / 2, ALERT_IMAGE_SIZE[1] / 2), wrapped, fill="white", anchor="mm", align="center")
     buf = io.BytesIO()
     image.save(buf, format="PNG")
@@ -91,10 +94,6 @@ def render_alert_video(text: str) -> bytes:
         seg, mp4 = Path(d) / "seg.mp4", Path(d) / "a.mp4"
         png.write_bytes(_render_alert_image(text))
         mp3.write_bytes(_tts_mp3(text))
-        # Encode a single _ALERT_LOOP_SECONDS segment (the speech padded to one
-        # loop period), then stream-copy it end to end to fill the full video.
-        # Encoding one period at 1fps is the only expensive step; the loop-copy
-        # re-encodes nothing, so ARM CPUs handle the whole thing quickly.
         audio = f"[1:a]aresample={_TTS_SAMPLE_RATE},apad=whole_dur={_ALERT_LOOP_SECONDS}[a]"
         subprocess.run(
             [
