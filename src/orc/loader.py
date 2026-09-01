@@ -66,7 +66,6 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
                 "long": Cast.float,
                 "http_timeout": Cast.int,
                 "port": Cast.int,
-                "emergency_volume": Cast.int,
                 "warning_device": Cast.device,
                 "attention_device": Cast.device,
                 "emergency_device": Cast.device,
@@ -104,6 +103,8 @@ def validate(config: SimpleNamespace) -> None:
         raise ConfigError(f"Missing required providers: {', '.join(unset)}")
     if unset := [key for key, value in zip(m.Settings._fields, config.setting) if value in (None, "")]:
         raise ConfigError(f"Missing required settings: {', '.join(unset)}")
+    if config.setting.emergency_routine not in config.ad_hoc:
+        raise ConfigError(f"Unknown ad-hoc routine {config.setting.emergency_routine!r}: expected one of {tuple(config.ad_hoc)}")
 
 
 _ERR_PARAMS = "Invalid parameter {}={!r}"
