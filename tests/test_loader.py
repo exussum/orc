@@ -90,7 +90,7 @@ def test_validate_empty_setting():
 
 
 def test_validate_unknown_emergency_routine():
-    with pytest.raises(ConfigError, match=r"Unknown ad-hoc routine 'ROUTINE_EMERGENCY': expected one of \(\)"):
+    with pytest.raises(ConfigError, match=r"Unknown routine 'ROUTINE_EMERGENCY': expected one of \('ROUTINE_RESET', 'ROUTINE_DEFAULT'\)"):
         validate(parse("validate_unknown_emergency_routine"))
 
 

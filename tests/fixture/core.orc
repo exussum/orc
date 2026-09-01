@@ -27,6 +27,8 @@ routine append .               Chromecast.CC stop
 routine define ROUTINE_DEFAULT Welcome
 routine append ROUTINE_DEFAULT Light         on
 routine define ROUTINE_MEETING Meeting --skip-replay
+routine define ROUTINE_EMERGENCY Emergency
+routine append ROUTINE_EMERGENCY USB.AUDIO 100
 
 theme 'work day' ROUTINE_RESET   1:00
 theme 'day off'  ROUTINE_DEFAULT sunset
@@ -38,7 +40,6 @@ device only Button REMOTE scene
 person Spence host9 aa:bb
 routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger Spence
 
-ad_hoc define ROUTINE_EMERGENCY --no-reset USB.AUDIO 100
 ad_hoc define Silence           --no-reset Chromecast.CC stop
 ad_hoc define Dog               --delay 7  Chromecast.CC stop
 ad_hoc define 'All Lights Off'  --no-reset Light off

@@ -1,4 +1,5 @@
 import importlib
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import time, timedelta
@@ -15,6 +16,8 @@ from orc.security import safe_eval
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 _NO_OBJECTS: Mapping[str, Any] = MappingProxyType({})
+_YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
+_ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
 
 GRAMMAR = """
 ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<device> <state>]
@@ -103,8 +106,8 @@ def validate(config: SimpleNamespace) -> None:
         raise ConfigError(f"Missing required providers: {', '.join(unset)}")
     if unset := [key for key, value in zip(m.Settings._fields, config.setting) if value in (None, "")]:
         raise ConfigError(f"Missing required settings: {', '.join(unset)}")
-    if config.setting.emergency_routine not in config.ad_hoc:
-        raise ConfigError(f"Unknown ad-hoc routine {config.setting.emergency_routine!r}: expected one of {tuple(config.ad_hoc)}")
+    if config.setting.emergency_routine not in config.routine:
+        raise ConfigError(f"Unknown routine {config.setting.emergency_routine!r}: expected one of {tuple(config.routine)}")
 
 
 _ERR_PARAMS = "Invalid parameter {}={!r}"
@@ -138,7 +141,13 @@ class Cast:
 
     @staticmethod
     def state(value: str) -> Any:
-        return m.resolve_state(value)
+        if value in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
+            return value
+        elif re.match(_YOUTUBE_ID_RE, value):
+            return m.YouTubeId(value)
+        elif value.isdigit():
+            return int(value)
+        raise ValueError(_ERR_STATE.format(value))
 
     @staticmethod
     def when(value: str) -> time | str:
