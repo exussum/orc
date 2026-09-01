@@ -353,7 +353,7 @@ def alert_wav() -> Response:
 
 @bp.route("/api/alert.mp4")
 def alert_mp4() -> Response:
-    return Response(api.render_alert_video(request.args.get("text", "")), mimetype="video/mp4")
+    return Response(api.render_alert_video(request.args.get("text", "").replace("`", "")), mimetype="video/mp4")
 
 
 @bp.route("/api/version")
