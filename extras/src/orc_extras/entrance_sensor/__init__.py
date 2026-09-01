@@ -6,7 +6,7 @@ from typing import Any, NamedTuple
 from command_cfg import group, scalar
 
 from orc.loader import Cast, load_plugin_config, resolve_device
-from orc.model import AppContext, resolve_state
+from orc.model import AppContext
 from orc_extras.entrance_sensor import plugins
 
 CONFIG = "orc_extras/entrance_sensor"
@@ -49,7 +49,7 @@ class Rule(NamedTuple):
 
 
 def _rule(**values: Any) -> Rule:
-    return Rule(device=resolve_device(values["device"], _devices()), state=resolve_state(values["state"]))
+    return Rule(device=resolve_device(values["device"], _devices()), state=Cast.state(values["state"]))
 
 
 class Rules(NamedTuple):
@@ -72,7 +72,7 @@ def _timed(**values: Any) -> Timed:
         start=Cast.clock(values["start"]),
         stop=Cast.clock(values["stop"]),
         device=resolve_device(values["device"], _devices()),
-        state=resolve_state(values["state"]),
+        state=Cast.state(values["state"]),
     )
 
 

@@ -47,6 +47,9 @@ routine append ROUTINE_QUIET      Chromecast stop --trigger SYSTEM
 routine define ROUTINE_DEFAULT    Welcome
 routine append ROUTINE_DEFAULT    Light      on   --trigger SYSTEM
 
+routine define ROUTINE_EMERGENCY Emergency
+routine append ROUTINE_EMERGENCY USB.TEST 100
+
 theme 'work day' ROUTINE_RESET      1:00
 theme 'work day' ROUTINE_LIGHTS_ON  sunset
 theme 'work day' ROUTINE_LIGHTS_OFF sunrise
@@ -55,7 +58,6 @@ theme 'day off'  ROUTINE_QUIET      23:00
 room 'Living Room' Light.LIVING_ROOM  on
 room Bedroom       Light.BEDROOM_LAMP on
 
-ad_hoc define ROUTINE_EMERGENCY --no-reset USB.TEST 100
 ad_hoc define Silence           --no-reset Chromecast stop
 ad_hoc define Dog               --delay 7  Chromecast stop
 ad_hoc define 'All Lights On'   --no-reset Light      100
