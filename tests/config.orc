@@ -8,6 +8,7 @@ setting mqtt_host        hubitat.example
 setting warning_device   Chromecast.LIVING_ROOM
 setting attention_device USB.TEST
 setting emergency_device USB.TEST
+setting emergency_routine ROUTINE_EMERGENCY
 
 provider secrets    orc.dal.secrets.stub
 provider weather    orc.dal.weather.stub
@@ -54,10 +55,11 @@ theme 'day off'  ROUTINE_QUIET      23:00
 room 'Living Room' Light.LIVING_ROOM  on
 room Bedroom       Light.BEDROOM_LAMP on
 
-ad_hoc define Silence          --no-reset Chromecast stop
-ad_hoc define Dog              --delay 7  Chromecast stop
-ad_hoc define 'All Lights On'  --no-reset Light      100
-ad_hoc define 'All Lights Off' --no-reset Light      off
+ad_hoc define ROUTINE_EMERGENCY --no-reset USB.TEST 100
+ad_hoc define Silence           --no-reset Chromecast stop
+ad_hoc define Dog               --delay 7  Chromecast stop
+ad_hoc define 'All Lights On'   --no-reset Light      100
+ad_hoc define 'All Lights Off'  --no-reset Light      off
 
 remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
 remote     .                         1 held   Silence

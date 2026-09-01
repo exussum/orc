@@ -4,7 +4,7 @@ setting jobs_db          sqlite:////tmp/jobs.sqlite
 setting lat              40.7143
 setting long             -74.0060
 setting broadlink_codes  /etc/orc/codes.json
-setting mqtt_host        ''
+setting mqtt_host        hub.test
 setting warning_device   Chromecast.CC
 setting attention_device USB.AUDIO
 setting emergency_device USB.AUDIO
@@ -36,4 +36,3 @@ routine append ROUTINE_DEFAULT Light on
 
 theme 'work day' ROUTINE_RESET   1:00
 theme 'day off'  ROUTINE_DEFAULT sunset
-
