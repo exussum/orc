@@ -2,12 +2,12 @@ import random
 import re
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 from itertools import chain, groupby
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 from flask import Blueprint, Flask, render_template, request, send_file
 from flask import current_app as _current_app
@@ -23,6 +23,13 @@ from orc.locale import Log
 
 class OrcFlask(Flask):
     orc: m.AppContext
+
+
+class PresenceStatus(NamedTuple):
+    name: str
+    hostnames: list[str]
+    last_seen: datetime | None
+    present: bool
 
 
 app = cast(OrcFlask, _current_app)
@@ -94,9 +101,9 @@ def cfg() -> str:
 
     states = [(title, fn()) for title, fn in config.registry.state_providers.items()]
     # One button per device: each actionable state row whose action is a
-    # device-section plugin (row "action" -> plugin name, "name" -> device).
+    # device-section plugin (row.action -> plugin name, row.name -> device).
     device_plugins = {p.name: p for p in config.plugins_in("device")}
-    device_buttons = [row for title, rows in states for row in rows if row.get("action") in device_plugins]
+    device_buttons = [row for title, rows in states for row in rows if row.action in device_plugins]
 
     return render_template(
         "system.html",
@@ -217,12 +224,12 @@ def presence() -> tuple[str, int, dict[str, str]]:
     last_seen = api.last_seen()
     present = api.present_names()
     rows = [
-        {
-            "name": name,
-            "hostnames": sorted(host for host, _ in entries),
-            "last_seen": last_seen.get(name),
-            "present": name in present,
-        }
+        PresenceStatus(
+            name=name,
+            hostnames=sorted(host for host, _ in entries),
+            last_seen=last_seen.get(name),
+            present=name in present,
+        )
         for name, entries in config.people.items()
     ]
     return (

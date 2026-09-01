@@ -34,9 +34,14 @@ def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", rule: "m.Config", stream: 
         raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
 
 
-def tv_state() -> list[dict[str, Any]]:
+def tv_state() -> list[m.DeviceStatus]:
     # ``action`` makes each row a clickable runner -> /api/run/Pair LG TV?device=<name>.
-    return [{"name": w.name, "action": "Pair LG TV", "state": "off" if plugins.is_off(_orc.WebOS[w.name]) else "on"} for w in _orc.LGTV]
+    return [
+        m.DeviceStatus(
+            name=w.name, label=w.label, action="Pair LG TV", details={"state": "off" if plugins.is_off(_orc.WebOS[w.name]) else "on"}
+        )
+        for w in _orc.LGTV
+    ]
 
 
 def declare(declarations: Any) -> None:

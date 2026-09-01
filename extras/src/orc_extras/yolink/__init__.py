@@ -73,24 +73,27 @@ def test_sensor(ctx: AppContext, device: str, *, entry: m.LogEntry) -> None:
     plugins.simulate_transition(device)
 
 
-def leak_state() -> list[dict[str, Any]]:
-    """Per-sensor state rows for core's generic state renderer (needs a "name" key).
+def leak_state() -> list[m.DeviceStatus]:
+    """Per-sensor state rows for core's generic state renderer.
 
     Each row carries ``action`` so core renders the name as a clickable runner that
     hits ``/api/run/Test Leak Sensor?device=<name>`` — the config-declared plugin.
     """
     return [
-        {
-            "name": s.name,
-            "action": "Test Leak Sensor",
-            "state": s.state,
-            "connected": s.connected,
-            "online": s.online,
-            "battery": s.battery.value if s.battery is not None else None,
-            "signal": s.signal,
-            "interval": s.interval,
-            "last_change": s.last_change,
-        }
+        m.DeviceStatus(
+            name=s.name,
+            label=s.name,
+            action="Test Leak Sensor",
+            details={
+                "state": s.state,
+                "connected": s.connected,
+                "online": s.online,
+                "battery": s.battery.value if s.battery is not None else None,
+                "signal": s.signal,
+                "interval": s.interval,
+                "last_change": s.last_change,
+            },
+        )
         for s in plugins.snapshot()
     ]
 
