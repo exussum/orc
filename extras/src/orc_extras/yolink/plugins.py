@@ -65,7 +65,7 @@ def start() -> None:
         return
 
     global _states
-    _states = LockedDict({device.value: SensorState(name=device.name, device_id=device.value) for device in _orc.Leak})
+    _states = LockedDict({device.value: SensorState(name=device.label, device_id=device.value) for device in _orc.Leak})
     threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()
 
 
@@ -76,7 +76,7 @@ def set_transition_callback(fn: TransitionCallback) -> None:
 
 def snapshot() -> list[SensorState]:
     sensors = _states.copy()
-    return [sensors.get(device.value) or SensorState(name=device.name, device_id=device.value) for device in _orc.Leak]
+    return [sensors.get(device.value) or SensorState(name=device.label, device_id=device.value) for device in _orc.Leak]
 
 
 def simulate_transition(name: str) -> bool:

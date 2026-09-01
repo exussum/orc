@@ -222,14 +222,14 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
     elif args.define:
         members[args.type] = []
     elif args.only:
-        members[args.type] = [(args.id, args.host, args.room, args.name)] if args.id else []
+        members[args.type] = [(args.id, args.host, args.room, args.name or args.id)] if args.id else []
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     elif args.type not in members:
         raise ValueError(f"Unknown device type {args.type!r}: expected one of {list(members)}")
     elif args.seal:
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     else:
-        members[args.type].append((args.id, args.host, args.room, args.name))
+        members[args.type].append((args.id, args.host, args.room, args.name or args.id))
 
 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
