@@ -1,10 +1,3 @@
-"""YoLink cloud MQTT client, leak-sensor state, and the test action.
-
-YoLink's broker has no retained state, so ``start`` hydrates sensor state over HTTP
-before events flow. Transitions are reported through the callback installed by
-``set_transition_callback``.
-"""
-
 import dataclasses
 import json
 import logging
