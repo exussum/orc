@@ -1,5 +1,4 @@
 import importlib
-import re
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import KW_ONLY, dataclass, field
@@ -8,7 +7,7 @@ from enum import Enum, EnumType, StrEnum, auto
 from itertools import chain
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, NamedTuple, Self
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.base import BaseScheduler
@@ -88,9 +87,6 @@ FOLLOW = "follow"
 THEME_WORK_DAY = "work day"
 THEME_DAY_OFF = "day off"
 
-_YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
-
-_ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
 
 _STATE_SORT_STOP = -2
@@ -209,6 +205,22 @@ class Speak(str):
 
     def __new__(cls, text: str) -> "Speak":
         return super().__new__(cls, text.replace("`", ""))
+
+
+class MediaUrl(str):
+    content_type: ClassVar[str]
+
+
+class ShowImage(MediaUrl):
+    content_type = "image/png"
+
+
+class Stream(MediaUrl):
+    content_type = "audio/mp3"
+
+
+class YouTubeId(str):
+    pass
 
 
 @dataclass
@@ -382,14 +394,6 @@ class Registry:
     state_providers: dict[str, Callable[[], Any]]
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
-
-
-def resolve_state(value: str) -> Any:
-    if value in (ON, OFF, STOP, PAUSE, RESUME) or re.match(_YOUTUBE_ID_RE, value):
-        return value
-    elif value.isdigit():
-        return int(value)
-    raise ValueError(_ERR_STATE.format(value))
 
 
 def resolve_time(value: str) -> time | str:

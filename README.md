@@ -233,7 +233,7 @@ bounces the `orc` supervisor job.
 - `src/orc/loader.py` — the config grammar, `parse_config`/`validate`, the `Cast` value coercions, and plugin config loading, all on `command-cfg`
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
-- `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), state/time parsing (`resolve_state`, `resolve_time`), routine/theme/device types
+- `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), time parsing (`resolve_time`), routine/theme/device types
 - `src/orc/collections.py` — `LockedDict` and `where`
 - `src/orc/dal/` — integrations split by capability, each a package with a
   real backend plus a `stub.py` for development: `mqtt/` (Hubitat MQTT

@@ -1,4 +1,5 @@
 import contextlib
+import io
 import math
 import threading
 import time
@@ -11,9 +12,10 @@ from enum import Enum
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote
 
 from apscheduler.job import Job
+from PIL import Image, ImageDraw, ImageFont
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -38,13 +40,31 @@ from orc.decorators import (
     unwrap_rule_container,
 )
 from orc.locale import Log
-from orc.security import safe_domain
 
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
 _PRESENCE_CRON_JOB_ID = "presence-cron"
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
+ALERT_IMAGE_SIZE = (1280, 720)
+
+
+def render_alert_image(text: str) -> bytes:
+    image = Image.new("RGB", ALERT_IMAGE_SIZE, color=(178, 24, 24))
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=128)
+    left, top, right, bottom = draw.multiline_textbbox((0, 0), text, font=font, align="center")
+    draw.multiline_text(
+        ((ALERT_IMAGE_SIZE[0] - (right - left)) / 2, (ALERT_IMAGE_SIZE[1] - (bottom - top)) / 2),
+        text,
+        font=font,
+        fill="white",
+        align="center",
+    )
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
 
 _ctx: m.AppContext | None = None
 
@@ -58,8 +78,6 @@ _PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
 _NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
-
-_STREAM_DOMAINS: set[str] = {".googlevideo.com", urlparse(config.settings.base_url).hostname or "", "." + config.settings.lan_domain}
 
 _TIMESCALE = load.timescale()
 _EPHEMERIS = load_file(str(resources.files("orc_data") / "de421.bsp"))
@@ -161,6 +179,13 @@ def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, str
         config.providers.chromecast.set_volume(w, rule.state)
     elif isinstance(rule.state, m.Speak):
         config.providers.chromecast.speak(w, rule.state)
+    elif isinstance(rule.state, m.ShowImage):
+        config.providers.chromecast.play(w, rule.state, "Alert")
+    elif isinstance(rule.state, m.YouTubeId):
+        if rule.state not in stream:
+            stream[rule.state] = config.providers.chromecast.fetch_youtube_stream_metadata(rule.state)
+        url, title = stream[rule.state]
+        config.providers.chromecast.play(w, m.Stream(url), title)
     elif rule.state == m.STOP:
         config.providers.chromecast.stop(w)
     elif rule.state == m.PAUSE:
@@ -168,14 +193,7 @@ def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, str
     elif rule.state == m.RESUME:
         config.providers.chromecast.resume(w)
     else:
-        if rule.state not in stream:
-            # rule.state is a stream URL or YouTube id (str) in this branch; Config.state is typed object
-            stream[rule.state] = (
-                (safe_domain(rule.state, _STREAM_DOMAINS), rule.state)
-                if "http" in rule.state
-                else config.providers.chromecast.fetch_youtube_stream_metadata(rule.state)
-            )
-        config.providers.chromecast.play(w, *stream[rule.state])
+        raise ValueError(f"Unsupported Chromecast state: {rule.state!r}")
 
 
 def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
@@ -319,7 +337,10 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
     if path is not None and not isinstance(device, orc.USB):
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
     if severity is m.Alarm.EMERGENCY:
-        dispatch(config.ad_hoc_routines[config.settings.emergency_routine], force=True, entry=entry)
+        dispatch(config.routines[config.settings.emergency_routine], force=True, entry=entry)
+        if text is not None:
+            alert_url = m.ShowImage(f"{config.settings.base_url}/api/alert.png?text={quote(text)}")
+            dispatch(m.Config(orc.Chromecast, alert_url), force=True, entry=entry)
     if text is not None:
         dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
     else:
