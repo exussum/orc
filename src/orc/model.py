@@ -211,8 +211,8 @@ class MediaUrl(str):
     content_type: ClassVar[str]
 
 
-class ShowImage(MediaUrl):
-    content_type = "image/png"
+class AlertVideo(MediaUrl):
+    content_type = "video/mp4"
 
 
 class Stream(MediaUrl):
