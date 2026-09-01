@@ -70,7 +70,7 @@ def pause(device: m.DeviceEnum) -> None:
             cast.media_controller.pause()
 
 
-def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
+def play(device: m.DeviceEnum, stream_url: m.MediaUrl, title: str) -> None:
     with _cast(device) as cast:
         # Reset so play_media loads into a fresh receiver. silence_fd(2) swallows
         # pychromecast's "no session is active" warning when nothing is playing.
@@ -85,7 +85,7 @@ def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
     # given instance (https://github.com/home-assistant-libs/pychromecast/issues/335).
     with _cast(device) as cast:
         mc = cast.media_controller
-        mc.play_media(stream_url, "audio/mp3", title=title)
+        mc.play_media(stream_url, stream_url.content_type, title=title)
         mc.block_until_active(timeout=10)
         if mc.status.player_state == "IDLE" and mc.status.idle_reason == "ERROR":
             raise RuntimeError(f"{device.name}: Chromecast failed to load {title!r}")

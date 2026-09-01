@@ -351,6 +351,11 @@ def alert_wav() -> Response:
     return send_file(api.DEFAULT_ALERT_PATH)
 
 
+@bp.route("/api/alert.png")
+def alert_png() -> Response:
+    return Response(api.render_alert_image(request.args.get("text", "")), mimetype="image/png")
+
+
 @bp.route("/api/version")
 def version() -> tuple[dict[str, Any], int]:
     return {"version": app.orc.version_manager.version}, 200

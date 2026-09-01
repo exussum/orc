@@ -28,7 +28,7 @@ def pause(device: m.DeviceEnum) -> None:
     pass
 
 
-def play(device: m.DeviceEnum, stream_url: str, title: str) -> None:
+def play(device: m.DeviceEnum, stream_url: m.MediaUrl, title: str) -> None:
     _content[device] = stream_url
 
 

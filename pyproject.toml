@@ -20,6 +20,7 @@ dependencies = [
     "piper-tts==1.6.1",
     "pychromecast==14.0.10",
     "paho-mqtt==2.1.0",
+    "Pillow==12.3.0",
     "audioop-lts==0.2.2; python_version >= '3.13'",
     "pyaudio==0.2.14",
     "pyalsaaudio==0.11.0; sys_platform == 'linux'",
