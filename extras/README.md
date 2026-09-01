@@ -116,8 +116,7 @@ describing the file's commands and a `command_cfg` serializer — `scalar()`,
 from typing import Any, NamedTuple
 
 from command_cfg import group, scalar
-from orc.loader import load_plugin_config, resolve_device
-from orc.model import resolve_state
+from orc.loader import Cast, load_plugin_config, resolve_device
 
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
@@ -142,7 +141,7 @@ class Rule(NamedTuple):
 
 
 def _rule(**values: Any) -> Rule:
-    return Rule(device=resolve_device(values["device"], _devices()), state=resolve_state(values["state"]))
+    return Rule(device=resolve_device(values["device"], _devices()), state=Cast.state(values["state"]))
 
 
 def setup(ctx):
