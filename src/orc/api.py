@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import quote
 
 from apscheduler.job import Job
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageText
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -47,20 +47,21 @@ _PRESENCE_CRON_JOB_ID = "presence-cron"
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 ALERT_IMAGE_SIZE = (1280, 720)
+_ALERT_MARGIN = 80
+_ALERT_MIN_FONT_SIZE = 24
 
 
 def render_alert_image(text: str) -> bytes:
     image = Image.new("RGB", ALERT_IMAGE_SIZE, color=(178, 24, 24))
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default(size=128)
-    left, top, right, bottom = draw.multiline_textbbox((0, 0), text, font=font, align="center")
-    draw.multiline_text(
-        ((ALERT_IMAGE_SIZE[0] - (right - left)) / 2, (ALERT_IMAGE_SIZE[1] - (bottom - top)) / 2),
-        text,
-        font=font,
-        fill="white",
-        align="center",
+    wrapped = ImageText.Text(text, font=font)
+    wrapped.wrap(
+        ALERT_IMAGE_SIZE[0] - 2 * _ALERT_MARGIN,
+        ALERT_IMAGE_SIZE[1] - 2 * _ALERT_MARGIN,
+        scaling=("shrink", _ALERT_MIN_FONT_SIZE),
     )
+    draw.text((ALERT_IMAGE_SIZE[0] / 2, ALERT_IMAGE_SIZE[1] / 2), wrapped, fill="white", anchor="mm", align="center")
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
