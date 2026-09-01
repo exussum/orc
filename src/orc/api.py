@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import date, datetime, timedelta
 from enum import Enum
+from functools import lru_cache
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
 from typing import Any
@@ -86,6 +87,7 @@ def _tts_mp3(text: str) -> bytes:
         return resp.read()
 
 
+@lru_cache(maxsize=5)
 def render_alert_video(text: str) -> bytes:
     if len(text) > MAX_CHARS:
         raise ValueError(f"Alert text exceeds {MAX_CHARS} characters: {len(text)}")
