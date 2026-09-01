@@ -306,7 +306,9 @@ def test_unwatched_device_is_ignored(plugin_ctx, sensor):
 
 def test_battery_state_reads_the_device_cache(plugin_ctx):
     _seed_devices(plugin_ctx, _device(battery="80"))
-    assert plugins.battery_state(plugin_ctx, {16}) == [{"name": "front door motion sensor", "battery": "HIGH", "last_activity": None}]
+    assert plugins.battery_state(plugin_ctx, {16}) == [
+        m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None})
+    ]
 
 
 def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
@@ -317,7 +319,7 @@ def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
     title, provider = plugin_ctx.api.add_state_provider.call_args[0]
     assert title == "Entrance Sensors"
     _seed_devices(plugin_ctx, _device(battery="80"))
-    assert provider() == [{"name": "front door motion sensor", "battery": "HIGH", "last_activity": None}]
+    assert provider() == [m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None})]
 
 
 def _motion(ctx, sensor, old, new):

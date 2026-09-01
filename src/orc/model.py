@@ -75,6 +75,13 @@ class RetryStats(NamedTuple):
     retried: int
 
 
+class DeviceStatus(NamedTuple):
+    name: str
+    details: dict[str, Any]
+    label: str | None = None
+    action: str | None = None
+
+
 SUNRISE = "sunrise"
 SUNSET = "sunset"
 

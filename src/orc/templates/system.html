@@ -14,7 +14,7 @@
                     {{ btn(id, id, "clipboard-check", durations.get(id, 0), delay=ad_hoc_routines[id].delay) }}
                 {% endfor %}
                 {% for row in device_buttons %}
-                    {{ btn(registry.button_labels.get(row.action, "{device}").format(device=row.name), row.action, device_plugins[row.action].icon, durations.get(row.action, 0), device=row.name) }}
+                    {{ btn(registry.button_labels.get(row.action, "{device}").format(device=row.label), row.action, device_plugins[row.action].icon, durations.get(row.action, 0), device=row.name) }}
                 {% endfor %}
             </div>
         </div>
@@ -70,7 +70,7 @@
                                 <li>
                                     {{ row.name }}
                                     <ul class="list-disc list-inside ml-4">
-                                        {% for k, v in row.items() if k not in ('name', 'action') %}
+                                        {% for k, v in row.details.items() %}
                                             <li>{{ k }}: {{ v if v is not none else '—' }}</li>
                                         {% endfor %}
                                     </ul>

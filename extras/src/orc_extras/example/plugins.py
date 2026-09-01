@@ -2,7 +2,7 @@ from typing import Any
 
 from apscheduler.schedulers.base import BaseScheduler
 
-from orc.model import AppContext
+from orc.model import AppContext, DeviceStatus
 from orc.plugins import requires_ctx
 from orc_extras.example.dal.sqlite import Connection
 from orc_extras.example.model import ExampleJob, Plan, Runtime
@@ -39,7 +39,7 @@ def _dispatch(ctx: AppContext, w: Any, rule: Any, stream: dict[Any, tuple[str, s
     pass
 
 
-def status() -> list[dict[str, Any]]:
+def status() -> list[DeviceStatus]:
     raise NotImplementedError
 
 
