@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -33,29 +32,25 @@ def declare(declarations: Any) -> None:
 
 
 def setup(ctx: AppContext) -> None:
-    try:
-        cfg = load_plugin_config(
-            CONFIG,
-            ctx.config,
-            GRAMMAR,
-            {
-                "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int}),
-                "widget": array(Widget, types={"value": int}),
-                "zone": group(Zone),
-            },
-        )
-        s = cfg.setting
-        runtime = Runtime(
-            foo=Cast.module(s.foo_backend),
-            bar=Cast.module(s.bar_backend),
-            settings=s,
-            widgets=cfg.widget,
-            zones=[z for zs in cfg.zone.values() for z in zs],
-            foo_key=ctx.config.secrets[s.foo_secret],
-            bar_key=ctx.config.secrets[s.bar_secret],
-        )
-    except Exception as exc:
-        print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
-        return
+    cfg = load_plugin_config(
+        CONFIG,
+        ctx.config,
+        GRAMMAR,
+        {
+            "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int}),
+            "widget": array(Widget, types={"value": int}),
+            "zone": group(Zone),
+        },
+    )
+    s = cfg.setting
+    runtime = Runtime(
+        foo=Cast.module(s.foo_backend),
+        bar=Cast.module(s.bar_backend),
+        settings=s,
+        widgets=cfg.widget,
+        zones=[z for zs in cfg.zone.values() for z in zs],
+        foo_key=ctx.config.secrets[s.foo_secret],
+        bar_key=ctx.config.secrets[s.bar_secret],
+    )
     sqlite.init_db(ctx.api.connection)
     plugins.set_runtime(runtime)
