@@ -9,7 +9,7 @@ from orc_extras.entrance_sensor import Rule, Settings, Timed
 
 import orc
 from orc import api
-from orc.model import DeviceEnum
+from orc.model import DeviceEnum, Devices
 
 FIXTURE = Path(__file__).parent / "fixture"
 
@@ -39,9 +39,9 @@ def test_entrance_config_loads():
         cleanup_delay_minutes=2, entrance_id=1, patio_door_id=56, active_event="active", inactive_event="inactive", snapshot=45
     )
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
-    assert sensor.rules.enter == [Rule(device=Light, state="on"), Rule(device=Chromecast, state="pause")]
-    assert sensor.rules.shutdown == [Rule(device=Light, state="off")]
-    assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), device=Light, state=1)]
+    assert sensor.rules.enter == [Rule(devices=Devices(Light), state="on"), Rule(devices=Devices(Chromecast), state="pause")]
+    assert sensor.rules.shutdown == [Rule(devices=Devices(Light), state="off")]
+    assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), devices=Devices(Light), state=1)]
 
 
 def test_calendar_config_loads():

@@ -20,9 +20,9 @@ def execute_plugin(ctx: m.AppContext, plugin: m.CallablePlugin, device: str | No
 def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     def report(expect_on: bool) -> None:
         wrong = sorted(
-            c.what.name
+            c.what.one().name
             for c in ctx.api.capture_lights().items
-            if c.what not in ctx.config.virtual_devices and (c.state != m.OFF) != expect_on
+            if c.what.one() not in ctx.config.virtual_devices and (c.state != m.OFF) != expect_on
         )
         if wrong:
             template = Log.LIGHT_TEST_STILL_OFF if expect_on else Log.LIGHT_TEST_STILL_ON
