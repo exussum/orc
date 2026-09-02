@@ -1,4 +1,3 @@
-import sys
 from typing import Any, NamedTuple
 
 from command_cfg import array, scalar
@@ -33,21 +32,17 @@ def declare(declarations: Any) -> None:
 
 
 def setup(ctx: AppContext) -> None:
-    try:
-        calendar = load_plugin_config(
-            CONFIG,
-            ctx.config,
-            GRAMMAR,
-            serializers={
-                "setting": scalar(
-                    Settings,
-                    types={"window_hours": Cast.int, "max_events": Cast.int, "warning_minutes": Cast.int, "http_timeout": Cast.int},
-                ),
-                "feed": array(Feed),
-            },
-        )
-        backend = Cast.module(calendar.setting.backend)
-    except Exception as exc:
-        print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
-        return
+    calendar = load_plugin_config(
+        CONFIG,
+        ctx.config,
+        GRAMMAR,
+        serializers={
+            "setting": scalar(
+                Settings,
+                types={"window_hours": Cast.int, "max_events": Cast.int, "warning_minutes": Cast.int, "http_timeout": Cast.int},
+            ),
+            "feed": array(Feed),
+        },
+    )
+    backend = Cast.module(calendar.setting.backend)
     plugins.schedule_cron(ctx, backend, calendar.setting, calendar.feed)
