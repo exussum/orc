@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,30 +23,26 @@ def declare(declarations: Any) -> None:
 
 
 def setup(ctx: AppContext) -> None:
-    try:
-        cfg = load_plugin_config(
-            CONFIG,
-            ctx.config,
-            GRAMMAR,
-            {
-                "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int, "buffer_minutes": Cast.int}),
-                "place": array(Place),
-                "extra": array(Extra, types={"minutes": int}),
-            },
-        )
-        s = cfg.setting
-        runtime = Runtime(
-            drive=Cast.module(s.drive_backend),
-            flight=Cast.module(s.flight_backend),
-            settings=s,
-            extras=cfg.extra,
-            places=cfg.place,
-            origin=f"{ctx.config.settings.lat},{ctx.config.settings.long}",
-            tomtom_key=ctx.config.secrets[s.tomtom_secret],
-            aerodatabox_key=ctx.config.secrets[s.aerodatabox_secret],
-        )
-    except Exception as exc:
-        print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
-        return
+    cfg = load_plugin_config(
+        CONFIG,
+        ctx.config,
+        GRAMMAR,
+        {
+            "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int, "buffer_minutes": Cast.int}),
+            "place": array(Place),
+            "extra": array(Extra, types={"minutes": int}),
+        },
+    )
+    s = cfg.setting
+    runtime = Runtime(
+        drive=Cast.module(s.drive_backend),
+        flight=Cast.module(s.flight_backend),
+        settings=s,
+        extras=cfg.extra,
+        places=cfg.place,
+        origin=f"{ctx.config.settings.lat},{ctx.config.settings.long}",
+        tomtom_key=ctx.config.secrets[s.tomtom_secret],
+        aerodatabox_key=ctx.config.secrets[s.aerodatabox_secret],
+    )
     sqlite.init_db(ctx.api.connection)
     plugins.set_runtime(runtime)
