@@ -303,14 +303,17 @@ def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
 
 def load_plugin_config(
     name: str,
-    plugin_configs: dict[str, str],
+    config: Any,
     grammar: str,
     serializers: Mapping[str, scalar | group | array | raw | each],
 ) -> SimpleNamespace:
-    text = plugin_configs.get(name)
+    text = config.plugin_configs.get(name)
     if text is None:
         raise FileNotFoundError(f"no config 'plugins/{name}.orc'")
-    return SimpleNamespace(**command_cfg.parse(text, grammar, serializers))
+    # Seed the parse with the sealed device registry so Cast.devices/Cast.device
+    # resolve in plugin configs the same way they do in the main config.
+    device = raw(lambda rows, objects: SimpleNamespace(enums={n: dt.cls for n, dt in config.registry.devices.items()}))
+    return SimpleNamespace(**command_cfg.parse(text, grammar, {"device": device, **serializers}))
 
 
 def resolve_backend(value: ModuleType | None) -> ModuleType:

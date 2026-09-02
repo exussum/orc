@@ -18,9 +18,6 @@ widget <name> <value>
 zone <group> <name> <value>
 """
 
-_SETTING_TYPES = {"window_hours": Cast.int, "http_timeout": Cast.int}
-_WIDGET_TYPES = {"value": int}
-
 
 def declare(declarations: Any) -> None:
     declarations.declare(
@@ -39,9 +36,13 @@ def setup(ctx: AppContext) -> None:
     try:
         cfg = load_plugin_config(
             CONFIG,
-            ctx.config.plugin_configs,
+            ctx.config,
             GRAMMAR,
-            {"setting": scalar(Settings, types=_SETTING_TYPES), "widget": array(Widget, types=_WIDGET_TYPES), "zone": group(Zone)},
+            {
+                "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int}),
+                "widget": array(Widget, types={"value": int}),
+                "zone": group(Zone),
+            },
         )
         s = cfg.setting
         runtime = Runtime(

@@ -1,6 +1,7 @@
 import re
 from datetime import time, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from command_cfg import scalar
@@ -159,7 +160,7 @@ def test_plugin_command_imports_callable():
 
 def test_load_plugin_config_missing_file():
     with pytest.raises(FileNotFoundError, match="no config 'plugins/foo.orc'"):
-        load_plugin_config("foo", {}, "setting <key> <value>", {"setting": scalar(m.Settings.build)})
+        load_plugin_config("foo", SimpleNamespace(plugin_configs={}), "setting <key> <value>", {"setting": scalar(m.Settings.build)})
 
 
 _PARSE_ERRORS = [
