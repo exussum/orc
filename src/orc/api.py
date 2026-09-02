@@ -11,7 +11,6 @@ from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
 from datetime import date, datetime, timedelta
-from enum import Enum
 from functools import lru_cache
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
@@ -390,7 +389,7 @@ def wire_external_log() -> None:
 def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
     if not force and snapshot_manager.intercepts(rule):
         return
-    what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+    what = rule.what.all()
     stream: dict[Any, tuple[str, str]] = {}
 
     def one(w: m.DeviceEnum) -> None:
@@ -433,7 +432,7 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
         dispatch(config.routines[config.settings.emergency_routine], force=True, entry=entry)
         if text is not None:
             video_url = m.AlertVideo(f"{config.settings.base_url}/api/alert.mp4?text={quote(text)}")
-            dispatch(m.Config(orc.Chromecast, video_url), force=True, entry=entry)
+            dispatch(m.Config(m.Devices(orc.Chromecast), video_url), force=True, entry=entry)
             if not isinstance(device, orc.Chromecast):
                 dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
     elif text is not None:
@@ -472,7 +471,7 @@ def device_command(id: str, state: str | None) -> None:
     for device_type in config.registry.devices.values():
         if device_type.dispatch is not None and device_type.handles(id):
             member = device_type.cls[id]
-            device_type.dispatch(_ctx, member, m.Config(member, parsed), {})
+            device_type.dispatch(_ctx, member, m.Config(m.Devices(member), parsed), {})
             return
     raise Exception(f"Unknown device: {id}")
 
@@ -495,7 +494,7 @@ class SnapshotManager:
             self.snapshots[name] = m.SnapShot(capture_lights(), end, label)
             # captured light states are always enum members, not the class/set arm
             routine_items = self.snapshots[name].routine.items
-            items = ", ".join(f"`{c.what.name}`={c.state}" for c in routine_items if c.state != m.OFF)  # type: ignore[union-attr]
+            items = ", ".join(f"`{c.what.one().name}`={c.state}" for c in routine_items if c.state != m.OFF)
             entry.add(entry.source, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
 
         dispatch(target_config, force=True, entry=entry)
@@ -528,11 +527,11 @@ class SnapshotManager:
     def update_snapshot(self, name: str, rule: m.Config) -> None:
         snapshot = self.snapshots[name]
 
-        what = [rule.what] if isinstance(rule.what, Enum) else rule.what
-        items = {e.what: e for e in snapshot.routine.items}
+        what = rule.what.all()
+        items = {e.what.one(): e for e in snapshot.routine.items}
 
         # Explode out the rule w/o creating a sub config explicitly
-        items.update({e: replace(rule, what=e) for e in what})
+        items.update({e: replace(rule, what=m.Devices(e)) for e in what})
         self.snapshots[name] = snapshot._replace(routine=m.Configs(*items.values()))
 
     @synchronized
@@ -545,7 +544,7 @@ class SnapshotManager:
         elif not self._live(snapshot):
             self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
         else:
-            what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+            what = rule.what.all()
             kinds = ", ".join(f"`{kind}`" for kind in sorted({type(e).__name__ for e in what}))
             log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
             return True

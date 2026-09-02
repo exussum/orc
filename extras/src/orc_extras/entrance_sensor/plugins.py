@@ -1,5 +1,4 @@
 from datetime import timedelta
-from enum import Enum
 from types import SimpleNamespace
 from typing import Any, Sequence
 
@@ -10,6 +9,7 @@ from orc.plugins import requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
+MAX_ON_JOB_ID = "entrance-max-on"
 TRIGGER_MSG = "Entrance sensor triggered"
 
 
@@ -26,6 +26,20 @@ def _on_sensor_event(
         level = m.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
             ctx.api.log(Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})")
+    elif attribute == "switch" and device.id in _inside_light_ids(sensor) and old != new:
+        job_id = f"{MAX_ON_JOB_ID}-{device.id}"
+        if new == m.ON:
+            ctx.scheduler.add_job(
+                _run_max_on,
+                DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.entrance_max_on), timezone=ctx.config.settings.tz),
+                name=f"Entrance Max On {device.name}",
+                id=job_id,
+                replace_existing=True,
+                jobstore=ctx.api.JOBSTORE_MEMORY,
+                args=(sensor, device.name),
+            )
+        elif ctx.scheduler.get_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY):
+            ctx.scheduler.remove_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY)
     elif _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
@@ -48,6 +62,10 @@ def _on_sensor_event(
             jobstore=ctx.api.JOBSTORE_MEMORY,
             args=(sensor, new, log_entry),
         )
+
+
+def _inside_light_ids(sensor: SimpleNamespace) -> set[int]:
+    return {d.value for r in sensor.rules.inside for d in r.devices.all()}
 
 
 def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, attribute: str, old: Any, new: Any) -> bool:
@@ -79,6 +97,12 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
             jobstore=ctx.api.JOBSTORE_MEMORY,
             args=(sensor, log_entry),
         )
+
+
+@requires_ctx
+def _run_max_on(sensor: SimpleNamespace, name: str, *, ctx: m.AppContext) -> None:
+    entry = ctx.api.log(Log.ENTRANCE, f"`{name}` on for {sensor.setting.entrance_max_on}m: applying inside rules")
+    ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=m.Trigger.SYSTEM), entry=entry)
 
 
 @requires_ctx
@@ -151,9 +175,9 @@ def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot
     # lights is plugin-caused, not household state - don't replay it.
     if snapshot is None:
         return m.Configs()
-    inside = {d for r in sensor.rules.inside for d in ((r.device,) if isinstance(r.device, Enum) else r.device)}
-    return m.Configs(*[c for c in snapshot.routine.items if c.what not in inside])
+    inside = {d for r in sensor.rules.inside for d in r.devices.all()}
+    return m.Configs(*[c for c in snapshot.routine.items if c.what.one() not in inside])
 
 
 def _to_configs(ctx: m.AppContext, rows: Sequence[Any], trigger: m.Trigger | None = None) -> m.Configs:
-    return m.Configs(*[m.Config(r.device, r.state, trigger=trigger) for r in rows])
+    return m.Configs(*[m.Config(r.devices, r.state, trigger=trigger) for r in rows])

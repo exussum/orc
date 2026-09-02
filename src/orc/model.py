@@ -1,6 +1,6 @@
 import importlib
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import KW_ONLY, dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, StrEnum, auto
@@ -232,10 +232,14 @@ class YouTubeId(str):
 
 @dataclass
 class Config:
-    what: DeviceEnum | type[DeviceEnum] | set[DeviceEnum]
+    what: Devices
     state: str | int
     _: KW_ONLY
     trigger: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.what, Devices):
+            self.what = Devices(self.what)
 
 
 @dataclass
@@ -372,6 +376,28 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
 
 
 @dataclass(frozen=True)
+class Devices:
+    members: tuple[DeviceEnum, ...]
+
+    def __init__(self, what: "DeviceEnum | type[DeviceEnum] | Iterable[DeviceEnum] | Devices") -> None:
+        if isinstance(what, Devices):
+            members = what.members
+        elif isinstance(what, Enum):
+            members = (what,)
+        else:
+            members = tuple(what)
+        object.__setattr__(self, "members", members)
+
+    def all(self) -> tuple[DeviceEnum, ...]:
+        return self.members
+
+    def one(self) -> DeviceEnum:
+        if len(self.members) != 1:
+            raise ValueError(f"expected exactly one device, got {len(self.members)}: {self.members}")
+        return self.members[0]
+
+
+@dataclass(frozen=True)
 class DeviceType:
     """A registered device type with everything plugins declared about it, so
     consumers iterate whole devices rather than parallel per-attribute maps.
@@ -430,11 +456,11 @@ def squish_configs(
     rules: defaultdict[Any, list[Config]] = defaultdict(list)
     for routine in configs:
         for rule in routine.items:
-            what = [rule.what] if isinstance(rule.what, Enum) else rule.what
+            what = rule.what.all()
             for e in what:
                 rules[e].append(
                     Config(
-                        what=e,
+                        what=Devices(e),
                         state=rule.state if state_override is None else state_override,
                         trigger=rule.trigger,
                     )
@@ -451,7 +477,7 @@ def squish_configs(
 
 def _op_cmp(k: Config) -> tuple[int, int]:
     # types never declared controllable tie past everything registered
-    class_sort = _CLASS_SORT.get(k.what.__class__.__name__, len(_CLASS_SORT))
+    class_sort = _CLASS_SORT.get(type(k.what.one()).__name__, len(_CLASS_SORT))
 
     if k.state == STOP:
         sub_sort = _STATE_SORT_STOP

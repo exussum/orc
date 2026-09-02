@@ -13,12 +13,18 @@ CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
 setting <key> <value>
 message <log> <message>
-rules <trigger> <device> <state>
+rules <trigger> <devices> <state>
 timed define <name> <start> <stop>
-timed append <name> <device> <state>
+timed append <name> <devices> <state>
 """
 
-_SETTING_TYPES = {"cleanup_delay_minutes": Cast.int, "entrance_id": Cast.int, "patio_door_id": Cast.int, "snapshot": Cast.int}
+_SETTING_TYPES = {
+    "cleanup_delay_minutes": Cast.int,
+    "entrance_id": Cast.int,
+    "patio_door_id": Cast.int,
+    "snapshot": Cast.int,
+    "entrance_max_on": Cast.int,
+}
 
 
 def _devices() -> dict[str, type]:
@@ -34,6 +40,7 @@ class Settings(NamedTuple):
     active_event: str
     inactive_event: str
     snapshot: int
+    entrance_max_on: int = 15
 
 
 class Messages(NamedTuple):
@@ -44,12 +51,12 @@ class Messages(NamedTuple):
 
 
 class Rule(NamedTuple):
-    device: Any
+    devices: Any
     state: Any
 
 
 def _rule(**values: Any) -> Rule:
-    return Rule(device=resolve_device(values["device"], _devices()), state=Cast.state(values["state"]))
+    return Rule(devices=resolve_device(values["devices"], _devices()), state=Cast.state(values["state"]))
 
 
 class Rules(NamedTuple):
@@ -63,7 +70,7 @@ class Rules(NamedTuple):
 class Timed(NamedTuple):
     start: time
     stop: time
-    device: Any
+    devices: Any
     state: Any
 
 
@@ -71,7 +78,7 @@ def _timed(**values: Any) -> Timed:
     return Timed(
         start=Cast.clock(values["start"]),
         stop=Cast.clock(values["stop"]),
-        device=resolve_device(values["device"], _devices()),
+        devices=resolve_device(values["devices"], _devices()),
         state=Cast.state(values["state"]),
     )
 
@@ -98,5 +105,6 @@ def setup(ctx: AppContext) -> None:
         print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
         return
     ids = {sensor.setting.entrance_id, sensor.setting.patio_door_id}
-    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor, ids))
+    listen_ids = ids | plugins._inside_light_ids(sensor)
+    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor, listen_ids))
     ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, ids))
