@@ -20,8 +20,8 @@ _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 _ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
 
 GRAMMAR = """
-ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<device> <state>]
-ad_hoc append <name> <device> <state>
+ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<devices> <state>]
+ad_hoc append <name> <devices> <state>
 
 remote <device> <button> <event> <action>
 
@@ -39,10 +39,10 @@ plugin <name> <module> <function> --section=<section> [--icon=<icon>] [--backend
 
 provider <key> <module>
 
-room <name> <device> <state>
+room <name> <devices> <state>
 
 routine define <id> <name> [--skip-replay]
-routine append <id> <device> <state> [--trigger=<trigger>]
+routine append <id> <devices> <state> [--trigger=<trigger>]
 
 setting <key> <value>
 
@@ -121,9 +121,9 @@ _ERR_FUNCTION = (
 _ERR_MODULE = "Cannot load module {!r}: {}. Expected an importable module like 'orc.dal.mqtt.stub'."
 
 
-def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> Any:
+def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> m.Devices:
     try:
-        return safe_eval(value, dict(devices))
+        return m.Devices(safe_eval(value, dict(devices)))
     except NameError as exc:
         raise ValueError(f"{exc} — device types must be defined and sealed first") from None
     except AttributeError:
@@ -136,8 +136,12 @@ def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> Any
 
 class Cast:
     @staticmethod
-    def device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> Any:
+    def devices(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> m.Devices:
         return resolve_device(value, objects["device"].enums)
+
+    @staticmethod
+    def device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> m.DeviceEnum:
+        return resolve_device(value, objects["device"].enums).one()
 
     @staticmethod
     def state(value: str) -> Any:
@@ -187,7 +191,7 @@ class Cast:
 
 
 def _config(objects: dict[str, Any], args: SimpleNamespace, **extra: Any) -> m.Config:
-    return m.Config(Cast.device(args.device, objects), Cast.state(args.state), **extra)
+    return m.Config(Cast.devices(args.devices, objects), Cast.state(args.state), **extra)
 
 
 def _resolve_function(value: str) -> Callable[..., Any]:
@@ -246,7 +250,7 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
             section=Cast.section(args.section) or "scene",
             reset=not args.no_reset,
         )
-        if args.device is not None:
+        if args.devices is not None:
             ad_hoc_routines[args.name].items = (_config(objects, args),)
     elif (config := ad_hoc_routines.get(args.name)) is None:
         raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(ad_hoc_routines)}")

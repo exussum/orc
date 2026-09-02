@@ -142,7 +142,7 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
         switch = attrs.get("switch", m.OFF)
         return int(attrs["level"]) if ("level" in attrs and switch == m.ON) else switch
 
-    return m.Configs(*(m.Config(what=light, state=state(light)) for light in lights))
+    return m.Configs(*(m.Config(what=m.Devices(light), state=state(light)) for light in lights))
 
 
 def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:

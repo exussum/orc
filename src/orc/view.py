@@ -130,7 +130,7 @@ def cfg() -> str:
 @bp.route("/device/")
 def device() -> str:
     # captured lights are always enum members, not the class/set arm
-    light_states = {c.what.name: c.state for c in api.capture_lights().items}  # type: ignore[union-attr]
+    light_states = {c.what.one().name: c.state for c in api.capture_lights().items}
     sound_states = {c.what.name: c.volume for c in api.capture_sounds().items}
     all_devices = list(chain.from_iterable(dt.cls for dt in config.registry.devices.values() if dt.controllable))
 

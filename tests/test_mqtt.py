@@ -81,7 +81,7 @@ class TestOnMessage:
 
 class TestFetchLightStates:
     def _state_of(self, configs, light):
-        return next(c for c in configs.items if c.what is light).state
+        return next(c for c in configs.items if c.what.one() is light).state
 
     def test_on_with_level_returns_int_level(self):
         _receive([_doc(id=1, attributes={"switch": "on", "level": "50"})])
@@ -102,7 +102,7 @@ class TestFetchLightStates:
     def test_returns_only_requested_subset(self):
         _receive([_doc(id=light.value, attributes={"switch": "on"}) for light in (orc.Light.a, orc.Light.b, orc.Light.c)])
         configs = mqtt.fetch_light_states((orc.Light.a, orc.Light.c))
-        assert tuple(c.what for c in configs.items) == (orc.Light.a, orc.Light.c)
+        assert tuple(c.what.one() for c in configs.items) == (orc.Light.a, orc.Light.c)
 
 
 class TestListeners:
