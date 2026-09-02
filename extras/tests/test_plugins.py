@@ -30,7 +30,7 @@ class Chromecast(DeviceEnum):
 
 
 def _row(device, state, start="", stop=""):
-    return SimpleNamespace(device=device, state=state, start=start, stop=stop)
+    return SimpleNamespace(devices=m.Devices(device), state=state, start=start, stop=stop)
 
 
 def _snapshot(*configs, end=_FUTURE):
@@ -164,7 +164,7 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
     )
     _trigger_sensor(ctx, sensor, "16", "active")
     executed = ctx.api.dispatch.call_args[0][0]
-    assert {c.what: c.state for c in executed.items} == {
+    assert {c.what.one(): c.state for c in executed.items} == {
         Light.saved: m.ON,  # restored
         Light.day_bulb: 20,  # follows the current window, never the snapshot
         Light.lamp: m.ON,
