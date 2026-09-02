@@ -35,9 +35,9 @@
                                 <th class="px-2 py-1 font-normal">Retried</th>
                             </tr>
                             {% for c in lights.items %}
-                                {% set s = retry_stats.get(c.what.value) %}
+                                {% set s = retry_stats.get(c.what.one().value) %}
                                 <tr>
-                                    <td class="px-2 py-1">{{ c.what.name }}</td>
+                                    <td class="px-2 py-1">{{ c.what.one().name }}</td>
                                     <td class="px-2 py-1">{{ c.state }}</td>
                                     <td class="px-2 py-1">{{ s.failed if s else '—' }}</td>
                                     <td class="px-2 py-1">{{ s.clean if s else '—' }}</td>
@@ -95,7 +95,7 @@
                                     <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
                                         <ul class="list-disc list-inside ml-4">
                                             {% for c in snap.routine.items if c.state != "off" %}
-                                                <li>{{ c.what.name }}={{ c.state }}</li>
+                                                <li>{{ c.what.one().name }}={{ c.state }}</li>
                                             {% else %}
                                                 <li>all off</li>
                                             {% endfor %}
