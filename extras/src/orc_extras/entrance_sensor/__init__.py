@@ -18,14 +18,6 @@ timed define <name> <start> <stop>
 timed append <name> <devices> <state>
 """
 
-_SETTING_TYPES = {
-    "cleanup_delay_minutes": Cast.int,
-    "entrance_id": Cast.int,
-    "patio_door_id": Cast.int,
-    "snapshot": Cast.int,
-    "entrance_max_on": Cast.int,
-}
-
 
 def _devices() -> dict[str, type]:
     import orc
@@ -40,7 +32,6 @@ class Settings(NamedTuple):
     active_event: str
     inactive_event: str
     snapshot: int
-    entrance_max_on: int = 15
 
 
 class Messages(NamedTuple):
@@ -91,10 +82,13 @@ def setup(ctx: AppContext) -> None:
     try:
         sensor = load_plugin_config(
             CONFIG,
-            ctx.config.plugin_configs,
+            ctx.config,
             GRAMMAR,
             serializers={
-                "setting": scalar(Settings, types=_SETTING_TYPES),
+                "setting": scalar(
+                    Settings,
+                    types={"cleanup_delay_minutes": Cast.int, "entrance_id": Cast.int, "patio_door_id": Cast.int, "snapshot": Cast.int},
+                ),
                 "message": scalar(Messages),
                 "rules": group(_rule),
                 "timed": group(_timed),
@@ -105,6 +99,5 @@ def setup(ctx: AppContext) -> None:
         print(f"Failed to load plugin config {CONFIG!r}: {exc}", file=sys.stderr)
         return
     ids = {sensor.setting.entrance_id, sensor.setting.patio_door_id}
-    listen_ids = ids | plugins._inside_light_ids(sensor)
-    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor, listen_ids))
+    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor, ids))
     ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, ids))

@@ -13,8 +13,6 @@ setting <key> <value>
 feed <name> <secret>
 """
 
-_SETTING_TYPES = {"window_hours": Cast.int, "max_events": Cast.int, "warning_minutes": Cast.int, "http_timeout": Cast.int}
-
 
 class Settings(NamedTuple):
     backend: str
@@ -38,9 +36,15 @@ def setup(ctx: AppContext) -> None:
     try:
         calendar = load_plugin_config(
             CONFIG,
-            ctx.config.plugin_configs,
+            ctx.config,
             GRAMMAR,
-            serializers={"setting": scalar(Settings, types=_SETTING_TYPES), "feed": array(Feed)},
+            serializers={
+                "setting": scalar(
+                    Settings,
+                    types={"window_hours": Cast.int, "max_events": Cast.int, "warning_minutes": Cast.int, "http_timeout": Cast.int},
+                ),
+                "feed": array(Feed),
+            },
         )
         backend = Cast.module(calendar.setting.backend)
     except Exception as exc:

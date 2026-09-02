@@ -18,8 +18,6 @@ place <name> <address>
 extra <name> <minutes>
 """
 
-_SETTING_TYPES = {"window_hours": Cast.int, "http_timeout": Cast.int, "buffer_minutes": Cast.int}
-
 
 def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup], blueprints={"jobs": travel_bp}, scripts=[Path(__file__).parent / "static" / "travel.js"])
@@ -29,9 +27,13 @@ def setup(ctx: AppContext) -> None:
     try:
         cfg = load_plugin_config(
             CONFIG,
-            ctx.config.plugin_configs,
+            ctx.config,
             GRAMMAR,
-            {"setting": scalar(Settings, types=_SETTING_TYPES), "place": array(Place), "extra": array(Extra, types={"minutes": int})},
+            {
+                "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int, "buffer_minutes": Cast.int}),
+                "place": array(Place),
+                "extra": array(Extra, types={"minutes": int}),
+            },
         )
         s = cfg.setting
         runtime = Runtime(
