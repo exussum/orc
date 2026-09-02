@@ -77,6 +77,7 @@ remote     .                         1 held   Silence
 plugin 'Pair LG TV'       orc_extras.lgtv            pair_tv     --section device --backend orc_extras.lgtv.dal.tv.webos
 plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device
 plugin 'Entrance Sensor'  orc_extras.entrance_sensor
+plugin 'Max On'           orc_extras.max_on
 plugin Calendar           orc_extras.calendar
 plugin Travel             orc_extras.travel         --section scene
 

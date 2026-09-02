@@ -75,8 +75,8 @@ Prefer A unless the backend naturally belongs to a `plugin` line.
 By an explicit `types=` mapping (field name to callable) passed to the
 `command_cfg` serializer — not the field annotation, and not automatic on
 all-digit strings. `widget <name> <value>` gives `Widget(name, value=int)`
-because `example`'s `_WIDGET_TYPES = {"value": int}` is passed as
-`array(Widget, types=_WIDGET_TYPES)`. A field left out of `types=` stays a
+because `example` passes `array(Widget, types={"value": int})`. A field left
+out of `types=` stays a
 string; convert it in `setup()` instead, or in the row factory for
 `group()`/`array()` commands that need a non-primitive value (device/state
 lookups, time parsing).

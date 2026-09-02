@@ -127,9 +127,6 @@ timed define <name> <start> <stop>
 timed append <name> <device> <state>
 """
 
-_SETTING_TYPES = {"entrance_id": int, "snapshot": int}
-
-
 class Settings(NamedTuple):
     entrance_id: int
     snapshot: int
@@ -147,10 +144,10 @@ def _rule(**values: Any) -> Rule:
 def setup(ctx):
     sensor = load_plugin_config(
         CONFIG,
-        ctx.config.plugin_configs,
+        ctx.config,
         GRAMMAR,
         serializers={
-            "setting": scalar(Settings, types=_SETTING_TYPES),
+            "setting": scalar(Settings, types={"entrance_id": int, "snapshot": int}),
             "message": scalar(Messages),
             "rules": group(_rule),
             "timed": group(_timed),
