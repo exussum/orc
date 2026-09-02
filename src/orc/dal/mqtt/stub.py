@@ -53,11 +53,6 @@ def add_external_listener(fn: m.Listener) -> None:
     _external_listeners.append(fn)
 
 
-def press_button(device_id: int, button: int, event: str) -> None:
-    for fn in _button_listeners:
-        fn(device_id, button, event)
-
-
 def reset() -> None:
     _states.clear()
     _listeners.clear()
