@@ -19,7 +19,7 @@
             </div>
         </div>
         <div class="orc-card mb-2">
-            <details open>
+            <details>
                 <summary class="orc-accordion-summary">
                     Devices
                 </summary>
@@ -82,10 +82,11 @@
             </details>
         </div>
         <div class="orc-card mb-2">
-            <div class="px-4 py-3 border-b border-orc-border">
-                <div class="text-base font-semibold">Internals</div>
-            </div>
-            <div class="p-4">
+            <details>
+                <summary class="orc-accordion-summary">
+                    Internals
+                </summary>
+                <div class="p-4">
                 <ul class="list-disc list-inside">
                     <li>Internal Version: {{ version }}</li>
                     <li>Snapshot State:
@@ -111,25 +112,50 @@
                     <li>Today's theme: {{ today_theme }}</li>
                     <li>Tomorrow's theme: {{ tomorrow_theme }}</li>
                 </ul>
-            </div>
+                <div class="font-semibold mt-3 mb-1">Scheduled Jobs</div>
+                <div class="overflow-x-auto">
+                    <table class="text-left">
+                        <tr>
+                            <th class="px-2 py-1 font-normal">Store</th>
+                            <th class="px-2 py-1 font-normal">Name</th>
+                            <th class="px-2 py-1 font-normal">Next Run</th>
+                        </tr>
+                        {% for store, jobs in scheduled_jobs %}
+                            {% for job in jobs %}
+                                <tr>
+                                    <td class="px-2 py-1">{{ store }}</td>
+                                    <td class="px-2 py-1">{{ job.name }}</td>
+                                    <td class="px-2 py-1">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    </table>
+                </div>
+                </div>
+            </details>
         </div>
         <div class="orc-card mb-2">
             <details>
                 <summary class="orc-accordion-summary">
-                    config.orc
+                    Configuration Files
                 </summary>
-                <div class="orc-config p-4 font-mono overflow-x-auto">{{ html|safe }}</div>
+                <div class="p-2">
+                    <details>
+                        <summary class="orc-accordion-summary">
+                            config.orc
+                        </summary>
+                        <div class="orc-config p-4 font-mono overflow-x-auto">{{ html|safe }}</div>
+                    </details>
+                    {% for name, plugin_html in plugin_htmls.items() %}
+                        <details>
+                            <summary class="orc-accordion-summary">
+                                {{ name }}.orc
+                            </summary>
+                            <div class="orc-config p-4 font-mono overflow-x-auto">{{ plugin_html|safe }}</div>
+                        </details>
+                    {% endfor %}
+                </div>
             </details>
         </div>
-        {% for name, plugin_html in plugin_htmls.items() %}
-        <div class="orc-card mb-2">
-            <details>
-                <summary class="orc-accordion-summary">
-                    {{ name }}.orc
-                </summary>
-                <div class="orc-config p-4 font-mono overflow-x-auto">{{ plugin_html|safe }}</div>
-            </details>
-        </div>
-        {% endfor %}
     </div>
 {% endblock %}
