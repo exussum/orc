@@ -6,6 +6,7 @@ from apscheduler.job import Job
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from sqlalchemy import text
 
 from orc import config
 from orc import model as m
@@ -77,3 +78,17 @@ def fetch_jobs_by_type(type: type) -> list[Job]:
 
 def remove_all_jobs() -> None:
     _scheduler().remove_all_jobs()
+
+
+def delete_stale_jobs(jobstore: str) -> None:
+    today = datetime.now(tz=config.settings.tz).date().isoformat()
+    with _scheduler()._lookup_jobstore(jobstore).engine.begin() as conn:
+        conn.execute(
+            text(
+                "delete from apscheduler_jobs"
+                " where next_run_time is null"
+                " and substr(id, -10) glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
+                " and substr(id, -10) < :today"
+            ),
+            {"today": today},
+        )
