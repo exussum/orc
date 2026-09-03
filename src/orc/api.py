@@ -731,8 +731,14 @@ def setup_scheduler(ctx: m.AppContext) -> None:
     for job_id, func, crontab, name in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
         (_PRESENCE_CRON_JOB_ID, _check_presence_job, "5 * * * *", "Presence Cron"),
+        ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
     ):
         scheduler.schedule_cron(func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
+
+
+@requires_ctx
+def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
+    scheduler.delete_stale_jobs(JOBSTORE_DEFAULT)
 
 
 def matched_presence(rule: m.Routine, people: set[str] | None = None) -> tuple[m.Config, ...]:

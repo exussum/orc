@@ -87,6 +87,7 @@
                     Internals
                 </summary>
                 <div class="p-4">
+                <div class="font-semibold mb-1">Status</div>
                 <ul class="list-disc list-inside">
                     <li>Internal Version: {{ version }}</li>
                     <li>Snapshot State:
@@ -116,16 +117,15 @@
                 <div class="overflow-x-auto">
                     <table class="text-left">
                         <tr>
-                            <th class="px-2 py-1 font-normal">Store</th>
                             <th class="px-2 py-1 font-normal">Name</th>
                             <th class="px-2 py-1 font-normal">Next Run</th>
                         </tr>
                         {% for store, jobs in scheduled_jobs %}
+                            <tr><td class="px-2 py-1 font-semibold" colspan="2">{{ store }}</td></tr>
                             {% for job in jobs %}
                                 <tr>
-                                    <td class="px-2 py-1">{{ store }}</td>
                                     <td class="px-2 py-1">{{ job.name }}</td>
-                                    <td class="px-2 py-1">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else '—' }}</td>
+                                    <td class="px-2 py-1">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else 'paused' }}</td>
                                 </tr>
                             {% endfor %}
                         {% endfor %}
