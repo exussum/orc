@@ -90,7 +90,7 @@ def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], 
             args=(CalendarJob(event.type, event.summary),),
             replace_existing=True,
             id=id,
-            name=event.summary,
+            name=event.summary if event.type == ALARM else f"{event.summary} ({event.type})",
             jobstore=ctx.api.JOBSTORE_MEMORY,
         )
 
