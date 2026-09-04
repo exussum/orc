@@ -30,8 +30,10 @@ const TEMPLATES = `
         <h2 class="text-xl font-semibold mb-3">Travel</h2>
         <ul id="travel-list" class="space-y-1 mb-4"></ul>
         <form id="travel-form" class="flex flex-col gap-2">
-            <input name="target" class="orc-input" placeholder="Flight (AA657) or address" list="travel-places">
-            <datalist id="travel-places"></datalist>
+            <div class="relative">
+                <input name="target" class="orc-input" placeholder="Flight (AA657) or address" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">
+                <ul id="travel-places" class="orc-card absolute z-50 w-full hidden" style="max-height:12rem;overflow-y:auto"></ul>
+            </div>
             <input name="arrive" type="text" class="orc-input" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">
             <details id="travel-extras-details">
                 <summary class="cursor-pointer mb-1">Extras</summary>
@@ -55,12 +57,16 @@ const TEMPLATES = `
 </template>
 <template id="travel-extra-tpl">
     <label class="flex items-center gap-2"><input type="checkbox" name="extra"><span data-name></span></label>
+</template>
+<template id="travel-place-tpl">
+    <li class="orc-dropdown-item cursor-pointer"></li>
 </template>`;
 
 let dialog;
 let templates;
 let arrivePicker;
 let arrivePrior;
+let places = [];
 
 function clone(id) {
     return templates.querySelector(`#${id}`).content.firstElementChild.cloneNode(true);
@@ -81,6 +87,10 @@ function build() {
     document.body.appendChild(dialog);
     dialog.querySelector("#travel-close").onclick = () => dialog.close();
     dialog.querySelector("#travel-form").addEventListener("submit", submit);
+    const target = dialog.querySelector("[name=target]");
+    target.addEventListener("input", showPlaces);
+    target.addEventListener("focus", showPlaces);
+    target.addEventListener("blur", () => dialog.querySelector("#travel-places").classList.add("hidden"));
     arrivePicker = flatpickr(dialog.querySelector("[name=arrive]"), {
         enableTime: true,
         dateFormat: "Y-m-d h:i K",
@@ -114,14 +124,23 @@ function renderExtras(extras) {
     }
 }
 
-function renderPlaces(places) {
+function showPlaces(e) {
+    const input = e.target;
     const list = dialog.querySelector("#travel-places");
+    const query = input.value.trim().toLowerCase();
+    const matches = places.filter((name) => name.toLowerCase().includes(query) && name !== input.value);
     list.replaceChildren();
-    for (const name of places) {
-        const opt = document.createElement("option");
-        opt.value = name;
-        list.appendChild(opt);
+    for (const name of matches) {
+        const li = clone("travel-place-tpl");
+        li.textContent = name;
+        li.onpointerdown = (event) => {
+            event.preventDefault();
+            input.value = name;
+            list.classList.add("hidden");
+        };
+        list.appendChild(li);
     }
+    list.classList.toggle("hidden", !matches.length);
 }
 
 function renderJobs(jobs) {
@@ -168,9 +187,9 @@ async function refresh() {
         err.classList.remove("hidden");
     }, false);
     if (!data) return;
-    const { jobs, extras, places } = data;
+    const { jobs, extras } = data;
+    places = data.places || [];
     renderExtras(extras || []);
-    renderPlaces(places || []);
     renderJobs(jobs);
 }
 
