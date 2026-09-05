@@ -2,9 +2,9 @@ from enum import Enum
 from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
-from orc_extras import lgtv
-from orc_extras.lgtv import plugins
-from orc_extras.lgtv.dal import sqlite
+from orc_extras import lg_tv
+from orc_extras.lg_tv import plugins
+from orc_extras.lg_tv.dal import sqlite
 
 import orc
 from orc import api
@@ -39,7 +39,7 @@ def mock_registry(monkeypatch):
 
 class TestDispatchLGTV:
     @pytest.fixture(autouse=True)
-    def _lgtv_enums(self, mock_registry):
+    def _lg_tv_enums(self, mock_registry):
         class LGTV(Enum):
             living_room = 1
 
@@ -51,46 +51,46 @@ class TestDispatchLGTV:
 
         self.ctx = MagicMock()
         self.ctx.api = create_autospec(api)
-        mock_registry(ctx=self.ctx, LGTV=(LGTV, lgtv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
-        self.lgtv = LGTV.living_room
+        mock_registry(ctx=self.ctx, LGTV=(LGTV, lg_tv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
+        self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room
         self.bl = BroadLink.living_room
 
     def test_off_powers_webos_off(self):
         with patch.object(plugins, "off") as webos_off:
-            api.dispatch(m.Config(self.lgtv, m.OFF), entry=None)
+            api.dispatch(m.Config(self.lg_tv, m.OFF), entry=None)
         webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
         with patch.object(plugins, "is_off", return_value=True):
-            api.dispatch(m.Config(self.lgtv, m.ON), entry=None)
+            api.dispatch(m.Config(self.lg_tv, m.ON), entry=None)
         self.ctx.api.tv_toggle.assert_called_once_with(self.bl)
 
     def test_on_skips_toggle_when_tv_already_on(self):
         with patch.object(plugins, "is_off", return_value=False):
-            api.dispatch(m.Config(self.lgtv, m.ON), entry=None)
+            api.dispatch(m.Config(self.lg_tv, m.ON), entry=None)
         self.ctx.api.tv_toggle.assert_not_called()
 
-    def test_device_command_routes_to_lgtv_handler(self):
+    def test_device_command_routes_to_lg_tv_handler(self):
         with patch.object(plugins, "off") as webos_off:
             api.device_command("living_room", m.OFF)
         webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
 
 
-def test_lgtv_registers_with_core():
+def test_lg_tv_registers_with_core():
     from orc import config
 
-    assert lgtv.setup in config.registry.setup_hooks
+    assert lg_tv.setup in config.registry.setup_hooks
     with patch.object(sqlite, "init_db") as init_db:
         ctx = MagicMock()
         ctx.api = create_autospec(api)
         ctx.config.plugin_configs = {}
-        lgtv.setup(ctx)
+        lg_tv.setup(ctx)
     init_db.assert_called_once_with(ctx.api.connection)
-    assert config.registry.state_providers["TV"] is lgtv.tv_state
+    assert config.registry.state_providers["TV"] is lg_tv.tv_state
 
-    lgtv_dev = config.registry.devices["LGTV"]
-    assert lgtv_dev.dispatch is lgtv._dispatch
-    assert lgtv_dev.controllable
-    assert lgtv_dev.icon == "tv"
-    assert config.registry.scripts["lgtv.js"].is_file()
+    lg_tv_dev = config.registry.devices["LGTV"]
+    assert lg_tv_dev.dispatch is lg_tv._dispatch
+    assert lg_tv_dev.controllable
+    assert lg_tv_dev.icon == "tv"
+    assert config.registry.scripts["lg_tv.js"].is_file()
