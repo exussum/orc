@@ -1,4 +1,9 @@
-"""ThinQ2 "clip" codec, provisioning, and cert signing."""
+"""ThinQ2 "clip" codec, provisioning, and cert signing.
+
+The wire protocol reverse-engineering — AABB/TLV framing, the provisioning
+handshake, and the field maps — is from anszom's rethink:
+https://github.com/anszom/rethink.
+"""
 
 from __future__ import annotations
 
