@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import traceback
 from urllib.parse import urlparse
@@ -18,6 +19,7 @@ from orc.view import OrcFlask, VersionManager, bp
 
 
 def flask() -> None:
+    subprocess.run(["tailwindcss", "-i", "src/css/tailwind.src.css", "-o", "src/orc/static/tailwind.min.css", "--minify"], check=True)
     app = _build_app()
     _start_services(app.orc)
     app.run(host="0.0.0.0", port=config.config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host

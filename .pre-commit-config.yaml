@@ -39,13 +39,6 @@ repos:
         files: ^src/config\.orc$
         pass_filenames: false
 
-      - id: tailwind
-        name: tailwind
-        entry: tailwindcss -i src/css/tailwind.src.css -o src/orc/static/tailwind.min.css --minify
-        language: system
-        pass_filenames: false
-        files: ^(src/css/tailwind\.src\.css|src/orc/templates/.*\.html|src/orc/static/.*\.(js|svg))$
-
       - id: uv-lock
         name: uv-lock
         entry: uv lock
