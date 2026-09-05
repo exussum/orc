@@ -111,6 +111,14 @@ def validate(config: SimpleNamespace) -> None:
 
 
 _ERR_PARAMS = "Invalid parameter {}={!r}"
+_FQDN_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")  # 1-63 chars, no leading/trailing hyphen
+
+
+def _is_fqdn(value: str) -> bool:
+    labels = value.split(".")
+    return len(value) <= 253 and len(labels) >= 2 and all(map(_FQDN_LABEL.fullmatch, labels))
+
+
 # "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
 # they render no button and are not auto-invoked, unlike the other sections.
 _VALID_SECTIONS = frozenset({"scene", "system", "device"})
@@ -180,6 +188,20 @@ class Cast:
     @staticmethod
     def int(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> int:
         return int(value)
+
+    @staticmethod
+    def bool(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> bool:
+        if value == "True":
+            return True
+        elif value == "False":
+            return False
+        raise ValueError(_ERR_PARAMS.format("bool", value))
+
+    @staticmethod
+    def fqdn(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> str:
+        if _is_fqdn(value):
+            return value
+        raise ValueError(_ERR_PARAMS.format("fqdn", value))
 
     @staticmethod
     def section(value: str | None) -> str | None:
