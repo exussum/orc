@@ -11,6 +11,10 @@ from typing import Any
 
 from amqtt.broker import Broker
 
+# plugin chatter only ("password-file not found", "sys_interval is not set");
+# amqtt.broker itself stays at WARNING so session/connection problems surface
+logging.getLogger("amqtt.broker.plugins").setLevel(logging.ERROR)
+
 _log = logging.getLogger(__name__)
 _thread: threading.Thread | None = None
 _ready = threading.Event()
