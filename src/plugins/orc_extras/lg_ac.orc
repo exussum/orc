@@ -1,0 +1,10 @@
+setting hostname          common.lgthinq.com
+setting https_advertise   443
+setting mqtt_host          192.168.4.6
+setting mqtt_port          1883
+setting mqtts_advertise    8883
+setting ca_cert            certs/lg_ac/ca.crt
+setting ca_key             certs/lg_ac/ca.key
+setting server_cert        certs/lg_ac/server-ca.crt
+setting server_key         certs/lg_ac/server-ca.key
+setting capture            False

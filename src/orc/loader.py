@@ -1,4 +1,5 @@
 import importlib
+import ipaddress
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -111,6 +112,7 @@ def validate(config: SimpleNamespace) -> None:
 
 
 _ERR_PARAMS = "Invalid parameter {}={!r}"
+_FQDN_RE = re.compile(r"^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$")
 # "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
 # they render no button and are not auto-invoked, unlike the other sections.
 _VALID_SECTIONS = frozenset({"scene", "system", "device"})
@@ -180,6 +182,28 @@ class Cast:
     @staticmethod
     def int(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> int:
         return int(value)
+
+    @staticmethod
+    def bool(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> bool:
+        if value == "True":
+            return True
+        elif value == "False":
+            return False
+        raise ValueError(_ERR_PARAMS.format("bool", value))
+
+    @staticmethod
+    def fqdn(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> str:
+        if _FQDN_RE.match(value):
+            return value
+        raise ValueError(_ERR_PARAMS.format("fqdn", value))
+
+    @staticmethod
+    def ip(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> str:
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            raise ValueError(_ERR_PARAMS.format("ip", value)) from None
+        return value
 
     @staticmethod
     def section(value: str | None) -> str | None:
