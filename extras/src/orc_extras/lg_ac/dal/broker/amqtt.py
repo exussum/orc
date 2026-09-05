@@ -61,9 +61,10 @@ def _patch_accept_any_client_cert() -> None:
 def start(mqtts_port: int, cafile: str, certfile: str, keyfile: str, plain_port: int = 1883) -> None:
     """Run the embedded broker on a background asyncio loop.
 
-    The device connects over TLS on `mqtts_port` (our CA-signed server cert; its
-    client cert is validated against `cafile`). Our own paho client connects on
-    the plain localhost listener.
+    The device connects over TLS on `mqtts_port` presenting our CA-signed server
+    cert; its own client cert is accepted without validation (see
+    _patch_accept_any_client_cert). Our paho client connects on the plain
+    localhost listener.
     """
     # "default" is amqtt's template listener that others inherit from — keep it
     # PLAIN (our local client), and override ssl only on the named device listener.

@@ -1,11 +1,10 @@
 """ThinQ2 (clip) MQTT handling.
 
-Background paho client connected to the local broker the AC enrolls into. Caches
-the latest decoded state per device id from ``clip/message/devices/<did>``,
-answers provisioning requests on ``clip/provisioning/devices/<did>``, and
-publishes commands back on the standing client. Modeled after orc's hubitat MQTT
-subscriber: module-level client, module-level caches, listeners fired on the mqtt
-thread.
+Background paho client connected to the local broker the AC enrolls into. Merges
+the latest raw TLV values per device from ``clip/message/devices/<did>`` (decoded
+on read), answers provisioning on ``clip/provisioning/devices/<did>``, and sends
+commands downstream on ``lime/devices/<did>``. Modeled after orc's hubitat MQTT
+subscriber: module-level client, module-level caches, listeners on the mqtt thread.
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ _client: mqtt.Client | None = None  # standing client, retained for publishing c
 _lock = threading.Lock()
 _raw: dict[str, dict[int, int]] = {}  # merged latest TLV values per device (frames are partial)
 _devices: list[str] = []  # device ids seen, in first-seen order
-_raw_listeners: list[Callable[[str, bytes], None]] = []  # every clip message, undecoded
+_raw_listeners: list[Callable[[str, bytes], None]] = []  # every inbound message, undecoded
 
 
 def add_raw_listener(fn: Callable[[str, bytes], None]) -> None:
@@ -129,7 +128,7 @@ def _receive_message(topic: str, payload: bytes) -> None:
         _poll(device_id)
     elif cmd == "device_packet":
         if api.active_model() is None:
-            return  # unknown model: raw frame is still in capture.jsonl, just not decoded
+            return  # unknown model: skip decode (enable capture to log raw frames for calibration)
         pkt = api.frame_tlv(bytes.fromhex(msg.get("data", "")))
         if pkt is None:
             return

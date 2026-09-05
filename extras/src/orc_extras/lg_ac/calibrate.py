@@ -3,9 +3,9 @@
 Connects to the local broker as an extra subscriber, watches the device's
 ``device_packet`` frames, and walks you through each mode / fan speed / the
 temperature range. Writes ``fieldmap/<model>.json`` at the end. Run it while the
-main proxy is running and the AC is provisioned:
+plugin is running and the AC is provisioned:
 
-    .venv/bin/python scripts/calibrate.py
+    lg-ac-calibrate
 """
 
 from __future__ import annotations

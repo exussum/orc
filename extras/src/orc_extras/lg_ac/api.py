@@ -18,13 +18,11 @@ from orc_extras.lg_ac import model as m
 
 # --- ThinQ2 TLV codec ---
 #
-# The field map (TLV ids, mode/fan codes, temp scaling) lives in fieldmap.json,
-# NOT here. Calibration writes that file; this just loads it. Override the path
-# with LG_AC_FIELDMAP.
-
-# One JSON file per device model, named <kind>.json (kind comes from the device's
+# The field map (TLV ids, mode/fan codes, temp scaling) lives in JSON, NOT here —
+# one file per device model at fieldmap/<kind>.json (kind comes from the device's
 # preDeploy payload, e.g. WIN_056905_WW). select_model() loads the map for the
 # connected device; an unknown model leaves the codec inert (capture-only).
+# Override the directory with LG_AC_FIELDMAP_DIR.
 _FIELDMAP_DIR = Path(os.environ.get("LG_AC_FIELDMAP_DIR") or Path(__file__).parent / "fieldmap")
 _active_model: str | None = None
 _fieldmap: dict[str, Any] = {}
@@ -210,8 +208,9 @@ def cert_response(pem: bytes) -> dict[str, object]:
 
 
 def deploy(device_id: str, mid: int, cmd: str = "completeProvisioning") -> dict[str, object]:
-    # Echo the phase the device asked for (preDeploy, then deploy). It drives the
-    # sequence itself once the response mid matches its request mid.
+    # Echo the phase the device asked for (preDeploy, then deploy); it drives the
+    # sequence itself. mid is a fresh id — the device doesn't require it to match
+    # its request.
     provisioning_type = cmd
     return {
         "did": device_id,
@@ -338,10 +337,4 @@ def sign_device_csr(csr_pem: bytes, device_id: str) -> bytes:
     public_key = cast(CertificatePublicKeyTypes, serialization.load_der_public_key(spki))
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, device_id)])
     cert = _sign(subject, public_key, [x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH])])
-    signed = cert.public_bytes(serialization.Encoding.PEM)
-    try:  # diagnostic: keep the last CSR + issued cert for inspection
-        Path("certs/last_csr.pem").write_bytes(csr_pem)
-        Path("certs/last_cert.pem").write_bytes(signed)
-    except OSError:
-        pass
-    return signed
+    return cert.public_bytes(serialization.Encoding.PEM)

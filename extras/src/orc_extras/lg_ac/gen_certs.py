@@ -1,6 +1,6 @@
 """Generate playground certs for the provisioning TLS listener and broker.
 
-Writes, under certs/: ca.{crt,key}, server-ca.{crt,key} (CA-signed),
+Writes, under certs/lg_ac/: ca.{crt,key}, server-ca.{crt,key} (CA-signed),
 server-selfsigned.{crt,key}. Server certs carry SAN, KeyUsage, and
 ExtendedKeyUsage(serverAuth, clientAuth) so picky embedded TLS clients accept
 them.
@@ -18,7 +18,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 CN = "common.lgthinq.com"
 DNS_SANS = ["work-laptop.spence.int.exussum.org", "common.lgthinq.com", "192.168.4.6"]
 IP_SANS = ["192.168.4.6"]
-CERTS = Path("certs")
+CERTS = Path("certs/lg_ac")
 _FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)
 _TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
 
@@ -96,7 +96,7 @@ def _server(
 
 
 def main() -> None:
-    CERTS.mkdir(exist_ok=True)
+    CERTS.mkdir(parents=True, exist_ok=True)
 
     ca_key = _key()
     ca_cert = (

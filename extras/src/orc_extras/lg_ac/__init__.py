@@ -4,8 +4,6 @@ Replaces LG's cloud: serves the device's enrollment over HTTP, runs the embedded
 MQTT broker it connects to, decodes its TLV state, and exposes control. The
 enrollment routes live on the ``web`` blueprint (mounted at ``/api/lg_ac/enroll``);
 nginx presents the LG cert on :443 and rewrites the device's root paths to it.
-Imports of ``orc.*`` are deferred into functions to avoid circular imports at
-config-load time.
 """
 
 import socket
