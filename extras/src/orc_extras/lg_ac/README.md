@@ -7,6 +7,13 @@ broker the AC connects to, decodes its binary TLV state, and exposes control.
 Calibrated for `WIN_056905_WW` (model `LW1522IVSM`); other models need a one-time
 calibration (see below).
 
+## Credit
+
+The ThinQ2 "clip" protocol (enrollment, the AABB/TLV framing, the `lime/devices`
+transport, and the field maps) was reverse-engineered by **anszom** in the
+**rethink** project — https://github.com/anszom/rethink. This plugin is a
+Python reimplementation of that work for orc.
+
 ## Quick start
 
 1. **Install + activate**: `uv pip install -e 'extras[lg_ac]'`, then add
