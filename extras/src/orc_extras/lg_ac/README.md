@@ -32,7 +32,9 @@ plugin 'LG AC' orc_extras.lg_ac
 ```
 
 Settings live in `src/plugins/orc_extras/lg_ac.orc` — set `mqtt_host` to this
-machine's LAN IP.
+machine's LAN IP and `fqdn` to this server's real FQDN. `fqdn` ships as the
+placeholder `lg-ac.example`; both the plugin (at startup) and `gen_certs` abort
+while it still ends in `.example`.
 
 ## Certificates (via BWS)
 

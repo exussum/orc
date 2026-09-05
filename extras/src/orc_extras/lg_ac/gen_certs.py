@@ -1,9 +1,10 @@
-"""Generate playground certs for the provisioning TLS listener and broker.
+"""Generate certs for the provisioning TLS listener and broker.
 
 Writes, under certs/lg_ac/: ca.{crt,key}, server-ca.{crt,key} (CA-signed),
 server-selfsigned.{crt,key}. Server certs carry SAN, KeyUsage, and
 ExtendedKeyUsage(serverAuth, clientAuth) so picky embedded TLS clients accept
-them.
+them. The server SAN includes this host's FQDN, read from the plugin config; run
+from the orc root.
 """
 
 import datetime
@@ -16,9 +17,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 CN = "common.lgthinq.com"
-DNS_SANS = ["work-laptop.spence.int.exussum.org", "common.lgthinq.com", "192.168.4.6"]
 IP_SANS = ["192.168.4.6"]
 CERTS = Path("certs/lg_ac")
+_CONFIG = Path("src/plugins/orc_extras/lg_ac.orc")
 _FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)
 _TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
 
@@ -54,14 +55,23 @@ def _write(stem: str, cert: x509.Certificate, key: rsa.RSAPrivateKey) -> None:
     )
 
 
-def _san() -> x509.SubjectAlternativeName:
-    entries: list[x509.GeneralName] = [x509.DNSName(h) for h in DNS_SANS]
+def _fqdn() -> str:
+    for line in _CONFIG.read_text().splitlines():
+        parts = line.split()
+        if parts[:2] == ["setting", "fqdn"]:
+            return parts[2]
+    raise SystemExit(f"no 'setting fqdn' line in {_CONFIG}")
+
+
+def _san(fqdn: str) -> x509.SubjectAlternativeName:
+    entries: list[x509.GeneralName] = [x509.DNSName(CN), x509.DNSName(fqdn)]
     entries += [x509.IPAddress(ipaddress.ip_address(ip)) for ip in IP_SANS]
     return x509.SubjectAlternativeName(entries)
 
 
 def _server(
     self_signed: bool,
+    fqdn: str,
     ca_cert: x509.Certificate | None = None,
     ca_key: rsa.RSAPrivateKey | None = None,
 ) -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
@@ -70,7 +80,7 @@ def _server(
     signer = key if self_signed else ca_key
     cert = (
         _base(_name(CN), issuer, key.public_key())
-        .add_extension(_san(), critical=False)
+        .add_extension(_san(fqdn), critical=False)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(
             x509.KeyUsage(
@@ -96,6 +106,9 @@ def _server(
 
 
 def main() -> None:
+    fqdn = _fqdn()
+    if fqdn.endswith(".example"):
+        raise SystemExit(f"set 'fqdn' in {_CONFIG} to this server's real FQDN before generating certs (still the .example placeholder)")
     CERTS.mkdir(parents=True, exist_ok=True)
 
     ca_key = _key()
@@ -120,10 +133,10 @@ def main() -> None:
     )
     _write("ca", ca_cert, ca_key)
 
-    ca_signed, ca_signed_key = _server(self_signed=False, ca_cert=ca_cert, ca_key=ca_key)
+    ca_signed, ca_signed_key = _server(self_signed=False, fqdn=fqdn, ca_cert=ca_cert, ca_key=ca_key)
     _write("server-ca", ca_signed, ca_signed_key)
 
-    self_signed, self_signed_key = _server(self_signed=True)
+    self_signed, self_signed_key = _server(self_signed=True, fqdn=fqdn)
     _write("server-selfsigned", self_signed, self_signed_key)
 
     print(f"wrote {CERTS}/ca.crt, server-ca.crt, server-selfsigned.crt (+ keys)")

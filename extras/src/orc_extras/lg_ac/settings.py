@@ -3,6 +3,7 @@ from typing import NamedTuple
 
 class Settings(NamedTuple):
     hostname: str  # advertised api host, e.g. common.lgthinq.com
+    fqdn: str  # this server's own FQDN, added as a cert SAN; a *.example value is the unset placeholder
     https_advertise: int  # port advertised for the api server (nginx :443)
     mqtt_host: str  # ip the device connects to for mqtt, e.g. 192.168.4.6
     mqtt_port: int  # local plain listener the proxy client uses

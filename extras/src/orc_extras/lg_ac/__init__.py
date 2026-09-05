@@ -53,6 +53,7 @@ def setup(ctx: AppContext) -> None:
                 settings.Settings,
                 types={
                     "hostname": Cast.fqdn,
+                    "fqdn": Cast.fqdn,
                     "https_advertise": Cast.int,
                     "mqtt_host": Cast.ip,
                     "mqtt_port": Cast.int,
@@ -63,6 +64,8 @@ def setup(ctx: AppContext) -> None:
         },
     )
     s = cfg.setting
+    if s.fqdn.endswith(".example"):
+        raise RuntimeError("lg_ac: set 'fqdn' in lg_ac.orc to this server's real FQDN (still the .example placeholder)")
     settings.set_current(s)
     secrets: Secrets = ctx.config.secrets
     api.configure(secrets[_SECRET_CA_CERT].encode(), secrets[_SECRET_CA_KEY].encode())
