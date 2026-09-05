@@ -11,7 +11,7 @@ from typing import Any
 from command_cfg import scalar
 
 from orc.loader import Cast, load_plugin_config
-from orc.model import AppContext, Secrets
+from orc.model import AppContext, LogSourceEnum, Secrets
 from orc_extras.lg_ac import api, settings, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
 from orc_extras.lg_ac.dal.capture import memory as capture
@@ -21,6 +21,12 @@ CONFIG = "orc_extras/lg_ac"
 GRAMMAR = """
 setting <key> <value>
 """
+
+
+class LogSource(LogSourceEnum):
+    LG_AC = "lg ac"
+
+
 _SECRET_CA_CERT = "LG_THINQ_CA_CERT"
 _SECRET_CA_KEY = "LG_THINQ_CA_KEY"
 _SECRET_SERVER_CERT = "LG_THINQ_SERVER_CERT"
@@ -55,6 +61,7 @@ def setup(ctx: AppContext) -> None:
     broker.start(s.mqtts_advertise, secrets[_SECRET_SERVER_CERT].encode(), secrets[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     if s.capture:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
+    thinq.set_event_listener(lambda msg: ctx.api.log(LogSource.LG_AC, msg))
     thinq.start("127.0.0.1", s.mqtt_port)
     ctx.api.set_ac_handler(_handle_ac)
 
