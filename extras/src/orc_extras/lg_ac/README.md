@@ -43,12 +43,12 @@ The AC requires a CA-signed server cert with `serverAuth` EKU, chaining to the C
 served at `/route/certificate`. Store four PEMs in Bitwarden Secrets under the
 `LG_THINQ_` namespace — each secret's **value is the PEM text itself**:
 
-| BWS secret             | value                          |
-| ---------------------- | ------------------------------ |
-| `LG_THINQ_CA_CERT`     | CA certificate (PEM)           |
-| `LG_THINQ_CA_KEY`      | CA private key (PEM)           |
+| BWS secret             | value                               |
+| ---------------------- | ----------------------------------- |
+| `LG_THINQ_CA_CERT`     | CA certificate (PEM)                |
+| `LG_THINQ_CA_KEY`      | CA private key (PEM)                |
 | `LG_THINQ_SERVER_CERT` | server certificate, CA-signed (PEM) |
-| `LG_THINQ_SERVER_KEY`  | server private key (PEM)       |
+| `LG_THINQ_SERVER_KEY`  | server private key (PEM)            |
 
 `gen_certs` produces them locally; paste each file's contents into the matching
 secret:
