@@ -13,6 +13,7 @@ from amqtt.broker import Broker
 
 _log = logging.getLogger(__name__)
 _thread: threading.Thread | None = None
+_ready = threading.Event()
 _server_pem: bytes = b""
 
 
@@ -102,6 +103,7 @@ def start(mqtts_port: int, cert_pem: bytes, key_pem: bytes, plain_port: int = 18
     async def _serve() -> None:
         broker = Broker(config)
         await broker.start()
+        _ready.set()  # listeners are bound; callers may connect
         await asyncio.Event().wait()  # keep the broker's listeners running
 
     def _run() -> None:
@@ -118,3 +120,4 @@ def start(mqtts_port: int, cert_pem: bytes, key_pem: bytes, plain_port: int = 18
     global _thread
     _thread = threading.Thread(target=_run, daemon=True)
     _thread.start()
+    _ready.wait(timeout=10)

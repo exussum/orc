@@ -6,8 +6,6 @@ enrollment routes live on the ``web`` blueprint (mounted at ``/api/lg_ac/enroll`
 nginx presents the LG cert on :443 and rewrites the device's root paths to it.
 """
 
-import socket
-import time
 from typing import Any
 
 from command_cfg import scalar
@@ -27,17 +25,6 @@ _SECRET_CA_CERT = "LG_THINQ_CA_CERT"
 _SECRET_CA_KEY = "LG_THINQ_CA_KEY"
 _SECRET_SERVER_CERT = "LG_THINQ_SERVER_CERT"
 _SECRET_SERVER_KEY = "LG_THINQ_SERVER_KEY"
-
-
-def _wait_for_port(host: str, port: int, timeout: float = 10.0) -> bool:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection((host, port), timeout=1):
-                return True
-        except OSError:
-            time.sleep(0.2)
-    return False
 
 
 def setup(ctx: AppContext) -> None:
@@ -68,7 +55,6 @@ def setup(ctx: AppContext) -> None:
     broker.start(s.mqtts_advertise, secrets[_SECRET_SERVER_CERT].encode(), secrets[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     if s.capture:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
-    _wait_for_port("127.0.0.1", s.mqtt_port)
     thinq.start("127.0.0.1", s.mqtt_port)
     ctx.api.set_ac_handler(_handle_ac)
 
