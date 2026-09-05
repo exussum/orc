@@ -26,8 +26,8 @@ ad_hoc append <name> <devices> <state>
 remote <device> <button> <event> <action>
 
 device define <type>
-device add <type> <id> <host> [--room=<room>] [--name=<name>]
-device only <type> [<id> <host>] [--room=<room>] [--name=<name>]
+device add <type> <id> <target> [--room=<room>] [--name=<name>]
+device only <type> [<id> <target>] [--room=<room>] [--name=<name>]
 device seal <type>
 
 highlight <name> <start> <stop>
@@ -111,6 +111,14 @@ def validate(config: SimpleNamespace) -> None:
 
 
 _ERR_PARAMS = "Invalid parameter {}={!r}"
+_FQDN_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")  # 1-63 chars, no leading/trailing hyphen
+
+
+def _is_fqdn(value: str) -> bool:
+    labels = value.split(".")
+    return len(value) <= 253 and len(labels) >= 2 and all(map(_FQDN_LABEL.fullmatch, labels))
+
+
 # "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
 # they render no button and are not auto-invoked, unlike the other sections.
 _VALID_SECTIONS = frozenset({"scene", "system", "device"})
@@ -182,6 +190,20 @@ class Cast:
         return int(value)
 
     @staticmethod
+    def bool(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> bool:
+        if value == "True":
+            return True
+        elif value == "False":
+            return False
+        raise ValueError(_ERR_PARAMS.format("bool", value))
+
+    @staticmethod
+    def fqdn(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> str:
+        if _is_fqdn(value):
+            return value
+        raise ValueError(_ERR_PARAMS.format("fqdn", value))
+
+    @staticmethod
     def section(value: str | None) -> str | None:
         if value is None:
             return None
@@ -210,10 +232,10 @@ def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any
             raise ValueError(f"Duplicate {label} in '{type_name}': {duplicates}")
     if type_name in ("Light", "Button"):
         members = {
-            name: (*zigbee_config.get(host, (-(i + 1), frozenset())), room, label) for i, (name, host, room, label) in enumerate(rows)
+            name: (*zigbee_config.get(target, (-(i + 1), frozenset())), room, label) for i, (name, target, room, label) in enumerate(rows)
         }
     else:
-        members = {name: (host, frozenset(), room, label) for name, host, room, label in rows}
+        members = {name: (target, frozenset(), room, label) for name, target, room, label in rows}
     # functional Enum API: mypy checks against the member-level __new__ rather than EnumMeta.__call__
     return m.DeviceEnum(type_name, members, module="orc")  # type: ignore[call-arg,arg-type,return-value]
 
@@ -226,14 +248,14 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
     elif args.define:
         members[args.type] = []
     elif args.only:
-        members[args.type] = [(args.id, args.host, args.room, args.name or args.id)] if args.id else []
+        members[args.type] = [(args.id, args.target, args.room, args.name or args.id)] if args.id else []
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     elif args.type not in members:
         raise ValueError(f"Unknown device type {args.type!r}: expected one of {list(members)}")
     elif args.seal:
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     else:
-        members[args.type].append((args.id, args.host, args.room, args.name or args.id))
+        members[args.type].append((args.id, args.target, args.room, args.name or args.id))
 
 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:

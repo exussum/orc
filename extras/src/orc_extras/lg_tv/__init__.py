@@ -2,7 +2,7 @@
 
 Registers the LGTV/WebOS device types, a dispatch handler (on/off via WebOS, with a
 BroadLink IR toggle to power on), a "TV" state row set, the pairing button's browser
-plugin (static/lgtv.js), and a boot hook to create its DB table.
+plugin (static/lg_tv.js), and a boot hook to create its DB table.
 """
 
 from pathlib import Path
@@ -10,9 +10,9 @@ from typing import Any
 
 import orc
 from orc import model as m
-from orc_extras.lgtv import plugins
-from orc_extras.lgtv.dal import sqlite
-from orc_extras.lgtv.plugins import pair_tv  # noqa: F401
+from orc_extras.lg_tv import plugins
+from orc_extras.lg_tv.dal import sqlite
+from orc_extras.lg_tv.plugins import pair_tv  # noqa: F401
 
 # orc.LGTV/WebOS/BroadLink are built at runtime from the registered device types; read
 # them through an Any view since mypy can't see the dynamic package attributes.
@@ -51,6 +51,6 @@ def declare(declarations: Any) -> None:
         dispatch={"LGTV": _dispatch},
         state_providers={"TV": tv_state},
         setup=[setup],
-        scripts=[Path(__file__).parent / "static" / "lgtv.js"],
+        scripts=[Path(__file__).parent / "static" / "lg_tv.js"],
         button_labels={"Pair LG TV": "Pair {device}"},
     )
