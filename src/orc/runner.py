@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import traceback
@@ -25,7 +26,24 @@ def flask() -> None:
     app.run(host="0.0.0.0", port=config.config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
+def _split_stderr() -> None:
+    """Python keeps stderr via a private dup; fd 2 itself goes to /dev/null.
+
+    Native libraries (onnxruntime, ALSA, JACK, …) spew to fd 2 directly and can't be
+    muted per-thread, while everything Python-side (print, logging, tracebacks) goes
+    through sys.stderr. Splitting them once at startup silences all C noise for good
+    without ever redirecting the stream Python logs to.
+    """
+    saved = os.dup(2)
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+    sys.stderr = os.fdopen(saved, "w", buffering=1)
+
+
 def web() -> None:
+    _split_stderr()
+
     class GunicornApp(BaseApplication):
         def load_config(self) -> None:
             self.cfg.set("workers", 1)

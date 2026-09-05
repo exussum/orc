@@ -10,7 +10,7 @@ import pyaudio
 
 from orc import model as m
 from orc.dal import system_volume
-from orc.decorators import audio_lock, silence_fd
+from orc.decorators import audio_lock
 
 _MODEL_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
@@ -18,11 +18,10 @@ _CONFIG_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onn
 
 @cache
 def _voice() -> Any:
-    with silence_fd(2):
-        from piper import PiperVoice
+    from piper import PiperVoice
 
-        # resources.files() yields a concrete Path here; piper's stub only accepts str | Path, not the broader Traversable
-        return PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
+    # resources.files() yields a concrete Path here; piper's stub only accepts str | Path, not the broader Traversable
+    return PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
 
 
 def alert(device: m.DeviceEnum, path: str) -> None:
@@ -50,8 +49,7 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
 def _find_output_device(serial: str) -> tuple[int, Any]:
     card_idx = system_volume.card_index_for_serial(serial)
     marker = f"(hw:{card_idx},"
-    with silence_fd(2):
-        pa = pyaudio.PyAudio()
+    pa = pyaudio.PyAudio()
     try:
         for i in range(pa.get_device_count()):
             info = pa.get_device_info_by_index(i)
@@ -63,8 +61,7 @@ def _find_output_device(serial: str) -> tuple[int, Any]:
 
 
 def list_devices_cli() -> None:
-    with silence_fd(2):
-        pa = pyaudio.PyAudio()
+    pa = pyaudio.PyAudio()
     try:
         infos = [pa.get_device_info_by_index(i) for i in range(pa.get_device_count())]
     finally:
@@ -80,7 +77,7 @@ def list_devices_cli() -> None:
 def _play_stream(device: m.DeviceEnum, chunks: Iterable[bytes], channels: int, src_rate: int) -> None:
     idx, info = _find_output_device(device.value)
     dst_rate = int(info["defaultSampleRate"])
-    with audio_lock, silence_fd(2):
+    with audio_lock:
         pa = pyaudio.PyAudio()
         try:
             stream = pa.open(format=pyaudio.paInt16, channels=channels, rate=dst_rate, output_device_index=idx, output=True)
