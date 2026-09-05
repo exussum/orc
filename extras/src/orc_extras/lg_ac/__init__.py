@@ -13,7 +13,7 @@ from typing import Any
 from command_cfg import scalar
 
 from orc.loader import Cast, load_plugin_config
-from orc.model import AppContext, DeviceStatus, Secrets
+from orc.model import AppContext, Secrets
 from orc_extras.lg_ac import api, settings, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
 from orc_extras.lg_ac.dal.capture import file as capture
@@ -76,17 +76,11 @@ def setup(ctx: AppContext) -> None:
     thinq.start("127.0.0.1", s.mqtt_port)
 
 
-def ac_state() -> list[DeviceStatus]:
-    device_id = thinq.default_device()
-    if device_id is None:
-        return []
-    state = thinq.fetch_state(device_id)
-    return [DeviceStatus(name="Air Conditioner", label="Air Conditioner", details=dict(state._asdict()))]
-
-
 def declare(declarations: Any) -> None:
+    # No state provider: the AC shows on the /device/ page via orc's built-in `AC`
+    # device type, not on the system page. This plugin only serves enrollment and
+    # the command channel.
     declarations.declare(
         setup=[setup],
-        state_providers={"Air Conditioner": ac_state},
         blueprints={"enroll": web.enroll},
     )

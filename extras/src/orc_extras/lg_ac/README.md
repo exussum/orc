@@ -87,8 +87,9 @@ The broker binds `:8883` directly — the AC connects to it without nginx.
 
 ## Control
 
-- State shows in orc's dashboard as **Air Conditioner** (state provider).
-- Set it: `POST /api/lg_ac/enroll/command` with e.g.
+- The AC appears on the **/device/** page via orc's built-in `AC` device type (not
+  the system page). This plugin serves enrollment and the command channel only.
+- Set it directly: `POST /api/lg_ac/enroll/command` with e.g.
   `{"mode":"cool","temperature":25,"fan_mode":"high"}`. A setpoint frame must
   include `mode`, so send all three fields together.
 - Temperatures are Celsius (the device stores °C×2; it displays °F itself).
