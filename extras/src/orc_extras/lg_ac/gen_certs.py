@@ -64,7 +64,9 @@ def _setting(key: str) -> str:
 
 
 def _san(fqdn: str, mqtt_ip: str) -> x509.SubjectAlternativeName:
-    entries: list[x509.GeneralName] = [x509.DNSName(CN), x509.DNSName(fqdn)]
+    # the AC connects to the broker by IP string and matches it against dNSName
+    # entries only, so the IP goes in as a DNSName as well as an IPAddress
+    entries: list[x509.GeneralName] = [x509.DNSName(CN), x509.DNSName(fqdn), x509.DNSName(mqtt_ip)]
     entries.append(x509.IPAddress(ipaddress.ip_address(mqtt_ip)))
     return x509.SubjectAlternativeName(entries)
 
