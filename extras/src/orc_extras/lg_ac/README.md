@@ -127,10 +127,15 @@ device add AC bedroom 6c9aff96-…-B --room Bedroom       --name 'Bedroom AC'
 device seal AC
 ```
 
-Each unit is its own card on `/device/`.
+Each unit is its own card on `/device/`; `_handle_ac` routes it to the matching
+clip id via the AC device's value. (An AC whose target isn't an enrolled clip id
+falls back to the single connected device.)
 
 ## Control
 
+- The `/device/` AC card's mode/temp/fan controls drive this plugin: `setup()`
+  registers `api.set_ac_handler`, so `ac_command` publishes to the AC instead of
+  the (removed) broadlink blaster. The card's °F is converted to °C.
 - Or set it directly: `POST /api/lg_ac/enroll/command` with e.g.
   `{"mode":"cool","temperature":25,"fan_mode":"high"}`. A setpoint frame must
   include `mode`, so send all three fields together.
