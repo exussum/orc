@@ -88,8 +88,10 @@ The broker binds `:8883` directly — the AC connects to it without nginx.
 ## Control
 
 - The AC appears on the **/device/** page via orc's built-in `AC` device type (not
-  the system page). This plugin serves enrollment and the command channel only.
-- Set it directly: `POST /api/lg_ac/enroll/command` with e.g.
+  the system page). Its mode/temp/fan controls drive this plugin: `setup()`
+  registers `api.set_ac_handler`, so `ac_command` publishes to the AC instead of
+  the (removed) broadlink blaster. The card's °F is converted to °C.
+- Or set it directly: `POST /api/lg_ac/enroll/command` with e.g.
   `{"mode":"cool","temperature":25,"fan_mode":"high"}`. A setpoint frame must
   include `mode`, so send all three fields together.
 - Temperatures are Celsius (the device stores °C×2; it displays °F itself).

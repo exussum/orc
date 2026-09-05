@@ -432,6 +432,8 @@ class Registry:
     state_providers: dict[str, Callable[[], Any]]
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
+    # Set by a setup hook (``api.set_ac_handler``); drives ``api.ac_command``.
+    ac_handler: Callable[["DeviceEnum", str | None, str | None, str | None, int | None], None] | None = None
 
 
 def resolve_time(value: str) -> time | str:
