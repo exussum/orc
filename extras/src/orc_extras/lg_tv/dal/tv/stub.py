@@ -1,5 +1,5 @@
 from orc.model import DeviceEnum
-from orc_extras.lgtv.dal.sqlite import Connection
+from orc_extras.lg_tv.dal.sqlite import Connection
 
 
 def pair(connection: Connection, hostname: str) -> str | None:
