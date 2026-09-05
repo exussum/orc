@@ -5,6 +5,9 @@ the latest raw TLV values per device from ``clip/message/devices/<did>`` (decode
 on read), answers provisioning on ``clip/provisioning/devices/<did>``, and sends
 commands downstream on ``lime/devices/<did>``. Modeled after orc's hubitat MQTT
 subscriber: module-level client, module-level caches, listeners on the mqtt thread.
+
+The clip transport (the upstream/downstream topics and the JSON ``packet``
+envelope) is from anszom's rethink: https://github.com/anszom/rethink.
 """
 
 from __future__ import annotations
