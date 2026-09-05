@@ -62,10 +62,10 @@ setting foo_backend  orc_extras.example.dal.foo.acme
 # setup(): Cast.module(s.foo_backend) -> stored on Runtime, typed FooService
 ```
 
-**B — `--backend` on the `plugin` line** (`lgtv`): for a plugin with no config
+**B — `--backend` on the `plugin` line** (`lg_tv`): for a plugin with no config
 file of its own; fetched via `orc.config.plugin_for(...).backend`.
 ```
-plugin 'Pair LG TV' orc_extras.lgtv pair_tv --section device --backend orc_extras.lgtv.dal.tv.webos
+plugin 'Pair LG TV' orc_extras.lg_tv pair_tv --section device --backend orc_extras.lg_tv.dal.tv.webos
 ```
 
 Prefer A unless the backend naturally belongs to a `plugin` line.
