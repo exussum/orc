@@ -3,8 +3,8 @@
 Writes, under certs/lg_ac/: ca.{crt,key}, server-ca.{crt,key} (CA-signed),
 server-selfsigned.{crt,key}. Server certs carry SAN, KeyUsage, and
 ExtendedKeyUsage(serverAuth, clientAuth) so picky embedded TLS clients accept
-them. The server SAN includes this host's FQDN, read from the plugin config; run
-from the orc root.
+them. The server SAN includes the FQDN and the mqtt_host IP the device connects
+to, both read from the plugin config; run from the orc root.
 """
 
 import datetime
@@ -17,7 +17,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 CN = "common.lgthinq.com"
-IP_SANS = ["192.168.4.6"]
 CERTS = Path("certs/lg_ac")
 _CONFIG = Path("src/plugins/orc_extras/lg_ac.orc")
 _FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)
@@ -55,23 +54,24 @@ def _write(stem: str, cert: x509.Certificate, key: rsa.RSAPrivateKey) -> None:
     )
 
 
-def _fqdn() -> str:
+def _setting(key: str) -> str:
     for line in _CONFIG.read_text().splitlines():
         parts = line.split()
-        if parts[:2] == ["setting", "fqdn"]:
+        if parts[:2] == ["setting", key]:
             return parts[2]
-    raise SystemExit(f"no 'setting fqdn' line in {_CONFIG}")
+    raise SystemExit(f"no 'setting {key}' line in {_CONFIG}")
 
 
-def _san(fqdn: str) -> x509.SubjectAlternativeName:
+def _san(fqdn: str, mqtt_ip: str) -> x509.SubjectAlternativeName:
     entries: list[x509.GeneralName] = [x509.DNSName(CN), x509.DNSName(fqdn)]
-    entries += [x509.IPAddress(ipaddress.ip_address(ip)) for ip in IP_SANS]
+    entries.append(x509.IPAddress(ipaddress.ip_address(mqtt_ip)))
     return x509.SubjectAlternativeName(entries)
 
 
 def _server(
     self_signed: bool,
     fqdn: str,
+    mqtt_ip: str,
     ca_cert: x509.Certificate | None = None,
     ca_key: rsa.RSAPrivateKey | None = None,
 ) -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
@@ -80,7 +80,7 @@ def _server(
     signer = key if self_signed else ca_key
     cert = (
         _base(_name(CN), issuer, key.public_key())
-        .add_extension(_san(fqdn), critical=False)
+        .add_extension(_san(fqdn, mqtt_ip), critical=False)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(
             x509.KeyUsage(
@@ -106,7 +106,8 @@ def _server(
 
 
 def main() -> None:
-    fqdn = _fqdn()
+    fqdn = _setting("fqdn")
+    mqtt_ip = _setting("mqtt_host")
     if fqdn.endswith(".example"):
         raise SystemExit(f"set 'fqdn' in {_CONFIG} to this server's real FQDN before generating certs (still the .example placeholder)")
     CERTS.mkdir(parents=True, exist_ok=True)
@@ -133,10 +134,10 @@ def main() -> None:
     )
     _write("ca", ca_cert, ca_key)
 
-    ca_signed, ca_signed_key = _server(self_signed=False, fqdn=fqdn, ca_cert=ca_cert, ca_key=ca_key)
+    ca_signed, ca_signed_key = _server(self_signed=False, fqdn=fqdn, mqtt_ip=mqtt_ip, ca_cert=ca_cert, ca_key=ca_key)
     _write("server-ca", ca_signed, ca_signed_key)
 
-    self_signed, self_signed_key = _server(self_signed=True, fqdn=fqdn)
+    self_signed, self_signed_key = _server(self_signed=True, fqdn=fqdn, mqtt_ip=mqtt_ip)
     _write("server-selfsigned", self_signed, self_signed_key)
 
     print(f"wrote {CERTS}/ca.crt, server-ca.crt, server-selfsigned.crt (+ keys)")
