@@ -42,10 +42,21 @@ _client: mqtt.Client | None = None  # standing client, retained for publishing c
 # first-seen order, so default_device() is the last key.
 _raw: LockedDict[str, dict[int, int]] = LockedDict()  # merged latest TLV values per device
 _raw_listeners: list[Callable[[str, bytes], None]] = []  # every inbound message, undecoded
+_event_listener: Callable[[str], None] | None = None  # major events (enrollment, state changes)
 
 
 def add_raw_listener(fn: Callable[[str, bytes], None]) -> None:
     _raw_listeners.append(fn)
+
+
+def set_event_listener(fn: Callable[[str], None]) -> None:
+    global _event_listener
+    _event_listener = fn
+
+
+def _event(msg: str) -> None:
+    if _event_listener is not None:
+        _event_listener(msg)
 
 
 def _seen(device_id: str) -> None:
@@ -128,6 +139,7 @@ def _receive_message(topic: str, payload: bytes) -> None:
         return
     cmd = msg.get("cmd")
     if cmd == "completeProvisioning_ack":
+        _event(f"AC {device_id[:8]} online")
         _seen(device_id)
         _poll(device_id)
     elif cmd == "device_packet":
@@ -137,9 +149,24 @@ def _receive_message(topic: str, payload: bytes) -> None:
         if pkt is None:
             return
         values = {f.type_id: f.value for f in pkt.fields}
+        old = _raw.get(device_id) or {}
         _raw.update(device_id, lambda cur: {**(cur or {}), **values})
+        _event_state_changes(device_id, old, {**old, **values})
     elif cmd == "req_timesync":
         _send_timesync(device_id)
+
+
+# current_temperature is deliberately excluded: it drifts constantly and would flood the log
+def _event_state_changes(device_id: str, old: dict[int, int], new: dict[int, int]) -> None:
+    before = api.state_from_raw(old)
+    after = api.state_from_raw(new)
+    changes = [
+        f"{field} {getattr(before, field)} → {getattr(after, field)}"
+        for field in ("power", "mode", "fan_mode", "temperature")
+        if getattr(before, field) is not None and getattr(before, field) != getattr(after, field)
+    ]
+    if changes:
+        _event(f"AC {device_id[:8]}: {', '.join(changes)}")
 
 
 def _send_timesync(device_id: str) -> None:
@@ -162,6 +189,9 @@ def _receive_provisioning(topic: str, payload: bytes) -> None:
     model = incoming.get("kind")
     if model and api.active_model() != model and not api.select_model(model):
         _log.warning("no field map for model %s; capture-only until one exists", model)
+        _event(f"AC {device_id[:8]}: no field map for model {model}; capture-only")
+    if device_cmd == "deploy":
+        _event(f"AC {device_id[:8]} enrolled (model {model})")
     _seen(device_id)
     if _client is not None:
         response = api.deploy(device_id, int(time.time() * 1000), device_cmd)
