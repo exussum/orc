@@ -101,7 +101,7 @@ logs a warning and runs **capture-only** (state won't decode) until a map exists
 
 To calibrate a new model:
 
-1. Enable capture: set `capture true` in `lg_ac.orc`, restart. This starts a fresh
+1. Enable capture: set `capture True` in `lg_ac.orc`, restart. This starts a fresh
    `capture.jsonl` wire log.
 2. Run the calibrator while the plugin is up and the AC is enrolled:
    ```
@@ -109,6 +109,6 @@ To calibrate a new model:
    ```
    It walks you through your modes, fan speeds, and the temperature range (low→high)
    and writes `fieldmap/<MODEL>.json`.
-3. Set `capture false` again.
+3. Set `capture False` again.
 
 Same model as an existing map → it just works, no calibration.
