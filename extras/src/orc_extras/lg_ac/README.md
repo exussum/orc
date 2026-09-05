@@ -37,20 +37,24 @@ machine's LAN IP.
 ## Certificates (via BWS)
 
 The AC requires a CA-signed server cert with `serverAuth` EKU, chaining to the CA
-served at `/route/certificate`. Generate them, then store the four PEMs in
-Bitwarden Secrets under the `LG_THINQ_` namespace. Each secret's **value is the
-PEM contents** (paste the whole file), not a path:
+served at `/route/certificate`. Store four PEMs in Bitwarden Secrets under the
+`LG_THINQ_` namespace — each secret's **value is the PEM text itself**:
+
+| BWS secret             | value                          |
+| ---------------------- | ------------------------------ |
+| `LG_THINQ_CA_CERT`     | CA certificate (PEM)           |
+| `LG_THINQ_CA_KEY`      | CA private key (PEM)           |
+| `LG_THINQ_SERVER_CERT` | server certificate, CA-signed (PEM) |
+| `LG_THINQ_SERVER_KEY`  | server private key (PEM)       |
+
+`gen_certs` produces them locally; paste each file's contents into the matching
+secret:
 
 ```
-python -m orc_extras.lg_ac.gen_certs        # writes certs/lg_ac/{ca,server-ca,...}
+python -m orc_extras.lg_ac.gen_certs
+# ca.crt → LG_THINQ_CA_CERT, ca.key → LG_THINQ_CA_KEY,
+# server-ca.crt → LG_THINQ_SERVER_CERT, server-ca.key → LG_THINQ_SERVER_KEY
 ```
-
-| BWS secret               | value = contents of         |
-| ------------------------ | --------------------------- |
-| `LG_THINQ_CA_CERT`       | `certs/lg_ac/ca.crt`        |
-| `LG_THINQ_CA_KEY`        | `certs/lg_ac/ca.key`        |
-| `LG_THINQ_SERVER_CERT`   | `certs/lg_ac/server-ca.crt` |
-| `LG_THINQ_SERVER_KEY`    | `certs/lg_ac/server-ca.key` |
 
 At boot the plugin reads these PEMs from BWS and holds them in memory. The broker's
 TLS context is built from the in-memory server PEM via a temp file that exists only
