@@ -454,13 +454,15 @@ def tv_toggle(bl_device: m.DeviceEnum) -> None:
     config.providers.blaster.tv_toggle(bl_device, config.settings.broadlink_codes)
 
 
-def ac_command(
-    bl_device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None
-) -> None:
-    if state == m.OFF:
-        config.providers.blaster.ac_off(bl_device, config.settings.broadlink_codes)
-    else:
-        config.providers.blaster.set_ac(bl_device, config.settings.broadlink_codes, mode or "cool", fan or "low", temp or 75)
+def set_ac_handler(handler: Callable[[m.DeviceEnum, str | None, str | None, str | None, int | None], None]) -> None:
+    config.registry.ac_handler = handler
+
+
+def ac_command(device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None) -> None:
+    handler = config.registry.ac_handler
+    if handler is None:
+        raise RuntimeError("no AC handler registered; enable an AC plugin (e.g. orc_extras.lg_ac)")
+    handler(device, state, mode, fan, temp)
 
 
 def device_command(id: str, state: str | None) -> None:
