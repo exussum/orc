@@ -1,28 +1,14 @@
 # Separate from api.py to avoid a circular import: api.py imports these decorators,
 # so anything that imports api must not live here.
 
-import contextlib
-import os
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
 from orc import model as m
 
 audio_lock = threading.Lock()
-
-
-@contextlib.contextmanager
-def silence_fd(fd: int) -> Iterator[None]:
-    saved = os.dup(fd)
-    with open(os.devnull, "w") as devnull:
-        os.dup2(devnull.fileno(), fd)
-        try:
-            yield
-        finally:
-            os.dup2(saved, fd)
-            os.close(saved)
 
 
 def requires_ctx[**P, R](f: Callable[P, R]) -> Callable[P, R]:

@@ -1,3 +1,4 @@
+import logging
 import socket
 import time
 from collections.abc import Iterator
@@ -10,7 +11,8 @@ import yt_dlp
 
 from orc import model as m
 from orc.dal.chromecast import MAX_CHARS
-from orc.decorators import silence_fd
+
+logging.getLogger("pychromecast.controllers").addFilter(lambda record: "no session is active" not in record.getMessage())
 
 _YDL_OPTS: dict[str, Any] = {
     "format": "bestaudio/best",  # Request the highest quality audio stream
@@ -72,9 +74,8 @@ def pause(device: m.DeviceEnum) -> None:
 
 def play(device: m.DeviceEnum, stream_url: m.MediaUrl, title: str) -> None:
     with _cast(device) as cast:
-        # Reset so play_media loads into a fresh receiver. silence_fd(2) swallows
-        # pychromecast's "no session is active" warning when nothing is playing.
-        with silence_fd(2), suppress(Exception):
+        # Reset so play_media loads into a fresh receiver.
+        with suppress(Exception):
             cast.media_controller.stop()
         if cast.status.app_id:
             cast.quit_app()
