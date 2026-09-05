@@ -64,9 +64,7 @@ class ChromecastService(Protocol):
 
 
 class BlasterService(Protocol):
-    def set_ac(self, device: DeviceEnum, codes_file: str, mode: str, fan: str, temp: int) -> None: ...
     def tv_toggle(self, device: DeviceEnum, codes_file: str) -> None: ...
-    def ac_off(self, device: DeviceEnum, codes_file: str) -> None: ...
 
 
 class HubitatService(Protocol):

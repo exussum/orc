@@ -1,7 +1,7 @@
 from typing import Protocol
 
 from orc.model import DeviceEnum
-from orc_extras.lgtv.dal.sqlite import Connection
+from orc_extras.lg_tv.dal.sqlite import Connection
 
 
 class WebOsBackend(Protocol):

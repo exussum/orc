@@ -9,3 +9,8 @@ dist/
 dev.sh
 pylock.toml
 scripts/deploy.env
+
+# built at wheel-build (hatch_build.py) and best-effort on dev startup
+src/orc/static/tailwind.min.css
+
+plan.md
