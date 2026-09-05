@@ -85,11 +85,11 @@ the scheduler injects the context as a `ctx` keyword argument at run time.
 Add a `plugin` line to `$ORC_CONFIG_DIR/config.orc`: a display name, the
 plugin's package, an optional function name (imported from the package
 itself, so it must be re-exported there — for example
-`from orc_extras.lgtv.plugins import pair_tv` makes the bare name `pair_tv`
+`from orc_extras.lg_tv.plugins import pair_tv` makes the bare name `pair_tv`
 resolve), section (defaults to `scene`), icon, and delay:
 
 ```
-plugin 'Pair LG TV' orc_extras.lgtv pair_tv --section device --icon tv
+plugin 'Pair LG TV' orc_extras.lg_tv pair_tv --section device --icon tv
 ```
 
 ## 3. Install it
