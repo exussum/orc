@@ -9,6 +9,7 @@ to, both read from the plugin config; run from the orc root.
 
 import datetime
 import ipaddress
+import socket
 from pathlib import Path
 
 from cryptography import x509
@@ -107,9 +108,9 @@ def _server(
 
 def main() -> None:
     fqdn = _setting("fqdn")
-    mqtt_ip = _setting("mqtt_host")
     if fqdn.endswith(".example"):
         raise SystemExit(f"set 'fqdn' in {_CONFIG} to this server's real FQDN before generating certs (still the .example placeholder)")
+    mqtt_ip = socket.gethostbyname(fqdn)  # the device connects to the broker by IP
     CERTS.mkdir(parents=True, exist_ok=True)
 
     ca_key = _key()

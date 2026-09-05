@@ -1,5 +1,4 @@
 import importlib
-import ipaddress
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -196,14 +195,6 @@ class Cast:
         if _FQDN_RE.match(value):
             return value
         raise ValueError(_ERR_PARAMS.format("fqdn", value))
-
-    @staticmethod
-    def ip(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> str:
-        try:
-            ipaddress.ip_address(value)
-        except ValueError:
-            raise ValueError(_ERR_PARAMS.format("ip", value)) from None
-        return value
 
     @staticmethod
     def section(value: str | None) -> str | None:

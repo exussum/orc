@@ -55,7 +55,6 @@ def setup(ctx: AppContext) -> None:
                     "hostname": Cast.fqdn,
                     "fqdn": Cast.fqdn,
                     "https_advertise": Cast.int,
-                    "mqtt_host": Cast.ip,
                     "mqtt_port": Cast.int,
                     "mqtts_advertise": Cast.int,
                     "capture": Cast.bool,

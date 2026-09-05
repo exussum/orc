@@ -31,8 +31,9 @@ In `src/config.orc`:
 plugin 'LG AC' orc_extras.lg_ac
 ```
 
-Settings live in `src/plugins/orc_extras/lg_ac.orc` — set `mqtt_host` to this
-machine's LAN IP and `fqdn` to this server's real FQDN. `fqdn` ships as the
+Settings live in `src/plugins/orc_extras/lg_ac.orc` — set `fqdn` to this server's
+real FQDN (it must resolve to the LAN IP the AC reaches; that IP is what the device
+uses for MQTT and is baked into the server cert's SAN). `fqdn` ships as the
 placeholder `lg-ac.example`; both the plugin (at startup) and `gen_certs` abort
 while it still ends in `.example`.
 

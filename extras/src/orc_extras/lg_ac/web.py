@@ -5,6 +5,8 @@ the domain root (``/route`` etc.); nginx terminates TLS on :443 with the LG
 CA-signed cert and rewrites those root paths onto this blueprint.
 """
 
+import socket
+
 from flask import Blueprint, jsonify, request
 from flask.wrappers import Response
 
@@ -17,7 +19,8 @@ enroll = Blueprint("lg_ac", __name__)
 @enroll.get("/route")
 def route() -> Response:
     s = settings.current()
-    return jsonify(api.route(s.hostname, s.https_advertise, s.mqtt_host, s.mqtts_advertise))
+    mqtt_ip = socket.gethostbyname(s.fqdn)  # the device connects to the broker by IP
+    return jsonify(api.route(s.hostname, s.https_advertise, mqtt_ip, s.mqtts_advertise))
 
 
 @enroll.get("/route/certificate")
