@@ -1,15 +1,15 @@
 from typing import TYPE_CHECKING, cast
 
 import orc
-import orc_extras.lgtv
+import orc_extras.lg_tv
 from orc.loader import resolve_backend
 from orc.model import AppContext, DeviceEnum, LogEntry
-from orc_extras.lgtv.dal.interfaces import WebOsBackend
-from orc_extras.lgtv.dal.sqlite import Connection
+from orc_extras.lg_tv.dal.interfaces import WebOsBackend
+from orc_extras.lg_tv.dal.sqlite import Connection
 
 
 def _backend() -> WebOsBackend:
-    return cast(WebOsBackend, resolve_backend(orc.config.plugin_for(orc_extras.lgtv).backend))
+    return cast(WebOsBackend, resolve_backend(orc.config.plugin_for(orc_extras.lg_tv).backend))
 
 
 def pair(connection: Connection, hostname: str) -> str | None:
@@ -29,7 +29,7 @@ def pair_tv(ctx: AppContext, device: str, *, entry: LogEntry) -> None:
 
 
 if TYPE_CHECKING:
-    from orc_extras.lgtv.dal.tv import stub, webos
+    from orc_extras.lg_tv.dal.tv import stub, webos
 
     _real: WebOsBackend = webos
     _stub: WebOsBackend = stub
