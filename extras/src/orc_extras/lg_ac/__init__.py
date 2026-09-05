@@ -70,6 +70,29 @@ def setup(ctx: AppContext) -> None:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
     _wait_for_port("127.0.0.1", s.mqtt_port)
     thinq.start("127.0.0.1", s.mqtt_port)
+    ctx.api.set_ac_handler(_handle_ac)
+
+
+def _handle_ac(device: Any, state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None:
+    """Drive the AC from orc's /device/ page AC card (mode/fan/temp in °F).
+
+    The AC device's value is its clip id (`device add AC <name> <clip-uuid>` in
+    config); an unbound `device only AC` falls back to the single connected device.
+    """
+    device_id: str | None = str(device.value)
+    if device_id not in thinq.devices():
+        device_id = thinq.default_device()
+    if device_id is None:
+        return
+    if state == "off":
+        thinq.publish_command(device_id, {"mode": "off"})
+        return
+    values: dict[str, object] = {"mode": mode or "cool"}
+    if fan:
+        values["fan_mode"] = fan
+    if temp is not None:
+        values["temperature"] = round((temp - 32) * 5 / 9, 1)  # UI is °F; the codec wants °C
+    thinq.publish_command(device_id, values)
 
 
 def declare(declarations: Any) -> None:
