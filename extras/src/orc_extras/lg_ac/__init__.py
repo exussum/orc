@@ -13,7 +13,7 @@ from typing import Any
 from command_cfg import scalar
 
 from orc.loader import Cast, load_plugin_config
-from orc.model import AppContext, DeviceStatus
+from orc.model import AppContext, DeviceStatus, Secrets
 from orc_extras.lg_ac import api, settings, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
 from orc_extras.lg_ac.dal.capture import file as capture
@@ -24,6 +24,12 @@ GRAMMAR = """
 setting <key> <value>
 """
 _CAPTURE_PATH = "capture.jsonl"
+
+# TLS material lives in Bitwarden Secrets (BWS), namespaced LG_THINQ_*.
+_SECRET_CA_CERT = "LG_THINQ_CA_CERT"
+_SECRET_CA_KEY = "LG_THINQ_CA_KEY"
+_SECRET_SERVER_CERT = "LG_THINQ_SERVER_CERT"
+_SECRET_SERVER_KEY = "LG_THINQ_SERVER_KEY"
 
 
 def _wait_for_port(host: str, port: int, timeout: float = 10.0) -> bool:
@@ -58,8 +64,9 @@ def setup(ctx: AppContext) -> None:
     )
     s = cfg.setting
     settings.set_current(s)
-    api.configure(s.ca_cert, s.ca_key)
-    broker.start(s.mqtts_advertise, s.ca_cert, s.server_cert, s.server_key, s.mqtt_port)
+    secrets: Secrets = ctx.config.secrets
+    api.configure(secrets[_SECRET_CA_CERT].encode(), secrets[_SECRET_CA_KEY].encode())
+    broker.start(s.mqtts_advertise, secrets[_SECRET_SERVER_CERT].encode(), secrets[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     if s.capture:
         capture.configure(_CAPTURE_PATH)
         thinq.add_raw_listener(capture.record)

@@ -7,10 +7,6 @@ class Settings(NamedTuple):
     mqtt_host: str  # ip the device connects to for mqtt, e.g. 192.168.4.6
     mqtt_port: int  # local plain listener the proxy client uses
     mqtts_advertise: int  # tls port the device connects to (broker)
-    ca_cert: str
-    ca_key: str
-    server_cert: str
-    server_key: str
     capture: bool = False
 
 

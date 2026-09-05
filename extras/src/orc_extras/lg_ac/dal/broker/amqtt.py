@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import ssl
+import tempfile
 import threading
 from typing import Any
 
 from amqtt.broker import Broker
 
 _thread: threading.Thread | None = None
+_server_pem: bytes = b""  # server cert + key, held in memory (never persisted)
 
 
 def _patch_mqtt31() -> None:
@@ -34,23 +38,27 @@ def _patch_mqtt31() -> None:
     ConnectVariableHeader._lg_ac_patched = True
 
 
-def _patch_accept_any_client_cert() -> None:
-    """Don't validate the device's client cert.
+def _patch_ssl_context_from_memory() -> None:
+    """Build the listener's TLS context from the in-memory server PEM.
 
-    amqtt hardcodes verify_mode=CERT_OPTIONAL, which fails the TLS handshake when
-    the device presents a client cert not signed by our CA. We don't need mTLS
-    from the device (it's on our own network), so force CERT_NONE.
+    amqtt's ``_create_ssl_context`` reads ``certfile``/``keyfile`` off disk and sets
+    verify_mode=CERT_OPTIONAL. We hold the cert+key in memory (from BWS), so replace
+    it: load the chain via a temp file that exists only for the ``load_cert_chain``
+    call, and force CERT_NONE — we don't validate the device's client cert (it's on
+    our own network).
     """
-    import ssl
-
-    from amqtt.broker import Broker
-
     if getattr(Broker, "_lg_ac_cert_patched", False):
         return
-    original = Broker._create_ssl_context
 
-    def _create_ssl_context(listener: Any) -> Any:
-        context = original(listener)
+    def _create_ssl_context(listener: Any) -> ssl.SSLContext:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        fd, path = tempfile.mkstemp(prefix="lg_ac_", suffix=".pem")
+        try:
+            os.write(fd, _server_pem)
+            os.close(fd)
+            context.load_cert_chain(path)
+        finally:
+            os.unlink(path)
         context.verify_mode = ssl.CERT_NONE
         return context
 
@@ -58,14 +66,16 @@ def _patch_accept_any_client_cert() -> None:
     Broker._lg_ac_cert_patched = True
 
 
-def start(mqtts_port: int, cafile: str, certfile: str, keyfile: str, plain_port: int = 1883) -> None:
+def start(mqtts_port: int, cert_pem: bytes, key_pem: bytes, plain_port: int = 1883) -> None:
     """Run the embedded broker on a background asyncio loop.
 
-    The device connects over TLS on `mqtts_port` presenting our CA-signed server
-    cert; its own client cert is accepted without validation (see
-    _patch_accept_any_client_cert). Our paho client connects on the plain
-    localhost listener.
+    The device connects over TLS on `mqtts_port`, where we present the server cert
+    (cert_pem + key_pem, kept in memory); its own client cert is accepted without
+    validation. Our paho client connects on the plain localhost listener.
     """
+    global _server_pem
+    _server_pem = cert_pem.rstrip() + b"\n" + key_pem.rstrip() + b"\n"
+
     # "default" is amqtt's template listener that others inherit from — keep it
     # PLAIN (our local client), and override ssl only on the named device listener.
     config = {
@@ -78,9 +88,6 @@ def start(mqtts_port: int, cafile: str, certfile: str, keyfile: str, plain_port:
                 "type": "tcp",
                 "bind": f"0.0.0.0:{mqtts_port}",
                 "ssl": True,
-                "cafile": cafile,
-                "certfile": certfile,
-                "keyfile": keyfile,
             },
         },
         "sys_interval": 0,
@@ -89,7 +96,7 @@ def start(mqtts_port: int, cafile: str, certfile: str, keyfile: str, plain_port:
 
     logging.getLogger("amqtt").setLevel(logging.WARNING)
     _patch_mqtt31()
-    _patch_accept_any_client_cert()
+    _patch_ssl_context_from_memory()
 
     async def _serve() -> None:
         broker = Broker(config)

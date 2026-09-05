@@ -240,10 +240,10 @@ _VALID_TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
 _ca: tuple[x509.Certificate, rsa.RSAPrivateKey] | None = None
 
 
-def configure(ca_cert: str, ca_key: str) -> None:
+def configure(ca_cert_pem: bytes, ca_key_pem: bytes) -> None:
     global _ca
-    cert = x509.load_pem_x509_certificate(Path(ca_cert).read_bytes())
-    key = serialization.load_pem_private_key(Path(ca_key).read_bytes(), password=None)
+    cert = x509.load_pem_x509_certificate(ca_cert_pem)
+    key = serialization.load_pem_private_key(ca_key_pem, password=None)
     if not isinstance(key, rsa.RSAPrivateKey):
         raise TypeError("CA key is not RSA")
     _ca = (cert, key)

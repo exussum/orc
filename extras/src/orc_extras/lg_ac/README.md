@@ -32,16 +32,29 @@ plugin 'LG AC' orc_extras.lg_ac
 ```
 
 Settings live in `src/plugins/orc_extras/lg_ac.orc` — set `mqtt_host` to this
-machine's LAN IP and point the cert paths at the files from `gen_certs`.
+machine's LAN IP.
 
-## Certificates
+## Certificates (via BWS)
 
 The AC requires a CA-signed server cert with `serverAuth` EKU, chaining to the CA
-served at `/route/certificate`. Generate them:
+served at `/route/certificate`. Generate them, then store the four PEMs in
+Bitwarden Secrets under the `LG_THINQ_` namespace:
 
 ```
 python -m orc_extras.lg_ac.gen_certs        # writes certs/lg_ac/{ca,server-ca,...}
 ```
+
+| BWS secret               | PEM file                    |
+| ------------------------ | --------------------------- |
+| `LG_THINQ_CA_CERT`       | `certs/lg_ac/ca.crt`        |
+| `LG_THINQ_CA_KEY`        | `certs/lg_ac/ca.key`        |
+| `LG_THINQ_SERVER_CERT`   | `certs/lg_ac/server-ca.crt` |
+| `LG_THINQ_SERVER_KEY`    | `certs/lg_ac/server-ca.key` |
+
+At boot the plugin reads these from BWS and holds them in memory. The broker's TLS
+context is built from the in-memory server PEM via a temp file that exists only for
+the `load_cert_chain` call, then is deleted — nothing persists to disk. No cert
+paths in config.
 
 ## DNS + nginx
 
