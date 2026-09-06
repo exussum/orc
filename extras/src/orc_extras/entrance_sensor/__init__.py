@@ -5,7 +5,7 @@ from typing import Any, NamedTuple
 from command_cfg import group, scalar
 
 from orc.loader import Cast, load_plugin_config, resolve_device
-from orc.model import AppContext
+from orc.model import AppContext, DeviceEnum
 from orc_extras.entrance_sensor import plugins
 
 CONFIG = "orc_extras/entrance_sensor"
@@ -26,8 +26,8 @@ def _devices() -> dict[str, type]:
 
 class Settings(NamedTuple):
     cleanup_delay_minutes: int
-    entrance_id: int
-    patio_door_id: int
+    entrance: DeviceEnum
+    patio_door: DeviceEnum
     active_event: str
     inactive_event: str
     snapshot: int
@@ -85,7 +85,7 @@ def setup(ctx: AppContext) -> None:
         serializers={
             "setting": scalar(
                 Settings,
-                types={"cleanup_delay_minutes": Cast.int, "entrance_id": Cast.int, "patio_door_id": Cast.int, "snapshot": Cast.int},
+                types={"cleanup_delay_minutes": Cast.int, "entrance": Cast.device, "patio_door": Cast.device, "snapshot": Cast.int},
             ),
             "message": scalar(Messages),
             "rules": group(_rule),
@@ -93,6 +93,6 @@ def setup(ctx: AppContext) -> None:
         },
     )
     sensor.rules = Rules(**sensor.rules)
-    ids = {sensor.setting.entrance_id, sensor.setting.patio_door_id}
-    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor, ids))
-    ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, ids))
+    names = {str(sensor.setting.entrance.value), str(sensor.setting.patio_door.value)}
+    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor, names))
+    ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, names))

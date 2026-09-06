@@ -1,6 +1,6 @@
 setting cleanup_delay_minutes 2
-setting entrance_id           1
-setting patio_door_id         56
+setting entrance              Sensor.ENTRANCE_SENSOR
+setting patio_door            Sensor.PATIO_DOOR
 setting active_event          active
 setting inactive_event        inactive
 setting snapshot              45

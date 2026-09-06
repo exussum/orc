@@ -22,21 +22,33 @@ class Chromecast(DeviceEnum):
     cc = 1
 
 
+class Sensor(DeviceEnum):
+    entrance = "front door motion sensor"
+    patio = "balcony door"
+
+
 @pytest.fixture(autouse=True)
 def _device_enums(monkeypatch):
     from orc import declarations
 
-    monkeypatch.setattr(orc.config, "registry", declarations.Declarations().build({"Light": Light, "Chromecast": Chromecast}))
+    enums = {"Light": Light, "Chromecast": Chromecast, "Sensor": Sensor}
+    monkeypatch.setattr(orc.config, "registry", declarations.Declarations().build(enums))
 
 
 def test_entrance_config_loads():
     ctx = MagicMock()
     ctx.api = create_autospec(api)
+    ctx.config.registry = orc.config.registry
     ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor.orc").read_text()}
     entrance_sensor.setup(ctx)
     sensor = ctx.api.add_listener.call_args.args[0].args[1]
     assert sensor.setting == Settings(
-        cleanup_delay_minutes=2, entrance_id=1, patio_door_id=56, active_event="active", inactive_event="inactive", snapshot=45
+        cleanup_delay_minutes=2,
+        entrance=Sensor.entrance,
+        patio_door=Sensor.patio,
+        active_event="active",
+        inactive_event="inactive",
+        snapshot=45,
     )
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
     assert sensor.rules.enter == [Rule(devices=Devices(Light), state="on"), Rule(devices=Devices(Chromecast), state="pause")]
