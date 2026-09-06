@@ -80,7 +80,8 @@ def _handle_ac(device: Any, state: str | None, mode: str | None, fan: str | None
     if state == "off":
         thinq.publish_command(device_id, {"mode": "off"})
         return
-    values: dict[str, object] = {"mode": mode or "cool"}
+    # a setpoint frame must carry mode, so an omitted mode keeps the device's current one
+    values: dict[str, object] = {"mode": mode or thinq.fetch_state(device_id).mode or "cool"}
     if fan:
         values["fan_mode"] = fan
     if temp is not None:
