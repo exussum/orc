@@ -29,6 +29,11 @@ class Chromecast(DeviceEnum):
     cc = 1
 
 
+class Sensor(DeviceEnum):
+    entrance = "front door motion sensor"
+    patio = "balcony door"
+
+
 def _row(device, state, start="", stop=""):
     return SimpleNamespace(devices=m.Devices(device), state=state, start=start, stop=stop)
 
@@ -71,8 +76,8 @@ def sensor():
     return SimpleNamespace(
         setting=entrance_sensor.Settings(
             cleanup_delay_minutes=2,
-            entrance_id=16,
-            patio_door_id=56,
+            entrance=Sensor.entrance,
+            patio_door=Sensor.patio,
             active_event="active",
             inactive_event="inactive",
             snapshot=45,
@@ -108,8 +113,9 @@ def _cleanup(sensor, plugin_ctx):
 
 def _trigger_sensor(ctx, sensor, device_id, event):
     old = "inactive" if event == "active" else "active"
-    device = m.DeviceState(id=int(device_id), name="front door motion sensor", attributes={"motion": event}, last_activity=None)
-    plugins._on_sensor_event(ctx, sensor, {sensor.setting.entrance_id, sensor.setting.patio_door_id}, device, "motion", old, event)
+    name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
+    device = m.DeviceState(id=int(device_id), name=name, attributes={"motion": event}, last_activity=None)
+    plugins._on_sensor_event(ctx, sensor, {"front door motion sensor", "balcony door"}, device, "motion", old, event)
     queued = [c for c in ctx.scheduler.add_job.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.add_job.reset_mock()
     for call in queued:
@@ -290,23 +296,23 @@ def _device(id=16, name="front door motion sensor", battery="100", attributes=No
 
 def test_critical_battery_report_logs(plugin_ctx, sensor):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(battery="5"), "battery", "5", "5")
+    plugins._on_sensor_event(plugin_ctx, sensor, {"front door motion sensor"}, _device(battery="5"), "battery", "5", "5")
     plugin_ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, "Low battery on `front door motion sensor` (CRITICAL)")
 
 
 def test_healthy_battery_report_does_not_log(plugin_ctx, sensor):
-    plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(battery="80"), "battery", None, "80")
+    plugins._on_sensor_event(plugin_ctx, sensor, {"front door motion sensor"}, _device(battery="80"), "battery", None, "80")
     plugin_ctx.api.log.assert_not_called()
 
 
 def test_unwatched_device_is_ignored(plugin_ctx, sensor):
-    plugins._on_sensor_event(plugin_ctx, sensor, {16}, _device(id=99, battery="5"), "battery", None, "5")
+    plugins._on_sensor_event(plugin_ctx, sensor, {"front door motion sensor"}, _device(name="other", battery="5"), "battery", None, "5")
     plugin_ctx.api.log.assert_not_called()
 
 
 def test_battery_state_reads_the_device_cache(plugin_ctx):
     _seed_devices(plugin_ctx, _device(battery="80"))
-    assert plugins.battery_state(plugin_ctx, {16}) == [
+    assert plugins.battery_state(plugin_ctx, {"front door motion sensor"}) == [
         m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None})
     ]
 

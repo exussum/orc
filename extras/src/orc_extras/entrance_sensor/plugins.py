@@ -17,9 +17,9 @@ class Log(m.LogSourceEnum):
 
 
 def _on_sensor_event(
-    ctx: m.AppContext, sensor: SimpleNamespace, sensor_ids: set[int], device: m.DeviceState, attribute: str, old: Any, new: Any
+    ctx: m.AppContext, sensor: SimpleNamespace, sensor_names: set[str], device: m.DeviceState, attribute: str, old: Any, new: Any
 ) -> None:
-    if device.id not in sensor_ids:
+    if device.name not in sensor_names:
         return
     if attribute == "battery":
         level = m.BatteryLevel.from_fraction(new, 100)
@@ -53,7 +53,7 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, att
     return (
         attribute == "motion"
         and old != new
-        and device.id == sensor.setting.entrance_id
+        and device.name == str(sensor.setting.entrance.value)
         and new in (sensor.setting.active_event, sensor.setting.inactive_event)
     )
 
@@ -102,7 +102,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     log_entry.add(Log.ENTRANCE, msg)
 
 
-def battery_state(ctx: m.AppContext, sensor_ids: set[int]) -> list[m.DeviceStatus]:
+def battery_state(ctx: m.AppContext, sensor_names: set[str]) -> list[m.DeviceStatus]:
     devices = ctx.api.device_states()
     return [
         m.DeviceStatus(
@@ -112,8 +112,8 @@ def battery_state(ctx: m.AppContext, sensor_ids: set[int]) -> list[m.DeviceStatu
                 "last_activity": d.last_activity,
             },
         )
-        for device_id in sorted(sensor_ids)
-        if (d := _sensor(devices, device_id)) is not None
+        for name in sorted(sensor_names)
+        if (d := _sensor(devices, name)) is not None
         for battery in (d.attributes.get("battery"),)
     ]
 
@@ -122,12 +122,12 @@ def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:
     # An open entrance door means someone is around even if presence hasn't seen them.
     # A door never seen over MQTT reads as closed, falling back to the presence-only
     # decision like the old unreachable-hub path.
-    device = _sensor(ctx.api.device_states(), sensor.setting.patio_door_id)
+    device = _sensor(ctx.api.device_states(), str(sensor.setting.patio_door.value))
     return device is not None and device.attributes.get("contact") == "open"
 
 
-def _sensor(devices: Sequence[m.DeviceState], device_id: int) -> m.DeviceState | None:
-    return next((d for d in devices if d.id == device_id), None)
+def _sensor(devices: Sequence[m.DeviceState], name: str) -> m.DeviceState | None:
+    return next((d for d in devices if d.name == name), None)
 
 
 def _timed_rows(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, Sequence[Any]]:

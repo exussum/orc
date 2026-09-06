@@ -40,6 +40,11 @@ device only LGTV
 device only WebOS
 device only Leak
 
+device define Sensor
+device add Sensor ENTRANCE_SENSOR 'front door motion sensor'
+device add Sensor PATIO_DOOR      'balcony door'
+device seal Sensor
+
 routine define ROUTINE_RESET      Reset
 routine append ROUTINE_RESET      Light      off  --trigger SYSTEM
 
@@ -77,7 +82,7 @@ remote     .                         1 held   Silence
 plugin 'Pair LG TV'       orc_extras.lg_tv           pair_tv     --section device --backend orc_extras.lg_tv.dal.tv.webos
 plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device
 plugin 'Entrance Sensor'  orc_extras.entrance_sensor
-plugin 'Max On'           orc_extras.max_on
+plugin React              orc_extras.react
 plugin Calendar           orc_extras.calendar
 plugin Travel             orc_extras.travel         --section scene
 
