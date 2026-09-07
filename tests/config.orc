@@ -67,7 +67,7 @@ remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
 remote     .                         1 held   Silence
 
 plugin 'Pair LG TV'       orc_extras.lg_tv           pair_tv     --section device --backend orc_extras.lg_tv.dal.tv.stub
-plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device
+plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device --backend orc_extras.yolink.dal.stub
 plugin 'Entrance Sensor'  orc_extras.entrance_sensor
 plugin Calendar           orc_extras.calendar
 
