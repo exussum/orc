@@ -1,21 +1,19 @@
 import dataclasses
-import json
 import logging
 import os
 import signal
 import threading
 import time
-import uuid
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Literal
-
-import paho.mqtt.client as mqtt
-import requests
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import orc as config
+import orc_extras.yolink
 from orc import model as m
 from orc.collections import LockedDict
+from orc.loader import resolve_backend
+from orc_extras.yolink.dal.interfaces import CloudBackend
 
 # orc.Leak is attached to the orc package at runtime once this plugin registers the
 # "Leak" device type; mypy can't see the dynamic attribute, so iterate it via an Any view.
@@ -42,21 +40,20 @@ class SensorState:
 STATE_DRY = "normal"
 STATE_WET = "alert"
 
-_AUTH_URL = "https://api.yosmart.com/open/yolink/token"
-_API_URL = "https://api.yosmart.com/open/yolink/v2/api"
-_MQTT_HOST = "api.yosmart.com"
-_MQTT_PORT = 8003
-
 _log = logging.getLogger(__name__)
 
 _states: LockedDict[str, SensorState] = LockedDict()  # device_id -> SensorState
 _on_transition: TransitionCallback | None = None
 
-# Flap suppression: paho auto-reconnects transient drops, so only treat the
-# connection as down once we've seen several disconnects in a short window.
+# Flap suppression: the real backend auto-reconnects transient drops, so only treat
+# the connection as down once we've seen several disconnects in a short window.
 _FLAP_WINDOW_SEC = 60
 _FLAP_THRESHOLD = 3
 _disconnect_times: list[float] = []
+
+
+def _backend() -> CloudBackend:
+    return cast(CloudBackend, resolve_backend(config.config.plugin_for(orc_extras.yolink).backend))
 
 
 def start() -> None:
@@ -103,64 +100,37 @@ def simulate_transition(name: str) -> bool:
 
 
 def _run() -> None:
+    backend = _backend()
     try:
         while True:
             try:
-                client, expires_in = _auth_and_connect()
+                access_token, expires_in = backend.authenticate()
             except Exception:
+                _log.exception("yolink: auth failed; retrying in 60s")
                 time.sleep(60)
                 continue
-            client.loop_start()
+            try:
+                _hydrate_states(backend, access_token)
+            except Exception:
+                _log.exception("yolink: hydrate failed; continuing without initial state")
+            try:
+                session = backend.connect(access_token, _on_connection, _on_report)
+            except Exception:
+                _log.exception("yolink: connect failed; retrying in 60s")
+                time.sleep(60)
+                continue
             # Re-auth a few minutes before the token expires
             time.sleep(max(60, expires_in - 300))
-            client.loop_stop()
-            client.disconnect()
+            session.close()
     finally:
         _log.error("yolink: thread exiting; signaling SIGTERM to process for restart")
         os.kill(os.getpid(), signal.SIGTERM)
 
 
-def _auth_and_connect() -> tuple[mqtt.Client, int]:
-    try:
-        access_token, expires_in = _authenticate()
-        home_id = _fetch_home_id(access_token)
-    except Exception:
-        _log.exception("yolink: auth failed; retrying in 60s")
-        raise
-
-    try:
-        _hydrate_states(access_token)
-    except Exception:
-        _log.exception("yolink: hydrate failed; continuing without initial state")
-
-    client = mqtt.Client(
-        mqtt.CallbackAPIVersion.VERSION2,
-        client_id=str(uuid.uuid4()),
-        userdata={"home_id": home_id},
-    )
-    client.username_pw_set(access_token, "")
-    client.on_connect = _on_connect
-    client.on_disconnect = _on_disconnect
-    client.on_message = _on_message
-    try:
-        client.connect(_MQTT_HOST, _MQTT_PORT, keepalive=60)
-    except Exception:
-        _log.exception("yolink: mqtt connect failed; retrying in 60s")
-        raise
-
-    return client, expires_in
-
-
-def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
-    if rc != 0:
-        _log.warning("yolink: mqtt connect rc=%s", rc)
+def _on_connection(connected: bool) -> None:
+    if connected:
+        _set_connected(True)
         return
-    home_id = userdata["home_id"]
-    client.subscribe(f"yl-home/{home_id}/+/report", qos=0)
-    _set_connected(True)
-
-
-def _on_disconnect(client: mqtt.Client, userdata: Any, *args: Any) -> None:
     now = time.time()
     cutoff = now - _FLAP_WINDOW_SEC
     _disconnect_times[:] = [t for t in _disconnect_times if t >= cutoff]
@@ -169,17 +139,7 @@ def _on_disconnect(client: mqtt.Client, userdata: Any, *args: Any) -> None:
         _set_connected(False)
 
 
-def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    parts = msg.topic.split("/")
-    if len(parts) < 4 or parts[3] != "report":
-        return
-    device_id = parts[2]
-    try:
-        payload = json.loads(msg.payload.decode())
-    except Exception:
-        _log.exception("yolink: bad payload on %s", msg.topic)
-        return
-    data = payload.get("data") or {}
+def _on_report(device_id: str, data: dict[str, Any]) -> None:
     data["battery"] = m.BatteryLevel.from_fraction(data["battery"], 4)
 
     # collect transitions inside the atomic update, fire after releasing the lock
@@ -210,20 +170,12 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
 # --- state transitions ---
 
 
-def _hydrate_states(access_token: str) -> None:
-    tokens = _fetch_device_tokens(access_token)
-    for device in _orc.Leak:
-        device_token = tokens.get(device.value)
-        if device_token is None:
-            continue
-        try:
-            data = _fetch_leak_state(access_token, device.value, device_token)
-        except Exception:
-            _log.exception("yolink: getState failed for %s", device.name)
-            continue
+def _hydrate_states(backend: CloudBackend, access_token: str) -> None:
+    device_ids = [device.value for device in _orc.Leak]
+    for device_id, data in backend.fetch_leak_states(access_token, device_ids).items():
         state = data["state"]
         _update_sensor(
-            device.value,
+            device_id,
             online=data.get("online"),
             state=state.get("state"),
             battery=m.BatteryLevel.from_fraction(state["battery"], 4),
@@ -269,42 +221,8 @@ def _fire(kind: TransitionKind, name: str, old: Any, new: Any) -> None:
             _log.exception("yolink transition callback failed")
 
 
-# --- yolink cloud HTTP ---
+if TYPE_CHECKING:
+    from orc_extras.yolink.dal import stub, yosmart
 
-
-def _authenticate() -> tuple[str, int]:
-    response = requests.post(
-        _AUTH_URL,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": config.config.secrets["YOLINK_ID"],
-            "client_secret": config.config.secrets["YOLINK_SECRET"],
-        },
-        timeout=config.config.settings.http_timeout,
-    )
-    response.raise_for_status()
-    body = response.json()
-    return body["access_token"], int(body.get("expires_in", 7200))
-
-
-def _api_post(access_token: str, body: dict[str, Any]) -> Any:
-    response = requests.post(
-        _API_URL,
-        json=body,
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=config.config.settings.http_timeout,
-    )
-    response.raise_for_status()
-    return response.json()["data"]
-
-
-def _fetch_home_id(access_token: str) -> Any:
-    return _api_post(access_token, {"method": "Home.getGeneralInfo"})["id"]
-
-
-def _fetch_device_tokens(access_token: str) -> dict[Any, Any]:
-    return {d["deviceId"]: d["token"] for d in _api_post(access_token, {"method": "Home.getDeviceList"})["devices"]}
-
-
-def _fetch_leak_state(access_token: str, device_id: str, device_token: str) -> Any:
-    return _api_post(access_token, {"method": "LeakSensor.getState", "targetDevice": device_id, "token": device_token})
+    _real: CloudBackend = yosmart
+    _stub: CloudBackend = stub
