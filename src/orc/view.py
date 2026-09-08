@@ -169,7 +169,7 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
 @bp.route("/api/presence/<name>/checkin")
 @VersionManager.versioned
 def checkin_presence(name: str) -> None:
-    api.mark_present([name], when=api.local_now() + timedelta(hours=1))
+    api.mark_present([name], when=api.local_now() + timedelta(hours=config.settings.checkin_hours))
     api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
 
 
