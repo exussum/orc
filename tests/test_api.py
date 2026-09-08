@@ -453,13 +453,13 @@ class TestWireButtons:
         return ctx, captured["fn"]
 
     def test_mapped_event_runs_action_as_hub_origin(self):
-        ctx, on_button = self._wire({(orc.Light.a, 1, "held"): "TV Lights"})
+        ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action", return_value=True) as run:
             on_button(orc.Light.a.value, 1, "held")
         run.assert_called_once_with(ctx, "TV Lights", hub_origin=True)
 
     def test_unmapped_event_is_ignored(self):
-        ctx, on_button = self._wire({(orc.Light.a, 1, "held"): "TV Lights"})
+        ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action") as run:
             on_button(99, 1, "held")
             on_button(orc.Light.a.value, 2, "held")
@@ -467,7 +467,7 @@ class TestWireButtons:
         run.assert_not_called()
 
     def test_unknown_action_logs(self):
-        ctx, on_button = self._wire({(orc.Light.a, 1, "held"): "No Such Routine"})
+        ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "No Such Routine"),))
         with patch.object(api, "run_action", return_value=False), patch.object(api, "log") as log:
             on_button(orc.Light.a.value, 1, "held")
         log.assert_called_once()
