@@ -17,15 +17,21 @@ AC: type[m.DeviceEnum] = m.DeviceEnum("AC", {}, module="orc")  # type: ignore[ca
 USB: type[m.DeviceEnum] = m.DeviceEnum("USB", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 
 
+class ConfigNotLoadedError(AttributeError):
+    pass
+
+
 class Config:
     def __init__(self) -> None:
-        # visible as orc.config before the parse below: modules imported by
+        # visible as orc.config before the parse in load(): modules imported by
         # `plugin`/`provider` config lines read it at import time
         globals()["config"] = self
-        self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
-        self.load(m.Secrets(), {})
+
+    def __getattr__(self, name: str) -> Any:
+        raise ConfigNotLoadedError(f"orc config not loaded (reading {name!r}): the entry point must call config.load() first")
 
     def load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
+        self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
         self.secrets = secrets
         plugins_dir = Path(self.config_dir) / "plugins"
         self.plugin_configs = {p.relative_to(plugins_dir).with_suffix("").as_posix(): p.read_text() for p in plugins_dir.glob("**/*.orc")}
@@ -56,7 +62,7 @@ class Config:
         self.plugins = parsed.plugins
         declarations = collect_declarations(parsed.plugin_modules)
 
-        if "orc.api" in sys.modules:  # bootstrap load runs during `import orc`, before api is importable — and needs no dispatch
+        if "orc.api" in sys.modules:  # a load can run before api is imported (bootstrap, extras conftest) — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
 
         globals().update(parsed.enums)

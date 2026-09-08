@@ -74,6 +74,9 @@ def _start_services(ctx: m.AppContext) -> None:
 
 
 def _build_app() -> OrcFlask:
+    # bootstrap parse with empty inputs so the provider modules are known, then
+    # reload with the real secrets and hub device map they fetch
+    config.config.load(m.Secrets(), {})
     secrets = config.config.providers.secrets.fetch_secrets()
     config.config.load(secrets, config.config.providers.mqtt.fetch_hubitat_config(secrets))
     api.init_db()
