@@ -189,9 +189,10 @@ def fetch_durations() -> list[tuple[str, int]]:
 def action_delay(id: str) -> timedelta:
     if (plugin := config.plugin(id)) is not None:
         return plugin.delay
-    if id in config.ad_hoc_routines:
+    elif id in config.ad_hoc_routines:
         return config.ad_hoc_routines[id].delay
-    return timedelta()
+    else:
+        return timedelta()
 
 
 @contextlib.contextmanager
@@ -579,9 +580,10 @@ def active_theme_override(today: date) -> m.ThemeOverride | None:
 def calculate_theme(today: date) -> str:
     if override := active_theme_override(today):
         return override.name
-    if today.weekday() in (5, 6):
+    elif today.weekday() in (5, 6):
         return m.THEME_DAY_OFF
-    return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
+    else:
+        return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
 
 
 def set_theme_override(name: str, start: date, end: date) -> None:

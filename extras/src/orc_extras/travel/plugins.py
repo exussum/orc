@@ -83,11 +83,12 @@ def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None
     remaining = leave_at - now
     if remaining < timedelta(0):
         return Schedule(leave_at, None, late=True, eta=now + timedelta(minutes=lead))
-    if remaining <= timedelta(minutes=10):
+    elif remaining <= timedelta(minutes=10):
         return Schedule(leave_at, None)
-    if remaining <= timedelta(hours=2):
+    elif remaining <= timedelta(hours=2):
         return Schedule(leave_at, now + timedelta(minutes=10))
-    return Schedule(leave_at, leave_at - timedelta(hours=2))
+    else:
+        return Schedule(leave_at, leave_at - timedelta(hours=2))
 
 
 def evaluate(job: TravelJob, tz: Any, now: datetime, connection: Connection) -> tuple[Arrival | None, Schedule]:
