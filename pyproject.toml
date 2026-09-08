@@ -45,6 +45,7 @@ lint = [
 
 [project.scripts]
 orc = "orc.runner:web"
+orc-dev = "orc.runner:flask"
 orc-audio-devices = "orc.dal.audio.pyaudio:list_devices_cli"
 
 [tool.ruff]
