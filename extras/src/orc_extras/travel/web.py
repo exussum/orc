@@ -31,8 +31,8 @@ def upcoming() -> dict:
             }
             for j in jobs[:3]
         ],
-        "extras": [{"name": e.name, "minutes": e.minutes} for e in plugins.available_extras()],
-        "places": plugins.place_names(),
+        "extras": [{"name": e.name, "minutes": e.minutes} for e in plugins.available_extras(app.orc)],
+        "places": plugins.place_names(app.orc),
     }
 
 
@@ -46,7 +46,7 @@ def create() -> tuple[dict, int]:
     else:
         flight, destination = None, (target or None)
     sub = Submission(
-        plugins.resolve_place(destination),
+        plugins.resolve_place(ctx, destination),
         datetime.fromisoformat(data["arrive"]) if data.get("arrive") else None,
         flight,
         data.get("extras", []),
@@ -54,13 +54,13 @@ def create() -> tuple[dict, int]:
     )
     try:
         job = TravelJob.from_submission(sub)
-        arrival, sched = plugins.evaluate(job, ctx.config.settings.tz, ctx.api.local_now(), ctx.api.connection)
+        arrival, sched = plugins.evaluate(ctx, job, ctx.config.settings.tz, ctx.api.local_now(), ctx.api.connection)
         if arrival is not None:
             job.arrive = arrival.when
         job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta
     except ValueError as exc:
         return {"error": str(exc)}, 400
-    plugins.schedule(ctx.scheduler, job, ctx.config.settings.tz)
+    plugins.schedule(ctx, job)
     return {
         "id": job.summary,
         "leave_at": job.leave_at.isoformat() if job.leave_at else None,

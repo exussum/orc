@@ -3,6 +3,7 @@ from typing import Any
 
 from command_cfg import array, group, scalar
 
+import orc_extras.example
 from orc.loader import Cast, load_plugin_config
 from orc.model import AppContext
 from orc_extras.example import plugins
@@ -53,4 +54,4 @@ def setup(ctx: AppContext) -> None:
         bar_key=ctx.config.secrets[s.bar_secret],
     )
     sqlite.init_db(ctx.api.connection)
-    plugins.set_runtime(runtime)
+    ctx.plugin_state[orc_extras.example] = runtime

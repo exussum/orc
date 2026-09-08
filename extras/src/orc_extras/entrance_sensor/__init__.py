@@ -18,10 +18,8 @@ timed append <name> <devices> <state>
 """
 
 
-def _devices() -> dict[str, type]:
-    import orc
-
-    return {name: dt.cls for name, dt in orc.config.registry.devices.items()}
+def _devices(ctx: AppContext) -> dict[str, type]:
+    return {name: dt.cls for name, dt in ctx.config.registry.devices.items()}
 
 
 class Settings(NamedTuple):
@@ -45,8 +43,8 @@ class Rule(NamedTuple):
     state: Any
 
 
-def _rule(**values: Any) -> Rule:
-    return Rule(devices=resolve_device(values["devices"], _devices()), state=Cast.state(values["state"]))
+def _rule(ctx: AppContext, **values: Any) -> Rule:
+    return Rule(devices=resolve_device(values["devices"], _devices(ctx)), state=Cast.state(values["state"]))
 
 
 class Rules(NamedTuple):
@@ -64,11 +62,11 @@ class Timed(NamedTuple):
     state: Any
 
 
-def _timed(**values: Any) -> Timed:
+def _timed(ctx: AppContext, **values: Any) -> Timed:
     return Timed(
         start=Cast.clock(values["start"]),
         stop=Cast.clock(values["stop"]),
-        devices=resolve_device(values["devices"], _devices()),
+        devices=resolve_device(values["devices"], _devices(ctx)),
         state=Cast.state(values["state"]),
     )
 
@@ -88,8 +86,8 @@ def setup(ctx: AppContext) -> None:
                 types={"cleanup_delay_minutes": Cast.int, "entrance": Cast.device, "patio_door": Cast.device, "snapshot": Cast.int},
             ),
             "message": scalar(Messages),
-            "rules": group(_rule),
-            "timed": group(_timed),
+            "rules": group(partial(_rule, ctx)),
+            "timed": group(partial(_timed, ctx)),
         },
     )
     sensor.rules = Rules(**sensor.rules)
