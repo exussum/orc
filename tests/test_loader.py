@@ -132,10 +132,10 @@ def test_ad_hoc_append_extends_items():
 def test_remote_repeats_device_with_ditto():
     parsed = parse("core")
     remote = parsed.enums["Button"]["REMOTE"]
-    assert parsed.remote == {
-        (remote, 1, "pushed"): "All Lights Off",
-        (remote, 1, "held"): "Silence",
-    }
+    assert parsed.remote == (
+        m.Remote(remote, 1, "pushed", "All Lights Off"),
+        m.Remote(remote, 1, "held", "Silence"),
+    )
 
 
 def test_highlight_windows_reference_ad_hoc():

@@ -56,7 +56,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         "device": each(partial(_device, zigbee_config or {}), default=lambda: SimpleNamespace(members={}, enums={})),
         "room": each(_room, default=dict),
         "ad_hoc": each(_ad_hoc, default=dict, types={"snapshot": int, "delay": int}),
-        "remote": each(_remote, default=dict, types={"button": int}),
+        "remote": each(_remote, default=tuple, types={"button": int}),
         "routine": each(_routine, default=dict),
         "highlight": each(_highlight, default=tuple, types={"start": Cast.when, "stop": Cast.when}),
         "theme": each(_theme, default=dict, types={"time": Cast.when}),
@@ -286,13 +286,13 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if args.event not in _BUTTON_EVENTS:
         raise ValueError(f"Invalid button event {args.event!r}: expected one of {sorted(_BUTTON_EVENTS)}")
-    objects["remote"][(Cast.device(args.device, objects), args.button, args.event)] = args.action
+    objects["remote"] = (*objects["remote"], m.Remote(Cast.device(args.device, objects), args.button, args.event, args.action))
 
 
 def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if args.name not in objects["ad_hoc"]:
         raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(objects['ad_hoc'])}")
-    objects["highlight"] = (*objects["highlight"], (args.name, args.start, args.stop))
+    objects["highlight"] = (*objects["highlight"], m.Highlight(args.name, args.start, args.stop))
 
 
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
