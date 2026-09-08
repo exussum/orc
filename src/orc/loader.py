@@ -1,4 +1,5 @@
 import importlib
+import os
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -78,7 +79,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
             },
         ),
     }
-    objects = command_cfg.parse(text, GRAMMAR, serializers)
+    objects = command_cfg.parse(text, GRAMMAR, serializers, variables=os.environ)
     if unsealed := objects["device"].members.keys() - objects["device"].enums.keys():
         raise ConfigError(f"Device types defined but never sealed: {sorted(unsealed)}")
     return SimpleNamespace(
@@ -338,7 +339,7 @@ def load_plugin_config(
     # Seed the parse with the sealed device registry so Cast.devices/Cast.device
     # resolve in plugin configs the same way they do in the main config.
     device = raw(lambda rows, objects: SimpleNamespace(enums={n: dt.cls for n, dt in config.registry.devices.items()}))
-    return SimpleNamespace(**command_cfg.parse(text, grammar, {"device": device, **serializers}))
+    return SimpleNamespace(**command_cfg.parse(text, grammar, {"device": device, **serializers}, variables=os.environ))
 
 
 def resolve_backend(value: ModuleType | None) -> ModuleType:
