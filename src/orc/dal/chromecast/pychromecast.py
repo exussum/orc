@@ -23,9 +23,11 @@ _YDL_OPTS: dict[str, Any] = {
 
 _PLAYING_STATES: tuple[str, ...] = ("PLAYING", "BUFFERING", "PAUSED")
 
+_CONNECT_TIMEOUT = 5
+
 
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
-    with _cast(device, timeout=5, tries=1) as cast:
+    with _cast(device, timeout=_CONNECT_TIMEOUT, tries=1) as cast:
         time.sleep(0.5)
         if cast.status is None:  # wait() timed out: device unreachable
             return m.SoundState(what=device, content=None, volume=0)
@@ -114,7 +116,7 @@ def set_volume(device: m.DeviceEnum, lvl: int) -> None:
 
 @contextmanager
 def _cast(device: m.DeviceEnum, **kwargs: Any) -> Iterator[Any]:
-    kwargs.setdefault("timeout", 5)
+    kwargs.setdefault("timeout", _CONNECT_TIMEOUT)
     ip = socket.gethostbyname(device.value)
     # pychromecast accepts None for uuid/model/name at runtime; its stub declares stricter tuple types
     cast = pychromecast.get_chromecast_from_host((ip, 8009, None, None, None), **kwargs)  # type: ignore[arg-type]
