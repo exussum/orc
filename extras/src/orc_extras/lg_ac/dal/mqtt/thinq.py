@@ -161,9 +161,9 @@ def _event_state_changes(device_id: str, old: dict[int, int], new: dict[int, int
     before = api.state_from_raw(old)
     after = api.state_from_raw(new)
     changes = [
-        f"{field} {getattr(before, field)} → {getattr(after, field)}"
-        for field in ("power", "mode", "fan_mode", "temperature")
-        if getattr(before, field) is not None and getattr(before, field) != getattr(after, field)
+        f"{field} {b} → {a}"
+        for field, b, a in zip(before._fields, before, after)
+        if field != "current_temperature" and b is not None and b != a
     ]
     if changes:
         _event(f"AC {device_id[:8]}: {', '.join(changes)}")
