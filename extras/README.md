@@ -75,6 +75,7 @@ directly:
 | `ctx.snapshot_manager` | snapshot manager        | Undo for device state. Records what devices looked like before a plugin changes them, so that state can be restored later. |
 | `ctx.scheduler`        | APScheduler instance    | Deferred work. Lets a plugin queue a follow-up job to run at a later time instead of acting immediately.                   |
 | `ctx.orc`              | top-level `orc` package | The devices themselves. The enums used to say which device a config applies to.                                            |
+| `ctx.plugin_state`     | per-plugin state dict   | Shared live state, keyed by the plugin's module and stored once by `setup()`. Wiring travels as arguments instead.         |
 
 For work scheduled to run later (this plugin queues a follow-up job with
 `ctx.scheduler.add_job`), decorate the job function with `@requires_ctx` —
