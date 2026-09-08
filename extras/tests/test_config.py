@@ -64,7 +64,7 @@ def test_calendar_config_loads():
         calendar.setup(ctx)
     _ctx, _backend, setting, feed = schedule_cron.call_args.args
     assert setting == calendar.Settings(
-        backend="orc_extras.calendar.dal.feed.stub",
+        backend="orc_extras.calendar.dal.stub",
         cron="10,25,40,55 8-21 * * *",
         window_hours=20,
         max_events=50,
