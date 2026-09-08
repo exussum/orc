@@ -165,7 +165,6 @@ def set_ctx(ctx: m.AppContext) -> None:
     _ctx = ctx
 
 
-_PRESENCE_WINDOW = timedelta(hours=9)
 _ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
 _NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
@@ -585,7 +584,7 @@ def set_theme_override(name: str, start: date, end: date) -> None:
 
 
 def present_names() -> set[str]:
-    cutoff = local_now() - _PRESENCE_WINDOW
+    cutoff = local_now() - timedelta(hours=config.settings.presence_hours)
     return {name for name, ts in sqlite.fetch_presence().items() if ts >= cutoff}
 
 
@@ -661,7 +660,7 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
             if (prev, curr) == (3, 4):
                 sunrise = t.utc_datetime()
             elif (prev, curr) == (4, 3):
-                sunset = t.utc_datetime() - timedelta(hours=1)
+                sunset = t.utc_datetime() - timedelta(hours=config.settings.sunset_lead_hours)
             prev = curr
 
         if override := active_theme_override(today):

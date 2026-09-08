@@ -59,6 +59,9 @@ class Settings(NamedTuple):
     hubitat_url: str = "http://hubitat.example"
     http_timeout: int = 5
     port: int = 8000
+    presence_hours: int = 9
+    checkin_hours: int = 1
+    sunset_lead_hours: int = 1
     emergency_routine: str | None = None
 
     @classmethod
