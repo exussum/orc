@@ -52,4 +52,4 @@ def reboot_hubitat(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) 
 
 def sound_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     for severity in m.Alarm:
-        ctx.api.alert(severity, text="Test", entry=entry)
+        ctx.api.alert(severity, text=Log.SOUND_TEST_TEXT, entry=entry)
