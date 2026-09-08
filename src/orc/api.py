@@ -77,12 +77,13 @@ def _render_alert_image(text: str) -> bytes:
 _ALERT_VIDEO_SECONDS = 300
 _ALERT_LOOP_SECONDS = 20
 _TTS_SAMPLE_RATE = 24000
+_TTS_TIMEOUT = 10
 
 
 def _tts_mp3(text: str) -> bytes:
     url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=10) as resp:  # nosemgrep
+    with urllib.request.urlopen(req, timeout=_TTS_TIMEOUT) as resp:  # nosemgrep
         return resp.read()
 
 
@@ -167,6 +168,7 @@ def set_ctx(ctx: m.AppContext) -> None:
 
 _ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
 _NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
+_EXTERNAL_GROUP_WINDOW = timedelta(seconds=5)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 
 
@@ -380,7 +382,7 @@ def wire_external_log() -> None:
         if not (
             last is not None
             and last.source is m.LogSource.EXTERNAL
-            and local_now() - (last.children or [last])[-1].timestamp < timedelta(seconds=5)
+            and local_now() - (last.children or [last])[-1].timestamp < _EXTERNAL_GROUP_WINDOW
         ):
             last = log(m.LogSource.EXTERNAL, Log.EXTERNAL_DETECTED)
         last.add(m.LogSource.EXTERNAL, action)
