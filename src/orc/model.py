@@ -359,6 +359,7 @@ class AppContext:
     snapshot_manager: SnapshotManager
     scheduler: BaseScheduler
     version_manager: VersionManager
+    plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
     orc: ModuleType = field(default_factory=lambda: importlib.import_module("orc"))
