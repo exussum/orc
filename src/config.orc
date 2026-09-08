@@ -60,12 +60,16 @@ routine append ROUTINE_QUIET      Chromecast stop --trigger SYSTEM
 routine define ROUTINE_DEFAULT    Welcome
 routine append ROUTINE_DEFAULT    Light      on   --trigger SYSTEM
 
+routine define ROUTINE_DAYLIGHT   Daylight --skip-replay
+routine append ROUTINE_DAYLIGHT   Light      off  --trigger SUNNY
+
 routine define ROUTINE_EMERGENCY 'Emergency'
 routine append ROUTINE_EMERGENCY Chromecast.BEDROOM 100
 
 theme 'work day' ROUTINE_RESET      1:00
 theme 'work day' ROUTINE_LIGHTS_ON  sunset
 theme 'work day' ROUTINE_LIGHTS_OFF sunrise
+theme 'day off'  ROUTINE_DAYLIGHT   10:00
 theme 'day off'  ROUTINE_QUIET      23:00
 
 room 'Living Room' Light.LIVING_ROOM  on
