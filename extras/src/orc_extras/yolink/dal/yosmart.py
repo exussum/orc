@@ -7,7 +7,7 @@ from typing import Any
 import paho.mqtt.client as mqtt
 import requests
 
-import orc as config
+from orc import model as m
 from orc_extras.yolink.dal.interfaces import ConnectionCallback, ReportCallback
 
 _AUTH_URL = "https://api.yosmart.com/open/yolink/token"
@@ -18,37 +18,39 @@ _MQTT_PORT = 8003
 _log = logging.getLogger(__name__)
 
 
-def authenticate() -> tuple[str, int]:
+def authenticate(secrets: m.Secrets, timeout: int) -> tuple[str, int]:
     response = requests.post(
         _AUTH_URL,
         data={
             "grant_type": "client_credentials",
-            "client_id": config.config.secrets["YOLINK_ID"],
-            "client_secret": config.config.secrets["YOLINK_SECRET"],
+            "client_id": secrets["YOLINK_ID"],
+            "client_secret": secrets["YOLINK_SECRET"],
         },
-        timeout=config.config.settings.http_timeout,
+        timeout=timeout,
     )
     response.raise_for_status()
     body = response.json()
     return body["access_token"], int(body.get("expires_in", 7200))
 
 
-def fetch_leak_states(access_token: str, device_ids: Sequence[str]) -> dict[str, Any]:
-    tokens = {d["deviceId"]: d["token"] for d in _api_post(access_token, {"method": "Home.getDeviceList"})["devices"]}
+def fetch_leak_states(access_token: str, device_ids: Sequence[str], timeout: int) -> dict[str, Any]:
+    tokens = {d["deviceId"]: d["token"] for d in _api_post(access_token, {"method": "Home.getDeviceList"}, timeout)["devices"]}
     states: dict[str, Any] = {}
     for device_id in device_ids:
         device_token = tokens.get(device_id)
         if device_token is None:
             continue
         try:
-            states[device_id] = _api_post(access_token, {"method": "LeakSensor.getState", "targetDevice": device_id, "token": device_token})
+            states[device_id] = _api_post(
+                access_token, {"method": "LeakSensor.getState", "targetDevice": device_id, "token": device_token}, timeout
+            )
         except Exception:
             _log.exception("yolink: getState failed for %s", device_id)
     return states
 
 
-def connect(access_token: str, on_connection: ConnectionCallback, on_report: ReportCallback) -> "_PahoSession":
-    home_id = _api_post(access_token, {"method": "Home.getGeneralInfo"})["id"]
+def connect(access_token: str, on_connection: ConnectionCallback, on_report: ReportCallback, timeout: int) -> "_PahoSession":
+    home_id = _api_post(access_token, {"method": "Home.getGeneralInfo"}, timeout)["id"]
 
     def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
         if rc != 0:
@@ -90,12 +92,12 @@ class _PahoSession:
         self._client.disconnect()
 
 
-def _api_post(access_token: str, body: dict[str, Any]) -> Any:
+def _api_post(access_token: str, body: dict[str, Any], timeout: int) -> Any:
     response = requests.post(
         _API_URL,
         json=body,
         headers={"Authorization": f"Bearer {access_token}"},
-        timeout=config.config.settings.http_timeout,
+        timeout=timeout,
     )
     response.raise_for_status()
     return response.json()["data"]
