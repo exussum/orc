@@ -77,8 +77,14 @@ packages = ["src/orc"]
 [tool.hatch.build.targets.wheel.hooks.custom]
 path = "scripts/hatch_build.py"
 
+[dependency-groups]
+dev = [
+    "orc_extras[lg_ac]",
+]
+
 [tool.uv.sources]
 orc_data = { path = "data" }
+orc_extras = { path = "extras", editable = true }
 command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v0.6.0" }
 
 
