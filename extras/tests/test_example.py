@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, create_autospec
 import pytest
 from orc_extras import example
 from orc_extras.example import model as m
-from orc_extras.example import plugins
 
 from orc import api
 from orc.loader import Cast
@@ -15,9 +14,10 @@ FIXTURE = Path(__file__).parent / "fixture"
 def _setup_runtime():
     ctx = MagicMock()
     ctx.api = create_autospec(api)
+    ctx.plugin_state = {}
     ctx.config.plugin_configs = {example.CONFIG: (FIXTURE / "example.orc").read_text()}
     example.setup(ctx)
-    return plugins._runtime
+    return ctx.plugin_state[example]
 
 
 def test_example_config_loads():

@@ -1,17 +1,19 @@
 """YoLink leak-sensor integration.
 
 Registers the ``Leak`` device type, a status capture, and a boot-time MQTT client.
-Imports of orc.api/orc.view are deferred into the functions that use them, because
-this package is imported during orc's config load (before api.py is importable) — a
-top-level import would be circular.
+Runtime state (api, config, device enums) comes only through the AppContext captured
+at setup(); module tops import orc leaf modules for types and helpers.
 """
 
 from functools import partial
-from typing import Any
+from typing import Any, cast
 
+import orc_extras.yolink
 from orc import model as m
+from orc.loader import resolve_backend
 from orc.model import AppContext
 from orc_extras.yolink import plugins
+from orc_extras.yolink.dal.interfaces import CloudBackend
 
 _SIGNAL_WEAK_THRESHOLD = -90
 
@@ -65,15 +67,17 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
 
 
 def setup(ctx: AppContext) -> None:
-    plugins.set_transition_callback(partial(_on_transition, ctx))
-    plugins.start()
+    backend = cast(CloudBackend, resolve_backend(ctx.config.plugin_for(orc_extras.yolink).backend))
+    ctx.plugin_state[orc_extras.yolink] = plugins.states_for(ctx.orc.Leak)
+    ctx.api.add_state_provider("Leak Sensors", partial(leak_state, ctx))
+    plugins.start(ctx, backend, partial(_on_transition, ctx))
 
 
 def test_sensor(ctx: AppContext, device: str, *, entry: m.LogEntry) -> None:
-    plugins.simulate_transition(device)
+    plugins.simulate_transition(ctx, device, partial(_on_transition, ctx))
 
 
-def leak_state() -> list[m.DeviceStatus]:
+def leak_state(ctx: AppContext) -> list[m.DeviceStatus]:
     """Per-sensor state rows for core's generic state renderer.
 
     Each row carries ``action`` so core renders the name as a clickable runner that
@@ -94,13 +98,12 @@ def leak_state() -> list[m.DeviceStatus]:
                 "last_change": s.last_change,
             },
         )
-        for s in plugins.snapshot()
+        for s in plugins.snapshot(ctx)
     ]
 
 
 def declare(declarations: Any) -> None:
     declarations.declare(
-        state_providers={"Leak Sensors": leak_state},
         setup=[setup],
         button_labels={"Test Leak Sensor": "Test {device}"},
     )
