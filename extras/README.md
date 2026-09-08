@@ -127,6 +127,7 @@ timed define <name> <start> <stop>
 timed append <name> <device> <state>
 """
 
+
 class Settings(NamedTuple):
     entrance_id: int
     snapshot: int
