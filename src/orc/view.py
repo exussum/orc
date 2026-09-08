@@ -304,7 +304,6 @@ def schedule() -> tuple[str, int, dict[str, str]]:
     theme_override = api.current_theme_override()
 
     theme = (
-        # dates rendered to ISO strings for the template
         theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat())  # type: ignore[arg-type]
         if theme_override
         else None
