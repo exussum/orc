@@ -29,7 +29,7 @@ def pair_tv(ctx: AppContext, device: str, *, entry: LogEntry) -> None:
 
 
 if TYPE_CHECKING:
-    from orc_extras.lg_tv.dal.tv import stub, webos
+    from orc_extras.lg_tv.dal import stub, webos
 
     _real: WebOsBackend = webos
     _stub: WebOsBackend = stub
