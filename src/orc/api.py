@@ -170,9 +170,12 @@ _ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
 _NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 
-_TIMESCALE = load.timescale()
-_EPHEMERIS = load_file(str(resources.files("orc_data") / "de421.bsp"))
-_TWILIGHT_FN = almanac.dark_twilight_day(_EPHEMERIS, wgs84.latlon(config.settings.lat, config.settings.long))
+
+@lru_cache(maxsize=1)
+def _almanac() -> tuple[Any, Any]:
+    """Timescale and twilight function, loaded on first schedule build instead of at import."""
+    ephemeris = load_file(str(resources.files("orc_data") / "de421.bsp"))
+    return load.timescale(), almanac.dark_twilight_day(ephemeris, wgs84.latlon(config.settings.lat, config.settings.long))
 
 
 def duration_stats() -> dict[str, tuple[int, float]]:
@@ -645,11 +648,12 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
         today = now.date()
 
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.settings.tz)
-        day_start = _TIMESCALE.from_datetime(local_midnight)
-        day_end = _TIMESCALE.from_datetime(local_midnight + timedelta(days=1))
+        timescale, twilight_fn = _almanac()
+        day_start = timescale.from_datetime(local_midnight)
+        day_end = timescale.from_datetime(local_midnight + timedelta(days=1))
 
-        prev = int(_TWILIGHT_FN(day_start).item())
-        times, twilight = almanac.find_discrete(day_start, day_end, _TWILIGHT_FN)
+        prev = int(twilight_fn(day_start).item())
+        times, twilight = almanac.find_discrete(day_start, day_end, twilight_fn)
         sunrise = sunset = None
 
         for t, curr in zip(times, twilight):
