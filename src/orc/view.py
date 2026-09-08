@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, NamedTuple, cast
 
-from flask import Blueprint, Flask, render_template, request, send_file
+from flask import Blueprint, Flask, render_template, request
 from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
@@ -351,11 +351,6 @@ def announce() -> None:
     text = request.form["text"]
     entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text))
     api.alert(m.Alarm.WARNING, text=text, entry=entry)
-
-
-@bp.route("/api/alert.wav")
-def alert_wav() -> Response:
-    return send_file(api.DEFAULT_ALERT_PATH)
 
 
 @bp.route("/api/alert.mp4")
