@@ -2,8 +2,26 @@ from enum import Enum
 from types import ModuleType
 
 import pytest
+from command_cfg import ConfigError
 
+import orc
 from orc import declarations
+
+
+def test_plugin_holding_runtime_globals_fails_config_load():
+    mod = ModuleType("bad_plugin")
+    mod.config = orc.config
+    mod.declare = lambda d: None
+    with pytest.raises(ConfigError, match="bad_plugin.*AppContext.*bad_plugin.config"):
+        declarations.collect_declarations([mod])
+
+
+def test_plugin_holding_orc_package_fails_config_load():
+    mod = ModuleType("bad_plugin_pkg")
+    mod.anything = orc
+    mod.declare = lambda d: None
+    with pytest.raises(ConfigError, match="bad_plugin_pkg.anything"):
+        declarations.collect_declarations([mod])
 
 
 @pytest.fixture
