@@ -416,17 +416,22 @@ def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
         list(ex.map(one, what))
 
 
-_ALARM_SETTINGS = {
-    m.Alarm.WARNING: "warning_device",
-    m.Alarm.ATTENTION: "attention_device",
-    m.Alarm.EMERGENCY: "emergency_device",
-}
+def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
+    match severity:
+        case m.Alarm.WARNING:
+            device = config.settings.warning_device
+        case m.Alarm.ATTENTION:
+            device = config.settings.attention_device
+        case _:
+            device = config.settings.emergency_device
+    assert device is not None
+    return device
 
 
 def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, entry: m.LogEntry) -> None:
     if (text is None) == (path is None):
         raise ValueError("alert() requires exactly one of text or path")
-    device = getattr(config.settings, _ALARM_SETTINGS[severity])
+    device = _alarm_device(severity)
     if path is not None and not isinstance(device, orc.USB):
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
 
@@ -436,12 +441,12 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
             video_url = m.AlertVideo(f"{config.settings.base_url}/api/alert.mp4?text={quote(text)}")
             dispatch(m.Config(m.Devices(orc.Chromecast), video_url), force=True, entry=entry)
             if not isinstance(device, orc.Chromecast):
-                dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
+                dispatch(m.Config(m.Devices(device), m.Speak(text)), force=True, entry=entry)
     elif text is not None:
-        dispatch(m.Config(device, m.Speak(text)), force=True, entry=entry)
+        dispatch(m.Config(m.Devices(device), m.Speak(text)), force=True, entry=entry)
     else:
         assert path is not None
-        dispatch(m.Config(device, path), force=True, entry=entry)
+        dispatch(m.Config(m.Devices(device), path), force=True, entry=entry)
 
 
 def reboot_hubitat() -> None:
