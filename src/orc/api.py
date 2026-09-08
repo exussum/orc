@@ -363,7 +363,7 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
 
 
 def wire_buttons(ctx: m.AppContext) -> None:
-    mapping = {(what.value, button, event): action for (what, button, event), action in config.remotes.items()}
+    mapping = {(r.device.value, r.button, r.event): r.action for r in config.remotes}
 
     def on_button(device_id: int, button: int, event_type: str) -> None:
         action = mapping.get((device_id, button, event_type))

@@ -41,6 +41,19 @@ class ThemeOverride(NamedTuple):
     end: date
 
 
+class Remote(NamedTuple):
+    device: "DeviceEnum"
+    button: int
+    event: str
+    action: str
+
+
+class Highlight(NamedTuple):
+    name: str
+    start: time
+    stop: time
+
+
 class Settings(NamedTuple):
     """Core settings from ``setting`` config lines. None marks a required key
     (enforced by loader.validate); the rest default here when the line is omitted."""
