@@ -10,7 +10,8 @@ calendar events, and a line-based config file.
   events tied to wall-clock times or sun position at a configured lat/long.
 - Skips market-holiday rules using a configurable holidays endpoint.
 - Controls Hubitat lights (MQTT/REST), Chromecast speakers (pychromecast +
-  yt-dlp for YouTube audio), and an AC unit (BroadLink IR).
+  yt-dlp for YouTube audio), and an LG AC unit (local ThinQ2, via the
+  `lg_ac` plugin in `extras/`).
 - Supports weather-condition triggers (for example, `SUNNY`) through the
   open-meteo API; the schedule UI marks weather-triggered jobs with a ☀ badge.
 - Via the optional `orc_extras` package (`extras/`): pulls calendar events
@@ -37,9 +38,10 @@ needs to name `weather`, `holiday`, and `blaster` explicitly. An explicit
 
 You'll need:
 
-- **Python 3.14+** (what CI and production use)
-- **git LFS** — the TTS voice model, ephemeris, and compiled CSS are LFS
-  objects; without it you'll get pointer files and confusing failures.
+- **uv** — manages the venv, Python 3.14 (what CI and production use), and
+  all dependencies
+- **git LFS** — the TTS voice model and ephemeris are LFS objects; without
+  it you'll get pointer files and confusing failures.
 - **PortAudio**, to build the `pyaudio` dependency:
   `brew install portaudio` (macOS) or
   `sudo apt-get install portaudio19-dev` (Debian/Ubuntu)
@@ -52,23 +54,21 @@ Then:
 git lfs install
 git clone https://github.com/exussum/orc.git && cd orc
 
-python3 -m venv ~/.venv-orc            # this exact path matters:
-source ~/.venv-orc/bin/activate        # scripts/dev.sh sources it
-pip install ./data '.[test]'
+uv sync --extra test --extra lint
 
-pytest && pytest extras
+uv run pytest && uv run pytest extras
 
-PYTHONPATH=src:data/src:extras/src python -c 'from orc.runner import flask; flask()'
+uv run orc-dev
 ```
 
 Open <http://localhost:8000> — the scene, device, schedule, presence, and
-log views are all live, driven by the sample config in `src/config.orc`.
-`PYTHONPATH=src:data/src:extras/src` makes the dev server run your working
-tree rather than the copy installed in the venv (the sample config registers
-plugins from `extras/src`, so it must be on the path).
+log views are all live, driven by the sample config in `src/config.orc`
+(the `ORC_CONFIG_DIR` default). `uv sync` installs `orc` and `orc_extras`
+editable, so the dev server runs your working tree — the sample config's
+plugin lines resolve against `extras/src` directly.
 
-Before your first commit, install the git hooks (black, isort, flake8,
-opengrep, mypy, both test suites, and more run on every commit):
+Before your first commit, install the git hooks (ruff, opengrep, mypy,
+both test suites, and more run on every commit):
 
 ```sh
 pre-commit install
@@ -81,7 +81,7 @@ of `config.orc` are never touched:
 
 - a Hubitat hub with the Maker API app enabled (lights)
 - Chromecast speakers on the same LAN
-- an LG webOS TV, plus a BroadLink IR blaster for power-on and AC control
+- an LG webOS TV, plus a BroadLink IR blaster for power-on
 - a YoLink hub with leak sensors
 - a USB audio output on the machine running orc (spoken announcements) — the
   `device add USB <name> <host>` line's `host` must be that device's USB
@@ -103,8 +103,9 @@ Steps:
 2. **Create a config directory, for example `/etc/orc`.** Copy
    `src/config.orc` into it as a starting point. Devices, people, routines,
    themes, room configs, and plugins are all defined there — the sample
-   file demonstrates every command. Per-plugin configs go in a `plugins/`
-   subdirectory (see `src/plugins/` for examples).
+   file demonstrates every command except `person`, which is omitted so a
+   stub-backed dev run never attempts privileged presence scans. Per-plugin
+   configs go in a `plugins/` subdirectory (see `src/plugins/` for examples).
 
 3. **Create the secrets in Bitwarden Secrets Manager.** See
    [Secrets (Bitwarden)](#secrets-bitwarden), and put a machine-account
@@ -155,15 +156,15 @@ Two config surfaces:
    The required keys fail startup with a named `ConfigError` when a line is
    missing or its value is empty:
 
-   | Setting                                                    | Purpose                                                                      |
-   | ---------------------------------------------------------- | ---------------------------------------------------------------------------- |
-   | `base_url`                                                 | LAN-reachable base URL for static audio; its host is allowlisted for streams |
-   | `lan_domain`                                               | Suffix stripped from presence hostnames; subdomains allowlisted for streams  |
-   | `jobs_db`                                                  | SQLAlchemy URL for the APScheduler / orc state DB                            |
-   | `lat` / `long`                                             | Coordinates for sunrise/sunset                                               |
-   | `warning_device` / `attention_device` / `emergency_device` | `USB.*`/`Chromecast.*` device for each Alarm severity's TTS/alerts           |
-   | `broadlink_codes`                                          | Path to BroadLink IR codes JSON                                              |
-   | `mqtt_host`                                                | Broker host for the Hubitat MQTT export                                      |
+   | Setting                                                    | Purpose                                                                                           |
+   | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+   | `base_url`                                                 | LAN-reachable base URL Chromecasts fetch alert media from; its host marks UI requests as internal |
+   | `lan_domain`                                               | Suffix stripped from presence-page hostnames                                                      |
+   | `jobs_db`                                                  | SQLAlchemy URL for the APScheduler / orc state DB                                                 |
+   | `lat` / `long`                                             | Coordinates for sunrise/sunset                                                                    |
+   | `warning_device` / `attention_device` / `emergency_device` | `USB.*`/`Chromecast.*` device for each Alarm severity's TTS/alerts                                |
+   | `broadlink_codes`                                          | Path to BroadLink IR codes JSON                                                                   |
+   | `mqtt_host`                                                | Broker host for the Hubitat MQTT export                                                           |
 
    The optional keys default when omitted:
 
