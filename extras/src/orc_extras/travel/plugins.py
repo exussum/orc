@@ -19,6 +19,8 @@ def set_runtime(runtime: Runtime) -> None:
 
 
 _FLIGHT_RE = re.compile(r"^(?=.*[A-Za-z])[A-Za-z0-9]{2,3}\s?\d{1,4}$")
+_REFRESH_INTERVAL = timedelta(minutes=10)
+_REFRESH_HORIZON = timedelta(hours=2)
 
 
 def is_flight(value: str) -> bool:
@@ -83,12 +85,12 @@ def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None
     remaining = leave_at - now
     if remaining < timedelta(0):
         return Schedule(leave_at, None, late=True, eta=now + timedelta(minutes=lead))
-    elif remaining <= timedelta(minutes=10):
+    elif remaining <= _REFRESH_INTERVAL:
         return Schedule(leave_at, None)
-    elif remaining <= timedelta(hours=2):
-        return Schedule(leave_at, now + timedelta(minutes=10))
+    elif remaining <= _REFRESH_HORIZON:
+        return Schedule(leave_at, now + _REFRESH_INTERVAL)
     else:
-        return Schedule(leave_at, leave_at - timedelta(hours=2))
+        return Schedule(leave_at, leave_at - _REFRESH_HORIZON)
 
 
 def evaluate(job: TravelJob, tz: Any, now: datetime, connection: Connection) -> tuple[Arrival | None, Schedule]:
