@@ -18,6 +18,7 @@ def mock_registry(monkeypatch):
     ``name=(enum_cls, dispatch | None)``; the enum is also attached to ``orc``."""
 
     def install(ctx, **dispatch_by_type):
+        ctx.orc = orc
         for name, (cls, _) in dispatch_by_type.items():
             monkeypatch.setattr(orc, name, cls, raising=False)
         registry = m.Registry(
@@ -59,7 +60,7 @@ class TestDispatchLGTV:
     def test_off_powers_webos_off(self):
         with patch.object(plugins, "off") as webos_off:
             api.dispatch(m.Config(self.lg_tv, m.OFF), entry=None)
-        webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
+        webos_off.assert_called_once_with(self.ctx, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
         with patch.object(plugins, "is_off", return_value=True):
@@ -74,7 +75,7 @@ class TestDispatchLGTV:
     def test_device_command_routes_to_lg_tv_handler(self):
         with patch.object(plugins, "off") as webos_off:
             api.device_command("living_room", m.OFF)
-        webos_off.assert_called_once_with(self.ctx.api.connection, self.webos)
+        webos_off.assert_called_once_with(self.ctx, self.webos)
 
 
 def test_lg_tv_registers_with_core():
@@ -87,7 +88,9 @@ def test_lg_tv_registers_with_core():
         ctx.config.plugin_configs = {}
         lg_tv.setup(ctx)
     init_db.assert_called_once_with(ctx.api.connection)
-    assert config.registry.state_providers["TV"] is lg_tv.tv_state
+    name, provider = ctx.api.add_state_provider.call_args.args
+    assert name == "TV"
+    assert provider.func is lg_tv.tv_state
 
     lg_tv_dev = config.registry.devices["LGTV"]
     assert lg_tv_dev.dispatch is lg_tv._dispatch
