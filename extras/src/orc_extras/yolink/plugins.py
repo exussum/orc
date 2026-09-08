@@ -6,18 +6,13 @@ import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-import orc as config
 import orc_extras.yolink
 from orc import model as m
 from orc.collections import LockedDict
-from orc.loader import resolve_backend
 from orc_extras.yolink.dal.interfaces import CloudBackend
-
-# orc.Leak is attached to the orc package at runtime once this plugin registers the
-# "Leak" device type; mypy can't see the dynamic attribute, so iterate it via an Any view.
-_orc: Any = config
 
 # callback (name, kind, old, new); old/new are arbitrary field values
 TransitionKind = Literal["connection", "leak", "battery", "signal", "interval", "online"]
@@ -42,55 +37,54 @@ STATE_WET = "alert"
 
 _log = logging.getLogger(__name__)
 
-_states: LockedDict[str, SensorState] = LockedDict()  # device_id -> SensorState
-_on_transition: TransitionCallback | None = None
-
 # Flap suppression: the real backend auto-reconnects transient drops, so only treat
 # the connection as down once we've seen several disconnects in a short window.
 _FLAP_WINDOW_SEC = 60
 _FLAP_THRESHOLD = 3
-_disconnect_times: list[float] = []
 
 
-def _backend() -> CloudBackend:
-    return cast(CloudBackend, resolve_backend(config.config.plugin_for(orc_extras.yolink).backend))
+def states_for(leak_devices: Any) -> LockedDict[str, SensorState]:
+    return LockedDict({device.value: SensorState(name=device.label, device_id=device.value) for device in leak_devices})
 
 
-def start() -> None:
-    if not len(_orc.Leak):
+def _states(ctx: m.AppContext) -> LockedDict[str, SensorState]:
+    return cast(LockedDict[str, SensorState], ctx.plugin_state[orc_extras.yolink])
+
+
+def _leak_devices(ctx: m.AppContext) -> Any:
+    # orc.Leak is attached to the orc package at runtime once this plugin registers the
+    # "Leak" device type; mypy can't see the dynamic attribute, so read it via ctx.orc
+    return ctx.orc.Leak
+
+
+def start(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback) -> None:
+    if not len(_leak_devices(ctx)):
         _log.info("yolink: no Leak devices in config.orc, skipping")
         return
-
-    global _states
-    _states = LockedDict({device.value: SensorState(name=device.label, device_id=device.value) for device in _orc.Leak})
-    threading.Thread(target=_run, name="yolink-mqtt", daemon=True).start()
+    threading.Thread(target=partial(_run, ctx, backend, on_transition), name="yolink-mqtt", daemon=True).start()
 
 
-def set_transition_callback(fn: TransitionCallback) -> None:
-    global _on_transition
-    _on_transition = fn
+def snapshot(ctx: m.AppContext) -> list[SensorState]:
+    sensors = _states(ctx).copy()
+    return [sensors.get(device.value) or SensorState(name=device.label, device_id=device.value) for device in _leak_devices(ctx)]
 
 
-def snapshot() -> list[SensorState]:
-    sensors = _states.copy()
-    return [sensors.get(device.value) or SensorState(name=device.label, device_id=device.value) for device in _orc.Leak]
-
-
-def simulate_transition(name: str) -> bool:
-    sensor = next((s for s in _states.copy().values() if s.name == name), None)
+def simulate_transition(ctx: m.AppContext, name: str, on_transition: TransitionCallback) -> bool:
+    states = _states(ctx)
+    sensor = next((s for s in states.copy().values() if s.name == name), None)
     if sensor is None:
         return False
     device_id = sensor.device_id
     prev = sensor.state if sensor.state in (STATE_DRY, STATE_WET) else STATE_DRY
 
-    if _states.update(device_id, _transition_to(STATE_WET)) is None:
+    if states.update(device_id, _transition_to(ctx, STATE_WET)) is None:
         return False
-    _fire("leak", name, prev, STATE_WET)
+    _fire(on_transition, "leak", name, prev, STATE_WET)
 
     def _revert() -> None:
         time.sleep(5)
-        if _states.update(device_id, _transition_to(STATE_DRY, require=STATE_WET)) is not None:
-            _fire("leak", name, STATE_WET, STATE_DRY)
+        if states.update(device_id, _transition_to(ctx, STATE_DRY, require=STATE_WET)) is not None:
+            _fire(on_transition, "leak", name, STATE_WET, STATE_DRY)
 
     threading.Thread(target=_revert, name=f"yolink-test-revert-{name}", daemon=True).start()
     return True
@@ -99,22 +93,25 @@ def simulate_transition(name: str) -> bool:
 # --- client lifecycle ---
 
 
-def _run() -> None:
-    backend = _backend()
+def _run(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback) -> None:
+    cfg = ctx.config
+    disconnect_times: list[float] = []
+    on_connection = partial(_on_connection, ctx, on_transition, disconnect_times)
+    on_report = partial(_on_report, ctx, on_transition)
     try:
         while True:
             try:
-                access_token, expires_in = backend.authenticate()
+                access_token, expires_in = backend.authenticate(cfg.secrets, cfg.settings.http_timeout)
             except Exception:
                 _log.exception("yolink: auth failed; retrying in 60s")
                 time.sleep(60)
                 continue
             try:
-                _hydrate_states(backend, access_token)
+                _hydrate_states(ctx, backend, access_token)
             except Exception:
                 _log.exception("yolink: hydrate failed; continuing without initial state")
             try:
-                session = backend.connect(access_token, _on_connection, _on_report)
+                session = backend.connect(access_token, on_connection, on_report, cfg.settings.http_timeout)
             except Exception:
                 _log.exception("yolink: connect failed; retrying in 60s")
                 time.sleep(60)
@@ -127,19 +124,19 @@ def _run() -> None:
         os.kill(os.getpid(), signal.SIGTERM)
 
 
-def _on_connection(connected: bool) -> None:
+def _on_connection(ctx: m.AppContext, on_transition: TransitionCallback, disconnect_times: list[float], connected: bool) -> None:
     if connected:
-        _set_connected(True)
+        _set_connected(ctx, on_transition, True)
         return
     now = time.time()
     cutoff = now - _FLAP_WINDOW_SEC
-    _disconnect_times[:] = [t for t in _disconnect_times if t >= cutoff]
-    _disconnect_times.append(now)
-    if len(_disconnect_times) >= _FLAP_THRESHOLD:
-        _set_connected(False)
+    disconnect_times[:] = [t for t in disconnect_times if t >= cutoff]
+    disconnect_times.append(now)
+    if len(disconnect_times) >= _FLAP_THRESHOLD:
+        _set_connected(ctx, on_transition, False)
 
 
-def _on_report(device_id: str, data: dict[str, Any]) -> None:
+def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: str, data: dict[str, Any]) -> None:
     data["battery"] = m.BatteryLevel.from_fraction(data["battery"], 4)
 
     # collect transitions inside the atomic update, fire after releasing the lock
@@ -160,21 +157,22 @@ def _on_report(device_id: str, data: dict[str, Any]) -> None:
             return None
         captured["name"] = current.name
         captured["transitions"] = [("leak" if f == "state" else f, old[f], new) for f, new in changes.items()]
-        return dataclasses.replace(current, last_change=datetime.now(tz=config.config.settings.tz), **changes)
+        return dataclasses.replace(current, last_change=datetime.now(tz=ctx.config.settings.tz), **changes)
 
-    _states.update(device_id, apply)
+    _states(ctx).update(device_id, apply)
     for kind, old, new in captured["transitions"]:
-        _fire(kind, captured["name"], old, new)
+        _fire(on_transition, kind, captured["name"], old, new)
 
 
 # --- state transitions ---
 
 
-def _hydrate_states(backend: CloudBackend, access_token: str) -> None:
-    device_ids = [device.value for device in _orc.Leak]
-    for device_id, data in backend.fetch_leak_states(access_token, device_ids).items():
+def _hydrate_states(ctx: m.AppContext, backend: CloudBackend, access_token: str) -> None:
+    device_ids = [device.value for device in _leak_devices(ctx)]
+    for device_id, data in backend.fetch_leak_states(access_token, device_ids, ctx.config.settings.http_timeout).items():
         state = data["state"]
         _update_sensor(
+            ctx,
             device_id,
             online=data.get("online"),
             state=state.get("state"),
@@ -184,20 +182,20 @@ def _hydrate_states(backend: CloudBackend, access_token: str) -> None:
         )
 
 
-def _update_sensor(device_id: str, **fields: Any) -> None:
-    _states.update(device_id, lambda current: dataclasses.replace(current, **fields) if current else None)
+def _update_sensor(ctx: m.AppContext, device_id: str, **fields: Any) -> None:
+    _states(ctx).update(device_id, lambda current: dataclasses.replace(current, **fields) if current else None)
 
 
-def _transition_to(new_state: str, require: str | None = None) -> Callable[[SensorState | None], SensorState | None]:
+def _transition_to(ctx: m.AppContext, new_state: str, require: str | None = None) -> Callable[[SensorState | None], SensorState | None]:
     def fn(current: SensorState | None) -> SensorState | None:
         if current is None or (require is not None and current.state != require):
             return None
-        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=config.config.settings.tz))
+        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=ctx.config.settings.tz))
 
     return fn
 
 
-def _set_connected(connected: bool) -> None:
+def _set_connected(ctx: m.AppContext, on_transition: TransitionCallback, connected: bool) -> None:
     # collect (name, prior state) inside the atomic update, fire after releasing the lock
     fired: list[tuple[str, str]] = []
 
@@ -207,16 +205,17 @@ def _set_connected(connected: bool) -> None:
         fired.append((current.name, "connected" if current.connected else "disconnected"))
         return dataclasses.replace(current, connected=connected)
 
-    for device_id in _states.copy().keys():
-        _states.update(device_id, apply)
+    states = _states(ctx)
+    for device_id in states.copy().keys():
+        states.update(device_id, apply)
     for name, old in fired:
-        _fire("connection", name, old, "connected" if connected else "disconnected")
+        _fire(on_transition, "connection", name, old, "connected" if connected else "disconnected")
 
 
-def _fire(kind: TransitionKind, name: str, old: Any, new: Any) -> None:
-    if _on_transition and old != new:
+def _fire(on_transition: TransitionCallback, kind: TransitionKind, name: str, old: Any, new: Any) -> None:
+    if old != new:
         try:
-            _on_transition(name, kind, old, new)
+            on_transition(name, kind, old, new)
         except Exception:
             _log.exception("yolink transition callback failed")
 
