@@ -65,7 +65,7 @@ setting foo_backend  orc_extras.example.dal.foo.acme
 **B — `--backend` on the `plugin` line** (`lg_tv`): for a plugin with no config
 file of its own; fetched via `orc.config.plugin_for(...).backend`.
 ```
-plugin 'Pair LG TV' orc_extras.lg_tv pair_tv --section device --backend orc_extras.lg_tv.dal.tv.webos
+plugin 'Pair LG TV' orc_extras.lg_tv pair_tv --section device --backend orc_extras.lg_tv.dal.webos
 ```
 
 Prefer A unless the backend naturally belongs to a `plugin` line.

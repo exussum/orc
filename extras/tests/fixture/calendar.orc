@@ -1,4 +1,4 @@
-setting backend         orc_extras.calendar.dal.feed.stub
+setting backend         orc_extras.calendar.dal.stub
 setting cron            '10,25,40,55 8-21 * * *'
 setting window_hours    20
 setting max_events      50
