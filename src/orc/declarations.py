@@ -1,9 +1,11 @@
+import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from command_cfg import ConfigError
 from flask import Blueprint
 
 from orc import plugins as core_plugins
@@ -72,6 +74,18 @@ class Declarations:
         )
 
 
+def _check_contract(module: ModuleType) -> None:
+    import orc
+
+    banned = tuple(obj for obj in (orc, orc.config, sys.modules.get("orc.api")) if obj)
+    package = [module] + [mod for name, mod in sys.modules.items() if name.startswith(module.__name__ + ".") and mod]
+    offenders = [f"{mod.__name__}.{name}" for mod in package for name, val in vars(mod).items() if any(val is b for b in banned)]
+    if offenders:
+        raise ConfigError(
+            f"Plugin {module.__name__!r} holds orc runtime globals; reach them through the AppContext: " + ", ".join(offenders)
+        )
+
+
 def collect_declarations(modules: Iterable[ModuleType]) -> Declarations:
     declarations = Declarations()
     seen: set[str] = set()
@@ -79,6 +93,7 @@ def collect_declarations(modules: Iterable[ModuleType]) -> Declarations:
         if module is core_plugins or module.__name__ in seen:
             continue
         seen.add(module.__name__)
+        _check_contract(module)
         declarations._current_plugin = module.__name__.split(".")[-1]
         module.declare(declarations)
     return declarations
