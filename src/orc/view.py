@@ -14,7 +14,6 @@ from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
 
-import orc
 from orc import api, config
 from orc import model as m
 from orc.collections import where
@@ -250,23 +249,6 @@ def presence() -> tuple[str, int, dict[str, str]]:
 def device_api(id: str) -> None:
     api.device_command(id, request.args.get("state"))
     api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=request.args.get("state")))
-
-
-@bp.route("/api/device/ac/<id>")
-def ac(id: str) -> tuple[dict[str, Any], int]:
-    state = request.args.get("state")
-    try:
-        bl_device = orc.AC[id]
-    except KeyError:
-        return {"error": "Unknown device"}, 404
-    api.ac_command(
-        bl_device,
-        state,
-        mode=request.args.get("mode"),
-        fan=request.args.get("fan"),
-        temp=int(t) if (t := request.args.get("temp")) else None,
-    )
-    return {"version": VersionManager.version}, 200
 
 
 @bp.route("/api/room/<id>")

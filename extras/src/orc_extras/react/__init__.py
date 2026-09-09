@@ -6,7 +6,6 @@ from command_cfg import each
 from orc.loader import Cast, load_plugin_config
 from orc.model import AppContext, Devices
 from orc_extras.react import plugins
-from orc_extras.react.plugins import AcAction, AcMode
 
 CONFIG = "orc_extras/react"
 GRAMMAR = """
@@ -24,21 +23,11 @@ class Rule(NamedTuple):
     delay: int | None
 
 
-def _parse_action(value: str) -> Any:
-    if ":" not in value:
-        return Cast.state(value)
-    try:
-        mode, fan, temp = value.split(":")
-        return AcAction(AcMode(mode), fan, int(temp))
-    except ValueError:
-        raise ValueError(f"Invalid AC action {value!r}: expected mode:fan:temp, e.g. cool:low:75") from None
-
-
 def _rule(objects: dict[str, Any], args: Any) -> None:
     attribute = _TRIGGERS.get(args.state)
     if attribute is None:
         raise ValueError(f"Invalid trigger state {args.state!r}: expected one of {sorted(_TRIGGERS)}")
-    objects["react"].append(Rule(Cast.devices(args.devices, objects), attribute, args.state, _parse_action(args.action), args.delay))
+    objects["react"].append(Rule(Cast.devices(args.devices, objects), attribute, args.state, Cast.state(args.action), args.delay))
 
 
 def declare(declarations: Any) -> None:

@@ -1,6 +1,5 @@
 from datetime import timedelta
-from enum import StrEnum
-from typing import Any, NamedTuple
+from typing import Any
 
 from apscheduler.triggers.date import DateTrigger
 
@@ -12,22 +11,6 @@ JOB_ID = "react"
 
 class Log(m.LogSourceEnum):
     REACT = "react"
-
-
-class AcMode(StrEnum):
-    COOL = "cool"
-    FAN_ONLY = "fan_only"
-    ECON = "econ"
-    DRY = "dry"
-
-
-class AcAction(NamedTuple):
-    mode: AcMode
-    fan: str
-    temp: int
-
-    def __str__(self) -> str:
-        return f"{self.mode}:{self.fan}:{self.temp}"
 
 
 def _on_event(
@@ -70,11 +53,8 @@ def _cancel(ctx: m.AppContext, index: int, member: m.DeviceEnum) -> None:
 
 
 def _apply(ctx: m.AppContext, what: m.DeviceEnum, action: Any, entry: m.LogEntry) -> None:
-    if isinstance(action, AcAction):
-        for ac in ctx.config.registry.devices["AC"].cls:
-            ctx.api.ac_command(ac, m.ON, action.mode, action.fan, action.temp)
-    else:
-        ctx.api.dispatch(m.Configs(m.Config(m.Devices(what), action, trigger=m.Trigger.SYSTEM)), entry=entry)
+    devices = m.Devices(ctx.config.registry.devices["AC"].cls) if isinstance(action, m.AcCommand) else m.Devices(what)
+    ctx.api.dispatch(m.Configs(m.Config(devices, action, trigger=m.Trigger.SYSTEM)), entry=entry)
 
 
 @requires_ctx

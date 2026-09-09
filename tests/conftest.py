@@ -30,6 +30,9 @@ def core_registry(monkeypatch):
     class USB(Enum):
         speaker = "Speaker"
 
+    class AC(DeviceEnum):
+        unit = "clip-1"
+
     # Register core dispatch into a fresh builder, then build the registry from the test
     # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.
     builder = declarations.Declarations()
@@ -37,7 +40,8 @@ def core_registry(monkeypatch):
     monkeypatch.setattr(orc, "Light", Light, raising=False)
     monkeypatch.setattr(orc, "Chromecast", Chromecast, raising=False)
     monkeypatch.setattr(orc, "USB", USB, raising=False)
-    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast, "USB": USB}))
+    monkeypatch.setattr(orc, "AC", AC, raising=False)
+    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast, "USB": USB, "AC": AC}))
     yield
 
 

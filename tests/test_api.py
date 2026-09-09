@@ -169,6 +169,19 @@ def test_dispatch_usb_plays_alert_path(entry):
     assert audio_stub._alerted == ["/tmp/alert.wav"]
 
 
+def test_dispatch_routes_ac_commands(entry):
+    with patch.object(config.registry, "ac_handler") as handler:
+        api.dispatch(m.Config(orc.AC.unit, m.AcCommand(m.AcMode.COOL, "low", 75)), force=True, entry=entry)
+        api.dispatch(m.Config(orc.AC.unit, m.ON), force=True, entry=entry)
+        api.dispatch(m.Config(orc.AC.unit, m.OFF), force=True, entry=entry)
+
+    assert handler.call_args_list == [
+        call(orc.AC.unit, m.ON, m.AcMode.COOL, "low", 75),
+        call(orc.AC.unit, m.ON, None, None, None),
+        call(orc.AC.unit, m.OFF, None, None, None),
+    ]
+
+
 def test_dispatch_usb_rejects_on_off_state(entry):
     from orc.dal.audio import stub as audio_stub
 
