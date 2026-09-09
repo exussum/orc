@@ -98,22 +98,16 @@ def test_run_react_dispatches_the_action(ctx):
     assert [(c.what.one(), c.state) for c in dispatched.items] == [(Light.lamp, m.OFF)]
 
 
-def test_ac_action_targets_every_ac_device(ctx):
-    plugins._run_react.__wrapped__(Light.lamp, "door", plugins.AcAction(plugins.AcMode.COOL, "low", 75), 10, ctx=ctx)
-    ctx.api.ac_command.assert_called_once_with(Ac.living, m.ON, plugins.AcMode.COOL, "low", 75)
-
-
-def test_ac_action_requires_the_full_triple():
-    assert react._parse_action("cool:low:75") == plugins.AcAction(plugins.AcMode.COOL, "low", 75)
-    with pytest.raises(ValueError):
-        react._parse_action("fan:low")
-    with pytest.raises(ValueError):
-        react._parse_action("chill:low:75")
+def test_ac_command_targets_every_ac_device(ctx):
+    plugins._run_react.__wrapped__(Light.lamp, "door", m.AcCommand(m.AcMode.COOL, "low", 75), 10, ctx=ctx)
+    dispatched = ctx.api.dispatch.call_args.args[0]
+    assert [(c.what.one(), c.state) for c in dispatched.items] == [(Ac.living, m.AcCommand(m.AcMode.COOL, "low", 75))]
 
 
 def test_contact_open_triggers_immediate_rule(ctx):
-    rule = react.Rule(m.Devices(Light.lamp), "contact", "open", plugins.AcAction(plugins.AcMode.FAN_ONLY, "low", 75), None)
+    rule = react.Rule(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), None)
     rules = [(0, rule, {"56": Light.lamp})]
     device = m.DeviceState(id=56, name="balcony door", attributes={"contact": "open"}, last_activity=None)
     plugins._on_event(ctx, rules, device, "contact", "closed", "open")
-    ctx.api.ac_command.assert_called_once_with(Ac.living, m.ON, plugins.AcMode.FAN_ONLY, "low", 75)
+    dispatched = ctx.api.dispatch.call_args.args[0]
+    assert [(c.what.one(), c.state) for c in dispatched.items] == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]

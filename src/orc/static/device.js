@@ -38,7 +38,7 @@ const acGroups = {
         onSelect(id, el) {
             if (el.dataset.state === 'off') setAcOff(id);
             else startAcWizard(id);
-            get(`/api/device/ac/${id}?state=${el.dataset.state}`, el);
+            get(`/api/device/${id}?state=${el.dataset.state}`, el);
         },
     },
     mode: {
@@ -74,7 +74,7 @@ document.querySelectorAll('.orc-ac-set').forEach(el => {
         const id = el.dataset.id;
         const temp = document.querySelector(`input.orc-ac-ctrl[data-id="${id}"]`)?.value;
         const { fan, mode } = acSelections[id] || {};
-        get(`/api/device/ac/${id}?state=on&mode=${mode}&fan=${fan}&temp=${temp}`, el);
+        get(`/api/device/${id}?state=${mode}:${fan}:${temp}`, el);
         ['power', 'fan', 'mode'].forEach(g => acQuery(g, id).forEach(btn => btn.classList.remove('orc-selected')));
     });
 });
