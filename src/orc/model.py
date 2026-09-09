@@ -246,10 +246,26 @@ class YouTubeId(str):
     pass
 
 
+class AcMode(StrEnum):
+    COOL = "cool"
+    FAN_ONLY = "fan_only"
+    ECON = "econ"
+    DRY = "dry"
+
+
+class AcCommand(NamedTuple):
+    mode: AcMode
+    fan: str
+    temp: int
+
+    def __str__(self) -> str:
+        return f"{self.mode}:{self.fan}:{self.temp}"
+
+
 @dataclass
 class Config:
     what: Devices
-    state: str | int
+    state: str | int | AcCommand
     _: KW_ONLY
     trigger: str | None = None
 

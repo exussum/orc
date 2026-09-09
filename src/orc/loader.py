@@ -18,7 +18,10 @@ from orc.security import safe_eval
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 _NO_OBJECTS: Mapping[str, Any] = MappingProxyType({})
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
-_ERR_STATE = "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, or an 11-character YouTube ID"
+_ERR_STATE = (
+    "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, an 11-character YouTube ID, or mode:fan:temp"
+)
+_ERR_AC_COMMAND = "Invalid AC command {!r}: expected mode:fan:temp with mode one of 'cool', 'fan_only', 'econ', 'dry', e.g. cool:low:75"
 
 GRAMMAR = """
 ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<devices> <state>]
@@ -159,6 +162,12 @@ class Cast:
     def state(value: str) -> Any:
         if value in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
             return value
+        elif ":" in value:
+            try:
+                mode, fan, temp = value.split(":")
+                return m.AcCommand(m.AcMode(mode), fan, int(temp))
+            except ValueError:
+                raise ValueError(_ERR_AC_COMMAND.format(value)) from None
         elif re.match(_YOUTUBE_ID_RE, value):
             return m.YouTubeId(value)
         elif value.isdigit():
@@ -217,7 +226,16 @@ class Cast:
 
 
 def _config(objects: dict[str, Any], args: SimpleNamespace, **extra: Any) -> m.Config:
-    return m.Config(Cast.devices(args.devices, objects), Cast.state(args.state), **extra)
+    devices = Cast.devices(args.devices, objects)
+    state = Cast.state(args.state)
+    ac_cls = objects["device"].enums.get("AC")
+    members = devices.all()
+    acs = tuple(d for d in members if isinstance(d, ac_cls)) if ac_cls else ()
+    if isinstance(state, m.AcCommand) and len(acs) != len(members):
+        raise ValueError(f"AC command {state} applies only to AC devices, got {args.devices!r}")
+    elif not isinstance(state, m.AcCommand) and acs and state not in (m.ON, m.OFF):
+        raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {args.state!r}")
+    return m.Config(devices, state, **extra)
 
 
 def _resolve_function(value: str) -> Callable[..., Any]:
