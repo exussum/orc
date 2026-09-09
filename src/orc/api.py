@@ -43,6 +43,7 @@ from orc.decorators import (
     synchronized,
     unwrap_rule_container,
 )
+from orc.loader import Cast
 from orc.locale import Log
 
 JOBSTORE_DEFAULT = "default"
@@ -303,6 +304,15 @@ def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: di
         config.providers.audio.alert(w, rule.state)
 
 
+def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, m.AcCommand):
+        ac_command(w, m.ON, rule.state.mode, rule.state.fan, rule.state.temp)
+    elif rule.state in (m.ON, m.OFF):
+        ac_command(w, rule.state)
+    else:
+        raise ValueError(f"AC devices don't support state {rule.state!r}")
+
+
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
     config.registry.state_providers[title] = provider
 
@@ -311,6 +321,7 @@ def declare_core(declarations: Declarations) -> None:
     declarations.declare_dispatch("Light", _dispatch_light)
     declarations.declare_dispatch("Chromecast", _dispatch_chromecast)
     declarations.declare_dispatch("USB", _dispatch_usb)
+    declarations.declare_dispatch("AC", _dispatch_ac)
     declarations.controllable_devices.append("Light")
     declarations.controllable_devices.append("Chromecast")
     declarations.controllable_devices.append("AC")
@@ -478,8 +489,14 @@ def ac_command(device: m.DeviceEnum, state: str | None, mode: str | None = None,
 def device_command(id: str, state: str | None) -> None:
     # Find the device across dispatch-handled types and run its registered handler
     # directly (no snapshot interception), so plugin device types work without core
-    # knowing them. state is an int level (brightness/volume) or an ON/OFF/STOP string.
-    parsed: Any = int(state) if state and state.isdigit() else state
+    # knowing them. state is an int level (brightness/volume), an ON/OFF/STOP string,
+    # or a mode:fan:temp AC command.
+    if state and state.isdigit():
+        parsed: Any = int(state)
+    elif state and ":" in state:
+        parsed = Cast.state(state)
+    else:
+        parsed = state
     for device_type in config.registry.devices.values():
         if device_type.dispatch is not None and device_type.handles(id):
             member = device_type.cls[id]
