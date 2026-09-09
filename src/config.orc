@@ -47,6 +47,7 @@ device seal Sensor
 
 routine define ROUTINE_RESET      Reset
 routine append ROUTINE_RESET      Light      off  --trigger SYSTEM
+routine append .                  AC         off  --trigger SYSTEM
 
 routine define ROUTINE_LIGHTS_ON  'Lights On'
 routine append ROUTINE_LIGHTS_ON  Light      on   --trigger SYSTEM
@@ -59,6 +60,7 @@ routine append ROUTINE_QUIET      Chromecast stop --trigger SYSTEM
 
 routine define ROUTINE_DEFAULT    Welcome
 routine append ROUTINE_DEFAULT    Light      on   --trigger SYSTEM
+routine append .                  AC         cool:low:75 --trigger SYSTEM
 
 routine define ROUTINE_DAYLIGHT   Daylight --skip-replay
 routine append ROUTINE_DAYLIGHT   Light      off  --trigger SUNNY

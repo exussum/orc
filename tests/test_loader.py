@@ -115,6 +115,11 @@ def test_ad_hoc_delay():
     assert dog.reset is True
 
 
+def test_routines_accept_ac_commands():
+    parsed = parse("ac_routine")
+    assert [c.state for c in parsed.routine["R_AC"].items] == [m.AcCommand(m.AcMode.COOL, "low", 75), m.OFF]
+
+
 def test_state_youtube_ids_stay_strings():
     parsed = parse("youtube_state")
     states = {name: cfg.items[0].state for name, cfg in parsed.ad_hoc.items()}
@@ -178,6 +183,9 @@ _PARSE_ERRORS = [
     ("duplicate_member_names", "Duplicate names in 'Foo': {'A'}"),
     ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),
     ("invalid_state", "Invalid state 'wibble'"),
+    ("invalid_ac_command", "Invalid AC command 'chill:low:75'"),
+    ("ac_command_non_ac", "AC command cool:low:75 applies only to AC devices, got 'Foo.A'"),
+    ("ac_device_bad_state", "AC devices take a mode:fan:temp command, 'on', or 'off', got 'stop'"),
     ("invalid_delay", "invalid literal for int() with base 10: 'soon'"),
     ("invalid_snapshot", "invalid literal for int() with base 10: 'lots'"),
     ("invalid_section", "Invalid parameter section='weird'"),
