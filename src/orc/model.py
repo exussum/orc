@@ -13,6 +13,8 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.base import BaseScheduler
 
 if TYPE_CHECKING:
+    from cryptography import x509
+    from cryptography.hazmat.primitives.asymmetric import rsa
     from flask import Blueprint
 
     from orc import Config as OrcConfig
@@ -182,6 +184,16 @@ class AcState(Flag):
     ECON = auto()
     DRY = auto()
     ON = COOL | FAN_ONLY | ECON | DRY
+
+
+class CA(NamedTuple):
+    cert: x509.Certificate
+    key: rsa.RSAPrivateKey
+
+
+class Certificate(NamedTuple):
+    cert_pem: bytes
+    key_pem: bytes
 
 
 @dataclass(frozen=True)
