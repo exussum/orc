@@ -18,7 +18,8 @@ Python reimplementation of that work for orc.
 
 1. **Install + activate**: `uv pip install -e 'extras[lg_ac]'`, then add
    `plugin 'LG AC' orc_extras.lg_ac` to `src/config.orc`.
-2. **Set `fqdn`** to this server's real FQDN in `src/plugins/orc_extras/lg_ac.orc`.
+2. **Config**: create `plugins/orc_extras/lg_ac.orc` in your config dir (settings
+   block below) and set `fqdn` to this server's real FQDN.
 3. **Certs**: `python -m orc_extras.lg_ac.gen_certs`, then paste the four PEMs into
    Bitwarden Secrets as `LG_THINQ_*`.
 4. **DNS + nginx**: point `common.lgthinq.com → this host`, and add the nginx `:443`
@@ -55,11 +56,21 @@ In `src/config.orc`:
 plugin 'LG AC' orc_extras.lg_ac
 ```
 
-Settings live in `src/plugins/orc_extras/lg_ac.orc` — set `fqdn` to this server's
-real FQDN (it must resolve to the LAN IP the AC reaches; that IP is what the device
-uses for MQTT and is baked into the server cert's SAN). `fqdn` ships as the
-placeholder `lg-ac.example`; both the plugin (at startup) and `gen_certs` abort
-while it still ends in `.example`.
+Settings live in `plugins/orc_extras/lg_ac.orc` in your config dir:
+
+```
+setting hostname          common.lgthinq.com
+setting fqdn              lg-ac.example
+setting https_advertise   443
+setting mqtt_port         1883
+setting mqtts_advertise   8883
+setting capture           False
+```
+
+Set `fqdn` to this server's real FQDN (it must resolve to the LAN IP the AC
+reaches; that IP is what the device uses for MQTT and is baked into the server
+cert's SAN). Both the plugin (at startup) and `gen_certs` abort while it still
+ends in `.example`.
 
 ## Certificates (via BWS)
 

@@ -1,5 +1,5 @@
-setting foo_backend     orc_extras.example.dal.foo.stub
-setting bar_backend     orc_extras.example.dal.bar.stub
+setting foo_backend     example.dal.foo.stub
+setting bar_backend     example.dal.bar.stub
 setting cron            '0 6 * * *'
 setting window_hours    6
 setting foo_secret      FOO_KEY
