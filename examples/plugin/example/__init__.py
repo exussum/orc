@@ -3,15 +3,15 @@ from typing import Any
 
 from command_cfg import array, group, scalar
 
-import orc_extras.example
+import example
+from example import plugins
+from example.dal import sqlite
+from example.model import Runtime, Settings, Widget, Zone
+from example.web import example_bp
 from orc.loader import Cast, load_plugin_config
 from orc.model import AppContext
-from orc_extras.example import plugins
-from orc_extras.example.dal import sqlite
-from orc_extras.example.model import Runtime, Settings, Widget, Zone
-from orc_extras.example.web import example_bp
 
-CONFIG = "orc_extras/example"
+CONFIG = "example"
 GRAMMAR = """
 setting <key> <value>
 widget <name> <value>
@@ -54,4 +54,4 @@ def setup(ctx: AppContext) -> None:
         bar_key=ctx.config.secrets[s.bar_secret],
     )
     sqlite.init_db(ctx.api.connection)
-    ctx.plugin_state[orc_extras.example] = runtime
+    ctx.plugin_state[example] = runtime
