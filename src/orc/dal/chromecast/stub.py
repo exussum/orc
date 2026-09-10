@@ -10,7 +10,9 @@ _announced: list[str] = []
 
 
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
-    return m.SoundState(what=device, content=_content.get(device), volume=_volumes.get(device, 0))
+    content = _content.get(device)
+    playback = m.Playback.PLAYING if content else m.Playback.STOPPED
+    return m.SoundState(what=device, content=content, volume=_volumes.get(device, 0), playback=playback)
 
 
 def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
