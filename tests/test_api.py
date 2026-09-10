@@ -182,6 +182,12 @@ def test_dispatch_routes_ac_commands(entry):
     ]
 
 
+def test_capture_acs_reads_each_device_through_the_handler():
+    with patch.object(config.registry, "ac_state_handler", lambda device: m.AcState.COOL):
+        assert api.capture_acs().items == (m.AcStatus(orc.AC.unit, m.AcState.COOL),)
+    assert api.capture_acs().items == (m.AcStatus(orc.AC.unit, None),)
+
+
 def test_dispatch_usb_rejects_on_off_state(entry):
     from orc.dal.audio import stub as audio_stub
 
