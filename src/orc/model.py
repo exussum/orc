@@ -288,11 +288,18 @@ class Config:
             self.what = Devices(self.what)
 
 
+class Playback(StrEnum):
+    PLAYING = "playing"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+
+
 @dataclass
 class SoundState:
     what: DeviceEnum
     content: str | None
     volume: int
+    playback: Playback = Playback.STOPPED
 
 
 @dataclass

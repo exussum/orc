@@ -37,12 +37,15 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
         time.sleep(0.5)
         ms = cast.media_controller.status
         content = None
+        playback = m.Playback.STOPPED
         if ms and ms.player_state in _PLAYING_STATES:
             content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
+            playback = m.Playback.PAUSED if ms.player_state == "PAUSED" else m.Playback.PLAYING
         return m.SoundState(
             what=device,
             content=content,
             volume=int(cast.status.volume_level * 100),
+            playback=playback,
         )
 
 
