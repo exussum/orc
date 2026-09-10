@@ -51,12 +51,14 @@
                         <table class="text-left">
                             <tr>
                                 <th class="px-2 py-1 font-normal">Name</th>
+                                <th class="px-2 py-1 font-normal">Status</th>
                                 <th class="px-2 py-1 font-normal">Content</th>
                                 <th class="px-2 py-1 font-normal">Volume</th>
                             </tr>
                             {% for c in sounds.items %}
                                 <tr>
                                     <td class="px-2 py-1">{{ c.what.name }}</td>
+                                    <td class="px-2 py-1">{{ c.playback.value }}</td>
                                     <td class="px-2 py-1">{{ c.content or '—' }}</td>
                                     <td class="px-2 py-1">{{ c.volume }}%</td>
                                 </tr>
