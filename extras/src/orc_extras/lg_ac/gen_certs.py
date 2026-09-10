@@ -9,6 +9,7 @@ resolves to; run from the orc root.
 
 import datetime
 import ipaddress
+import os
 import socket
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 CN = "common.lgthinq.com"
 CERTS = Path("certs/lg_ac")
-_CONFIG = Path("src/plugins/orc_extras/lg_ac.orc")
+_CONFIG = Path(os.environ.get("ORC_CONFIG_DIR", "src")) / "plugins" / "orc_extras" / "lg_ac.orc"
 _FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)
 _TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
 
