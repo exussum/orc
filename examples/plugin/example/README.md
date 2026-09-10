@@ -23,7 +23,7 @@ example/
 A plugin runs only when the **main** config (`src/config.orc`) names it:
 
 ```
-plugin Example orc_extras.example
+plugin Example example
 ```
 
 Its own `.orc` (under `src/plugins/**`) is separate — read into
@@ -58,7 +58,7 @@ differ only in where the backend is declared.
 `travel`): one setting per capability, resolved in `setup()`.
 ```
 # example.orc
-setting foo_backend  orc_extras.example.dal.foo.acme
+setting foo_backend  example.dal.foo.acme
 # setup(): Cast.module(s.foo_backend) -> stored on Runtime, typed FooService
 ```
 

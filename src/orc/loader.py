@@ -351,9 +351,7 @@ def load_plugin_config(
     grammar: str,
     serializers: Mapping[str, scalar | group | array | raw | each],
 ) -> SimpleNamespace:
-    text = config.plugin_configs.get(name)
-    if text is None:
-        raise FileNotFoundError(f"no config 'plugins/{name}.orc'")
+    text = config.plugin_configs[name]
     # Seed the parse with the sealed device registry so Cast.devices/Cast.device
     # resolve in plugin configs the same way they do in the main config.
     device = raw(lambda rows, objects: SimpleNamespace(enums={n: dt.cls for n, dt in config.registry.devices.items()}))

@@ -105,7 +105,8 @@ Steps:
    themes, room configs, and plugins are all defined there — the sample
    file demonstrates every command except `person`, which is omitted so a
    stub-backed dev run never attempts privileged presence scans. Per-plugin
-   configs go in a `plugins/` subdirectory (see `src/plugins/` for examples).
+   configs go in a `plugins/` subdirectory of the config directory — copyable
+   samples for each plugin are in `examples/configs/`.
 
 3. **Create the secrets in Bitwarden Secrets Manager.** See
    [Secrets (Bitwarden)](#secrets-bitwarden), and put a machine-account
@@ -254,6 +255,6 @@ bounces the `orc` supervisor job.
 - `src/orc/locale.py` — log-message string constants
 - `src/orc/view.py` + `templates/` + `static/` — Flask UI (schedule, device, presence, log, config views)
 - `src/config.orc` — sample device/routine/theme/plugin definitions
-- `src/plugins/` — per-plugin config files
+- `examples/` — copyable per-plugin config samples (`configs/`) and the example plugin (`plugin/`)
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
 - `extras/` — optional `orc_extras` plugin package (for example, `entrance_sensor`) with its own tests

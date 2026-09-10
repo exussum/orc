@@ -1,9 +1,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock, create_autospec
 
+import example
 import pytest
-from orc_extras import example
-from orc_extras.example import model as m
+from example import model as m
 
 from orc import api
 from orc.loader import Cast
@@ -23,8 +23,8 @@ def _setup_runtime():
 def test_example_config_loads():
     rt = _setup_runtime()
     assert rt.settings == m.Settings(
-        foo_backend="orc_extras.example.dal.foo.stub",
-        bar_backend="orc_extras.example.dal.bar.stub",
+        foo_backend="example.dal.foo.stub",
+        bar_backend="example.dal.bar.stub",
         cron="0 6 * * *",
         window_hours=6,
         foo_secret="FOO_KEY",
@@ -37,17 +37,17 @@ def test_example_config_loads():
         m.Zone("Office", "500 Market St, Metropolis"),
         m.Zone("Villa", "9 Beach Rd, Seaside"),
     ]
-    assert rt.foo is Cast.module("orc_extras.example.dal.foo.stub")
-    assert rt.bar is Cast.module("orc_extras.example.dal.bar.stub")
+    assert rt.foo is Cast.module("example.dal.foo.stub")
+    assert rt.bar is Cast.module("example.dal.bar.stub")
 
 
 @pytest.mark.parametrize(
     "path,func",
     [
-        ("orc_extras.example.dal.foo.acme", "do_foo"),
-        ("orc_extras.example.dal.foo.stub", "do_foo"),
-        ("orc_extras.example.dal.bar.globex", "do_bar"),
-        ("orc_extras.example.dal.bar.stub", "do_bar"),
+        ("example.dal.foo.acme", "do_foo"),
+        ("example.dal.foo.stub", "do_foo"),
+        ("example.dal.bar.globex", "do_bar"),
+        ("example.dal.bar.stub", "do_bar"),
     ],
 )
 def test_backends_resolve(path, func):

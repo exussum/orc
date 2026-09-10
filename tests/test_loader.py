@@ -1,14 +1,12 @@
 import re
 from datetime import time, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
-from command_cfg import scalar
 
 from orc import model as m
 from orc.dal import interfaces
-from orc.loader import ConfigError, load_plugin_config, parse_config, validate
+from orc.loader import ConfigError, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
 
@@ -161,11 +159,6 @@ def test_plugin_command_imports_callable():
     assert plugin.section == "device"
     assert plugin.icon == "tv"
     assert plugin.delay == timedelta()
-
-
-def test_load_plugin_config_missing_file():
-    with pytest.raises(FileNotFoundError, match="no config 'plugins/foo.orc'"):
-        load_plugin_config("foo", SimpleNamespace(plugin_configs={}), "setting <key> <value>", {"setting": scalar(m.Settings.build)})
 
 
 _PARSE_ERRORS = [

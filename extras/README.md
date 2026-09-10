@@ -199,8 +199,7 @@ namespaced as `<package>/<name>`, so the file lives at:
 $ORC_CONFIG_DIR/plugins/orc_extras/entrance_sensor.orc
 ```
 
-The in-repo sample is
-[`../src/plugins/orc_extras/entrance_sensor.orc`](../src/plugins/orc_extras/entrance_sensor.orc):
+For example:
 
 ```
 setting cleanup_delay_minutes 2
