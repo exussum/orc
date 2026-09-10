@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import KW_ONLY, dataclass, field
 from datetime import date, datetime, time, timedelta
-from enum import Enum, EnumType, StrEnum, auto
+from enum import Enum, EnumType, Flag, StrEnum, auto
 from itertools import chain
 from pathlib import Path
 from types import ModuleType
@@ -168,6 +168,20 @@ class Alarm(str, Enum):
     WARNING = "WARNING"
     ATTENTION = "ATTENTION"
     EMERGENCY = "EMERGENCY"
+
+
+class AcState(Flag):
+    """An AC's live state: OFF, a powered mode, or bare ON when the mode is unknown.
+
+    ON is the union of the modes, so matching is bitwise containment: ``COOL in ON``
+    holds for any powered state, ``ON in COOL`` does not."""
+
+    OFF = auto()
+    COOL = auto()
+    FAN_ONLY = auto()
+    ECON = auto()
+    DRY = auto()
+    ON = COOL | FAN_ONLY | ECON | DRY
 
 
 @dataclass(frozen=True)
@@ -462,6 +476,9 @@ class Registry:
     # Set by a setup hook (``api.set_ac_handler``); ``api.ac_command`` calls it with the
     # target AC device, so one backend routes every AC member by device.
     ac_handler: Callable[["DeviceEnum", str | None, str | None, str | None, int | None], None] | None = None
+    # Set by a setup hook (``api.set_ac_state_handler``); ``api.ac_state`` reads a
+    # device's live ``AcState`` (None if unknown) through it.
+    ac_state_handler: Callable[["DeviceEnum"], AcState | None] | None = None
 
 
 def resolve_time(value: str) -> time | str:

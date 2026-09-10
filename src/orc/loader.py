@@ -225,16 +225,19 @@ class Cast:
         raise ValueError(_ERR_PARAMS.format("section", value))
 
 
+def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, type[m.DeviceEnum]], *, source: str) -> None:
+    ac_cls = enums.get("AC")
+    acs = tuple(d for d in members if isinstance(d, ac_cls)) if ac_cls else ()
+    if isinstance(state, m.AcCommand) and len(acs) != len(members):
+        raise ValueError(f"AC command {state} applies only to AC devices, got {source!r}")
+    elif not isinstance(state, m.AcCommand) and acs and state not in (m.ON, m.OFF):
+        raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {state!r}")
+
+
 def _config(objects: dict[str, Any], args: SimpleNamespace, **extra: Any) -> m.Config:
     devices = Cast.devices(args.devices, objects)
     state = Cast.state(args.state)
-    ac_cls = objects["device"].enums.get("AC")
-    members = devices.all()
-    acs = tuple(d for d in members if isinstance(d, ac_cls)) if ac_cls else ()
-    if isinstance(state, m.AcCommand) and len(acs) != len(members):
-        raise ValueError(f"AC command {state} applies only to AC devices, got {args.devices!r}")
-    elif not isinstance(state, m.AcCommand) and acs and state not in (m.ON, m.OFF):
-        raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {args.state!r}")
+    validate_ac_state(devices.all(), state, objects["device"].enums, source=args.devices)
     return m.Config(devices, state, **extra)
 
 
