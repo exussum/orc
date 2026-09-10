@@ -296,6 +296,12 @@ class SoundState:
 
 
 @dataclass
+class AcStatus:
+    what: DeviceEnum
+    state: AcState | None
+
+
+@dataclass
 class Configs[T = Config]:
     items: tuple[T, ...]
 
