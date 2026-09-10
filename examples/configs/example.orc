@@ -1,5 +1,5 @@
-setting foo_backend     orc_extras.example.dal.foo.acme
-setting bar_backend     orc_extras.example.dal.bar.globex
+setting foo_backend     example.dal.foo.acme
+setting bar_backend     example.dal.bar.globex
 setting cron            '0 6 * * *'
 setting window_hours    6
 setting foo_secret      FOO_KEY

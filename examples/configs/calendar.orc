@@ -1,4 +1,4 @@
-setting backend         orc_extras.calendar.dal.ical
+setting backend         ${ORC_CALENDAR_BACKEND-orc_extras.calendar.dal.ical}
 setting cron            '10,25,40,55 8-21 * * *'
 setting window_hours    20
 setting max_events      50

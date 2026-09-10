@@ -91,11 +91,7 @@ class VersionManager:
 def cfg() -> str:
     today = api.local_now().date()
     tomorrow = today + timedelta(days=1)
-    plugins_dir = Path(config.config_dir) / "plugins"
-    plugin_htmls: dict[str, str] = {}
-    if plugins_dir.is_dir():
-        for p in sorted(plugins_dir.glob("**/*.orc")):
-            plugin_htmls[p.stem] = Markup("<pre>{}</pre>").format(p.read_text())
+    plugin_htmls = {name.rsplit("/", 1)[-1]: Markup("<pre>{}</pre>").format(text) for name, text in sorted(config.plugin_configs.items())}
     html = Markup("<pre>{}</pre>").format((Path(config.config_dir) / "config.orc").read_text())
 
     states = [(title, fn()) for title, fn in config.registry.state_providers.items()]
