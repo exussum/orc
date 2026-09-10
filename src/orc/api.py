@@ -486,6 +486,15 @@ def ac_command(device: m.DeviceEnum, state: str | None, mode: str | None = None,
     handler(device, state, mode, fan, temp)
 
 
+def set_ac_state_handler(handler: Callable[[m.DeviceEnum], m.AcState | None]) -> None:
+    config.registry.ac_state_handler = handler
+
+
+def ac_state(device: m.DeviceEnum) -> m.AcState | None:
+    handler = config.registry.ac_state_handler
+    return handler(device) if handler else None
+
+
 def device_command(id: str, state: str | None) -> None:
     # Find the device across dispatch-handled types and run its registered handler
     # directly (no snapshot interception), so plugin device types work without core
