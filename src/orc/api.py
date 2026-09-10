@@ -264,6 +264,10 @@ def capture_sounds() -> m.Configs[m.SoundState]:
         return m.Configs(*ex.map(fetch, devices))
 
 
+def capture_acs() -> m.Configs[m.AcStatus]:
+    return m.Configs(*[m.AcStatus(w, ac_state(w)) for w in orc.AC])
+
+
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(rule.state, int):
         config.providers.mqtt.publish_light(w, brightness=rule.state)
