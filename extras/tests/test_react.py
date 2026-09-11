@@ -194,6 +194,14 @@ def test_when_mode_predicate_requires_that_mode(ctx):
     ctx.api.dispatch.assert_called_once()
 
 
+def test_when_on_ignores_unknown_mode_for_a_specific_mode_query(ctx):
+    # an AC powered but with unknown mode (bare ON) must not satisfy `is cool`
+    when = plugins.When(Ac.living, m.AcState.COOL)
+    ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.ON))
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    ctx.api.dispatch.assert_not_called()
+
+
 def test_when_checks_chromecast_playback_at_fire_time(ctx):
     when = plugins.When(Chromecast.tv, m.Playback.PLAYING)
     ctx.api.capture_sounds.return_value = m.Configs(m.SoundState(Chromecast.tv, None, 30, m.Playback.STOPPED))

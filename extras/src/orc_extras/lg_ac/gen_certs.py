@@ -1,12 +1,3 @@
-"""Generate certs for the provisioning TLS listener and broker.
-
-Writes, under certs/lg_ac/: ca.{crt,key}, server-ca.{crt,key} (CA-signed),
-server-selfsigned.{crt,key}. Server certs carry SAN, KeyUsage, and
-ExtendedKeyUsage(serverAuth, clientAuth) so picky embedded TLS clients accept
-them. The server SAN includes the FQDN (read from the plugin config) and the IP it
-resolves to; run from the orc root.
-"""
-
 import datetime
 import ipaddress
 import os
