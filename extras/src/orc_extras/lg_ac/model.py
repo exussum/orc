@@ -17,6 +17,21 @@ class Certificate(NamedTuple):
     key_pem: bytes
 
 
+class Fieldmap(NamedTuple):
+    """One model's TLV vocabulary, loaded from fieldmap/<model>.json."""
+
+    power: int
+    mode: int
+    fan: int
+    current_temp: int
+    target_temp: int
+    mode_to_code: dict[str, int]
+    fan_to_code: dict[str, int]
+    min_c: float
+    max_c: float
+    temp_div: int
+
+
 @dataclass(slots=True)
 class TLVField:
     type_id: int

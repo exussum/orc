@@ -41,6 +41,7 @@ _client: mqtt.Client | None = None  # standing client, retained for publishing c
 # a reader iterating a returned snapshot never races an in-place mutation. Keys are in
 # first-seen order, so default_device() is the last key.
 _raw: LockedDict[str, dict[int, int]] = LockedDict()  # merged latest TLV values per device
+_models: LockedDict[str, str] = LockedDict()  # device id -> model kind from its preDeploy payload
 _raw_listeners: list[Callable[[str, bytes], None]] = []  # every inbound message, undecoded
 _event_listener: Callable[[str], None] | None = None  # major events (enrollment, state changes)
 
@@ -77,8 +78,16 @@ def start(host: str, port: int = 1883, username: str | None = None, password: st
     _client = client
 
 
+def _fieldmap(device_id: str) -> m.Fieldmap | None:
+    model = _models.get(device_id)
+    return api.load_fieldmap(model) if model else None
+
+
 def fetch_state(device_id: str) -> m.ACState:
-    return api.state_from_raw(_raw.get(device_id) or {})
+    fm = _fieldmap(device_id)
+    if fm is None:
+        return m.ACState()
+    return api.state_from_raw(fm, _raw.get(device_id) or {})
 
 
 def devices() -> list[str]:
@@ -102,7 +111,11 @@ def _send_packet(device_id: str, frame: bytes) -> None:
 def publish_command(device_id: str, values: dict[str, object]) -> None:
     if _client is None:
         raise RuntimeError("mqtt client not started; cannot command device")
-    _send_packet(device_id, api.build_command(values))
+    fm = _fieldmap(device_id)
+    if fm is None:
+        _event(f"AC {device_id[:8]}: command dropped, no field map")
+        return
+    _send_packet(device_id, api.build_command(fm, values))
 
 
 def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
@@ -143,7 +156,8 @@ def _receive_message(topic: str, payload: bytes) -> None:
         _seen(device_id)
         _poll(device_id)
     elif cmd == "device_packet":
-        if api.active_model() is None:
+        fm = _fieldmap(device_id)
+        if fm is None:
             return  # unknown model: skip decode (enable capture to log raw frames for calibration)
         pkt = api.frame_tlv(bytes.fromhex(msg.get("data", "")))
         if pkt is None:
@@ -151,15 +165,15 @@ def _receive_message(topic: str, payload: bytes) -> None:
         values = {f.type_id: f.value for f in pkt.fields}
         old = _raw.get(device_id) or {}
         _raw.update(device_id, lambda cur: {**(cur or {}), **values})
-        _event_state_changes(device_id, old, {**old, **values})
+        _event_state_changes(fm, device_id, old, {**old, **values})
     elif cmd == "req_timesync":
         _send_timesync(device_id)
 
 
 # current_temperature is deliberately excluded: it drifts constantly and would flood the log
-def _event_state_changes(device_id: str, old: dict[int, int], new: dict[int, int]) -> None:
-    before = api.state_from_raw(old)
-    after = api.state_from_raw(new)
+def _event_state_changes(fm: m.Fieldmap, device_id: str, old: dict[int, int], new: dict[int, int]) -> None:
+    before = api.state_from_raw(fm, old)
+    after = api.state_from_raw(fm, new)
     changes = [
         f"{field} {b} → {a}"
         for field, b, a in zip(before._fields, before, after)
@@ -187,9 +201,11 @@ def _receive_provisioning(topic: str, payload: bytes) -> None:
     if device_cmd not in ("preDeploy", "deploy"):
         return  # ignore our own completeProvisioning response echoed back
     model = incoming.get("kind")
-    if model and api.active_model() != model and not api.select_model(model):
-        _log.warning("no field map for model %s; capture-only until one exists", model)
-        _event(f"AC {device_id[:8]}: no field map for model {model}; capture-only")
+    if model and model != _models.get(device_id):
+        _models.update(device_id, lambda cur: model)
+        if api.load_fieldmap(model) is None:
+            _log.warning("no field map for model %s; capture-only until one exists", model)
+            _event(f"AC {device_id[:8]}: no field map for model {model}; capture-only")
     if device_cmd == "deploy":
         _event(f"AC {device_id[:8]} enrolled (model {model})")
     _seen(device_id)
