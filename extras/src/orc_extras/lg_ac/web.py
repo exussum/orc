@@ -1,25 +1,25 @@
-"""Flask blueprint for the LG AC.
-
-Mounted by orc at ``/api/lg_ac/enroll``. The device hits the enrollment routes at
-the domain root (``/route`` etc.); nginx terminates TLS on :443 with the LG
-CA-signed cert and rewrites those root paths onto this blueprint.
-"""
-
 import socket
+from typing import TYPE_CHECKING, cast
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask.wrappers import Response
 
-from orc_extras.lg_ac import api, settings
+import orc_extras.lg_ac as lg_ac
+from orc_extras.lg_ac import api
 from orc_extras.lg_ac.dal.capture import memory as capture
 from orc_extras.lg_ac.dal.mqtt import thinq
+from orc_extras.lg_ac.model import Settings
+
+if TYPE_CHECKING:
+    from orc.view import OrcFlask
 
 enroll = Blueprint("lg_ac", __name__)
+app = cast("OrcFlask", current_app)
 
 
 @enroll.get("/route")
 def route() -> Response:
-    s = settings.current()
+    s: Settings = app.orc.plugin_state[lg_ac]
     mqtt_ip = socket.gethostbyname(s.fqdn)  # the device connects to the broker by IP
     return jsonify(api.route(s.hostname, s.https_advertise, mqtt_ip, s.mqtts_advertise))
 
@@ -35,6 +35,7 @@ def route_certificate() -> Response:
 def device_certificate(device_id: str) -> Response:
     body = request.get_json(force=True)
     signed = api.sign_device_csr(body["csr"].encode(), device_id)
+    thinq.event(f"AC {device_id[:8]} paired")
     return jsonify(api.cert_response(signed))
 
 
