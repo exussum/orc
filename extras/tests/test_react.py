@@ -85,7 +85,7 @@ def test_switch_on_schedules_reaction(ctx):
     call = ctx.scheduler.add_job.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"] == "react-0-1"
-    assert call.kwargs["args"] == (m.Devices(Light.lamp), "lamp", m.OFF, 10, None)
+    assert call.kwargs["args"] == (m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, None)
 
 
 def test_switch_off_cancels_pending_jobs(ctx):
@@ -102,7 +102,7 @@ def test_unwatched_device_is_ignored(ctx):
 
 
 def test_run_react_dispatches_the_action(ctx):
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, None, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, None, ctx=ctx)
     assert _dispatched(ctx) == [(Light.lamp, m.OFF)]
 
 
@@ -124,7 +124,7 @@ def test_targeted_rule_schedules_with_the_target(ctx):
     rules = [(0, rule, {"1": Light.lamp})]
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     plugins._on_event(ctx, rules, device, "switch", m.OFF, m.ON)
-    assert ctx.scheduler.add_job.call_args.kwargs["args"] == (m.Devices(Light.desk), "lamp", m.OFF, 5, None)
+    assert ctx.scheduler.add_job.call_args.kwargs["args"] == (m.Devices(Light.desk), "lamp", m.ON, m.OFF, 5, None)
 
 
 def test_contact_open_triggers_immediate_rule(ctx):
@@ -187,10 +187,10 @@ def test_when_gates_immediate_rule_on_ac_state(ctx):
 def test_when_mode_predicate_requires_that_mode(ctx):
     when = plugins.When(Ac.living, m.AcState.COOL)
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.FAN_ONLY))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.COOL))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_called_once()
 
 
@@ -198,25 +198,25 @@ def test_when_on_ignores_unknown_mode_for_a_specific_mode_query(ctx):
     # an AC powered but with unknown mode (bare ON) must not satisfy `is cool`
     when = plugins.When(Ac.living, m.AcState.COOL)
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.ON))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_not_called()
 
 
 def test_when_checks_chromecast_playback_at_fire_time(ctx):
     when = plugins.When(Chromecast.tv, m.Playback.PLAYING)
     ctx.api.capture_sounds.return_value = m.Configs(m.SoundState(Chromecast.tv, None, 30, m.Playback.STOPPED))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.capture_sounds.return_value = m.Configs(m.SoundState(Chromecast.tv, "stream", 30, m.Playback.PLAYING))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_called_once()
 
 
 def test_when_checks_hubitat_state_at_fire_time(ctx):
     when = plugins.When(Light.desk, m.ON)
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.OFF}, last_activity=None)]
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)]
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.OFF, 10, when, ctx=ctx)
+    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_called_once()
