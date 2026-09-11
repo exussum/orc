@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from cryptography import x509
@@ -6,10 +7,13 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from flask import Flask
-from orc_extras.lg_ac import api, settings, web
+from orc_extras import lg_ac
+from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac import model as m
 from orc_extras.lg_ac.dal.capture import memory as capture
 from orc_extras.lg_ac.dal.mqtt import thinq
+
+from orc.model import AcState
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
@@ -213,10 +217,9 @@ def test_sign_device_csr_issues_a_client_cert(ca_pem, device_csr, encoding):
 
 @pytest.fixture
 def client():
-    settings.set_current(
-        settings.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtt_port=1883, mqtts_advertise=8883)
-    )
     app = Flask(__name__)
+    settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtt_port=1883, mqtts_advertise=8883)
+    app.orc = SimpleNamespace(plugin_state={lg_ac: settings})  # type: ignore[attr-defined]
     app.register_blueprint(web.enroll)
     return app.test_client()
 
@@ -269,6 +272,32 @@ def test_command_endpoint_publishes_to_the_device(client, monkeypatch):
 def test_command_endpoint_errors_with_no_device(client, monkeypatch):
     monkeypatch.setattr(thinq, "default_device", lambda: None)
     assert client.post("/command", json={"mode": "cool"}).get_json() == {"error": "no device"}
+
+
+def test_handle_ac_commands_the_bound_device(monkeypatch):
+    published = []
+    monkeypatch.setattr(thinq, "devices", lambda: ["clip-1", "clip-2"])
+    monkeypatch.setattr(thinq, "publish_command", lambda device_id, values: published.append((device_id, values)))
+    lg_ac._handle_ac(SimpleNamespace(value="clip-2"), "off", None, None, None)
+    assert published == [("clip-2", {"mode": "off"})]
+
+
+def test_handle_ac_stale_id_commands_nothing(monkeypatch):
+    published = []
+    monkeypatch.setattr(thinq, "devices", lambda: ["clip-1", "clip-2"])
+    monkeypatch.setattr(thinq, "publish_command", lambda device_id, values: published.append((device_id, values)))
+    lg_ac._handle_ac(SimpleNamespace(value="clip-stale"), "off", None, None, None)
+    assert published == []
+
+
+def test_ac_state_reads_the_bound_device(monkeypatch):
+    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState("ON", "cool", "low", 25.0, 22.0))
+    assert lg_ac._ac_state(SimpleNamespace(value="clip-1")) == AcState.COOL
+
+
+def test_ac_state_stale_id_is_none(monkeypatch):
+    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState())  # unknown id → empty state
+    assert lg_ac._ac_state(SimpleNamespace(value="clip-stale")) is None
 
 
 def test_capture_endpoint_dumps_recorded_frames(client):
