@@ -7,22 +7,21 @@ https://github.com/anszom/rethink.
 
 from __future__ import annotations
 
-import base64
 import datetime
 import enum
 import json
 import os
-from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 from typing import cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+from orc import security
+from orc.model import CA, Certificate
 from orc_extras.lg_ac import model as m
 
 # --- Module constants ---
@@ -38,7 +37,7 @@ class Query(enum.IntEnum):
 _RESULT_OK = "0000"  # provisioning resultCode
 _VALID_FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)  # issued-cert validity window
 _VALID_TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
-_ca: tuple[x509.Certificate, rsa.RSAPrivateKey] | None = None  # loaded CA, set by configure()
+_ca: CA | None = None  # loaded CA, set by configure()
 
 # --- ThinQ2 TLV codec ---
 #
@@ -223,53 +222,18 @@ def deploy(device_id: str, mid: int, cmd: str = "completeProvisioning") -> dict[
 
 def configure(ca_cert_pem: bytes, ca_key_pem: bytes) -> None:
     global _ca
-    cert = x509.load_pem_x509_certificate(ca_cert_pem)
-    key = serialization.load_pem_private_key(ca_key_pem, password=None)
-    if not isinstance(key, rsa.RSAPrivateKey):
-        raise TypeError("CA key is not RSA")
-    _ca = (cert, key)
+    _ca = security.load_ca(ca_cert_pem, ca_key_pem)
 
 
-def _require_ca() -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
+def _require_ca() -> CA:
     if _ca is None:
         raise RuntimeError("CA not loaded; call configure(ca_cert, ca_key)")
     return _ca
 
 
-def _pem(cert: x509.Certificate, key: rsa.RSAPrivateKey) -> m.Certificate:
-    return m.Certificate(
-        cert.public_bytes(serialization.Encoding.PEM),
-        key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.TraditionalOpenSSL,
-            serialization.NoEncryption(),
-        ),
-    )
-
-
-def ca() -> m.Certificate:
-    cert, key = _require_ca()
-    return _pem(cert, key)
-
-
-def _sign(
-    subject: x509.Name,
-    public_key: CertificatePublicKeyTypes,
-    extensions: Sequence[x509.ExtensionType] = (),
-) -> x509.Certificate:
-    ca_cert, ca_key = _require_ca()
-    builder = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(ca_cert.subject)
-        .public_key(public_key)
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(_VALID_FROM)
-        .not_valid_after(_VALID_TO)
-    )
-    for extension in extensions:
-        builder = builder.add_extension(extension, critical=False)
-    return builder.sign(ca_key, hashes.SHA256())
+def ca() -> Certificate:
+    loaded = _require_ca()
+    return security.pem(loaded.cert, loaded.key)
 
 
 def _tlv(data: bytes, i: int) -> tuple[int, int]:
@@ -303,19 +267,19 @@ def _csr_public_key_der(csr_der: bytes) -> bytes:
     return csr_der[spki_start:spki_end]
 
 
-def _pem_to_der(pem: bytes) -> bytes:
-    if b"-----BEGIN" not in pem:
-        return pem
-    body = b"".join(line for line in pem.splitlines() if line and not line.startswith(b"-----"))
-    return base64.b64decode(body)
-
-
 def sign_device_csr(csr_pem: bytes, device_id: str) -> bytes:
     # The device's CSR is non-canonical DER that strict parsers reject. We don't
     # need to validate its self-signature (it's enrolling on our own network) —
     # extract the public key ahead of the offending field and sign a cert for it.
-    spki = _csr_public_key_der(_pem_to_der(csr_pem))
+    spki = _csr_public_key_der(security.pem_to_der(csr_pem))
     public_key = cast(CertificatePublicKeyTypes, serialization.load_der_public_key(spki))
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, device_id)])
-    cert = _sign(subject, public_key, [x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH])])
+    cert = security.sign(
+        _require_ca(),
+        subject,
+        public_key,
+        [x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH])],
+        not_before=_VALID_FROM,
+        not_after=_VALID_TO,
+    )
     return cert.public_bytes(serialization.Encoding.PEM)
