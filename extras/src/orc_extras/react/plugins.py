@@ -52,12 +52,16 @@ def _on_event(
             _cancel(ctx, index, source)
 
 
+def _targets(what: m.Devices) -> str:
+    return ", ".join(f"`{d.label or d.name}`" for d in what.all())
+
+
 def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, name: str) -> None:
     what = rule.target or m.Devices(source)
     if rule.delay is None:
         if not _when_holds(ctx, rule.when):
             return
-        entry = ctx.api.log(Log.REACT, f"`{name}` {rule.state} — {rule.action}")
+        entry = ctx.api.log(Log.REACT, f"`{name}` {rule.state} → set {_targets(what)} {rule.action}")
         _apply(ctx, what, rule.action, entry)
     else:
         ctx.scheduler.add_job(
@@ -67,7 +71,7 @@ def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, nam
             id=f"{JOB_ID}-{index}-{source.value}",
             replace_existing=True,
             jobstore=ctx.api.JOBSTORE_MEMORY,
-            args=(what, name, rule.action, rule.delay, rule.when),
+            args=(what, name, rule.state, rule.action, rule.delay, rule.when),
         )
 
 
@@ -82,8 +86,8 @@ def _apply(ctx: m.AppContext, what: m.Devices, action: Any, entry: m.LogEntry) -
 
 
 @requires_ctx
-def _run_react(what: m.Devices, name: str, action: Any, minutes: int, when: When | None, *, ctx: m.AppContext) -> None:
+def _run_react(what: m.Devices, name: str, state: str, action: Any, minutes: int, when: When | None, *, ctx: m.AppContext) -> None:
     if not _when_holds(ctx, when):
         return
-    entry = ctx.api.log(Log.REACT, f"`{name}` on {minutes}m — {action}")
+    entry = ctx.api.log(Log.REACT, f"`{name}` {state} {minutes}m ago → set {_targets(what)} {action}")
     _apply(ctx, what, action, entry)
