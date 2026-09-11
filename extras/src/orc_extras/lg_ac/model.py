@@ -4,17 +4,21 @@ from dataclasses import dataclass, field
 from typing import NamedTuple
 
 
+class Settings(NamedTuple):
+    hostname: str  # advertised api host, e.g. common.lgthinq.com
+    fqdn: str  # this server's own FQDN; resolves to the mqtt IP the device connects to. *.example = unset
+    https_advertise: int  # port advertised for the api server (nginx :443)
+    mqtt_port: int  # local plain listener the proxy client uses
+    mqtts_advertise: int  # tls port the device connects to (broker)
+    capture: bool = False
+
+
 class ACState(NamedTuple):
     power: str | None = None
     mode: str | None = None
     fan_mode: str | None = None
     current_temperature: float | None = None
     temperature: float | None = None
-
-
-class Certificate(NamedTuple):
-    cert_pem: bytes
-    key_pem: bytes
 
 
 class Fieldmap(NamedTuple):
