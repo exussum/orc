@@ -13,11 +13,8 @@ from orc_extras.lg_ac.dal.mqtt import thinq
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
-
-
-@pytest.fixture(autouse=True)
-def _model():
-    assert api.select_model(MODEL)
+FM = api.load_fieldmap(MODEL)
+assert FM is not None
 
 
 @pytest.fixture(scope="module")
@@ -112,23 +109,23 @@ def test_frame_tlv_rejects_malformed_frames(name, payload):
 # --- Field map and state decoding ---
 
 
-def test_select_model_rejects_unknown_models():
-    assert not api.select_model("WIN_000000_XX")
-    assert api.active_model() == MODEL
+def test_load_fieldmap_handles_unknown_models():
+    assert api.load_fieldmap("WIN_000000_XX") is None
+    assert api.load_fieldmap(MODEL) is FM
 
 
 def test_state_from_raw_decodes_every_field():
-    raw = {api.POWER: 1, api.MODE: 0, api.FAN: 2, api.CURRENT_TEMP: 50, api.TARGET_TEMP: 44}
-    assert api.state_from_raw(raw) == m.ACState("ON", "cool", "low", 25.0, 22.0)
+    raw = {FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44}
+    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", 25.0, 22.0)
 
 
 def test_state_from_raw_reports_mode_off_when_powered_down():
-    assert api.state_from_raw({api.POWER: 0, api.MODE: 0}) == m.ACState("OFF", "off")
+    assert api.state_from_raw(FM, {FM.power: 0, FM.mode: 0}) == m.ACState("OFF", "off")
 
 
 def test_state_from_raw_leaves_unknown_codes_as_none():
-    assert api.state_from_raw({api.POWER: 1, api.MODE: 99, api.FAN: 99}) == m.ACState("ON", None, None)
-    assert api.state_from_raw({}) == m.ACState()
+    assert api.state_from_raw(FM, {FM.power: 1, FM.mode: 99, FM.fan: 99}) == m.ACState("ON", None, None)
+    assert api.state_from_raw(FM, {}) == m.ACState()
 
 
 # --- Command encoding ---
@@ -137,33 +134,33 @@ def test_state_from_raw_leaves_unknown_codes_as_none():
 @pytest.mark.parametrize(
     ("values", "fields"),
     [
-        ({"power": "on"}, [("POWER", 1)]),
-        ({"power": "off"}, [("POWER", 0)]),
-        ({"mode": "off"}, [("POWER", 0)]),
-        ({"mode": "cool"}, [("POWER", 1), ("MODE", 0)]),
-        ({"fan_mode": "high"}, [("FAN", 6)]),
-        ({"temperature": 22}, [("TARGET_TEMP", 44)]),
-        ({"temperature": 35}, [("TARGET_TEMP", 60)]),
-        ({"temperature": 10}, [("TARGET_TEMP", 32)]),
+        ({"power": "on"}, [("power", 1)]),
+        ({"power": "off"}, [("power", 0)]),
+        ({"mode": "off"}, [("power", 0)]),
+        ({"mode": "cool"}, [("power", 1), ("mode", 0)]),
+        ({"fan_mode": "high"}, [("fan", 6)]),
+        ({"temperature": 22}, [("target_temp", 44)]),
+        ({"temperature": 35}, [("target_temp", 60)]),
+        ({"temperature": 10}, [("target_temp", 32)]),
     ],
 )
 def test_encode_command_maps_values_to_tlv_fields(values, fields):
-    packet = api.dissect(api.encode_command(values))
-    assert [(f.type_id, f.value) for f in packet.fields] == [(getattr(api, name), value) for name, value in fields]
+    packet = api.dissect(api.encode_command(FM, values))
+    assert [(f.type_id, f.value) for f in packet.fields] == [(getattr(FM, name), value) for name, value in fields]
 
 
 def test_encode_command_rejects_unknown_fields():
     with pytest.raises(KeyError):
-        api.encode_command({"swing": 1})
+        api.encode_command(FM, {"swing": 1})
 
 
 def test_build_command_round_trips_through_the_codec():
-    frame = api.build_command({"mode": "cool", "fan_mode": "low", "temperature": 22})
+    frame = api.build_command(FM, {"mode": "cool", "fan_mode": "low", "temperature": 22})
     body = frame[2:-2]
     assert frame[:2] == b"\x01\x01"
     assert body[:9] == bytes([0x04, 0x00, 0x00, 0x00, 0x65, 2, 1, 1, len(body) - 9])
     raw = {f.type_id: f.value for f in api.dissect(body[9:]).fields}
-    assert api.state_from_raw(raw) == m.ACState("ON", "cool", "low", temperature=22.0)
+    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", temperature=22.0)
 
 
 # --- Provisioning responses ---
