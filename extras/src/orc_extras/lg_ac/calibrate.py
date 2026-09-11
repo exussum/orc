@@ -133,7 +133,8 @@ def main() -> None:
         "temperature": {"divisor": TEMP_DIVISOR, "min": _celsius(min_raw), "max": _celsius(max_raw)},
     }
 
-    path = api.save_fieldmap(model, data)
+    path = api.FIELDMAP_DIR / f"{model}.json"
+    path.write_text(json.dumps(data, indent=2) + "\n")
     client.loop_stop()
     print(f"\nWrote {path}")
     print(json.dumps(data, indent=2))

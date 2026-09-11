@@ -13,8 +13,9 @@ import enum
 import json
 import os
 from collections.abc import Sequence
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -43,64 +44,31 @@ _ca: tuple[x509.Certificate, rsa.RSAPrivateKey] | None = None  # loaded CA, set 
 #
 # The field map (TLV ids, mode/fan codes, temp scaling) lives in JSON, NOT here —
 # one file per device model at fieldmap/<kind>.json (kind comes from the device's
-# preDeploy payload, e.g. WIN_056905_WW). select_model() loads the map for the
-# connected device; an unknown model leaves the codec inert (capture-only).
+# preDeploy payload, e.g. WIN_056905_WW). load_fieldmap() reads a model's map;
+# an unknown model leaves the codec inert (capture-only).
 # Override the directory with LG_AC_FIELDMAP_DIR.
-_FIELDMAP_DIR = Path(os.environ.get("LG_AC_FIELDMAP_DIR") or Path(__file__).parent / "fieldmap")
-_active_model: str | None = None
-_fieldmap: dict[str, Any] = {}
-
-POWER = MODE = FAN = CURRENT_TEMP = TARGET_TEMP = 0
-MODE_TO_CODE: dict[str, int] = {}
-FAN_TO_CODE: dict[str, int] = {}
-_MIN_C = 16.0
-_MAX_C = 30.0
-_TEMP_DIV = 2
+FIELDMAP_DIR = Path(os.environ.get("LG_AC_FIELDMAP_DIR") or Path(__file__).parent / "fieldmap")
 _ON = (True, "ON", "on", 1)
 
 
-def _apply_fieldmap() -> None:
-    global POWER, MODE, FAN, CURRENT_TEMP, TARGET_TEMP
-    global MODE_TO_CODE, FAN_TO_CODE, _MIN_C, _MAX_C, _TEMP_DIV
-    POWER = int(_fieldmap["fields"]["power"], 16)
-    MODE = int(_fieldmap["fields"]["mode"], 16)
-    FAN = int(_fieldmap["fields"]["fan_mode"], 16)
-    CURRENT_TEMP = int(_fieldmap["fields"]["current_temperature"], 16)
-    TARGET_TEMP = int(_fieldmap["fields"]["temperature"], 16)
-    MODE_TO_CODE = _fieldmap["modes"]
-    FAN_TO_CODE = _fieldmap["fans"]
-    _MIN_C = float(_fieldmap["temperature"]["min"])
-    _MAX_C = float(_fieldmap["temperature"]["max"])
-    _TEMP_DIV = _fieldmap["temperature"]["divisor"]
-
-
-def active_model() -> str | None:
-    return _active_model
-
-
-def select_model(model: str) -> bool:
-    global _fieldmap, _active_model
-    path = _FIELDMAP_DIR / f"{model}.json"
+@lru_cache
+def load_fieldmap(model: str) -> m.Fieldmap | None:
+    path = FIELDMAP_DIR / f"{model}.json"
     if not path.exists():
-        return False
-    _fieldmap = json.loads(path.read_text())
-    _active_model = model
-    _apply_fieldmap()
-    return True
-
-
-def update_fieldmap(section: str, key: str, value: object) -> None:
-    if _active_model is None:
-        raise RuntimeError("no model selected; call select_model() first")
-    _fieldmap[section][key] = value
-    (_FIELDMAP_DIR / f"{_active_model}.json").write_text(json.dumps(_fieldmap, indent=2) + "\n")
-    _apply_fieldmap()
-
-
-def save_fieldmap(model: str, data: dict[str, Any]) -> Path:
-    path = _FIELDMAP_DIR / f"{model}.json"
-    path.write_text(json.dumps(data, indent=2) + "\n")
-    return path
+        return None
+    raw = json.loads(path.read_text())
+    return m.Fieldmap(
+        power=int(raw["fields"]["power"], 16),
+        mode=int(raw["fields"]["mode"], 16),
+        fan=int(raw["fields"]["fan_mode"], 16),
+        current_temp=int(raw["fields"]["current_temperature"], 16),
+        target_temp=int(raw["fields"]["temperature"], 16),
+        mode_to_code=raw["modes"],
+        fan_to_code=raw["fans"],
+        min_c=float(raw["temperature"]["min"]),
+        max_c=float(raw["temperature"]["max"]),
+        temp_div=raw["temperature"]["divisor"],
+    )
 
 
 def dissect(raw: bytes) -> m.DissectedPacket:
@@ -121,30 +89,26 @@ def dissect(raw: bytes) -> m.DissectedPacket:
     return m.DissectedPacket(fields=fields, remainder=raw[offset:])
 
 
-def decode_state(packet: m.DissectedPacket) -> m.ACState:
-    return state_from_raw({f.type_id: f.value for f in packet.fields})
-
-
-def state_from_raw(raw: dict[int, int]) -> m.ACState:
+def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> m.ACState:
     values: dict[str, object] = {}
-    if POWER in raw:
-        values["power"] = "ON" if raw[POWER] else "OFF"
-    if MODE in raw:
-        mode_by_code = {code: name for name, code in MODE_TO_CODE.items()}
-        values["mode"] = "off" if raw.get(POWER) == 0 else mode_by_code.get(raw[MODE])
-    if FAN in raw:
-        fan_by_code = {code: name for name, code in FAN_TO_CODE.items()}
-        values["fan_mode"] = fan_by_code.get(raw[FAN])
-    if CURRENT_TEMP in raw:
-        values["current_temperature"] = raw[CURRENT_TEMP] / _TEMP_DIV
-    if TARGET_TEMP in raw:
-        values["temperature"] = raw[TARGET_TEMP] / _TEMP_DIV
+    if fm.power in raw:
+        values["power"] = "ON" if raw[fm.power] else "OFF"
+    if fm.mode in raw:
+        mode_by_code = {code: name for name, code in fm.mode_to_code.items()}
+        values["mode"] = "off" if raw.get(fm.power) == 0 else mode_by_code.get(raw[fm.mode])
+    if fm.fan in raw:
+        fan_by_code = {code: name for name, code in fm.fan_to_code.items()}
+        values["fan_mode"] = fan_by_code.get(raw[fm.fan])
+    if fm.current_temp in raw:
+        values["current_temperature"] = raw[fm.current_temp] / fm.temp_div
+    if fm.target_temp in raw:
+        values["temperature"] = raw[fm.target_temp] / fm.temp_div
     return m.ACState(**values)  # type: ignore[arg-type]
 
 
-def _clamp_temp(celsius: object) -> int:
-    value = max(_MIN_C, min(_MAX_C, float(celsius)))  # type: ignore[arg-type]
-    return round(value * _TEMP_DIV)
+def _clamp_temp(fm: m.Fieldmap, celsius: object) -> int:
+    value = max(fm.min_c, min(fm.max_c, float(celsius)))  # type: ignore[arg-type]
+    return round(value * fm.temp_div)
 
 
 def _crc16(data: bytes) -> int:
@@ -186,29 +150,29 @@ def frame_tlv(payload: bytes) -> m.DissectedPacket | None:
     return None
 
 
-def encode_command(values: dict[str, object]) -> bytes:
+def encode_command(fm: m.Fieldmap, values: dict[str, object]) -> bytes:
     fields: list[m.TLVField] = []
     for name, value in values.items():
         if name == "power":
-            fields.append(m.TLVField.of(POWER, 1 if value in _ON else 0))
+            fields.append(m.TLVField.of(fm.power, 1 if value in _ON else 0))
         elif name == "mode":
             if value == "off":
-                fields.append(m.TLVField.of(POWER, 0))
+                fields.append(m.TLVField.of(fm.power, 0))
             else:
-                fields.append(m.TLVField.of(POWER, 1))
-                fields.append(m.TLVField.of(MODE, MODE_TO_CODE[str(value)]))
+                fields.append(m.TLVField.of(fm.power, 1))
+                fields.append(m.TLVField.of(fm.mode, fm.mode_to_code[str(value)]))
         elif name == "fan_mode":
-            fields.append(m.TLVField.of(FAN, FAN_TO_CODE[str(value)]))
+            fields.append(m.TLVField.of(fm.fan, fm.fan_to_code[str(value)]))
         elif name == "temperature":
-            fields.append(m.TLVField.of(TARGET_TEMP, _clamp_temp(value)))
+            fields.append(m.TLVField.of(fm.target_temp, _clamp_temp(fm, value)))
         else:
             raise KeyError(f"unknown AC field: {name}")
     return m.DissectedPacket(fields=fields).rebuild()
 
 
-def build_command(values: dict[str, object]) -> bytes:
+def build_command(fm: m.Fieldmap, values: dict[str, object]) -> bytes:
     # command frame uses header [1,1,2,1,1]
-    return _build_frame(2, 1, 1, encode_command(values))
+    return _build_frame(2, 1, 1, encode_command(fm, values))
 
 
 # --- ThinQ2 provisioning responses ---
