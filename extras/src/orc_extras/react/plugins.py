@@ -7,8 +7,12 @@ from orc import model as m
 from orc.plugins import requires_ctx
 
 JOB_ID = "react"
+_COOLDOWN = timedelta(seconds=10)  # a (rule, device) won't re-fire within this window — breaks flapping loops
 
 TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "contact"}
+
+# per-rule last-fired times, created per setup() and passed in (never a module global)
+type Cooldowns = dict[int, Any]
 
 
 class Log(m.LogSourceEnum):
@@ -36,7 +40,13 @@ def _when_holds(ctx: m.AppContext, when: When | None) -> bool:
 
 
 def _on_event(
-    ctx: m.AppContext, rules: list[tuple[int, Any, dict[str, m.DeviceEnum]]], device: m.DeviceState, attribute: str, old: Any, new: Any
+    ctx: m.AppContext,
+    rules: list[tuple[int, Any, dict[str, m.DeviceEnum]]],
+    cooldowns: Cooldowns,
+    device: m.DeviceState,
+    attribute: str,
+    old: Any,
+    new: Any,
 ) -> None:
     if old == new:
         return
@@ -47,7 +57,7 @@ def _on_event(
         if source is None:
             continue
         if new == rule.state:
-            _trigger(ctx, index, rule, source, device.name)
+            _trigger(ctx, index, rule, source, device.name, cooldowns)
         else:
             _cancel(ctx, index, source)
 
@@ -56,14 +66,20 @@ def _targets(what: m.Devices) -> str:
     return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
-def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, name: str) -> None:
+def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, name: str, cooldowns: Cooldowns) -> None:
+    now = ctx.api.local_now()
+    if (last := cooldowns.get(index)) is not None and now - last < _COOLDOWN:
+        ctx.api.log(Log.REACT, f"`{name}` {rule.state} — skipped, rule fired {int((now - last).total_seconds())}s ago (cooldown)")
+        return
     what = rule.target or m.Devices(source)
     if rule.delay is None:
         if not _when_holds(ctx, rule.when):
             return
+        cooldowns[index] = now
         entry = ctx.api.log(Log.REACT, f"`{name}` {rule.state} → set {_targets(what)} {rule.action}")
         _apply(ctx, what, rule.action, entry)
     else:
+        cooldowns[index] = now
         ctx.scheduler.add_job(
             _run_react,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=rule.delay), timezone=ctx.config.settings.tz),
