@@ -79,4 +79,5 @@ def declare(declarations: Any) -> None:
 def setup(ctx: AppContext) -> None:
     cfg = load_plugin_config(CONFIG, ctx.config, GRAMMAR, serializers={"react": each(_rule, default=list, types={"delay": int})})
     rules = [(index, rule, {str(d.value): d for d in rule.devices.all()}) for index, rule in enumerate(cfg.react)]
-    ctx.api.add_listener(partial(plugins._on_event, ctx, rules))
+    cooldowns: plugins.Cooldowns = {}
+    ctx.api.add_listener(partial(plugins._on_event, ctx, rules, cooldowns))
