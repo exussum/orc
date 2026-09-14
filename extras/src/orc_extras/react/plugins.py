@@ -77,20 +77,10 @@ def _unmet(when: When) -> str:
 
 
 def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, name: str, cooldowns: Cooldowns) -> None:
-    now = ctx.api.local_now()
-    if (last := cooldowns.get(index)) is not None and now - last < _COOLDOWN:
-        ctx.api.log(Log.REACT, f"`{name}` {rule.state} — skipped, rule fired {int((now - last).total_seconds())}s ago (cooldown)")
-        return
     what = rule.target or m.Devices(source)
     if rule.delay is None:
-        if rule.when and not _when_holds(ctx, rule.when):
-            ctx.api.log(Log.REACT, f"`{name}` {rule.state} — skipped, {_unmet(rule.when)}")
-        else:
-            cooldowns[index] = now
-            entry = ctx.api.log(Log.REACT, f"`{name}` {rule.state} → set {_targets(what)} {rule.action}")
-            _apply(ctx, what, rule.action, entry)
+        _execute(ctx, index, rule, what, name, cooldowns)
     else:
-        cooldowns[index] = now
         ctx.scheduler.add_job(
             _run_react,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=rule.delay), timezone=ctx.config.settings.tz),
@@ -98,7 +88,7 @@ def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, nam
             id=f"{JOB_ID}-{index}-{source.value}",
             replace_existing=True,
             jobstore=ctx.api.JOBSTORE_MEMORY,
-            args=(what, name, rule.state, rule.action, rule.delay, rule.when),
+            args=(index, rule, what, name, cooldowns),
         )
 
 
@@ -112,10 +102,19 @@ def _apply(ctx: m.AppContext, what: m.Devices, action: Any, entry: m.LogEntry) -
     ctx.api.dispatch(m.Configs(m.Config(what, action, trigger=m.Trigger.SYSTEM)), entry=entry)
 
 
+def _execute(ctx: m.AppContext, index: int, rule: Any, what: m.Devices, name: str, cooldowns: Cooldowns, note: str = "") -> None:
+    now = ctx.api.local_now()
+    if (last := cooldowns.get(index)) is not None and now - last < _COOLDOWN:
+        ctx.api.log(Log.REACT, f"`{name}` {rule.state}{note} — skipped, rule fired {int((now - last).total_seconds())}s ago (cooldown)")
+        return
+    if rule.when and not _when_holds(ctx, rule.when):
+        ctx.api.log(Log.REACT, f"`{name}` {rule.state}{note} — skipped, {_unmet(rule.when)}")
+        return
+    cooldowns[index] = now
+    entry = ctx.api.log(Log.REACT, f"`{name}` {rule.state}{note} → set {_targets(what)} {rule.action}")
+    _apply(ctx, what, rule.action, entry)
+
+
 @requires_ctx
-def _run_react(what: m.Devices, name: str, state: str, action: Any, minutes: int, when: When | None, *, ctx: m.AppContext) -> None:
-    if when and not _when_holds(ctx, when):
-        ctx.api.log(Log.REACT, f"`{name}` {state} {minutes}m ago — skipped, {_unmet(when)}")
-    else:
-        entry = ctx.api.log(Log.REACT, f"`{name}` {state} {minutes}m ago → set {_targets(what)} {action}")
-        _apply(ctx, what, action, entry)
+def _run_react(index: int, rule: Any, what: m.Devices, name: str, cooldowns: Cooldowns, *, ctx: m.AppContext) -> None:
+    _execute(ctx, index, rule, what, name, cooldowns, note=f" {rule.delay}m ago")
