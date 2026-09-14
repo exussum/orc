@@ -317,6 +317,13 @@ def test_battery_state_reads_the_device_cache(plugin_ctx):
     ]
 
 
+def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx):
+    _seed_devices(plugin_ctx)
+    assert plugins.battery_state(plugin_ctx, {"front door motion sensor"}) == [
+        m.DeviceStatus(name="front door motion sensor", details={"battery": None, "last_activity": None})
+    ]
+
+
 def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
     sensor.rules = dict(sensor.rules._asdict())
     with patch.object(entrance_sensor, "load_plugin_config", return_value=sensor):
@@ -325,7 +332,10 @@ def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
     title, provider = plugin_ctx.api.add_state_provider.call_args[0]
     assert title == "Entrance Sensors"
     _seed_devices(plugin_ctx, _device(battery="80"))
-    assert provider() == [m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None})]
+    assert provider() == [
+        m.DeviceStatus(name="balcony door", details={"battery": None, "last_activity": None}),
+        m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None}),
+    ]
 
 
 def _motion(ctx, sensor, old, new):
