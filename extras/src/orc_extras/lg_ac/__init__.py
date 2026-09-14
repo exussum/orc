@@ -6,13 +6,14 @@ enrollment routes live on the ``web`` blueprint (mounted at ``/api/lg_ac/enroll`
 nginx presents the LG cert on :443 and rewrites the device's root paths to it.
 """
 
+from functools import partial
 from typing import Any
 
 from command_cfg import scalar
 
 import orc_extras.lg_ac
 from orc.loader import Cast, load_plugin_config
-from orc.model import AcState, AppContext, LogSourceEnum, Secrets
+from orc.model import AcState, AppContext, DeviceStatus, LogSourceEnum, Secrets
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
 from orc_extras.lg_ac.dal.capture import memory as capture
@@ -67,6 +68,33 @@ def setup(ctx: AppContext) -> None:
     thinq.start("127.0.0.1", s.mqtt_port)
     ctx.api.set_ac_handler(_handle_ac)
     ctx.api.set_ac_state_handler(_ac_state)
+    ctx.api.add_state_provider("AC", partial(_ac_status, ctx))
+
+
+def _fahrenheit(celsius: float | None) -> int | None:
+    return round(celsius * 9 / 5 + 32) if celsius is not None else None
+
+
+def _ac_status(ctx: AppContext) -> list[DeviceStatus]:
+    rows = []
+    for device in ctx.orc.AC:
+        device_id = str(device.value)
+        state = thinq.fetch_state(device_id)
+        rows.append(
+            DeviceStatus(
+                name=device.name,
+                label=device.label,
+                details={
+                    "connected": device_id in thinq.devices(),
+                    "power": state.power,
+                    "mode": state.mode,
+                    "fan": state.fan_mode,
+                    "target": _fahrenheit(state.temperature),
+                    "current": _fahrenheit(state.current_temperature),
+                },
+            )
+        )
+    return rows
 
 
 def _ac_state(device: Any) -> AcState | None:
@@ -96,9 +124,6 @@ def _handle_ac(device: Any, state: str | None, mode: str | None, fan: str | None
 
 
 def declare(declarations: Any) -> None:
-    # No state provider: the AC shows on the /device/ page via orc's built-in `AC`
-    # device type, not on the system page. This plugin only serves enrollment and
-    # the command channel.
     declarations.declare(
         setup=[setup],
         blueprints={"enroll": web.enroll},
