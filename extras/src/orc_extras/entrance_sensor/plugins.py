@@ -31,13 +31,9 @@ def _on_sensor_event(
         # command behind the chromecast I/O the same dispatch triggers. Run on
         # the scheduler's worker; None grace so a busy worker delays, never drops.
 
-        # Both motion events of one visit land under a single log entry: reuse
-        # the latest entry if it's still the trigger message.
-        entries = ctx.api.log_entries()
-        if entries and entries[0].action == TRIGGER_MSG:
-            log_entry = entries[0]
-        else:
-            log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG)
+        # Both motion events of one visit land under a single log entry: amend
+        # groups consecutive entrance logs under the running one.
+        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, amend=True)
 
         ctx.scheduler.add_job(
             _run_motion,
