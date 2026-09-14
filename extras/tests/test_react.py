@@ -68,6 +68,11 @@ def _dispatched(ctx):
     return [(c.what.one(), c.state) for c in ctx.api.dispatch.call_args.args[0].items]
 
 
+def _run(ctx, when, cooldowns=None):
+    rule = react.Rule(m.Devices(Light.lamp), "switch", m.ON, m.OFF, None, 10, when)
+    plugins._run_react.__wrapped__(0, rule, m.Devices(Light.lamp), "lamp", {} if cooldowns is None else cooldowns, ctx=ctx)
+
+
 def test_config_registers_listener(ctx):
     rules, _ = _setup(ctx)
     index, rule, by_id = rules[0]
@@ -80,12 +85,12 @@ def test_config_registers_listener(ctx):
 
 
 def test_switch_on_schedules_reaction(ctx):
-    _, listener = _setup(ctx)
+    rules, listener = _setup(ctx)
     _switch(ctx, listener, 1, m.OFF, m.ON)
     call = ctx.scheduler.add_job.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"] == "react-0-1"
-    assert call.kwargs["args"] == (m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, None)
+    assert call.kwargs["args"] == (0, rules[0][1], m.Devices(Light.lamp), "lamp", listener.args[2])
 
 
 def test_switch_off_cancels_pending_jobs(ctx):
@@ -115,8 +120,18 @@ def test_unwatched_device_is_ignored(ctx):
 
 
 def test_run_react_dispatches_the_action(ctx):
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, None, ctx=ctx)
+    _run(ctx, None)
     assert _dispatched(ctx) == [(Light.lamp, m.OFF)]
+
+
+def test_delayed_reaction_checks_cooldown_at_execution(ctx):
+    cooldowns: dict = {}
+    _run(ctx, None, cooldowns)
+    _run(ctx, None, cooldowns)
+    ctx.api.dispatch.assert_called_once()  # second execution is within the cooldown window
+    ctx.api.local_now.return_value = _NOW + timedelta(seconds=11)
+    _run(ctx, None, cooldowns)
+    assert ctx.api.dispatch.call_count == 2  # window elapsed, fires again
 
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx):
@@ -137,7 +152,7 @@ def test_targeted_rule_schedules_with_the_target(ctx):
     rules = [(0, rule, {"1": Light.lamp})]
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     plugins._on_event(ctx, rules, {}, device, "switch", m.OFF, m.ON)
-    assert ctx.scheduler.add_job.call_args.kwargs["args"] == (m.Devices(Light.desk), "lamp", m.ON, m.OFF, 5, None)
+    assert ctx.scheduler.add_job.call_args.kwargs["args"] == (0, rule, m.Devices(Light.desk), "lamp", {})
 
 
 def test_contact_open_triggers_immediate_rule(ctx):
@@ -201,11 +216,11 @@ def test_when_gates_immediate_rule_on_ac_state(ctx):
 def test_when_mode_predicate_requires_that_mode(ctx):
     when = plugins.When(Ac.living, m.AcState.COOL)
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.FAN_ONLY))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
+    _run(ctx, when)
     ctx.api.dispatch.assert_not_called()
     ctx.api.log.assert_called_with(plugins.Log.REACT, "`lamp` on 10m ago — skipped, `living` is not cool")
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.COOL))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
+    _run(ctx, when)
     ctx.api.dispatch.assert_called_once()
 
 
@@ -213,25 +228,25 @@ def test_when_on_ignores_unknown_mode_for_a_specific_mode_query(ctx):
     # an AC powered but with unknown mode (bare ON) must not satisfy `is cool`
     when = plugins.When(Ac.living, m.AcState.COOL)
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.ON))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
+    _run(ctx, when)
     ctx.api.dispatch.assert_not_called()
 
 
 def test_when_checks_chromecast_playback_at_fire_time(ctx):
     when = plugins.When(Chromecast.tv, m.Playback.PLAYING)
     ctx.api.capture_sounds.return_value = m.Configs(m.SoundState(Chromecast.tv, None, 30, m.Playback.STOPPED))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
+    _run(ctx, when)
     ctx.api.dispatch.assert_not_called()
     ctx.api.capture_sounds.return_value = m.Configs(m.SoundState(Chromecast.tv, "stream", 30, m.Playback.PLAYING))
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
+    _run(ctx, when)
     ctx.api.dispatch.assert_called_once()
 
 
 def test_when_checks_hubitat_state_at_fire_time(ctx):
     when = plugins.When(Light.desk, m.ON)
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.OFF}, last_activity=None)]
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
+    _run(ctx, when)
     ctx.api.dispatch.assert_not_called()
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)]
-    plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
+    _run(ctx, when)
     ctx.api.dispatch.assert_called_once()
