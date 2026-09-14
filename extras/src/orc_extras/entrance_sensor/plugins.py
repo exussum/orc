@@ -106,15 +106,15 @@ def battery_state(ctx: m.AppContext, sensor_names: set[str]) -> list[m.DeviceSta
     devices = ctx.api.device_states()
     return [
         m.DeviceStatus(
-            name=d.name,
+            name=name,
             details={
                 "battery": m.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
-                "last_activity": d.last_activity,
+                "last_activity": d.last_activity if d else None,
             },
         )
         for name in sorted(sensor_names)
-        if (d := _sensor(devices, name)) is not None
-        for battery in (d.attributes.get("battery"),)
+        for d in (_sensor(devices, name),)
+        for battery in (d.attributes.get("battery") if d else None,)
     ]
 
 
