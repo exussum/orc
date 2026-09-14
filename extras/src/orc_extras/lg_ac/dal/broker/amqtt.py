@@ -16,9 +16,6 @@ from amqtt.broker import Broker
 logging.getLogger("amqtt.broker.plugins").setLevel(logging.ERROR)
 
 _log = logging.getLogger(__name__)
-_thread: threading.Thread | None = None
-_ready = threading.Event()
-_server_pem: bytes = b""
 
 
 def _patch_mqtt31() -> None:
@@ -45,7 +42,7 @@ def _patch_mqtt31() -> None:
     ConnectVariableHeader._lg_ac_patched = True
 
 
-def _patch_ssl_context_from_memory() -> None:
+def _patch_ssl_context_from_memory(server_pem: bytes) -> None:
     """Build the listener's TLS context from the in-memory server PEM.
 
     amqtt's ``_create_ssl_context`` reads ``certfile``/``keyfile`` off disk and sets
@@ -61,7 +58,7 @@ def _patch_ssl_context_from_memory() -> None:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         fd, path = tempfile.mkstemp(prefix="lg_ac_", suffix=".pem")
         try:
-            os.write(fd, _server_pem)
+            os.write(fd, server_pem)
             os.close(fd)
             context.load_cert_chain(path)
         finally:
@@ -80,8 +77,8 @@ def start(mqtts_port: int, cert_pem: bytes, key_pem: bytes, plain_port: int = 18
     (cert_pem + key_pem, kept in memory); its own client cert is accepted without
     validation. Our paho client connects on the plain localhost listener.
     """
-    global _server_pem
-    _server_pem = cert_pem.rstrip() + b"\n" + key_pem.rstrip() + b"\n"
+    server_pem = cert_pem.rstrip() + b"\n" + key_pem.rstrip() + b"\n"
+    ready = threading.Event()
 
     # "default" is amqtt's template listener that others inherit from — keep it
     # PLAIN (our local client), and override ssl only on the named device listener.
@@ -102,12 +99,12 @@ def start(mqtts_port: int, cert_pem: bytes, key_pem: bytes, plain_port: int = 18
     }
 
     _patch_mqtt31()
-    _patch_ssl_context_from_memory()
+    _patch_ssl_context_from_memory(server_pem)
 
     async def _serve() -> None:
         broker = Broker(config)
         await broker.start()
-        _ready.set()  # listeners are bound; callers may connect
+        ready.set()  # listeners are bound; callers may connect
         await asyncio.Event().wait()  # keep the broker's listeners running
 
     def _run() -> None:
@@ -121,7 +118,5 @@ def start(mqtts_port: int, cert_pem: bytes, key_pem: bytes, plain_port: int = 18
             _log.exception("lg_ac broker thread crashed; signaling restart")
             os.kill(os.getpid(), signal.SIGTERM)
 
-    global _thread
-    _thread = threading.Thread(target=_run, daemon=True)
-    _thread.start()
-    _ready.wait(timeout=10)
+    threading.Thread(target=_run, daemon=True).start()
+    ready.wait(timeout=10)
