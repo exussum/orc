@@ -309,51 +309,22 @@ def _get_schedule(client, jobs, present_names=()):
         return client.get("/schedule/")
 
 
-def test_schedule_system_rule_is_blue(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.SYSTEM)])
-    assert b"orc-btn-absent" not in response.data
-
-
-def test_schedule_person_absent_is_grey(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger="me")])
-    assert b"orc-btn-absent" in response.data
-
-
-def test_schedule_person_present_is_blue(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger="me")], present_names={"me"})
-    assert b"orc-btn-absent" not in response.data
-
-
-def test_schedule_anyone_with_presence_is_blue(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.ANYONE)], present_names={"me"})
-    assert b"orc-btn-absent" not in response.data
-
-
-def test_schedule_anyone_no_presence_is_grey(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.ANYONE)])
-    assert b"orc-btn-absent" in response.data
-
-
-def test_schedule_person_rule_shows_presence_badge(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger="me")])
-    assert b"orc-presence-badge" in response.data
-
-
-def test_schedule_system_rule_no_presence_badge(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger=m.Trigger.SYSTEM)])
-    assert b"orc-presence-badge" not in response.data
-
-
-def test_schedule_weather_rule_shows_weather_badge(client):
-    response = _get_schedule(client, [_fake_iot_job(trigger=m.WeatherCondition.SUNNY)])
-    assert b"orc-weather-badge" in response.data
-
-
-def test_schedule_skip_replay_shows_badge(client):
-    response = _get_schedule(client, [_fake_iot_job(skip_replay=True)])
-    assert b"orc-skip-replay-badge" in response.data
-
-
-def test_schedule_no_skip_replay_no_badge(client):
-    response = _get_schedule(client, [_fake_iot_job()])
-    assert b"orc-skip-replay-badge" not in response.data
+@pytest.mark.parametrize(
+    "kwargs, present, present_badges, absent_badges",
+    [
+        ({"trigger": m.Trigger.SYSTEM}, (), (), (b"orc-btn-absent", b"orc-presence-badge", b"orc-skip-replay-badge")),
+        ({"trigger": "me"}, (), (b"orc-btn-absent", b"orc-presence-badge"), ()),
+        ({"trigger": "me"}, ("me",), (), (b"orc-btn-absent",)),
+        ({"trigger": m.Trigger.ANYONE}, ("me",), (), (b"orc-btn-absent",)),
+        ({"trigger": m.Trigger.ANYONE}, (), (b"orc-btn-absent",), ()),
+        ({"trigger": m.WeatherCondition.SUNNY}, (), (b"orc-weather-badge",), ()),
+        ({"skip_replay": True}, (), (b"orc-skip-replay-badge",), ()),
+    ],
+    ids=["system", "me_absent", "me_present", "anyone_present", "anyone_absent", "weather", "skip_replay"],
+)
+def test_schedule_badges(client, kwargs, present, present_badges, absent_badges):
+    response = _get_schedule(client, [_fake_iot_job(**kwargs)], present_names=present)
+    for badge in present_badges:
+        assert badge in response.data
+    for badge in absent_badges:
+        assert badge not in response.data
