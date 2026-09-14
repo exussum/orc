@@ -66,6 +66,16 @@ def _targets(what: m.Devices) -> str:
     return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
+def _unmet(when: When) -> str:
+    if isinstance(when.state, m.AcState):
+        state = (when.state.name or "").lower()
+    elif isinstance(when.state, m.Playback):
+        state = when.state.value
+    else:
+        state = when.state
+    return f"`{when.device.label or when.device.name}` is not {state}"
+
+
 def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, name: str, cooldowns: Cooldowns) -> None:
     now = ctx.api.local_now()
     if (last := cooldowns.get(index)) is not None and now - last < _COOLDOWN:
@@ -73,11 +83,12 @@ def _trigger(ctx: m.AppContext, index: int, rule: Any, source: m.DeviceEnum, nam
         return
     what = rule.target or m.Devices(source)
     if rule.delay is None:
-        if not _when_holds(ctx, rule.when):
-            return
-        cooldowns[index] = now
-        entry = ctx.api.log(Log.REACT, f"`{name}` {rule.state} → set {_targets(what)} {rule.action}")
-        _apply(ctx, what, rule.action, entry)
+        if rule.when and not _when_holds(ctx, rule.when):
+            ctx.api.log(Log.REACT, f"`{name}` {rule.state} — skipped, {_unmet(rule.when)}")
+        else:
+            cooldowns[index] = now
+            entry = ctx.api.log(Log.REACT, f"`{name}` {rule.state} → set {_targets(what)} {rule.action}")
+            _apply(ctx, what, rule.action, entry)
     else:
         cooldowns[index] = now
         ctx.scheduler.add_job(
@@ -103,7 +114,8 @@ def _apply(ctx: m.AppContext, what: m.Devices, action: Any, entry: m.LogEntry) -
 
 @requires_ctx
 def _run_react(what: m.Devices, name: str, state: str, action: Any, minutes: int, when: When | None, *, ctx: m.AppContext) -> None:
-    if not _when_holds(ctx, when):
-        return
-    entry = ctx.api.log(Log.REACT, f"`{name}` {state} {minutes}m ago → set {_targets(what)} {action}")
-    _apply(ctx, what, action, entry)
+    if when and not _when_holds(ctx, when):
+        ctx.api.log(Log.REACT, f"`{name}` {state} {minutes}m ago — skipped, {_unmet(when)}")
+    else:
+        entry = ctx.api.log(Log.REACT, f"`{name}` {state} {minutes}m ago → set {_targets(what)} {action}")
+        _apply(ctx, what, action, entry)

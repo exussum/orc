@@ -192,6 +192,7 @@ def test_when_gates_immediate_rule_on_ac_state(ctx):
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.OFF))
     plugins._on_event(ctx, rules, {}, device, "contact", "closed", "open")
     ctx.api.dispatch.assert_not_called()
+    ctx.api.log.assert_called_with(plugins.Log.REACT, "`balcony door` open — skipped, `living` is not on")
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.COOL))
     plugins._on_event(ctx, rules, {}, device, "contact", "closed", "open")
     assert _dispatched(ctx) == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
@@ -202,6 +203,7 @@ def test_when_mode_predicate_requires_that_mode(ctx):
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.FAN_ONLY))
     plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_not_called()
+    ctx.api.log.assert_called_with(plugins.Log.REACT, "`lamp` on 10m ago — skipped, `living` is not cool")
     ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.COOL))
     plugins._run_react.__wrapped__(m.Devices(Light.lamp), "lamp", m.ON, m.OFF, 10, when, ctx=ctx)
     ctx.api.dispatch.assert_called_once()
