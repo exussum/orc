@@ -14,7 +14,7 @@
   },
   "fans": {
     "low": 2,
-    "med": 4,
+    "mid": 4,
     "high": 6
   },
   "temperature": {
