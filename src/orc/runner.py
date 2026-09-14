@@ -65,6 +65,13 @@ def web() -> None:
 
 
 def _start_services(ctx: m.AppContext) -> None:
+    # Start the scheduler and its services here, after gunicorn has forked the worker:
+    # the scheduler's thread and the mqtt network loops don't survive the fork, so they
+    # must start in the worker, not in _build_app (which runs pre-fork in web()).
+    ctx.scheduler.start(paused=True)
+    api.setup_scheduler(ctx)
+    for hook in config.config.registry.setup_hooks:
+        hook(ctx)
     api.wire_buttons(ctx)
     api.wire_external_log()
     config.config.providers.mqtt.start()
@@ -87,11 +94,6 @@ def _build_app() -> OrcFlask:
     api.set_ctx(ctx)
     scheduler.add_executor(ContextThreadPoolExecutor(ctx), JOBSTORE_DEFAULT)
     scheduler.add_listener(lambda e: ctx.version_manager.bump_version(), EVENT_JOB_EXECUTED)
-    scheduler.start(paused=True)
-
-    api.setup_scheduler(ctx)
-    for hook in config.config.registry.setup_hooks:
-        hook(ctx)
     return _build_flask(ctx)
 
 
