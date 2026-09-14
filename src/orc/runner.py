@@ -43,6 +43,11 @@ def _split_stderr() -> None:
 
 def web() -> None:
     _split_stderr()
+    try:
+        app = _build_app()
+    except Exception:
+        traceback.print_exc()
+        sys.exit(4)
 
     class GunicornApp(BaseApplication):
         def load_config(self) -> None:
@@ -53,11 +58,6 @@ def web() -> None:
             self.cfg.set("bind", f"0.0.0.0:{config.config.settings.port}")
 
         def load(self) -> OrcFlask:
-            try:
-                app = _build_app()
-            except Exception:
-                traceback.print_exc()
-                sys.exit(4)
             _start_services(app.orc)
             return app
 
