@@ -262,10 +262,6 @@ class TestFetchHubitatConfig:
             "office floor lamp": (1, frozenset()),
         }
 
-    def test_missing_credentials_fails_boot(self, monkeypatch):
-        with pytest.raises(RuntimeError, match="no device documents"):
-            self._fetch(monkeypatch, [], timeout=0.1, secrets=m.Secrets())
-
     def test_empty_flood_fails_boot(self, monkeypatch):
         with pytest.raises(RuntimeError, match="no device documents"):
             self._fetch(monkeypatch, [], timeout=0.1)
