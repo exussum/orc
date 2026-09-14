@@ -13,7 +13,7 @@ from orc_extras.lg_ac import model as m
 from orc_extras.lg_ac.dal.capture import memory as capture
 from orc_extras.lg_ac.dal.mqtt import thinq
 
-from orc.model import AcState
+from orc.model import AcState, DeviceStatus
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
@@ -298,6 +298,32 @@ def test_ac_state_reads_the_bound_device(monkeypatch):
 def test_ac_state_stale_id_is_none(monkeypatch):
     monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState())  # unknown id → empty state
     assert lg_ac._ac_state(SimpleNamespace(value="clip-stale")) is None
+
+
+def test_ac_status_rows_decode_per_device(monkeypatch):
+    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState("ON", "cool", "low", 25.0, 22.0))
+    monkeypatch.setattr(thinq, "devices", lambda: ["clip-1"])
+    ctx = SimpleNamespace(orc=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),)))
+    assert lg_ac._ac_status(ctx) == [
+        DeviceStatus(
+            name="LIVING_ROOM_AC",
+            label="Living Room AC",
+            details={"connected": True, "power": "ON", "mode": "cool", "fan": "low", "target": 72, "current": 77},
+        )
+    ]
+
+
+def test_ac_status_disconnected_device_is_blank(monkeypatch):
+    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState())
+    monkeypatch.setattr(thinq, "devices", lambda: [])
+    ctx = SimpleNamespace(orc=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label=None),)))
+    assert lg_ac._ac_status(ctx) == [
+        DeviceStatus(
+            name="LIVING_ROOM_AC",
+            label=None,
+            details={"connected": False, "power": None, "mode": None, "fan": None, "target": None, "current": None},
+        )
+    ]
 
 
 def test_capture_endpoint_dumps_recorded_frames(client):
