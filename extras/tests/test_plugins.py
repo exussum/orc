@@ -193,12 +193,12 @@ def test_walk_in_with_no_pending_cleanup_does_not_cancel(ctx, sensor):
     ctx.api.dispatch.assert_called_once()
 
 
-def test_motion_reuses_the_latest_trigger_entry(ctx, sensor):
+def test_motion_groups_under_the_trigger_entry(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG)
-    ctx.api.log_entries.return_value = [entry]
+    ctx.api.log.return_value = entry
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.log.assert_not_called()
+    ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, amend=True)
     assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
 

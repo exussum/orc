@@ -65,7 +65,7 @@ _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 
 _ctx: m.AppContext | None = None
 _ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
-_NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
+_NOTIFICATIONS: deque[m.LogSubEntry] = deque(maxlen=10)
 
 
 # --- State manager ---
@@ -258,12 +258,16 @@ def local_now() -> datetime:
     return datetime.now(tz=config.settings.tz)
 
 
-def notify(entry: m.LogEntry) -> m.LogEntry:
+def notify(entry: m.LogSubEntry) -> m.LogSubEntry:
     _NOTIFICATIONS.appendleft(entry)
     return entry
 
 
-def log(source: m.LogSourceEnum, action: str, *, should_notify: bool = False) -> m.LogEntry:
+def log(source: m.LogSourceEnum, action: str, *, amend: bool = False, should_notify: bool = False) -> m.LogEntry:
+    if amend and _ACTIVITY_LOG and _ACTIVITY_LOG[0].source == source:
+        top = _ACTIVITY_LOG[0]
+        top.add(source, action)
+        return top
     entry = m.LogEntry(local_now(), source, action)
     _ACTIVITY_LOG.appendleft(entry)
     if should_notify:
