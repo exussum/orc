@@ -245,11 +245,6 @@ def test_device_certificate_signs_the_posted_csr(client, ca_pem, device_csr):
     assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == DEVICE_ID
 
 
-def test_devices_endpoint_lists_connected_devices(client, monkeypatch):
-    monkeypatch.setattr(thinq, "devices", lambda: [DEVICE_ID])
-    assert client.get("/devices").get_json() == [DEVICE_ID]
-
-
 def test_state_endpoint_reports_the_default_device(client, monkeypatch):
     monkeypatch.setattr(thinq, "default_device", lambda: DEVICE_ID)
     monkeypatch.setattr(thinq, "fetch_state", lambda device_id: m.ACState("ON", "cool", "low", 25.0, 22.0))

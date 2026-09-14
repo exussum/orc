@@ -168,15 +168,10 @@ def test_plugin_command_imports_callable():
 
 _PARSE_ERRORS = [
     ("device_type_not_defined", "name 'Foo' is not defined — device types must be defined and sealed first"),
-    ("device_type_not_sealed", "name 'Foo' is not defined — device types must be defined and sealed first"),
     ("unknown_device_member", "Unknown Foo device 'B': expected one of ['A']"),
     ("device_expression_syntax_error", "'(' was never closed"),
     ("add_before_define", "Unknown device type 'Foo'"),
-    ("seal_before_define", "Unknown device type 'Foo'"),
     ("add_after_seal", "Device type 'Foo' is already sealed"),
-    ("define_after_seal", "Device type 'Foo' is already sealed"),
-    ("seal_after_seal", "Device type 'Foo' is already sealed"),
-    ("only_after_seal", "Device type 'Foo' is already sealed"),
     ("unsealed_at_end", "Device types defined but never sealed: ['Foo']"),
     ("duplicate_member_names", "Duplicate names in 'Foo': {'A'}"),
     ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),

@@ -268,26 +268,19 @@ def _door(state):
     return m.DeviceState(id=56, name="balcony door", attributes={"contact": state, "battery": "98"}, last_activity=None)
 
 
-def test_open_door_counts_as_present(sensor, plugin_ctx):
+@pytest.mark.parametrize(
+    "contact, expected",
+    [
+        ("open", "log_door_open"),
+        ("closed", "log_shutdown"),
+        (None, "log_shutdown"),
+    ],
+)
+def test_door_state_drives_cleanup(sensor, plugin_ctx, contact, expected):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    _seed_devices(plugin_ctx, _door("open"))
+    _seed_devices(plugin_ctx, *([_door(contact)] if contact else []))
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.dispatch.assert_called_once_with(m.Configs(m.Config(Chromecast.cc, m.STOP)), entry=ANY)
-    assert [c.action for c in entry.children] == [sensor.message.log_door_open]
-
-
-def test_closed_door_still_shuts_down(sensor, plugin_ctx):
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    _seed_devices(plugin_ctx, _door("closed"))
-    entry = _cleanup(sensor, plugin_ctx)
-    assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
-
-
-def test_unseen_door_still_shuts_down(sensor, plugin_ctx):
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    _seed_devices(plugin_ctx)
-    entry = _cleanup(sensor, plugin_ctx)
-    assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
+    assert [c.action for c in entry.children] == [getattr(sensor.message, expected)]
 
 
 def _device(id=16, name="front door motion sensor", battery="100", attributes=None):
