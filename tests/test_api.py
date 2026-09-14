@@ -236,6 +236,30 @@ def test_unwrapper_class_single_rule():
     assert calls == [rule]
 
 
+class TestLog:
+    @pytest.fixture(autouse=True)
+    def _clear(self):
+        api._ACTIVITY_LOG.clear()
+
+    def test_amend_nests_under_the_same_source(self):
+        api.log(m.LogSource.PLUGIN, "first")
+        api.log(m.LogSource.PLUGIN, "second", amend=True)
+        entries = api.log_entries()
+        assert [e.action for e in entries] == ["first"]
+        assert [c.action for c in entries[0].children] == ["second"]
+
+    def test_amend_starts_a_new_entry_for_a_different_source(self):
+        api.log(m.LogSource.SYSTEM, "sys")
+        api.log(m.LogSource.PLUGIN, "plug", amend=True)
+        entries = api.log_entries()
+        assert [e.action for e in entries] == ["plug", "sys"]
+        assert entries[0].children == []
+
+    def test_amend_on_an_empty_log_creates_a_top_level_entry(self):
+        api.log(m.LogSource.PLUGIN, "only", amend=True)
+        assert [e.action for e in api.log_entries()] == ["only"]
+
+
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
 class TestActiveOverride:
     OVERRIDE = m.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))
