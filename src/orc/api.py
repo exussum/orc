@@ -340,7 +340,7 @@ def resolve_run_action(
     elif (plugin := config.plugin(id)) is not None:
         return lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.delay
     elif id in config.schedule_routines:
-        return lambda entry: run_schedule_routine(config.schedule_routines[id], entry, force=True), timedelta()
+        return lambda entry: run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True), timedelta()
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
@@ -738,12 +738,11 @@ def next_iot_job(present_names: set[str]) -> Job | None:
 
 @requires_ctx
 def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
-    run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`"))
+    run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`"), present_names())
 
 
-def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, force: bool = False) -> None:
+def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
     now = local_now()
-    pnames = present_names()
     if not (matched := matching_items(rule, now, pnames)):
         if not pnames:
             detail = "nobody home"
