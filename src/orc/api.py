@@ -542,20 +542,14 @@ def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSourc
 
 
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None) -> None:
-    now = local_now()
-    today = now.date()
-    before = calculate_theme(today)
     if not name:
-        entry = log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
+        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
         clear_theme_override()
     else:
         assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
-        entry = log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
-    after = calculate_theme(today)
+        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
     rebuild_jobs(ctx)
-    if before != after:
-        replay_day(now, entry)
 
 
 def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
