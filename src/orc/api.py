@@ -48,44 +48,104 @@ from orc.locale import Log
 
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
-_PRESENCE_CRON_JOB_ID = "presence-cron"
-
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 ALERT_IMAGE_SIZE = (1280, 720)
+ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
+
+_PRESENCE_CRON_JOB_ID = "presence-cron"
 _ALERT_MARGIN = 80
 _ALERT_MIN_FONT_SIZE = 24
-
-
-def _render_alert_image(text: str) -> bytes:
-    image = Image.new("RGB", ALERT_IMAGE_SIZE, color=(178, 24, 24))
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default(size=128)
-    width, height = ALERT_IMAGE_SIZE[0] - 2 * _ALERT_MARGIN, ALERT_IMAGE_SIZE[1] - 2 * _ALERT_MARGIN
-    wrapped = ImageText.Text(text, font=font)
-    wrapped.wrap(width, height, scaling=("shrink", _ALERT_MIN_FONT_SIZE))
-    if "\n" not in wrapped.text:
-        # scaling wrap early-returns without writing the wrapped lines back when the
-        # text fits at the starting size. Drop this once the early return in the
-        # scaling=="shrink" branch of ImageText.Text.wrap is fixed upstream:
-        # https://github.com/python-pillow/Pillow/pull/9286 (present through 12.3.0).
-        wrapped.wrap(width, height)
-    draw.text((ALERT_IMAGE_SIZE[0] / 2, ALERT_IMAGE_SIZE[1] / 2), wrapped, fill="white", anchor="mm", align="center")
-    buf = io.BytesIO()
-    image.save(buf, format="PNG")
-    return buf.getvalue()
-
-
 _ALERT_VIDEO_SECONDS = 300
 _ALERT_LOOP_SECONDS = 20
 _TTS_SAMPLE_RATE = 24000
 _TTS_TIMEOUT = 10
+_EXTERNAL_GROUP_WINDOW = timedelta(seconds=5)
+_WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
+_RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
+
+_ctx: m.AppContext | None = None
+_ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
+_NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
 
 
-def _tts_mp3(text: str) -> bytes:
-    url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=_TTS_TIMEOUT) as resp:  # nosemgrep
-        return resp.read()
+# --- State manager ---
+
+
+class SnapshotManager:
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self.snapshots: dict[str, m.SnapShot] = {}
+
+    @synchronized
+    def replace_config(self, name: str, target_config: m.Configs, end: datetime, label: str, entry: m.LogEntry) -> None:
+
+        if name not in self.snapshots:
+            self.snapshots[name] = m.SnapShot(capture_lights(), end, label)
+            # captured light states are always enum members, not the class/set arm
+            routine_items = self.snapshots[name].routine.items
+            items = ", ".join(f"`{c.what.one().name}`={c.state}" for c in routine_items if c.state != m.OFF)
+            entry.add(entry.source, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
+
+        dispatch(target_config, force=True, entry=entry)
+
+    @staticmethod
+    def _live(snapshot: m.SnapShot | None) -> bool:
+        return bool(snapshot and local_now() <= snapshot.end)
+
+    @synchronized
+    def get(self, name: str) -> m.SnapShot | None:
+        snapshot = self.snapshots.pop(name, None)
+        return snapshot if self._live(snapshot) else None
+
+    @synchronized
+    def active(self, name: str) -> bool:
+        return self._live(self.snapshots.get(name))
+
+    @synchronized
+    def resume(self, name: str, target_config: m.Configs, entry: m.LogEntry) -> None:
+        snapshot = self.get(name)
+
+        if snapshot:
+            routine = snapshot.routine
+            entry.add(entry.source, Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
+        else:
+            routine = target_config
+        dispatch(routine, force=True, entry=entry)
+
+    @synchronized
+    def update_snapshot(self, name: str, rule: m.Config) -> None:
+        snapshot = self.snapshots[name]
+
+        what = rule.what.all()
+        items = {e.what.one(): e for e in snapshot.routine.items}
+
+        # Explode out the rule w/o creating a sub config explicitly
+        items.update({e: replace(rule, what=m.Devices(e)) for e in what})
+        self.snapshots[name] = snapshot._replace(routine=m.Configs(*items.values()))
+
+    @synchronized
+    def intercepts(self, rule: m.Config) -> bool:
+        snapshot = self.snapshots.get(ORC_SYSTEM_SNAPSHOT)
+        if snapshot is None:
+            return False
+        elif rule.trigger == m.Trigger.SYSTEM:
+            self.update_snapshot(ORC_SYSTEM_SNAPSHOT, rule)
+        elif not self._live(snapshot):
+            self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
+        else:
+            what = rule.what.all()
+            kinds = ", ".join(f"`{kind}`" for kind in sorted({type(e).__name__ for e in what}))
+            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
+            return True
+        return False
+
+
+snapshot_manager = SnapshotManager()
+
+
+def set_ctx(ctx: m.AppContext) -> None:
+    global _ctx
+    _ctx = ctx
 
 
 @lru_cache(maxsize=5)
@@ -157,27 +217,6 @@ def render_alert_video(text: str) -> bytes:
             check=True,
         )
         return mp4.read_bytes()
-
-
-_ctx: m.AppContext | None = None
-
-
-def set_ctx(ctx: m.AppContext) -> None:
-    global _ctx
-    _ctx = ctx
-
-
-_ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
-_NOTIFICATIONS: deque[m.LogEntry] = deque(maxlen=10)
-_EXTERNAL_GROUP_WINDOW = timedelta(seconds=5)
-_WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
-
-
-@lru_cache(maxsize=1)
-def _almanac() -> tuple[Any, Any]:
-    """Timescale and twilight function, loaded on first schedule build instead of at import."""
-    ephemeris = load_file(str(resources.files("orc_data") / "de421.bsp"))
-    return load.timescale(), almanac.dark_twilight_day(ephemeris, wgs84.latlon(config.settings.lat, config.settings.long))
 
 
 def duration_stats() -> dict[str, tuple[int, float]]:
@@ -266,55 +305,6 @@ def capture_sounds() -> m.Configs[m.SoundState]:
 
 def capture_acs() -> m.Configs[m.AcStatus]:
     return m.Configs(*[m.AcStatus(w, ac_state(w)) for w in orc.AC])
-
-
-def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, int):
-        config.providers.mqtt.publish_light(w, brightness=rule.state)
-    else:
-        config.providers.mqtt.publish_light(w, on=rule.state == m.ON)
-
-
-def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, int):
-        config.providers.chromecast.set_volume(w, rule.state)
-    elif isinstance(rule.state, m.Speak):
-        config.providers.chromecast.speak(w, rule.state)
-    elif isinstance(rule.state, m.AlertVideo):
-        config.providers.chromecast.play(w, rule.state, "Alert")
-    elif isinstance(rule.state, m.YouTubeId):
-        if rule.state not in stream:
-            stream[rule.state] = config.providers.chromecast.fetch_youtube_stream_metadata(rule.state)
-        url, title = stream[rule.state]
-        config.providers.chromecast.play(w, m.Stream(url), title)
-    elif rule.state == m.STOP:
-        config.providers.chromecast.stop(w)
-    elif rule.state == m.PAUSE:
-        config.providers.chromecast.pause(w)
-    elif rule.state == m.RESUME:
-        config.providers.chromecast.resume(w)
-    else:
-        raise ValueError(f"Unsupported Chromecast state: {rule.state!r}")
-
-
-def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, int):
-        config.providers.audio.set_volume(w, rule.state)
-    elif isinstance(rule.state, m.Speak):
-        config.providers.audio.speak(w, rule.state)
-    elif rule.state in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
-        raise ValueError(f"USB devices don't support state {rule.state!r}")
-    else:
-        config.providers.audio.alert(w, rule.state)
-
-
-def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, m.AcCommand):
-        ac_command(w, m.ON, rule.state.mode, rule.state.fan, rule.state.temp)
-    elif rule.state in (m.ON, m.OFF):
-        ac_command(w, rule.state)
-    else:
-        raise ValueError(f"AC devices don't support state {rule.state!r}")
 
 
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
@@ -434,18 +424,6 @@ def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
         list(ex.map(one, what))
 
 
-def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
-    match severity:
-        case m.Alarm.WARNING:
-            device = config.settings.warning_device
-        case m.Alarm.ATTENTION:
-            device = config.settings.attention_device
-        case _:
-            device = config.settings.emergency_device
-    assert device is not None
-    return device
-
-
 def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, entry: m.LogEntry) -> None:
     if (text is None) == (path is None):
         raise ValueError("alert() requires exactly one of text or path")
@@ -516,84 +494,6 @@ def device_command(id: str, state: str | None) -> None:
             device_type.dispatch(_ctx, member, m.Config(m.Devices(member), parsed), {})
             return
     raise Exception(f"Unknown device: {id}")
-
-
-# --- State manager ---
-
-ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
-_RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
-
-
-class SnapshotManager:
-    def __init__(self) -> None:
-        self._lock = threading.RLock()
-        self.snapshots: dict[str, m.SnapShot] = {}
-
-    @synchronized
-    def replace_config(self, name: str, target_config: m.Configs, end: datetime, label: str, entry: m.LogEntry) -> None:
-
-        if name not in self.snapshots:
-            self.snapshots[name] = m.SnapShot(capture_lights(), end, label)
-            # captured light states are always enum members, not the class/set arm
-            routine_items = self.snapshots[name].routine.items
-            items = ", ".join(f"`{c.what.one().name}`={c.state}" for c in routine_items if c.state != m.OFF)
-            entry.add(entry.source, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
-
-        dispatch(target_config, force=True, entry=entry)
-
-    @staticmethod
-    def _live(snapshot: m.SnapShot | None) -> bool:
-        return bool(snapshot and local_now() <= snapshot.end)
-
-    @synchronized
-    def get(self, name: str) -> m.SnapShot | None:
-        snapshot = self.snapshots.pop(name, None)
-        return snapshot if self._live(snapshot) else None
-
-    @synchronized
-    def active(self, name: str) -> bool:
-        return self._live(self.snapshots.get(name))
-
-    @synchronized
-    def resume(self, name: str, target_config: m.Configs, entry: m.LogEntry) -> None:
-        snapshot = self.get(name)
-
-        if snapshot:
-            routine = snapshot.routine
-            entry.add(entry.source, Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
-        else:
-            routine = target_config
-        dispatch(routine, force=True, entry=entry)
-
-    @synchronized
-    def update_snapshot(self, name: str, rule: m.Config) -> None:
-        snapshot = self.snapshots[name]
-
-        what = rule.what.all()
-        items = {e.what.one(): e for e in snapshot.routine.items}
-
-        # Explode out the rule w/o creating a sub config explicitly
-        items.update({e: replace(rule, what=m.Devices(e)) for e in what})
-        self.snapshots[name] = snapshot._replace(routine=m.Configs(*items.values()))
-
-    @synchronized
-    def intercepts(self, rule: m.Config) -> bool:
-        snapshot = self.snapshots.get(ORC_SYSTEM_SNAPSHOT)
-        if snapshot is None:
-            return False
-        elif rule.trigger == m.Trigger.SYSTEM:
-            self.update_snapshot(ORC_SYSTEM_SNAPSHOT, rule)
-        elif not self._live(snapshot):
-            self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
-        else:
-            what = rule.what.all()
-            kinds = ", ".join(f"`{kind}`" for kind in sorted({type(e).__name__ for e in what}))
-            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
-            return True
-        return False
-
-
-snapshot_manager = SnapshotManager()
 
 
 def current_theme_override() -> m.ThemeOverride | None:
@@ -756,13 +656,6 @@ def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], f
     dispatch(_squish_matched(rule, matched, entry), force=force, entry=entry)
 
 
-def _squish_matched(rule: m.Routine, matched: Sequence[m.Config], entry: m.LogEntry) -> m.Configs:
-    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
-        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
-
-    return m.squish_configs(replace(rule, items=matched), on_conflict=log_conflict)
-
-
 def rebuild_jobs(ctx: m.AppContext) -> None:
     scheduler.remove_all_jobs()
     setup_scheduler(ctx)
@@ -777,11 +670,6 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
     ):
         scheduler.schedule_cron(func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
-
-
-@requires_ctx
-def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
-    scheduler.delete_stale_jobs(JOBSTORE_DEFAULT)
 
 
 def matched_presence(rule: m.Routine, people: set[str] | None = None) -> tuple[m.Config, ...]:
@@ -837,6 +725,115 @@ def replay_day(now: datetime, entry: m.LogEntry) -> None:
     # replace() keeps Routine type; squish_configs only reads .items, which Routine and Configs share
     configs = (replace(cfg, items=matching_items(cfg, now, present)) for (when, cfg) in jobs if when <= now and not cfg.skip_replay)
     dispatch(m.squish_configs(*configs), force=True, entry=entry)
+
+
+# --- Private helpers ---
+
+
+def _render_alert_image(text: str) -> bytes:
+    image = Image.new("RGB", ALERT_IMAGE_SIZE, color=(178, 24, 24))
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=128)
+    width, height = ALERT_IMAGE_SIZE[0] - 2 * _ALERT_MARGIN, ALERT_IMAGE_SIZE[1] - 2 * _ALERT_MARGIN
+    wrapped = ImageText.Text(text, font=font)
+    wrapped.wrap(width, height, scaling=("shrink", _ALERT_MIN_FONT_SIZE))
+    if "\n" not in wrapped.text:
+        # scaling wrap early-returns without writing the wrapped lines back when the
+        # text fits at the starting size. Drop this once the early return in the
+        # scaling=="shrink" branch of ImageText.Text.wrap is fixed upstream:
+        # https://github.com/python-pillow/Pillow/pull/9286 (present through 12.3.0).
+        wrapped.wrap(width, height)
+    draw.text((ALERT_IMAGE_SIZE[0] / 2, ALERT_IMAGE_SIZE[1] / 2), wrapped, fill="white", anchor="mm", align="center")
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _tts_mp3(text: str) -> bytes:
+    url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=_TTS_TIMEOUT) as resp:  # nosemgrep
+        return resp.read()
+
+
+@lru_cache(maxsize=1)
+def _almanac() -> tuple[Any, Any]:
+    """Timescale and twilight function, loaded on first schedule build instead of at import."""
+    ephemeris = load_file(str(resources.files("orc_data") / "de421.bsp"))
+    return load.timescale(), almanac.dark_twilight_day(ephemeris, wgs84.latlon(config.settings.lat, config.settings.long))
+
+
+def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, int):
+        config.providers.mqtt.publish_light(w, brightness=rule.state)
+    else:
+        config.providers.mqtt.publish_light(w, on=rule.state == m.ON)
+
+
+def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, int):
+        config.providers.chromecast.set_volume(w, rule.state)
+    elif isinstance(rule.state, m.Speak):
+        config.providers.chromecast.speak(w, rule.state)
+    elif isinstance(rule.state, m.AlertVideo):
+        config.providers.chromecast.play(w, rule.state, "Alert")
+    elif isinstance(rule.state, m.YouTubeId):
+        if rule.state not in stream:
+            stream[rule.state] = config.providers.chromecast.fetch_youtube_stream_metadata(rule.state)
+        url, title = stream[rule.state]
+        config.providers.chromecast.play(w, m.Stream(url), title)
+    elif rule.state == m.STOP:
+        config.providers.chromecast.stop(w)
+    elif rule.state == m.PAUSE:
+        config.providers.chromecast.pause(w)
+    elif rule.state == m.RESUME:
+        config.providers.chromecast.resume(w)
+    else:
+        raise ValueError(f"Unsupported Chromecast state: {rule.state!r}")
+
+
+def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, int):
+        config.providers.audio.set_volume(w, rule.state)
+    elif isinstance(rule.state, m.Speak):
+        config.providers.audio.speak(w, rule.state)
+    elif rule.state in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
+        raise ValueError(f"USB devices don't support state {rule.state!r}")
+    else:
+        config.providers.audio.alert(w, rule.state)
+
+
+def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(rule.state, m.AcCommand):
+        ac_command(w, m.ON, rule.state.mode, rule.state.fan, rule.state.temp)
+    elif rule.state in (m.ON, m.OFF):
+        ac_command(w, rule.state)
+    else:
+        raise ValueError(f"AC devices don't support state {rule.state!r}")
+
+
+def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
+    match severity:
+        case m.Alarm.WARNING:
+            device = config.settings.warning_device
+        case m.Alarm.ATTENTION:
+            device = config.settings.attention_device
+        case _:
+            device = config.settings.emergency_device
+    assert device is not None
+    return device
+
+
+def _squish_matched(rule: m.Routine, matched: Sequence[m.Config], entry: m.LogEntry) -> m.Configs:
+    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
+        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
+
+    return m.squish_configs(replace(rule, items=matched), on_conflict=log_conflict)
+
+
+@requires_ctx
+def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
+    scheduler.delete_stale_jobs(JOBSTORE_DEFAULT)
 
 
 @requires_ctx
