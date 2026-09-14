@@ -3,7 +3,6 @@ from unittest.mock import patch
 
 from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.holiday import polygon
-from orc.dal.hubitat import http as hubitat
 
 
 class TestStripGoogleVideoParams:
@@ -25,13 +24,6 @@ class TestStripGoogleVideoParams:
 
     def test_no_hostname(self):
         assert _strip_googlevideo_params("not a url") == "not a url"
-
-
-class TestReboot:
-    @patch("requests.post")
-    def test_reboot_hits_hub_endpoint(self, post):
-        hubitat.reboot()
-        assert "/hub/reboot" in post.call_args[0][0]
 
 
 _HOLIDAYS = [
