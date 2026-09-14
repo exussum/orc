@@ -64,9 +64,11 @@ def _seen(device_id: str) -> None:
     _raw.update(device_id, lambda cur: cur if cur is not None else {})
 
 
-def start(host: str, port: int = 1883, username: str | None = None, password: str | None = None) -> None:
+def start(host: str, port: int = 1883, username: str | None = None, password: str | None = None, clip_ids: list[str] | None = None) -> None:
     global _client
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="lg_ac")
+    # clip_ids ride paho's per-client userdata, delivered to _on_connect on every
+    # (re)connect so it can nudge the configured ACs — no module-level state needed.
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="lg_ac", userdata=clip_ids or [])
     if username is not None:
         client.username_pw_set(username, password)
     client.on_connect = _on_connect
@@ -102,10 +104,18 @@ def _envelope(device_id: str, cmd: str, type_: int, data: str) -> bytes:
     return json.dumps({"did": device_id, "mid": int(time.time() * 1000), "cmd": cmd, "type": type_, "data": data}).encode()
 
 
-def _send_packet(device_id: str, frame: bytes) -> None:
+def _send_packet(device_id: str, frame: bytes, retain: bool = False) -> None:
     if _client is None:
         return
-    _client.publish(_DOWNSTREAM_PREFIX + device_id, _envelope(device_id, "packet", 1, frame.hex()))
+    _client.publish(_DOWNSTREAM_PREFIX + device_id, _envelope(device_id, "packet", 1, frame.hex()), retain=retain)
+
+
+def _nudge(device_id: str) -> None:
+    # Retained so a unit that reconnects after an orc restart is prompted on its next
+    # subscribe, instead of sitting idle (invisible to devices()/commands) until a manual
+    # power-cycle re-provisions it. Diverges from rethink, which never queries and waits
+    # for the device to push state.
+    _send_packet(device_id, api.build_query(api.Query.VALUES), retain=True)
 
 
 def publish_command(device_id: str, values: dict[str, object]) -> None:
@@ -126,6 +136,8 @@ def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: 
         _log.warning("mqtt connect failed: rc=%s", rc)
         return
     client.subscribe("#", qos=0)
+    for clip_id in userdata:
+        _nudge(clip_id)
 
 
 def _on_disconnect(client: mqtt.Client, userdata: Any, *args: Any) -> None:
