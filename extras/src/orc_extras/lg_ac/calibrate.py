@@ -115,7 +115,7 @@ def main() -> None:
     modes = {name: _capture_code(FIELDS["mode"], name) for name in mode_names}
 
     print("\n--- Fan speeds ---")
-    fan_names = _ask_list("Which fan speeds does your AC have? (e.g. low,med,high): ")
+    fan_names = _ask_list("Which fan speeds does your AC have? (e.g. low,mid,high): ")
     fans = {name: _capture_code(FIELDS["fan_mode"], name) for name in fan_names}
 
     print("\n--- Temperature range (sweep low → high) ---")

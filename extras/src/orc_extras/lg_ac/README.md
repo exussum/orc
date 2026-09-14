@@ -190,7 +190,7 @@ The calibrator just produces this file; you can also write it yourself as
   "fields":      { "power": "0x1f7", "mode": "0x1f9", "fan_mode": "0x1fa",
                    "current_temperature": "0x1fd", "temperature": "0x1fe" },
   "modes":       { "cool": 0, "fan_only": 2, "econ": 8, "dry": 1 },
-  "fans":        { "low": 2, "med": 4, "high": 6 },
+  "fans":        { "low": 2, "mid": 4, "high": 6 },
   "temperature": { "divisor": 2, "min": 16, "max": 30 }
 }
 ```
