@@ -8,7 +8,6 @@ import orc_extras.lg_ac as lg_ac
 from orc_extras.lg_ac import api
 from orc_extras.lg_ac.dal.capture import memory as capture
 from orc_extras.lg_ac.dal.mqtt import thinq
-from orc_extras.lg_ac.model import Settings
 
 if TYPE_CHECKING:
     from orc.view import OrcFlask
@@ -19,7 +18,7 @@ app = cast("OrcFlask", current_app)
 
 @enroll.get("/route")
 def route() -> Response:
-    s: Settings = app.orc.plugin_state[lg_ac]
+    s = app.orc.plugin_state[lg_ac].settings
     mqtt_ip = socket.gethostbyname(s.fqdn)  # the device connects to the broker by IP
     return jsonify(api.route(s.hostname, s.https_advertise, mqtt_ip, s.mqtts_advertise))
 
@@ -41,7 +40,7 @@ def device_certificate(device_id: str) -> Response:
 
 @enroll.get("/devices")
 def devices() -> Response:
-    return jsonify(thinq.devices())
+    return jsonify(app.orc.plugin_state[lg_ac].transport.devices())
 
 
 @enroll.get("/capture")
@@ -51,17 +50,19 @@ def capture_dump() -> Response:
 
 @enroll.get("/state")
 def state() -> Response:
-    device_id = request.args.get("device") or thinq.default_device()
+    transport = app.orc.plugin_state[lg_ac].transport
+    device_id = request.args.get("device") or transport.default_device()
     if device_id is None:
         return jsonify({"error": "no device"})
-    return jsonify(thinq.fetch_state(device_id)._asdict())
+    return jsonify(transport.fetch_state(device_id)._asdict())
 
 
 @enroll.post("/command")
 def command() -> Response:
+    transport = app.orc.plugin_state[lg_ac].transport
     body = dict(request.get_json(force=True))
-    device_id = body.pop("device", None) or thinq.default_device()
+    device_id = body.pop("device", None) or transport.default_device()
     if device_id is None:
         return jsonify({"error": "no device"})
-    thinq.publish_command(device_id, body)
+    transport.publish_command(device_id, body)
     return jsonify({"status": "sent", "device": device_id, "command": body})
