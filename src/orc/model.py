@@ -571,13 +571,7 @@ def _squish(items: list[Config]) -> tuple[Config, ...]:
         return ()
 
     last = items[-1]
-    if isinstance(last.state, int):
-        for e in range(len(items) - 2, -1, -1):
-            if items[e].state == STOP:
-                return (items[e], last)
-        return (last,)
-
-    for e in range(len(items) - 2, -1, -1):
-        if isinstance(items[e].state, int):
-            return (items[e], last)
-    return (last,)
+    # a level (int) is preceded by the last STOP; a non-level is preceded by the last level
+    preceding = (lambda c: c.state == STOP) if isinstance(last.state, int) else (lambda c: isinstance(c.state, int))
+    match = next((item for item in reversed(items[:-1]) if preceding(item)), None)
+    return (match, last) if match else (last,)
