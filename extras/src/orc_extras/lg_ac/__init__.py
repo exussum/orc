@@ -79,6 +79,7 @@ def setup(ctx: AppContext) -> None:
 
 def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
     rows = []
+    connected = transport.devices()
     for device in ctx.orc.AC:
         device_id = str(device.value)
         state = transport.fetch_state(device_id)
@@ -87,7 +88,7 @@ def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
                 name=device.name,
                 label=device.label,
                 details={
-                    "connected": device_id in transport.devices(),
+                    "connected": device_id in connected,
                     "power": state.power,
                     "mode": state.mode,
                     "fan": state.fan_mode,
