@@ -157,7 +157,7 @@ def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: 
             return None
         captured["name"] = current.name
         captured["transitions"] = [("leak" if f == "state" else f, old[f], new) for f, new in changes.items()]
-        return dataclasses.replace(current, last_change=datetime.now(tz=ctx.config.settings.tz), **changes)
+        return dataclasses.replace(current, last_change=ctx.api.local_now(), **changes)
 
     _states(ctx).update(device_id, apply)
     for kind, old, new in captured["transitions"]:
@@ -190,7 +190,7 @@ def _transition_to(ctx: m.AppContext, new_state: str, require: str | None = None
     def fn(current: SensorState | None) -> SensorState | None:
         if current is None or (require is not None and current.state != require):
             return None
-        return dataclasses.replace(current, state=new_state, last_change=datetime.now(tz=ctx.config.settings.tz))
+        return dataclasses.replace(current, state=new_state, last_change=ctx.api.local_now())
 
     return fn
 
