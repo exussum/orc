@@ -120,7 +120,7 @@ def test_load_fieldmap_handles_unknown_models():
 
 def test_state_from_raw_decodes_every_field():
     raw = {FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44}
-    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", 25.0, 22.0)
+    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", 77, 72)
 
 
 def test_state_from_raw_reports_mode_off_when_powered_down():
@@ -164,7 +164,7 @@ def test_build_command_round_trips_through_the_codec():
     assert frame[:2] == b"\x01\x01"
     assert body[:9] == bytes([0x04, 0x00, 0x00, 0x00, 0x65, 2, 1, 1, len(body) - 9])
     raw = {f.type_id: f.value for f in api.dissect(body[9:]).fields}
-    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", temperature=22.0)
+    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", temperature=72)
 
 
 # --- Provisioning responses ---
@@ -296,7 +296,7 @@ def test_ac_state_stale_id_is_none(monkeypatch):
 
 
 def test_ac_status_rows_decode_per_device(monkeypatch):
-    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState("ON", "cool", "low", 25.0, 22.0))
+    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState("ON", "cool", "low", 77, 72))
     monkeypatch.setattr(thinq, "devices", lambda: ["clip-1"])
     ctx = SimpleNamespace(orc=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),)))
     assert lg_ac._ac_status(ctx) == [
