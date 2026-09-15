@@ -3,7 +3,7 @@ import re
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, datetime, timedelta
-from functools import wraps
+from functools import cache, wraps
 from itertools import chain, groupby
 from pathlib import Path
 from types import SimpleNamespace
@@ -52,13 +52,23 @@ def no_cache(response: Response) -> Response:
     return response
 
 
-@bp.route("/hooks.js")
-def hooks() -> Response:
+@cache
+def _hooks_bundle(scripts: tuple[tuple[str, Path], ...]) -> str:
     static = Path(__file__).parent / "static"
     gate = static / "hooks" / "are-you-sure.js"
     core = [static / "hooks.js", gate, *(p for p in (static / "hooks").glob("*.js") if p != gate)]
-    files = [(p.name, p) for p in core] + list(config.registry.scripts.items())
-    return Response("\n".join(f"// --- {name}\n(() => {{\n{path.read_text()}}})();" for name, path in files), mimetype="text/javascript")
+    files = [(p.name, p) for p in core] + list(scripts)
+    return "\n".join(f"// --- {name}\n(() => {{\n{path.read_text()}}})();" for name, path in files)
+
+
+@bp.route("/hooks.js")
+def hooks() -> Response:
+    return Response(_hooks_bundle(tuple(config.registry.scripts.items())), mimetype="text/javascript")
+
+
+@cache
+def _config_text(config_dir: str) -> str:
+    return (Path(config_dir) / "config.orc").read_text()
 
 
 class VersionManager:
@@ -92,7 +102,7 @@ def cfg() -> str:
     today = api.local_now().date()
     tomorrow = today + timedelta(days=1)
     plugin_htmls = {name.rsplit("/", 1)[-1]: Markup("<pre>{}</pre>").format(text) for name, text in sorted(config.plugin_configs.items())}
-    html = Markup("<pre>{}</pre>").format((Path(config.config_dir) / "config.orc").read_text())
+    html = Markup("<pre>{}</pre>").format(_config_text(config.config_dir))
 
     states = [(title, fn()) for title, fn in config.registry.state_providers.items()]
     # One button per device: each actionable state row whose action is a
