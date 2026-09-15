@@ -11,7 +11,7 @@ from orc_extras import lg_ac
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac import model as m
 from orc_extras.lg_ac.dal.capture import memory as capture
-from orc_extras.lg_ac.dal.mqtt import thinq
+from orc_extras.lg_ac.dal.mqtt import stub
 
 from orc.model import AcState, DeviceStatus
 
@@ -215,11 +215,16 @@ def test_sign_device_csr_issues_a_client_cert(ca_pem, device_csr, encoding):
 # --- Enrollment routes ---
 
 
+@pytest.fixture(autouse=True)
+def reset_stub():
+    stub.reset()
+
+
 @pytest.fixture
 def client():
     app = Flask(__name__)
     settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtt_port=1883, mqtts_advertise=8883)
-    app.orc = SimpleNamespace(plugin_state={lg_ac: settings})  # type: ignore[attr-defined]
+    app.orc = SimpleNamespace(plugin_state={lg_ac: lg_ac.State(settings, stub)})  # type: ignore[attr-defined]
     app.register_blueprint(web.enroll)
     return app.test_client()
 
@@ -245,61 +250,50 @@ def test_device_certificate_signs_the_posted_csr(client, ca_pem, device_csr):
     assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == DEVICE_ID
 
 
-def test_state_endpoint_reports_the_default_device(client, monkeypatch):
-    monkeypatch.setattr(thinq, "default_device", lambda: DEVICE_ID)
-    monkeypatch.setattr(thinq, "fetch_state", lambda device_id: m.ACState("ON", "cool", "low", 25.0, 22.0))
+def test_state_endpoint_reports_the_default_device(client):
+    stub.reset(states={DEVICE_ID: m.ACState("ON", "cool", "low", 25.0, 22.0)}, default=DEVICE_ID)
     assert client.get("/state").get_json() == m.ACState("ON", "cool", "low", 25.0, 22.0)._asdict()
 
 
-def test_state_endpoint_errors_with_no_device(client, monkeypatch):
-    monkeypatch.setattr(thinq, "default_device", lambda: None)
+def test_state_endpoint_errors_with_no_device(client):
     assert client.get("/state").get_json() == {"error": "no device"}
 
 
-def test_command_endpoint_publishes_to_the_device(client, monkeypatch):
-    published = []
-    monkeypatch.setattr(thinq, "publish_command", lambda device_id, values: published.append((device_id, values)))
+def test_command_endpoint_publishes_to_the_device(client):
     body = client.post("/command", json={"device": DEVICE_ID, "mode": "cool", "temperature": 22}).get_json()
-    assert published == [(DEVICE_ID, {"mode": "cool", "temperature": 22})]
+    assert stub.published == [(DEVICE_ID, {"mode": "cool", "temperature": 22})]
     assert body == {"status": "sent", "device": DEVICE_ID, "command": {"mode": "cool", "temperature": 22}}
 
 
-def test_command_endpoint_errors_with_no_device(client, monkeypatch):
-    monkeypatch.setattr(thinq, "default_device", lambda: None)
+def test_command_endpoint_errors_with_no_device(client):
     assert client.post("/command", json={"mode": "cool"}).get_json() == {"error": "no device"}
 
 
-def test_handle_ac_commands_the_bound_device(monkeypatch):
-    published = []
-    monkeypatch.setattr(thinq, "devices", lambda: ["clip-1", "clip-2"])
-    monkeypatch.setattr(thinq, "publish_command", lambda device_id, values: published.append((device_id, values)))
-    lg_ac._handle_ac(SimpleNamespace(value="clip-2"), "off", None, None, None)
-    assert published == [("clip-2", {"mode": "off"})]
+def test_handle_ac_commands_the_bound_device():
+    stub.reset(devices=["clip-1", "clip-2"])
+    lg_ac._handle_ac(stub, SimpleNamespace(value="clip-2"), "off", None, None, None)
+    assert stub.published == [("clip-2", {"mode": "off"})]
 
 
-def test_handle_ac_stale_id_commands_nothing(monkeypatch):
-    published = []
-    monkeypatch.setattr(thinq, "devices", lambda: ["clip-1", "clip-2"])
-    monkeypatch.setattr(thinq, "publish_command", lambda device_id, values: published.append((device_id, values)))
-    lg_ac._handle_ac(SimpleNamespace(value="clip-stale"), "off", None, None, None)
-    assert published == []
+def test_handle_ac_stale_id_commands_nothing():
+    stub.reset(devices=["clip-1", "clip-2"])
+    lg_ac._handle_ac(stub, SimpleNamespace(value="clip-stale"), "off", None, None, None)
+    assert stub.published == []
 
 
-def test_ac_state_reads_the_bound_device(monkeypatch):
-    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState("ON", "cool", "low", 25.0, 22.0))
-    assert lg_ac._ac_state(SimpleNamespace(value="clip-1")) == AcState.COOL
+def test_ac_state_reads_the_bound_device():
+    stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 25.0, 22.0)})
+    assert lg_ac._ac_state(stub, SimpleNamespace(value="clip-1")) == AcState.COOL
 
 
-def test_ac_state_stale_id_is_none(monkeypatch):
-    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState())  # unknown id → empty state
-    assert lg_ac._ac_state(SimpleNamespace(value="clip-stale")) is None
+def test_ac_state_stale_id_is_none():
+    assert lg_ac._ac_state(stub, SimpleNamespace(value="clip-stale")) is None  # unknown id → empty state
 
 
-def test_ac_status_rows_decode_per_device(monkeypatch):
-    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState("ON", "cool", "low", 77, 72))
-    monkeypatch.setattr(thinq, "devices", lambda: ["clip-1"])
+def test_ac_status_rows_decode_per_device():
+    stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 77, 72)}, devices=["clip-1"])
     ctx = SimpleNamespace(orc=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),)))
-    assert lg_ac._ac_status(ctx) == [
+    assert lg_ac._ac_status(stub, ctx) == [
         DeviceStatus(
             name="LIVING_ROOM_AC",
             label="Living Room AC",
@@ -308,11 +302,9 @@ def test_ac_status_rows_decode_per_device(monkeypatch):
     ]
 
 
-def test_ac_status_disconnected_device_is_blank(monkeypatch):
-    monkeypatch.setattr(thinq, "fetch_state", lambda _id: m.ACState())
-    monkeypatch.setattr(thinq, "devices", lambda: [])
+def test_ac_status_disconnected_device_is_blank():
     ctx = SimpleNamespace(orc=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label=None),)))
-    assert lg_ac._ac_status(ctx) == [
+    assert lg_ac._ac_status(stub, ctx) == [
         DeviceStatus(
             name="LIVING_ROOM_AC",
             label=None,
