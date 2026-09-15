@@ -71,10 +71,6 @@ def setup(ctx: AppContext) -> None:
     ctx.api.add_state_provider("AC", partial(_ac_status, ctx))
 
 
-def _fahrenheit(celsius: float | None) -> int | None:
-    return round(celsius * 9 / 5 + 32) if celsius is not None else None
-
-
 def _ac_status(ctx: AppContext) -> list[DeviceStatus]:
     rows = []
     for device in ctx.orc.AC:
@@ -89,8 +85,8 @@ def _ac_status(ctx: AppContext) -> list[DeviceStatus]:
                     "power": state.power,
                     "mode": state.mode,
                     "fan": state.fan_mode,
-                    "target": _fahrenheit(state.temperature),
-                    "current": _fahrenheit(state.current_temperature),
+                    "target": state.temperature,
+                    "current": state.current_temperature,
                 },
             )
         )
