@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, NamedTuple, cast
 
+from apscheduler.job import Job
 from flask import Blueprint, Flask, render_template, request
 from flask import current_app as _current_app
 from flask.wrappers import Response
@@ -298,10 +299,18 @@ def schedule() -> tuple[str, int, dict[str, str]]:
     )
 
     present_names = api.present_names()
-    absent_by_job = {j.id: api.is_absent(j.args[0].rule, present_names) for j in jobs}
-    weather_by_job = {j.id: bool(api.matched_weather(j.args[0].rule, j.trigger.run_date)) for j in jobs}
-    presence_by_job = {j.id: bool(api.matched_presence(j.args[0].rule)) for j in jobs}
-    skip_replay_by_job = {j.id: j.args[0].rule.skip_replay for j in jobs}
+
+    def meta(job: Job) -> SimpleNamespace:
+        rule = job.args[0].rule
+        any_present = api.matched_presence(rule)
+        return SimpleNamespace(
+            absent=bool(any_present) and not api.matched_presence(rule, present_names),
+            weather=bool(api.matched_weather(rule, job.trigger.run_date)),
+            presence=bool(any_present),
+            skip_replay=rule.skip_replay,
+        )
+
+    job_meta = {j.id: meta(j) for j in jobs}
     jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
 
     return (
@@ -312,10 +321,7 @@ def schedule() -> tuple[str, int, dict[str, str]]:
             theme=theme,
             themes=sorted(config.themes),
             durations=dict(api.fetch_durations()),
-            absent_by_job=absent_by_job,
-            weather_by_job=weather_by_job,
-            presence_by_job=presence_by_job,
-            skip_replay_by_job=skip_replay_by_job,
+            job_meta=job_meta,
         ),
         200,
         {"Cache-control": "max-age=3600"},
