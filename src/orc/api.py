@@ -516,10 +516,13 @@ def active_theme_override(today: date) -> m.ThemeOverride | None:
 def calculate_theme(today: date) -> str:
     if override := active_theme_override(today):
         return override.name
-    elif today.weekday() in (5, 6):
+    return base_theme(today)
+
+
+def base_theme(today: date) -> str:
+    if today.weekday() in (5, 6):
         return m.THEME_DAY_OFF
-    else:
-        return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
+    return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
 
 
 def set_theme_override(name: str, start: date, end: date) -> None:
@@ -603,7 +606,7 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
         if override := active_theme_override(today):
             cfg = config.themes.get(override.name)
         else:
-            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(calculate_theme(today))
+            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(base_theme(today))
 
         assert cfg is not None  # the resolved theme is always present in config
         for e in cfg.configs:
