@@ -98,11 +98,16 @@ def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> m.ACState:
     if fm.fan in raw:
         fan_by_code = {code: name for name, code in fm.fan_to_code.items()}
         values["fan_mode"] = fan_by_code.get(raw[fm.fan])
+    # The wire is °C; ACState carries °F so nothing downstream handles Celsius.
     if fm.current_temp in raw:
-        values["current_temperature"] = raw[fm.current_temp] / fm.temp_div
+        values["current_temperature"] = _fahrenheit(raw[fm.current_temp] / fm.temp_div)
     if fm.target_temp in raw:
-        values["temperature"] = raw[fm.target_temp] / fm.temp_div
+        values["temperature"] = _fahrenheit(raw[fm.target_temp] / fm.temp_div)
     return m.ACState(**values)  # type: ignore[arg-type]
+
+
+def _fahrenheit(celsius: float) -> int:
+    return round(celsius * 9 / 5 + 32)
 
 
 def _clamp_temp(fm: m.Fieldmap, celsius: object) -> int:
