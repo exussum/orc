@@ -12,15 +12,15 @@
                 </tr>
             {% endif %}
             {% for job in day_jobs %}
-                {% set absent = absent_by_job[job.id] %}
+                {% set meta = job_meta[job.id] %}
                 <tr>
                     <td class="px-2 py-3 align-middle w-16">
                         <div class="relative inline-block">
-                            <button class="orc-btn{% if absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.name }}" data-duration="{{ durations.get(job.name, 0) }}">&nbsp;</button>
+                            <button class="orc-btn{% if meta.absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.name }}" data-duration="{{ durations.get(job.name, 0) }}">&nbsp;</button>
                             <span class="orc-job-badges">
-                                {%- if skip_replay_by_job[job.id] %}<span class="orc-skip-replay-badge">⏩</span>{% endif -%}
-                                {%- if weather_by_job[job.id] %}<span class="orc-weather-badge">🌤</span>{% endif -%}
-                                {%- if presence_by_job[job.id] %}<span class="orc-presence-badge">👤</span>{% endif -%}
+                                {%- if meta.skip_replay %}<span class="orc-skip-replay-badge">⏩</span>{% endif -%}
+                                {%- if meta.weather %}<span class="orc-weather-badge">🌤</span>{% endif -%}
+                                {%- if meta.presence %}<span class="orc-presence-badge">👤</span>{% endif -%}
                             </span>
                         </div>
                     </td>
