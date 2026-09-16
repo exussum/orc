@@ -15,7 +15,7 @@ from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
 
-from orc import api, config
+from orc import alerts, api, config
 from orc import model as m
 from orc.collections import where
 from orc.locale import Log
@@ -349,7 +349,7 @@ def announce() -> None:
 
 @bp.route("/api/alert.mp4")
 def alert_mp4() -> Response:
-    return Response(api.render_alert_video(request.args.get("text", "").replace("`", "")), mimetype="video/mp4")
+    return Response(alerts.render_alert_video(request.args.get("text", "").replace("`", "")), mimetype="video/mp4")
 
 
 @bp.route("/api/version")
