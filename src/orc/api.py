@@ -1,11 +1,7 @@
 import contextlib
-import io
 import math
-import subprocess
-import tempfile
 import threading
 import time
-import urllib.request
 from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
@@ -15,10 +11,9 @@ from functools import lru_cache
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote
 
 from apscheduler.job import Job
-from PIL import Image, ImageDraw, ImageFont, ImageText
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -26,7 +21,6 @@ import orc
 from orc import config, plugins
 from orc import model as m
 from orc.dal import net, scheduler, sqlite
-from orc.dal.chromecast import MAX_CHARS
 from orc.dal.scheduler import fetch_jobs_by_type
 from orc.dal.sqlite import (
     connection,  # noqa: F401
@@ -46,19 +40,12 @@ from orc.decorators import (
 from orc.loader import Cast
 from orc.locale import Log
 
+DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
-DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
-ALERT_IMAGE_SIZE = (1280, 720)
 ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
 
 _PRESENCE_CRON_JOB_ID = "presence-cron"
-_ALERT_MARGIN = 80
-_ALERT_MIN_FONT_SIZE = 24
-_ALERT_VIDEO_SECONDS = 300
-_ALERT_LOOP_SECONDS = 20
-_TTS_SAMPLE_RATE = 24000
-_TTS_TIMEOUT = 10
 _EXTERNAL_GROUP_WINDOW = timedelta(seconds=5)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
@@ -146,77 +133,6 @@ snapshot_manager = SnapshotManager()
 def set_ctx(ctx: m.AppContext) -> None:
     global _ctx
     _ctx = ctx
-
-
-@lru_cache(maxsize=5)
-def render_alert_video(text: str) -> bytes:
-    if len(text) > MAX_CHARS:
-        raise ValueError(f"Alert text exceeds {MAX_CHARS} characters: {len(text)}")
-    with tempfile.TemporaryDirectory() as d:
-        png, mp3 = Path(d) / "a.png", Path(d) / "a.mp3"
-        seg, mp4 = Path(d) / "seg.mp4", Path(d) / "a.mp4"
-        png.write_bytes(_render_alert_image(text))
-        mp3.write_bytes(_tts_mp3(text))
-        audio = f"[1:a]aresample={_TTS_SAMPLE_RATE},apad=whole_dur={_ALERT_LOOP_SECONDS}[a]"
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-loglevel",
-                "error",
-                "-loop",
-                "1",
-                "-i",
-                str(png),
-                "-i",
-                str(mp3),
-                "-filter_complex",
-                audio,
-                "-map",
-                "0:v",
-                "-map",
-                "[a]",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "ultrafast",
-                "-tune",
-                "stillimage",
-                "-pix_fmt",
-                "yuv420p",
-                "-r",
-                "1",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "64k",
-                "-t",
-                str(_ALERT_LOOP_SECONDS),
-                str(seg),
-            ],
-            check=True,
-        )
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-loglevel",
-                "error",
-                "-stream_loop",
-                "-1",
-                "-i",
-                str(seg),
-                "-c",
-                "copy",
-                "-t",
-                str(_ALERT_VIDEO_SECONDS),
-                "-movflags",
-                "+faststart",
-                str(mp4),
-            ],
-            check=True,
-        )
-        return mp4.read_bytes()
 
 
 def duration_stats() -> dict[str, tuple[int, float]]:
@@ -729,32 +645,6 @@ def replay_day(now: datetime, entry: m.LogEntry) -> None:
 
 
 # --- Private helpers ---
-
-
-def _render_alert_image(text: str) -> bytes:
-    image = Image.new("RGB", ALERT_IMAGE_SIZE, color=(178, 24, 24))
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default(size=128)
-    width, height = ALERT_IMAGE_SIZE[0] - 2 * _ALERT_MARGIN, ALERT_IMAGE_SIZE[1] - 2 * _ALERT_MARGIN
-    wrapped = ImageText.Text(text, font=font)
-    wrapped.wrap(width, height, scaling=("shrink", _ALERT_MIN_FONT_SIZE))
-    if "\n" not in wrapped.text:
-        # scaling wrap early-returns without writing the wrapped lines back when the
-        # text fits at the starting size. Drop this once the early return in the
-        # scaling=="shrink" branch of ImageText.Text.wrap is fixed upstream:
-        # https://github.com/python-pillow/Pillow/pull/9286 (present through 12.3.0).
-        wrapped.wrap(width, height)
-    draw.text((ALERT_IMAGE_SIZE[0] / 2, ALERT_IMAGE_SIZE[1] / 2), wrapped, fill="white", anchor="mm", align="center")
-    buf = io.BytesIO()
-    image.save(buf, format="PNG")
-    return buf.getvalue()
-
-
-def _tts_mp3(text: str) -> bytes:
-    url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=_TTS_TIMEOUT) as resp:  # nosemgrep
-        return resp.read()
 
 
 @lru_cache(maxsize=1)
