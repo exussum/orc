@@ -17,7 +17,8 @@ def core_registry(monkeypatch):
     runs in the same process it asserts against the real registry. So we save/restore
     rather than clobber. Autouse in this conftest ⇒ scoped to tests/."""
     import orc
-    from orc import api, declarations
+    from orc import api
+    from orc.kernel import declarations
 
     class Light(DeviceEnum):
         a = (1, frozenset([m.Capability.change_level]))
@@ -65,3 +66,13 @@ def orc_state_db(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
     sqlite.init_db()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _reset_ctx():
+    from unittest.mock import MagicMock
+
+    from orc import api
+    from orc import model as m
+
+    api.set_ctx(m.AppContext(MagicMock(), MagicMock()))

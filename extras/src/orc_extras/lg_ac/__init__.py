@@ -12,7 +12,7 @@ from typing import Any, NamedTuple
 from command_cfg import scalar
 
 import orc_extras.lg_ac
-from orc.loader import Cast, load_plugin_config
+from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AcState, AppContext, DeviceStatus, LogSourceEnum, Secrets
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker

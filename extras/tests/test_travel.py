@@ -15,7 +15,7 @@ from orc_extras.travel.dal.drive import tomtom
 from orc_extras.travel.dal.flight import stub as flight_stub
 
 from orc import api
-from orc.loader import Cast
+from orc.kernel.loader import Cast
 
 FIXTURE = Path(__file__).parent / "fixture"
 ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)

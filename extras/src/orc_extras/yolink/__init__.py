@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import orc_extras.yolink
 from orc import model as m
-from orc.loader import resolve_backend
+from orc.kernel.loader import resolve_backend
 from orc.model import AppContext
 from orc_extras.yolink import plugins
 from orc_extras.yolink.dal.interfaces import CloudBackend

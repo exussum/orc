@@ -6,9 +6,34 @@ import pytest
 
 from orc import model as m
 from orc.dal import interfaces
-from orc.loader import ConfigError, parse_config, validate
+from orc.kernel import engine, loader
+from orc.kernel.loader import ConfigError, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
+
+
+def test_condition_system_is_unconditional():
+    assert loader._condition(None) is engine.ALWAYS
+    assert loader._condition("SYSTEM") is engine.ALWAYS
+
+
+def test_condition_anyone():
+    assert loader._condition("ANYONE") == engine.Is(m.AnyoneChannel(), True)
+
+
+def test_condition_weather_is_membership():
+    assert loader._condition("SUNNY") == engine.In(m.WeatherChannel(), m.WeatherCondition.SUNNY)
+
+
+def test_condition_person():
+    assert loader._condition("alice") == engine.Is(m.PersonChannel("alice"), True)
+
+
+def test_condition_holds_against_world():
+    world = {m.AnyoneChannel(): True, m.PersonChannel("bob"): False}
+    read = world.__getitem__
+    assert loader._condition("ANYONE").holds(read)
+    assert not loader._condition("bob").holds(read)
 
 
 def parse(case, **kwargs):
@@ -42,28 +67,28 @@ def test_routines_append_devices_and_triggers():
     parsed = parse("core")
     light, cc = parsed.enums["Light"], parsed.enums["Chromecast"]["CC"]
     assert parsed.routine["ROUTINE_RESET"].name == "Reset"
-    assert parsed.routine["ROUTINE_RESET"].items == (
-        m.Config(light, "off", trigger="SYSTEM"),
-        m.Config(cc, "stop"),
+    assert parsed.routine["ROUTINE_RESET"].commands == (
+        engine.Command(m.Devices(light), "off", tag="SYSTEM"),
+        engine.Command(m.Devices(cc), "stop"),
     )
 
 
 def test_routine_skip_replay_flag():
     routines = parse("core").routine
-    assert routines["ROUTINE_MEETING"].skip_replay is True
-    assert routines["ROUTINE_RESET"].skip_replay is False
+    assert m.SKIP_REPLAY_TAG in routines["ROUTINE_MEETING"].tags
+    assert m.SKIP_REPLAY_TAG not in routines["ROUTINE_RESET"].tags
 
 
 def test_themes_schedule_routines():
     themes = parse("core").theme
     assert [c.name for c in themes["work day"].configs] == ["Reset"]
-    assert themes["work day"].configs[0].when == time(1, 0)
-    assert themes["day off"].configs[0].when == m.SUNSET
+    assert themes["work day"].configs[0].trigger == engine.At(time(1, 0))
+    assert themes["day off"].configs[0].trigger == engine.At(m.SUNSET)
 
 
 def test_rooms_collect_member_states():
     parsed = parse("core")
-    assert parsed.room["Bedroom"].items == (m.Config(parsed.enums["Light"]["LAMP"], "on"),)
+    assert parsed.room["Bedroom"].commands == (engine.Command(m.Devices(parsed.enums["Light"]["LAMP"]), "on"),)
 
 
 def test_settings_typed_and_defaulted():
@@ -102,7 +127,7 @@ def test_validate_accepts_complete_config():
 def test_ad_hoc_define_with_inline_first_item():
     parsed = parse("core")
     silence = parsed.ad_hoc["Silence"]
-    assert silence.items == (m.Config(parsed.enums["Chromecast"]["CC"], "stop"),)
+    assert silence.commands == (engine.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),)
     assert silence.reset is False
     assert silence.section == "scene"
 
@@ -120,20 +145,20 @@ def test_ac_state_covers_every_ac_mode():
 
 def test_routines_accept_ac_commands():
     parsed = parse("ac_routine")
-    assert [c.state for c in parsed.routine["R_AC"].items] == [m.AcCommand(m.AcMode.COOL, "low", 75), m.OFF]
+    assert [c.value for c in parsed.routine["R_AC"].commands] == [m.AcCommand(m.AcMode.COOL, "low", 75), m.OFF]
 
 
 def test_state_youtube_ids_stay_strings():
     parsed = parse("youtube_state")
-    states = {name: cfg.items[0].state for name, cfg in parsed.ad_hoc.items()}
+    states = {name: cfg.commands[0].value for name, cfg in parsed.ad_hoc.items()}
     assert states == {"Music": "dQw4w9WgXcQ", "Numbers": "12345678901", "Volume": 40}
 
 
 def test_ad_hoc_append_extends_items():
     parsed = parse("core")
-    assert parsed.ad_hoc["All Lights Off"].items == (
-        m.Config(parsed.enums["Light"], "off"),
-        m.Config(parsed.enums["Chromecast"]["CC"], "stop"),
+    assert parsed.ad_hoc["All Lights Off"].commands == (
+        engine.Command(m.Devices(parsed.enums["Light"]), "off"),
+        engine.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),
     )
 
 
@@ -153,7 +178,7 @@ def test_highlight_windows_reference_ad_hoc():
 def test_person_becomes_known_trigger():
     parsed = parse("core")
     assert parsed.person == {"Spence": [m.Person("host9", "aa:bb")]}
-    assert parsed.routine["ROUTINE_DEFAULT"].items[-1].trigger == "Spence"
+    assert parsed.routine["ROUTINE_DEFAULT"].commands[-1].tag == "Spence"
 
 
 def test_plugin_command_imports_callable():
