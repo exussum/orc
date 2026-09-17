@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, cast
 
 import orc_extras.lg_tv
-from orc.loader import resolve_backend
+from orc.kernel.loader import resolve_backend
 from orc.model import AppContext, DeviceEnum, LogEntry
 from orc_extras.lg_tv.dal.interfaces import WebOsBackend
 

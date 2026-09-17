@@ -4,7 +4,7 @@ from typing import Any, NamedTuple
 
 from command_cfg import group, scalar
 
-from orc.loader import Cast, load_plugin_config, resolve_device
+from orc.kernel.loader import Cast, load_plugin_config, resolve_device
 from orc.model import AppContext, DeviceEnum
 from orc_extras.entrance_sensor import plugins
 

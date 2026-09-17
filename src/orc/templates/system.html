@@ -34,11 +34,11 @@
                                 <th class="px-2 py-1 font-normal">OK</th>
                                 <th class="px-2 py-1 font-normal">Retried</th>
                             </tr>
-                            {% for c in lights.items %}
-                                {% set s = retry_stats.get(c.what.one().value) %}
+                            {% for c in lights %}
+                                {% set s = retry_stats.get(c.channel.one().value) %}
                                 <tr>
-                                    <td class="px-2 py-1">{{ c.what.one().name }}</td>
-                                    <td class="px-2 py-1">{{ c.state }}</td>
+                                    <td class="px-2 py-1">{{ c.channel.one().name }}</td>
+                                    <td class="px-2 py-1">{{ c.value }}</td>
                                     <td class="px-2 py-1">{{ s.failed if s else '—' }}</td>
                                     <td class="px-2 py-1">{{ s.clean if s else '—' }}</td>
                                     <td class="px-2 py-1">{{ s.retried if s else '—' }}</td>
@@ -55,7 +55,7 @@
                                 <th class="px-2 py-1 font-normal">Content</th>
                                 <th class="px-2 py-1 font-normal">Volume</th>
                             </tr>
-                            {% for c in sounds.items %}
+                            {% for c in sounds %}
                                 <tr>
                                     <td class="px-2 py-1">{{ c.what.name }}</td>
                                     <td class="px-2 py-1">{{ c.playback.value }}</td>
@@ -93,13 +93,13 @@
                 <ul class="list-disc list-inside">
                     <li>Internal Version: {{ version }}</li>
                     <li>Snapshot State:
-                        {% if ctx.snapshot_manager.snapshots %}
+                        {% if ctx.engine.snapshots(ctx.api.local_now()) %}
                             <ul class="list-disc list-inside ml-4">
-                                {% for name, snap in ctx.snapshot_manager.snapshots.items() %}
+                                {% for name, snap in ctx.engine.snapshots(ctx.api.local_now()).items() %}
                                     <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
                                         <ul class="list-disc list-inside ml-4">
-                                            {% for c in snap.routine.items if c.state != "off" %}
-                                                <li>{{ c.what.one().name }}={{ c.state }}</li>
+                                            {% for c in snap.routine if c.value != "off" %}
+                                                <li>{{ c.channel.one().name }}={{ c.value }}</li>
                                             {% else %}
                                                 <li>all off</li>
                                             {% endfor %}

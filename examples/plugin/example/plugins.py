@@ -35,7 +35,7 @@ def schedule(scheduler: BaseScheduler, job: ExampleJob, tz: Any) -> None:
     pass
 
 
-def _dispatch(ctx: AppContext, w: Any, rule: Any, stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch(ctx: AppContext, w: Any, command: Any, stream: dict[Any, tuple[str, str]]) -> None:
     pass
 
 
