@@ -13,9 +13,11 @@ from command_cfg import ConfigError, array, each, group, raw, scalar
 
 from orc import model as m
 from orc.dal import interfaces
+from orc.kernel import engine
 from orc.security import safe_eval
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
+_WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
 _NO_OBJECTS: Mapping[str, Any] = MappingProxyType({})
 _YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
 _ERR_STATE = (
@@ -234,11 +236,26 @@ def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapp
         raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {state!r}")
 
 
-def _config(objects: dict[str, Any], args: SimpleNamespace, **extra: Any) -> m.Config:
+def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> engine.Command[str]:
     devices = Cast.devices(args.devices, objects)
     state = Cast.state(args.state)
     validate_ac_state(devices.all(), state, objects["device"].enums, source=args.devices)
-    return m.Config(devices, state, **extra)
+    return engine.Command[str](devices, state, tag=trigger)
+
+
+def _condition(trigger: str | None) -> engine.Condition:
+    if trigger in (None, m.Trigger.SYSTEM):
+        return engine.ALWAYS
+    elif trigger in _WEATHER_TRIGGERS:
+        return engine.In(m.WeatherChannel(), m.WeatherCondition(trigger))
+    elif trigger == m.Trigger.ANYONE:
+        return engine.Is(m.AnyoneChannel(), True)
+    else:
+        return engine.Is(m.PersonChannel(trigger), True)
+
+
+def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Clause:
+    return engine.Clause(_condition(trigger), _command(objects, args, trigger))
 
 
 def _resolve_function(value: str) -> Callable[..., Any]:
@@ -284,25 +301,26 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
 
 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    configs = objects["room"].setdefault(args.name, m.Configs())
-    configs.items = (*configs.items, _config(objects, args))
+    rooms = objects["room"]
+    base = rooms.get(args.name, engine.Rule(engine.NEVER, (), name=args.name))
+    rooms[args.name] = replace(base, items=(*base.items, engine.Clause(engine.ALWAYS, _command(objects, args))))
 
 
 def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
     ad_hoc_routines = objects["ad_hoc"]
     if args.define:
-        ad_hoc_routines[args.name] = m.AdhocConfig(
+        ad_hoc_routines[args.name] = m.AdhocAction(
             snapshot=timedelta(minutes=args.snapshot) if args.snapshot is not None else None,
             delay=timedelta(minutes=args.delay) if args.delay is not None else timedelta(),
             section=Cast.section(args.section) or "scene",
             reset=not args.no_reset,
         )
         if args.devices is not None:
-            ad_hoc_routines[args.name].items = (_config(objects, args),)
+            ad_hoc_routines[args.name].commands = (_command(objects, args),)
     elif (config := ad_hoc_routines.get(args.name)) is None:
         raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(ad_hoc_routines)}")
     else:
-        config.items = (*config.items, _config(objects, args))
+        config.commands = (*config.commands, _command(objects, args))
 
 
 def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
@@ -331,21 +349,22 @@ def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     routines = objects["routine"]
     if args.define:
-        routines[args.id] = m.Routine(args.name, "", (), skip_replay=args.skip_replay)
+        tags = frozenset({m.SKIP_REPLAY_TAG}) if args.skip_replay else frozenset()
+        routines[args.id] = engine.Rule(engine.NEVER, (), name=args.name, tags=tags)
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:
         known = (None, *(t.value for t in m.Trigger), *(w.value for w in m.WeatherCondition), *objects["person"])
         if args.trigger not in known:
             raise ValueError(f"Unknown trigger {args.trigger!r}: expected one of {known[1:]}")
-        routine.items = (*routine.items, _config(objects, args, trigger=args.trigger))
+        routines[args.id] = replace(routine, items=(*routine.items, _clause(objects, args, args.trigger)))
 
 
 def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if (routine := objects["routine"].get(args.routine)) is None:
         raise ValueError(f"Unknown routine {args.routine!r}: expected one of {tuple(objects['routine'])}")
     theme = objects["theme"].setdefault(args.name, m.Theme(args.name))
-    theme.configs = (*theme.configs, replace(routine, when=args.time))
+    theme.configs = (*theme.configs, replace(routine, trigger=engine.At(args.time)))
 
 
 def load_plugin_config(

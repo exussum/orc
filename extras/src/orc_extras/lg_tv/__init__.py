@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from orc import model as m
+from orc.kernel import engine
 from orc_extras.lg_tv import plugins
 from orc_extras.lg_tv.dal import sqlite
 from orc_extras.lg_tv.dal.interfaces import WebOsBackend
@@ -21,15 +22,15 @@ def setup(ctx: "m.AppContext") -> None:
     ctx.api.add_state_provider("TV", partial(tv_state, ctx, plugins.backend(ctx)))
 
 
-def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", rule: "m.Config", stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", command: "engine.Command[Any]", stream: dict[Any, tuple[str, str]]) -> None:
     webos_device, bl_device = ctx.orc.WebOS[w.name], ctx.orc.BroadLink[w.name]
-    if rule.state == m.OFF:
+    if command.value == m.OFF:
         plugins.off(ctx, webos_device)
-    elif rule.state == m.ON:
+    elif command.value == m.ON:
         if plugins.is_off(ctx, webos_device):
             ctx.api.tv_toggle(bl_device)
     else:
-        raise Exception(f"LGTV only supports on and off, got: {rule.state!r}")
+        raise Exception(f"LGTV only supports on and off, got: {command.value!r}")
 
 
 def tv_state(ctx: "m.AppContext", backend: "WebOsBackend") -> list[m.DeviceStatus]:

@@ -5,6 +5,7 @@ from typing import Any, Sequence
 from apscheduler.triggers.date import DateTrigger
 
 from orc import model as m
+from orc.kernel import engine
 from orc.plugins import requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
@@ -59,12 +60,12 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
     if new == sensor.setting.active_event:
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
-        restore = _restorable(ctx, sensor, ctx.snapshot_manager.get(SNAPSHOT_NAME))
+        restore = _restorable(ctx, sensor, ctx.engine.take_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
         timed_name, timed_rows = _timed_rows(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
-        ctx.api.dispatch(m.squish_configs(restore, _to_configs(ctx, [*sensor.rules.enter, *timed_rows])), force=True, entry=log_entry)
+        ctx.api.dispatch(m.squish((*restore, *_to_commands([*sensor.rules.enter, *timed_rows]))), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.inside, trigger=m.Trigger.SYSTEM), entry=log_entry)
+        ctx.api.dispatch(_to_commands(sensor.rules.inside, tag=m.Trigger.SYSTEM), entry=log_entry)
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
@@ -83,17 +84,17 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     door_open = not present and _door_open(ctx, sensor)
 
     if present or door_open:
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.present), entry=log_entry)
+        ctx.api.dispatch(_to_commands(sensor.rules.present), entry=log_entry)
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
-    elif any(s.content for s in ctx.api.capture_sounds().items):
+    elif any(s.content for s in ctx.api.capture_sounds()):
         # Visitor left, pet still listening: restore the pre-visit state
-        ctx.snapshot_manager.resume(SNAPSHOT_NAME, m.Configs(), log_entry)
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent), entry=log_entry)
+        ctx.engine.restore_scene(ctx, SNAPSHOT_NAME, (), log_entry)
+        ctx.api.dispatch(_to_commands(sensor.rules.absent), entry=log_entry)
         msg = sensor.message.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
-        ctx.snapshot_manager.replace_config(SNAPSHOT_NAME, _to_configs(ctx, sensor.rules.shutdown), end, SNAPSHOT_NAME, log_entry)
-        ctx.api.dispatch(_to_configs(ctx, sensor.rules.absent), entry=log_entry)
+        ctx.engine.override_scene(ctx, SNAPSHOT_NAME, _to_commands(sensor.rules.shutdown), end, SNAPSHOT_NAME, log_entry)
+        ctx.api.dispatch(_to_commands(sensor.rules.absent), entry=log_entry)
         msg = sensor.message.log_shutdown
     log_entry.add(Log.ENTRANCE, msg)
 
@@ -141,14 +142,14 @@ def _timed_rows(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, Sequen
     )
 
 
-def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot | None) -> m.Configs:
+def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot | None) -> m.Commands:
     # The snapshot is captured after the inside rule ran, so its state for those
     # lights is plugin-caused, not household state - don't replay it.
     if snapshot is None:
-        return m.Configs()
+        return ()
     inside = {d for r in sensor.rules.inside for d in r.devices.all()}
-    return m.Configs(*[c for c in snapshot.routine.items if c.what.one() not in inside])
+    return tuple(c for c in snapshot.routine if c.channel.one() not in inside)
 
 
-def _to_configs(ctx: m.AppContext, rows: Sequence[Any], trigger: m.Trigger | None = None) -> m.Configs:
-    return m.Configs(*[m.Config(r.devices, r.state, trigger=trigger) for r in rows])
+def _to_commands(rows: Sequence[Any], tag: str | None = None) -> m.Commands:
+    return tuple(engine.Command[str, m.Devices](r.devices, r.state, tag=tag) for r in rows)

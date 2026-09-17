@@ -51,7 +51,7 @@ if the plugin persists nothing.
 
 ## Choosing a backend pattern
 
-Both resolve the dotted path via `Cast.module(...)` (`orc.loader.Cast`); they
+Both resolve the dotted path via `Cast.module(...)` (`orc.kernel.loader.Cast`); they
 differ only in where the backend is declared.
 
 **A — `setting backend` in the plugin's own config** (`example`, `calendar`,
