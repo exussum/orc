@@ -5,7 +5,7 @@ import pytest
 from command_cfg import ConfigError
 
 import orc
-from orc import declarations
+from orc.kernel import declarations
 
 
 def test_plugin_holding_runtime_globals_fails_config_load():

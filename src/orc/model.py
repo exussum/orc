@@ -1,10 +1,9 @@
 import importlib
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import KW_ONLY, dataclass, field
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, Flag, StrEnum, auto
-from itertools import chain
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self
@@ -20,14 +19,7 @@ if TYPE_CHECKING:
     from flask import Blueprint
 
     from orc import Config as OrcConfig
-    from orc.api import SnapshotManager
     from orc.view import VersionManager
-
-
-class SnapShot(NamedTuple):
-    routine: Configs
-    end: datetime
-    label: str = ""
 
 
 class Person(NamedTuple):
@@ -258,7 +250,7 @@ class IotJob:
 
 
 class Speak(str):
-    """Config.state value meaning 'speak this text aloud' — distinct from a plain str
+    """A Command value meaning 'speak this text aloud' — distinct from a plain str
     (a file path or stream URL) and an int (volume). Log messages use backticks for
     markdown emphasis in the log view; strip them here since TTS shouldn't say them."""
 
@@ -298,18 +290,6 @@ class AcCommand(NamedTuple):
         return f"{self.mode}:{self.fan}:{self.temp}"
 
 
-@dataclass
-class Config:
-    what: Devices
-    state: str | int | AcCommand
-    _: KW_ONLY
-    trigger: str | None = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.what, Devices):
-            self.what = Devices(self.what)
-
-
 class Playback(StrEnum):
     PLAYING = "playing"
     PAUSED = "paused"
@@ -331,14 +311,6 @@ class AcStatus:
 
 
 @dataclass
-class Configs[T = Config]:
-    items: tuple[T, ...]
-
-    def __init__(self, *items: T) -> None:
-        self.items = tuple(items)
-
-
-@dataclass
 class Plugin:
     name: str
     module: ModuleType
@@ -356,27 +328,6 @@ class CallablePlugin:
     icon: str = "rocket-launch"
     backend: ModuleType | None = None
     delay: timedelta = field(default_factory=timedelta)
-
-
-@dataclass
-class AdhocConfig(Configs):
-    snapshot: timedelta | None = None
-    delay: timedelta = field(default_factory=timedelta)
-    section: str = "scene"
-    reset: bool = True
-
-    def __init__(
-        self, *items: Config, snapshot: timedelta | None = None, delay: timedelta = timedelta(), section: str = "scene", reset: bool = True
-    ) -> None:
-        if snapshot and delay:
-            raise ValueError("snapshot and delay cannot both be set")
-        if snapshot and not reset:
-            raise ValueError("snapshot and reset=false cannot both be set")
-        super().__init__(*items)
-        self.snapshot = snapshot
-        self.delay = delay
-        self.section = section
-        self.reset = reset
 
 
 @dataclass
@@ -404,14 +355,6 @@ class AdhocAction:
         self.delay = delay
         self.section = section
         self.reset = reset
-
-
-@dataclass
-class Routine:
-    name: str
-    when: str | time
-    items: Sequence[Config]
-    skip_replay: bool = False
 
 
 @dataclass
@@ -448,7 +391,6 @@ class AppContext:
     The module fields are static; they default to lazy imports because this module
     can't import orc.api at import time (api imports model)."""
 
-    snapshot_manager: SnapshotManager
     scheduler: BaseScheduler
     version_manager: VersionManager
     engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([]))
@@ -499,6 +441,10 @@ class Devices(engine.Channel):
         if len(self.members) != 1:
             raise ValueError(f"expected exactly one device, got {len(self.members)}: {self.members}")
         return self.members[0]
+
+
+SnapShot = engine.SnapShot[Devices]
+Routine = engine.Rule[Devices]
 
 
 @dataclass(frozen=True)
@@ -590,56 +536,51 @@ def resolve_time(value: str) -> time | str:
     return time(hour, minute)
 
 
-def squish_configs(
-    *configs: Configs | Routine, state_override: Any = None, on_conflict: Callable[[Any, list[Any]], object] = lambda what, states: None
-) -> Configs:
-    """
-    Take multiple Configs objects, and merge them into one as if they were run sequentially, removing duplicates
-    and handling brightness changes.
-    """
-    rules: defaultdict[Any, list[Config]] = defaultdict(list)
-    for routine in configs:
-        for rule in routine.items:
-            what = rule.what.all()
-            for e in what:
-                rules[e].append(
-                    Config(
-                        what=Devices(e),
-                        state=rule.state if state_override is None else state_override,
-                        trigger=rule.trigger,
-                    )
-                )
+def squish(
+    commands: Iterable[DeviceCommand],
+    *,
+    state_override: Any = None,
+    on_conflict: Callable[[Any, list[Any]], object] = lambda what, states: None,
+) -> Commands:
+    """Merge commands as if run sequentially — dedupe per device, handle brightness/stop changes."""
+    grouped: defaultdict[Any, list[DeviceCommand]] = defaultdict(list)
+    for command in commands:
+        for e in command.channel.all():
+            value = command.value if state_override is None else state_override
+            grouped[e].append(engine.Command(Devices(e), value, command.tag))
 
-    for what, items in rules.items():
-        if {c.state for c in items} - {c.state for c in _squish(items)}:
-            on_conflict(what, [c.state for c in items])
+    flattened: list[DeviceCommand] = []
+    for what, items in grouped.items():
+        squished = _squish(items)
+        if {c.value for c in items} - {c.value for c in squished}:
+            on_conflict(what, [c.value for c in items])
+        flattened.extend(squished)
 
-    flattened = list(chain.from_iterable(_squish(e) for e in rules.values()))
     flattened.sort(key=_op_cmp)
-    return Configs(*flattened)
+    return tuple(flattened)
 
 
-def _op_cmp(k: Config) -> tuple[int, int]:
+def _op_cmp(k: DeviceCommand) -> tuple[int, int]:
     # types never declared controllable tie past everything registered
-    class_sort = _CLASS_SORT.get(type(k.what.one()).__name__, len(_CLASS_SORT))
+    class_sort = _CLASS_SORT.get(type(k.channel.one()).__name__, len(_CLASS_SORT))
 
-    if k.state == STOP:
+    if k.value == STOP:
         sub_sort = _STATE_SORT_STOP
-    elif isinstance(k.state, int):
+    elif isinstance(k.value, int):
         sub_sort = _STATE_SORT_INT
-    elif k.state == ON:
+    elif k.value == ON:
         sub_sort = _STATE_SORT_ON
     else:
         sub_sort = _STATE_SORT_OTHER
     return (class_sort, sub_sort)
 
 
-def _squish(items: list[Config]) -> tuple[Config, ...]:
+def _squish(items: list[DeviceCommand]) -> tuple[DeviceCommand, ...]:
     if not items:
         return ()
 
     last = items[-1]
     # a level (int) is preceded by the last STOP; a non-level is preceded by the last level
-    preceding = (lambda c: c.state == STOP) if isinstance(last.state, int) else (lambda c: isinstance(c.state, int))
+    preceding = (lambda c: c.value == STOP) if isinstance(last.value, int) else (lambda c: isinstance(c.value, int))
     match = next((item for item in reversed(items[:-1]) if preceding(item)), None)
     return (match, last) if match else (last,)

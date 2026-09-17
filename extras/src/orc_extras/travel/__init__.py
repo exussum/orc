@@ -4,7 +4,7 @@ from typing import Any
 from command_cfg import array, scalar
 
 import orc_extras.travel
-from orc.loader import Cast, load_plugin_config
+from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AppContext
 from orc_extras.travel.dal import sqlite
 from orc_extras.travel.model import Extra, Place, Runtime, Settings

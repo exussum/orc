@@ -2,7 +2,7 @@ from typing import Any, NamedTuple
 
 from command_cfg import array, scalar
 
-from orc.loader import Cast, load_plugin_config
+from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AppContext
 from orc_extras.calendar import plugins
 

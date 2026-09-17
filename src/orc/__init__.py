@@ -7,8 +7,8 @@ from typing import Any
 from command_cfg import ConfigError
 
 from orc import model as m
-from orc.declarations import collect_declarations
-from orc.loader import parse_config, validate
+from orc.kernel.declarations import collect_declarations
+from orc.kernel.loader import parse_config, validate
 
 Light: type[m.DeviceEnum] = m.DeviceEnum("Light", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 Chromecast: type[m.DeviceEnum] = m.DeviceEnum("Chromecast", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
@@ -43,7 +43,7 @@ class Config:
         self.default_config = self.routines["ROUTINE_DEFAULT"]
         self.reset_config = self.routines["ROUTINE_RESET"]
         self.schedule_routines = {r.name: r for theme in self.themes.values() for r in theme.configs}
-        self.rooms_off = m.squish_configs(*self.rooms.values(), state_override=m.OFF)
+        self.rooms = parsed.room
 
     def plugin(self, id: str) -> m.CallablePlugin | None:
         return next((p for p in self.plugins if p.name == id and isinstance(p, m.CallablePlugin)), None)
@@ -73,7 +73,6 @@ class Config:
         self.providers = parsed.provider
         self.routines = parsed.routine
         self.themes = parsed.theme
-        self.rooms = parsed.room
         self.ad_hoc_routines = parsed.ad_hoc
         self.remotes = parsed.remote
         self.button_highlights = parsed.highlight

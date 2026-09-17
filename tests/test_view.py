@@ -10,7 +10,18 @@ import orc
 from orc import api, config
 from orc import model as m
 from orc.dal import scheduler as dal_scheduler
+from orc.kernel import engine, loader
 from orc.view import VersionManager, bp
+
+
+def _routine(name, when, *commands, skip_replay=False):
+    clauses = tuple(engine.Clause(loader._condition(c.tag), c) for c in commands)
+    tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
+    return engine.Rule(engine.At(when), clauses, name=name, tags=tags)
+
+
+def _room(*commands):
+    return engine.Rule(engine.NEVER, tuple(engine.Clause(engine.ALWAYS, c) for c in commands))
 
 
 @pytest.fixture
@@ -22,11 +33,12 @@ def scheduler():
 
 @pytest.fixture
 def ctx(scheduler):
-    return m.AppContext(
-        snapshot_manager=api.SnapshotManager(),
+    context = m.AppContext(
         scheduler=scheduler,
         version_manager=VersionManager(),
     )
+    api.set_ctx(context)
+    return context
 
 
 @pytest.fixture
@@ -83,57 +95,58 @@ def test_console_plugin(client, ctx):
 
 
 def test_console_schedule_routine(client):
-    routine = m.Routine("r", "", (m.Config(orc.Light.a, m.OFF, trigger=m.Trigger.SYSTEM),))
+    routine = _routine("r", "", engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Trigger.SYSTEM))
     with (
         patch.object(config, "schedule_routines", {"r": routine}),
         patch.object(config, "plugins", {}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.Configs(m.Config(orc.Light.a, m.OFF, trigger=m.Trigger.SYSTEM)), force=True, entry=ANY)
+    ex.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Trigger.SYSTEM),)), force=True, entry=ANY)
 
 
 def test_console_ad_hoc(client):
-    reset = m.Configs(m.Config(orc.Light.a, m.OFF))
-    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON))
+    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True, entry=ANY)
+    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
 def test_console_ad_hoc_no_reset(client):
-    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), reset=False)
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), reset=False)
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish_configs(routine), force=True, entry=ANY)
+    ex.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
 
 
 def test_button_ad_hoc_snapshot(ctx):
-    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
-    captured = m.Configs(m.Config(orc.Light.a, m.ON))
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    captured = (engine.Command(m.Devices(orc.Light.a), m.ON),)
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "capture_lights", return_value=captured),
         patch.object(api, "dispatch") as ex,
     ):
         api.run_action(ctx, "r", hub_origin=True)
-    snap = ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT]
+    snap = ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
-    ex.assert_called_once_with(routine, force=True, entry=ANY)
+    ex.assert_called_once_with(routine.commands, force=True, entry=ANY)
 
 
 def test_button_ad_hoc_snapshot_does_not_stack(ctx):
-    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
-    reset = m.Configs(m.Config(orc.Light.a, m.OFF))
-    existing = m.Configs(m.Config(orc.Light.a, m.ON))
-    ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT] = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
+    existing = (engine.Command(m.Devices(orc.Light.a), m.ON),)
+    snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
+    ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap, snap.end)
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "capture_lights") as capture,
@@ -141,23 +154,23 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx):
     ):
         api.run_action(ctx, "r", hub_origin=True)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
-    assert ctx.snapshot_manager.snapshots[api.ORC_SYSTEM_SNAPSHOT].routine is existing
+    assert ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
-    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True, entry=ANY)
+    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
 def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
-    routine = m.AdhocConfig(m.Config(orc.Light.b, m.ON), snapshot=timedelta(hours=3))
-    reset = m.Configs(m.Config(orc.Light.a, m.OFF))
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "capture_lights") as capture,
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    assert api.ORC_SYSTEM_SNAPSHOT not in ctx.snapshot_manager.snapshots
+    assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots(api.local_now())
     capture.assert_not_called()
-    ex.assert_called_once_with(m.squish_configs(reset, routine), force=True, entry=ANY)
+    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
 def test_console_unknown_returns_404(client):
@@ -170,39 +183,44 @@ def test_console_unknown_returns_404(client):
 
 
 def test_room_on(client):
-    routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
-        patch.object(config, "rooms", {"Living Room": routine}),
+        patch.object(config, "rooms", {"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=on")
-    ex.assert_called_once_with(routine, force=True, entry=ANY)
+    ex.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
 
 
 def test_room_off_replaces_state(client):
-    routine = m.Configs(m.Config(orc.Light.a, m.ON))
     with (
-        patch.object(config, "rooms", {"Living Room": routine}),
+        patch.object(config, "rooms", {"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=off")
-    (args,), _ = ex.call_args
-    assert all(c.state == m.OFF for c in args.items)
+    (cmds,), _ = ex.call_args
+    assert all(c.value == m.OFF for c in cmds)
 
 
 def test_room_follow(client):
-    routine = m.Configs(m.Config(orc.Light.a, m.ON))
-    off = m.Configs(m.Config(orc.Light.b, m.OFF))
+    rooms = {
+        "Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON)),
+        "Bedroom": _room(engine.Command(m.Devices(orc.Light.b), m.ON)),
+    }
     with (
-        patch.multiple(config, rooms={"Living Room": routine}, rooms_off=off),
+        patch.object(config, "rooms", rooms),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/room/Living Room?state=follow")
-    ex.assert_called_once_with(m.squish_configs(off, routine), force=True, entry=ANY)
+    expected = (
+        engine.Command(m.Devices(orc.Light.a), m.OFF),
+        engine.Command(m.Devices(orc.Light.b), m.OFF),
+        engine.Command(m.Devices(orc.Light.a), m.ON),
+    )
+    ex.assert_called_once_with(expected, force=True, entry=ANY)
 
 
 def test_room_unknown_state_raises(client):
-    with patch.object(config, "rooms", {"Living Room": m.Configs()}):
+    with patch.object(config, "rooms", {"Living Room": ()}):
         response = client.get("/api/room/Living Room?state=bogus")
     assert response.status_code == 500
 
@@ -288,7 +306,7 @@ def test_pause_unknown_job_returns_404(client, scheduler, good_version):
 
 def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
-    rule = m.Routine(name, "", [m.Config(MagicMock(), "on", trigger=trigger)], skip_replay=skip_replay)
+    rule = _routine(name, "", engine.Command(m.Devices(MagicMock()), "on", tag=trigger), skip_replay=skip_replay)
     job = create_autospec(Job, instance=True)
     job.id = name
     job.name = name

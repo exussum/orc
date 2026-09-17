@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from orc import model as m
 from orc.decorators import requires_ctx  # noqa: F401
+from orc.kernel import engine
 from orc.locale import Log
 
 _LIGHT_TEST_WINDOW = timedelta(minutes=10)
@@ -23,22 +24,22 @@ def execute_plugin(ctx: m.AppContext, plugin: m.CallablePlugin, device: str | No
 def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     def report(expect_on: bool) -> None:
         wrong = sorted(
-            c.what.one().name
-            for c in ctx.api.capture_lights().items
-            if c.what.one() not in ctx.config.virtual_devices and (c.state != m.OFF) != expect_on
+            device.name
+            for c in ctx.api.capture_lights()
+            if (device := c.channel.one()) not in ctx.config.virtual_devices and (c.value != m.OFF) != expect_on
         )
         if wrong:
             template = Log.LIGHT_TEST_STILL_OFF if expect_on else Log.LIGHT_TEST_STILL_ON
             ctx.api.log(m.LogSource.PLUGIN, template.format(names=", ".join(wrong)))
 
     end = ctx.api.local_now() + _LIGHT_TEST_WINDOW
-    ctx.snapshot_manager.replace_config("light_test", m.Config(ctx.orc.Light, m.OFF), end, "light_test", entry)
+    ctx.engine.override_scene(ctx, "light_test", (engine.Command(m.Devices(ctx.orc.Light), m.OFF),), end, "light_test", entry)
     time.sleep(_LIGHT_TEST_SETTLE_SECONDS)
     report(expect_on=False)
-    ctx.api.dispatch(m.Config(ctx.orc.Light, m.ON), force=True, entry=entry)
+    ctx.api.dispatch((engine.Command(ctx.orc.Light, m.ON),), force=True, entry=entry)
     time.sleep(_LIGHT_TEST_SETTLE_SECONDS)
     report(expect_on=True)
-    ctx.snapshot_manager.resume("light_test", ctx.config.default_config, entry)
+    ctx.engine.restore_scene(ctx, "light_test", ctx.config.default_config.commands, entry)
 
 
 def rebuild_jobs(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:

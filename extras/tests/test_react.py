@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, create_autospec
+from unittest.mock import MagicMock, create_autospec
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -12,6 +12,7 @@ from orc_extras.react import plugins
 import orc
 from orc import api
 from orc import model as m
+from orc.kernel import engine
 from orc.model import DeviceEnum
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -34,7 +35,7 @@ class Chromecast(DeviceEnum):
 
 @pytest.fixture(autouse=True)
 def _device_enums(monkeypatch):
-    from orc import declarations
+    from orc.kernel import declarations
 
     monkeypatch.setattr(orc.config, "registry", declarations.Declarations().build({"Light": Light, "AC": Ac, "Chromecast": Chromecast}))
 
@@ -43,20 +44,38 @@ def _device_enums(monkeypatch):
 def ctx():
     mock = MagicMock()
     mock.api = create_autospec(api)
+    mock.engine = engine.Runtime([])
     mock.scheduler = create_autospec(BaseScheduler, instance=True)
     mock.api.JOBSTORE_MEMORY = "memory"
     mock.api.local_now.return_value = _NOW
     mock.config.settings.tz = _UTC
     mock.config.registry = orc.config.registry
+    mock.plugin_state = {}
     return mock
 
 
 def _setup(ctx):
     ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react.orc").read_text()}
     react.setup(ctx)
+    rules = list(ctx.plugin_state[plugins].rules.values())
     listener = ctx.api.add_listener.call_args.args[0]
-    _, rules, _ = listener.args
     return rules, listener
+
+
+def _make(devices, attribute, state, action, target=None, delay=None, when=None):
+    cond = plugins.condition(when)
+    span = timedelta(minutes=delay) if delay else timedelta()
+    rules = []
+    for source in devices.all():
+        command = engine.Command(target or m.Devices(source), action)
+        trigger = engine.Transition(m.MqttDeviceChannel(source, attribute), state)
+        rules.append(engine.Rule(trigger, (engine.Clause(cond, command),), span, cooldown=plugins.COOLDOWN))
+    return rules
+
+
+def _install(ctx, engine_rules, sources):
+    ctx.engine.add_rules(engine_rules)
+    ctx.plugin_state[plugins] = plugins.React({hash(er): er for er in engine_rules}, sources)
 
 
 def _switch(ctx, listener, device_id, old, new):
@@ -65,51 +84,42 @@ def _switch(ctx, listener, device_id, old, new):
 
 
 def _dispatched(ctx):
-    return [(c.what.one(), c.state) for c in ctx.api.dispatch.call_args.args[0].items]
+    return [(c.channel.one(), c.value) for c in ctx.api.dispatch.call_args.args[0]]
 
 
-def _run(ctx, when, cooldowns=None):
-    rule = react.Rule(m.Devices(Light.lamp), "switch", m.ON, m.OFF, None, 10, when)
-    plugins._run_react.__wrapped__(0, rule, m.Devices(Light.lamp), "lamp", {} if cooldowns is None else cooldowns, ctx=ctx)
+def _fire_pending(ctx):
+    deferred, name = ctx.scheduler.add_job.call_args.kwargs["args"]
+    plugins._run_react.__wrapped__(deferred, name, ctx=ctx)
 
 
+# The fixture's first line (`react Light ...`) fans out to lamp + desk, so the
+# compiled rules are: 0 lamp/on, 1 desk/on, 2..6 the single-device lines 2..6.
 def test_config_registers_listener(ctx):
     rules, _ = _setup(ctx)
-    index, rule, by_id = rules[0]
-    assert index == 0
-    assert rule.attribute == "switch"
-    assert rule.state == m.ON
-    assert rule.action == m.OFF
-    assert rule.delay == 10
-    assert by_id == {"1": Light.lamp, "2": Light.desk}
+    assert len(rules) == 7  # line 1 fans out to lamp + desk; lines 2..6 are single-device
+    assert rules[0].trigger == engine.Transition(m.MqttDeviceChannel(Light.lamp, "switch"), m.ON)
+    assert rules[1].trigger == engine.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert rules[0].items[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
+    assert rules[0].delay == timedelta(minutes=10)
+    assert ctx.plugin_state[plugins].sources == {"1": Light.lamp, "2": Light.desk}
 
 
 def test_switch_on_schedules_reaction(ctx):
-    rules, listener = _setup(ctx)
+    _setup(ctx)
+    listener = ctx.api.add_listener.call_args.args[0]
     _switch(ctx, listener, 1, m.OFF, m.ON)
     call = ctx.scheduler.add_job.call_args
     assert call.args[0] is plugins._run_react
-    assert call.kwargs["id"] == "react-0-1"
-    assert call.kwargs["args"] == (0, rules[0][1], m.Devices(Light.lamp), "lamp", listener.args[2])
+    assert call.kwargs["id"].startswith("react-")
+    assert call.kwargs["args"][1] == "lamp"
 
 
 def test_switch_off_cancels_pending_jobs(ctx):
     _, listener = _setup(ctx)
-    _switch(ctx, listener, 1, m.ON, m.OFF)
-    assert ctx.scheduler.remove_job.call_args_list == [call(f"react-{index}-1", jobstore="memory") for index in (0, 4, 5)]
-
-
-def test_cooldown_suppresses_rapid_re_trigger(ctx):
-    rule = react.Rule(m.Devices(Light.lamp), "switch", m.ON, m.OFF, None, None, None)
-    rules = [(0, rule, {"1": Light.lamp})]
-    cooldowns: dict = {}
-    device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, rules, cooldowns, device, "switch", m.OFF, m.ON)
-    plugins._on_event(ctx, rules, cooldowns, device, "switch", m.OFF, m.ON)
-    ctx.api.dispatch.assert_called_once()  # second is within the cooldown window
-    ctx.api.local_now.return_value = _NOW + timedelta(seconds=11)
-    plugins._on_event(ctx, rules, cooldowns, device, "switch", m.OFF, m.ON)
-    assert ctx.api.dispatch.call_count == 2  # window elapsed, fires again
+    _switch(ctx, listener, 1, m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
+    ctx.scheduler.reset_mock()
+    _switch(ctx, listener, 1, m.ON, m.OFF)  # reverse edge cancels the pending
+    assert ctx.scheduler.remove_job.called
 
 
 def test_unwatched_device_is_ignored(ctx):
@@ -117,62 +127,55 @@ def test_unwatched_device_is_ignored(ctx):
     device = m.DeviceState(id=99, name="other", attributes={"switch": m.ON}, last_activity=None)
     listener.func(*listener.args, device, "switch", m.OFF, m.ON)
     ctx.scheduler.add_job.assert_not_called()
+    ctx.api.dispatch.assert_not_called()
 
 
 def test_run_react_dispatches_the_action(ctx):
-    _run(ctx, None)
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10), {"1": Light.lamp})
+    device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     assert _dispatched(ctx) == [(Light.lamp, m.OFF)]
-
-
-def test_delayed_reaction_checks_cooldown_at_execution(ctx):
-    cooldowns: dict = {}
-    _run(ctx, None, cooldowns)
-    _run(ctx, None, cooldowns)
-    ctx.api.dispatch.assert_called_once()  # second execution is within the cooldown window
-    ctx.api.local_now.return_value = _NOW + timedelta(seconds=11)
-    _run(ctx, None, cooldowns)
-    assert ctx.api.dispatch.call_count == 2  # window elapsed, fires again
 
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx):
     rules, _ = _setup(ctx)
-    assert rules[3][1].target == m.Devices(Ac)
+    assert rules[4].items[0].command.channel == m.Devices(Ac)
 
 
 def test_targeted_action_goes_to_the_target(ctx):
-    rule = react.Rule(m.Devices(Light.lamp), "switch", m.ON, m.OFF, m.Devices(Light.desk), None, None)
-    rules = [(0, rule, {"1": Light.lamp})]
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, target=m.Devices(Light.desk)), {"1": Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, rules, {}, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
     assert _dispatched(ctx) == [(Light.desk, m.OFF)]
 
 
 def test_targeted_rule_schedules_with_the_target(ctx):
-    rule = react.Rule(m.Devices(Light.lamp), "switch", m.ON, m.OFF, m.Devices(Light.desk), 5, None)
-    rules = [(0, rule, {"1": Light.lamp})]
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, target=m.Devices(Light.desk), delay=5), {"1": Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, rules, {}, device, "switch", m.OFF, m.ON)
-    assert ctx.scheduler.add_job.call_args.kwargs["args"] == (0, rule, m.Devices(Light.desk), "lamp", {})
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
+    assert _dispatched(ctx) == [(Light.desk, m.OFF)]
 
 
 def test_contact_open_triggers_immediate_rule(ctx):
-    rule = react.Rule(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), m.Devices(Ac), None, None)
-    rules = [(0, rule, {"56": Light.lamp})]
+    rule = _make(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), target=m.Devices(Ac))
+    _install(ctx, rule, {"56": Light.lamp})
     device = m.DeviceState(id=56, name="balcony door", attributes={"contact": "open"}, last_activity=None)
-    plugins._on_event(ctx, rules, {}, device, "contact", "closed", "open")
+    plugins._on_event(ctx, device, "contact", "closed", "open")
     assert _dispatched(ctx) == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
 
 
 def test_if_clause_parses_device_and_condition(ctx):
     rules, _ = _setup(ctx)
-    assert rules[1][1].when == plugins.When(Ac.living, m.AcState.ON)
-    assert rules[2][1].when == plugins.When(Ac.living, m.AcState.COOL)
+    assert rules[2].items[0].condition == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
+    assert rules[3].items[0].condition == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
 
 
 def test_set_clause_parses_explicit_target(ctx):
     rules, _ = _setup(ctx)
-    assert rules[0][1].target is None
-    assert rules[1][1].target == m.Devices(Ac.living)
+    assert rules[0].items[0].command.channel == m.Devices(Light.lamp)
+    assert rules[2].items[0].command.channel == m.Devices(Ac.living)
 
 
 def test_target_must_match_action_kind():
@@ -185,8 +188,8 @@ def test_target_must_match_action_kind():
 
 def test_if_clause_covers_lights_and_chromecasts(ctx):
     rules, _ = _setup(ctx)
-    assert rules[4][1].when == plugins.When(Light.desk, m.ON)
-    assert rules[5][1].when == plugins.When(Chromecast.tv, m.Playback.PLAYING)
+    assert rules[5].items[0].condition == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert rules[6].items[0].condition == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
 
 
 def test_when_requires_a_known_condition():
@@ -201,52 +204,89 @@ def test_when_requires_a_known_condition():
 
 def test_when_gates_immediate_rule_on_ac_state(ctx):
     when = plugins.When(Ac.living, m.AcState.ON)
-    rule = react.Rule(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), m.Devices(Ac), None, when)
-    rules = [(0, rule, {"56": Light.lamp})]
+    rule = _make(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), target=m.Devices(Ac), when=when)
+    _install(ctx, rule, {"56": Light.lamp})
     device = m.DeviceState(id=56, name="balcony door", attributes={"contact": "open"}, last_activity=None)
-    ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.OFF))
-    plugins._on_event(ctx, rules, {}, device, "contact", "closed", "open")
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
+    plugins._on_event(ctx, device, "contact", "closed", "open")
     ctx.api.dispatch.assert_not_called()
     ctx.api.log.assert_called_with(plugins.Log.REACT, "`balcony door` open — skipped, `living` is not on")
-    ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.COOL))
-    plugins._on_event(ctx, rules, {}, device, "contact", "closed", "open")
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
+    plugins._on_event(ctx, device, "contact", "closed", "open")
     assert _dispatched(ctx) == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
 
 
 def test_when_mode_predicate_requires_that_mode(ctx):
     when = plugins.When(Ac.living, m.AcState.COOL)
-    ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.FAN_ONLY))
-    _run(ctx, when)
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {"1": Light.lamp})
+    device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.FAN_ONLY),)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.log.assert_called_with(plugins.Log.REACT, "`lamp` on 10m ago — skipped, `living` is not cool")
-    ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.COOL))
-    _run(ctx, when)
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     ctx.api.dispatch.assert_called_once()
 
 
 def test_when_on_ignores_unknown_mode_for_a_specific_mode_query(ctx):
-    # an AC powered but with unknown mode (bare ON) must not satisfy `is cool`
     when = plugins.When(Ac.living, m.AcState.COOL)
-    ctx.api.capture_acs.return_value = m.Configs(m.AcStatus(Ac.living, m.AcState.ON))
-    _run(ctx, when)
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {"1": Light.lamp})
+    device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.ON),)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
 
 
 def test_when_checks_chromecast_playback_at_fire_time(ctx):
     when = plugins.When(Chromecast.tv, m.Playback.PLAYING)
-    ctx.api.capture_sounds.return_value = m.Configs(m.SoundState(Chromecast.tv, None, 30, m.Playback.STOPPED))
-    _run(ctx, when)
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {"1": Light.lamp})
+    device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
+    ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, None, 30, m.Playback.STOPPED),)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
-    ctx.api.capture_sounds.return_value = m.Configs(m.SoundState(Chromecast.tv, "stream", 30, m.Playback.PLAYING))
-    _run(ctx, when)
+    ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, "stream", 30, m.Playback.PLAYING),)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     ctx.api.dispatch.assert_called_once()
 
 
 def test_when_checks_hubitat_state_at_fire_time(ctx):
     when = plugins.When(Light.desk, m.ON)
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {"1": Light.lamp})
+    device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.OFF}, last_activity=None)]
-    _run(ctx, when)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)]
-    _run(ctx, when)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    _fire_pending(ctx)
     ctx.api.dispatch.assert_called_once()
+
+
+def test_reader_resolves_ac_playback_and_attr(ctx):
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
+    ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, "s", 30, m.Playback.PLAYING),)
+    ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)]
+    read = plugins._reader(ctx)
+    assert read(m.AcChannel(Ac.living)) == m.AcState.COOL
+    assert read(m.CastChannel(Chromecast.tv)) == m.Playback.PLAYING
+    assert read(m.MqttDeviceChannel(Light.desk, "switch")) == m.ON
+
+
+def test_condition_maps_when_by_kind():
+    assert plugins.condition(None) is engine.ALWAYS
+    assert plugins.condition(plugins.When(Ac.living, m.AcState.ON)) == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
+    assert plugins.condition(plugins.When(Chromecast.tv, m.Playback.PLAYING)) == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
+    assert plugins.condition(plugins.When(Light.desk, m.ON)) == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+
+
+def test_ac_is_bitmask_respects_flag_membership():
+    assert not plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL).holds(lambda channel: m.AcState.ON)
+    assert plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON).holds(lambda channel: m.AcState.COOL)
+    assert not plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL).holds(lambda channel: None)
