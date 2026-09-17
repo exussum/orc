@@ -6,8 +6,6 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from orc import model as m
-
 audio_lock = threading.Lock()
 
 
@@ -26,19 +24,5 @@ def synchronized[R](method: Callable[..., R]) -> Callable[..., R]:
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> R:
         with self._lock:
             return method(self, *args, **kwargs)
-
-    return wrapper
-
-
-def unwrap_rule_container[R](f: Callable[..., R]) -> Callable[..., None]:
-    def wrapper(*args: Any, **kwargs: Any) -> None:
-        if isinstance(args[0], m.Routine | m.Configs):
-            for e in args[0].items:
-                f(e, *args[1:], **kwargs)
-        elif len(args) > 1 and isinstance(args[1], m.Routine | m.Configs):
-            for e in args[1].items:
-                f(args[0], e, *args[2:], **kwargs)
-        else:
-            f(*args, **kwargs)
 
     return wrapper

@@ -8,7 +8,7 @@ from example import plugins
 from example.dal import sqlite
 from example.model import Runtime, Settings, Widget, Zone
 from example.web import example_bp
-from orc.loader import Cast, load_plugin_config
+from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AppContext
 
 CONFIG = "example"

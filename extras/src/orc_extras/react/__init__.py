@@ -1,10 +1,12 @@
+from datetime import timedelta
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any
 
 from command_cfg import each
 
-from orc.loader import Cast, load_plugin_config, validate_ac_state
-from orc.model import AcCommand, AcState, AppContext, DeviceEnum, Devices, Playback
+from orc.kernel import engine
+from orc.kernel.loader import Cast, load_plugin_config, validate_ac_state
+from orc.model import AcCommand, AcState, AppContext, DeviceEnum, Devices, MqttDeviceChannel, Playback
 from orc_extras.react import plugins
 from orc_extras.react.plugins import TRIGGERS, When
 
@@ -13,16 +15,6 @@ GRAMMAR = """
 react <devices> turns <state> set <action> [if <device> is <condition>] [--delay=<minutes>]
 react <devices> turns <state> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
 """
-
-
-class Rule(NamedTuple):
-    devices: Devices
-    attribute: str
-    state: str
-    action: Any
-    target: Devices | None
-    delay: int | None
-    when: When | None
 
 
 _AC_CONDITIONS = {name.lower(): state for name, state in AcState.__members__.items()}
@@ -69,7 +61,12 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     action = Cast.state(args.action)
     target = _parse_target(args.target, action, objects)
     when = _parse_when(Cast.device(args.device, objects), args.condition, objects) if args.device else None
-    objects["react"].append(Rule(Cast.devices(args.devices, objects), attribute, args.state, action, target, args.delay, when))
+    cond = plugins.condition(when)
+    delay = timedelta(minutes=args.delay) if args.delay else timedelta()
+    for source in Cast.devices(args.devices, objects).all():
+        command = engine.Command(target or Devices(source), action)
+        trigger = engine.Transition(MqttDeviceChannel(source, attribute), args.state)
+        objects["react"].append(engine.Rule(trigger, (engine.Clause(cond, command),), delay, cooldown=plugins.COOLDOWN))
 
 
 def declare(declarations: Any) -> None:
@@ -78,6 +75,8 @@ def declare(declarations: Any) -> None:
 
 def setup(ctx: AppContext) -> None:
     cfg = load_plugin_config(CONFIG, ctx.config, GRAMMAR, serializers={"react": each(_rule, default=list, types={"delay": int})})
-    rules = [(index, rule, {str(d.value): d for d in rule.devices.all()}) for index, rule in enumerate(cfg.react)]
-    cooldowns: plugins.Cooldowns = {}
-    ctx.api.add_listener(partial(plugins._on_event, ctx, rules, cooldowns))
+    engine_rules = cfg.react
+    ctx.engine.add_rules(engine_rules)
+    sources = {str(plugins.source_of(er).value): plugins.source_of(er) for er in engine_rules}
+    ctx.plugin_state[plugins] = plugins.React({hash(er): er for er in engine_rules}, sources)
+    ctx.api.add_listener(partial(plugins._on_event, ctx))

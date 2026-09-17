@@ -6,7 +6,7 @@ import pytest
 from example import model as m
 
 from orc import api
-from orc.loader import Cast
+from orc.kernel.loader import Cast
 
 FIXTURE = Path(__file__).parent / "fixture"
 

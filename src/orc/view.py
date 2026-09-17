@@ -1,7 +1,6 @@
 import random
 import re
 from collections.abc import Callable
-from dataclasses import replace
 from datetime import date, datetime, timedelta
 from functools import cache, wraps
 from itertools import chain, groupby
@@ -136,9 +135,8 @@ def cfg() -> str:
 
 @bp.route("/device/")
 def device() -> str:
-    # captured lights are always enum members, not the class/set arm
-    light_states = {c.what.one().name: c.state for c in api.capture_lights().items}
-    sound_states = {c.what.name: c.volume for c in api.capture_sounds().items}
+    light_states = {c.channel.one().name: c.value for c in api.capture_lights()}
+    sound_states = {c.what.name: c.volume for c in api.capture_sounds()}
     all_devices = list(chain.from_iterable(dt.cls for dt in config.registry.devices.values() if dt.controllable))
 
     def make_device(d: Any) -> SimpleNamespace:
@@ -260,19 +258,9 @@ def device_api(id: str) -> None:
 
 @bp.route("/api/room/<id>")
 def room(id: str) -> tuple[dict[str, Any], int]:
-    state = request.args.get("state")
     if id not in config.rooms:
         return {"error": "Unknown room"}, 404
-    entry = api.log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
-    with api.record_duration(id):
-        if state == m.ON:
-            api.dispatch(config.rooms[id], force=True, entry=entry)
-        elif state == m.OFF:
-            api.dispatch(m.Configs(*(replace(e, state=m.OFF) for e in config.rooms[id].items)), force=True, entry=entry)
-        elif state == m.FOLLOW:
-            api.dispatch(m.squish_configs(config.rooms_off, config.rooms[id]), force=True, entry=entry)
-        else:
-            raise Exception("Unknown state")
+    api.run_room(id, request.args.get("state"))
     return {"version": VersionManager.version}, 200
 
 
@@ -302,12 +290,11 @@ def schedule() -> tuple[str, int, dict[str, str]]:
 
     def meta(job: Job) -> SimpleNamespace:
         rule = job.args[0].rule
-        any_present = api.matched_presence(rule)
         return SimpleNamespace(
-            absent=bool(any_present) and not api.matched_presence(rule, present_names),
-            weather=bool(api.matched_weather(rule, job.trigger.run_date)),
-            presence=bool(any_present),
-            skip_replay=rule.skip_replay,
+            absent=api.is_absent(rule, present_names),
+            weather=api.weather_active(rule, job.trigger.run_date),
+            presence=api.has_presence(rule),
+            skip_replay=m.SKIP_REPLAY_TAG in rule.tags,
         )
 
     job_meta = {j.id: meta(j) for j in jobs}
@@ -359,8 +346,9 @@ def version() -> tuple[dict[str, Any], int]:
 
 @bp.route("/api/durations")
 def durations() -> tuple[dict[str, Any], int]:
+    delays = api.action_delays()
     return {
-        name: {"avg": round(avg, 3), "samples": samples, "delay": str(api.action_delay(name))}
+        name: {"avg": round(avg, 3), "samples": samples, "delay": str(delays.get(name, timedelta()))}
         for name, (samples, avg) in api.duration_stats().items()
     }, 200
 

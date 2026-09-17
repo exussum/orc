@@ -1,16 +1,15 @@
 import contextlib
 import math
-import threading
 import time
 from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
-from dataclasses import replace
 from datetime import date, datetime, timedelta
-from functools import lru_cache
+from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
-from typing import Any
+from types import UnionType
+from typing import Any, NamedTuple
 from urllib.parse import quote
 
 from apscheduler.job import Job
@@ -31,13 +30,10 @@ from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa
 from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
 from orc.dal.sqlite import insert_presence as mark_present
-from orc.declarations import Declarations
-from orc.decorators import (
-    requires_ctx,
-    synchronized,
-    unwrap_rule_container,
-)
-from orc.loader import Cast
+from orc.decorators import requires_ctx
+from orc.kernel import engine
+from orc.kernel.declarations import Declarations
+from orc.kernel.loader import Cast
 from orc.locale import Log
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
@@ -55,81 +51,6 @@ _ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
 _NOTIFICATIONS: deque[m.LogSubEntry] = deque(maxlen=10)
 
 
-# --- State manager ---
-
-
-class SnapshotManager:
-    def __init__(self) -> None:
-        self._lock = threading.RLock()
-        self.snapshots: dict[str, m.SnapShot] = {}
-
-    @synchronized
-    def replace_config(self, name: str, target_config: m.Configs, end: datetime, label: str, entry: m.LogEntry) -> None:
-
-        if name not in self.snapshots:
-            self.snapshots[name] = m.SnapShot(capture_lights(), end, label)
-            # captured light states are always enum members, not the class/set arm
-            routine_items = self.snapshots[name].routine.items
-            items = ", ".join(f"`{c.what.one().name}`={c.state}" for c in routine_items if c.state != m.OFF)
-            entry.add(entry.source, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
-
-        dispatch(target_config, force=True, entry=entry)
-
-    @staticmethod
-    def _live(snapshot: m.SnapShot | None) -> bool:
-        return bool(snapshot and local_now() <= snapshot.end)
-
-    @synchronized
-    def get(self, name: str) -> m.SnapShot | None:
-        snapshot = self.snapshots.pop(name, None)
-        return snapshot if self._live(snapshot) else None
-
-    @synchronized
-    def active(self, name: str) -> bool:
-        return self._live(self.snapshots.get(name))
-
-    @synchronized
-    def resume(self, name: str, target_config: m.Configs, entry: m.LogEntry) -> None:
-        snapshot = self.get(name)
-
-        if snapshot:
-            routine = snapshot.routine
-            entry.add(entry.source, Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
-        else:
-            routine = target_config
-        dispatch(routine, force=True, entry=entry)
-
-    @synchronized
-    def update_snapshot(self, name: str, rule: m.Config) -> None:
-        snapshot = self.snapshots[name]
-
-        what = rule.what.all()
-        items = {e.what.one(): e for e in snapshot.routine.items}
-
-        # Explode out the rule w/o creating a sub config explicitly
-        items.update({e: replace(rule, what=m.Devices(e)) for e in what})
-        self.snapshots[name] = snapshot._replace(routine=m.Configs(*items.values()))
-
-    @synchronized
-    def intercepts(self, rule: m.Config) -> bool:
-        snapshot = self.snapshots.get(ORC_SYSTEM_SNAPSHOT)
-        if snapshot is None:
-            return False
-        elif rule.trigger == m.Trigger.SYSTEM:
-            self.update_snapshot(ORC_SYSTEM_SNAPSHOT, rule)
-        elif not self._live(snapshot):
-            self.snapshots.pop(ORC_SYSTEM_SNAPSHOT, None)
-        else:
-            what = rule.what.all()
-            kinds = ", ".join(f"`{kind}`" for kind in sorted({type(e).__name__ for e in what}))
-            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=kinds))
-            return True
-        return False
-
-
-snapshot_manager = SnapshotManager()
-
-
 def set_ctx(ctx: m.AppContext) -> None:
     global _ctx
     _ctx = ctx
@@ -144,13 +65,10 @@ def fetch_durations() -> list[tuple[str, int]]:
     return [(name, math.ceil(avg)) for name, (_, avg) in duration_stats().items()]
 
 
-def action_delay(id: str) -> timedelta:
-    if (plugin := config.plugin(id)) is not None:
-        return plugin.delay
-    elif id in config.ad_hoc_routines:
-        return config.ad_hoc_routines[id].delay
-    else:
-        return timedelta()
+def action_delays() -> dict[str, timedelta]:
+    ad_hoc = {id: routine.delay for id, routine in config.ad_hoc_routines.items()}
+    plugins = {p.name: p.delay for p in config.plugins if isinstance(p, m.CallablePlugin)}
+    return ad_hoc | plugins
 
 
 @contextlib.contextmanager
@@ -206,25 +124,25 @@ def device_states() -> list[m.DeviceState]:
     return config.providers.mqtt.snapshot()
 
 
-def capture_lights() -> m.Configs:
+def capture_lights() -> m.Commands:
     return config.providers.mqtt.fetch_light_states(tuple(orc.Light))
 
 
-def capture_sounds() -> m.Configs[m.SoundState]:
+def capture_sounds() -> tuple[m.SoundState, ...]:
     devices: tuple[m.DeviceEnum, ...] = (*orc.Chromecast, *orc.USB)
     if not devices:
-        return m.Configs()
+        return ()
 
     def fetch(w: m.DeviceEnum) -> m.SoundState:
         provider = config.providers.chromecast if isinstance(w, orc.Chromecast) else config.providers.audio
         return provider.fetch_state(w)
 
     with Pool(max_workers=len(devices)) as ex:
-        return m.Configs(*ex.map(fetch, devices))
+        return tuple(ex.map(fetch, devices))
 
 
-def capture_acs() -> m.Configs[m.AcStatus]:
-    return m.Configs(*[m.AcStatus(w, ac_state(w)) for w in orc.AC])
+def capture_acs() -> tuple[m.AcStatus, ...]:
+    return tuple(m.AcStatus(w, ac_state(w)) for w in orc.AC)
 
 
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
@@ -242,49 +160,57 @@ def declare_core(declarations: Declarations) -> None:
     declarations.controllable_devices.append("USB")
 
 
-def resolve_run_action(
-    ctx: m.AppContext, id: str, *, device: str | None, hub_origin: bool
-) -> tuple[Callable[[m.LogEntry], None], timedelta] | None:
-    if id == ORC_SYSTEM_SNAPSHOT:
-        return lambda entry: ctx.snapshot_manager.resume(ORC_SYSTEM_SNAPSHOT, config.default_config, entry), timedelta()
-    elif (plugin := config.plugin(id)) is not None:
-        return lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.delay
-    elif id in config.schedule_routines:
-        return lambda entry: run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True), timedelta()
-    elif id in config.ad_hoc_routines:
-        routine = config.ad_hoc_routines[id]
-        if hub_origin and routine.snapshot and not ctx.snapshot_manager.active(ORC_SYSTEM_SNAPSHOT):
-            # Don't stack snapshots
-            snap = routine.snapshot
-            return (
-                lambda entry: ctx.snapshot_manager.replace_config(ORC_SYSTEM_SNAPSHOT, routine, local_now() + snap, id, entry),
-                timedelta(),
-            )
-        base = (config.reset_config,) if routine.reset else ()
-        return lambda entry: dispatch(m.squish_configs(*base, routine), force=True, entry=entry), routine.delay
-    return None
+class RunAction(NamedTuple):
+    effect: Callable[[m.LogEntry], object]
+    delay: timedelta = timedelta()
 
 
 def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_origin: bool = False, skip_delay: bool = False) -> bool:
-    resolved = resolve_run_action(ctx, id, device=device, hub_origin=hub_origin)
-    if resolved is None:
+    if id == ORC_SYSTEM_SNAPSHOT:
+        action = RunAction(lambda entry: ctx.engine.restore_scene(ctx, ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry))
+    elif (plugin := config.plugin(id)) is not None:
+        action = RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.delay)
+    elif id in config.schedule_routines:
+        action = RunAction(lambda entry: run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True))
+    elif id in config.ad_hoc_routines:
+        routine = config.ad_hoc_routines[id]
+        if hub_origin and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT, local_now()):
+            # Don't stack snapshots, hub_origin should go away in favour of something that's snapshot-able
+            end = local_now() + routine.snapshot
+            action = RunAction(lambda entry: ctx.engine.override_scene(ctx, ORC_SYSTEM_SNAPSHOT, routine.commands, end, id, entry))
+        else:
+            base = config.reset_config.commands if routine.reset else ()
+            commands = (*base, *routine.commands)
+            action = RunAction(lambda entry: dispatch(commands, force=True, entry=entry), routine.delay)
+    else:
         return False
-    action, delay = resolved
-    if skip_delay:
-        delay = timedelta()
 
-    @requires_ctx
-    def run(ctx: m.AppContext) -> None:
-        action(log(m.LogSource.MANUAL, f"`{_RUN_DISPLAY.get(id, id)}`"))
-
+    display = f"`{_RUN_DISPLAY.get(id, id)}`"
     with record_duration(id):
-        if delay:
-            when = local_now() + delay
+        if action.delay and not skip_delay:
+            when = local_now() + action.delay
             log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
+            run = requires_ctx(lambda ctx: action.effect(log(m.LogSource.MANUAL, display)))
             scheduler.schedule_once(run, when, id=f"run-{id}", replace_existing=True, jobstore=JOBSTORE_MEMORY)
         else:
-            run(ctx=ctx)
+            action.effect(log(m.LogSource.MANUAL, display))
     return True
+
+
+def run_room(id: str, state: str | None) -> None:
+    room = config.rooms[id]
+    if state == m.ON:
+        commands = room.commands
+    elif state == m.OFF:
+        commands = m.squish(room.commands, state_override=m.OFF)
+    elif state == m.FOLLOW:
+        others = (c for group in config.rooms.values() for c in group.commands)
+        commands = (*m.squish(others, state_override=m.OFF), *room.commands)
+    else:
+        raise ValueError(f"Unknown room state: {state}")
+    entry = log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
+    with record_duration(id):
+        dispatch(commands, force=True, entry=entry)
 
 
 def wire_buttons(ctx: m.AppContext) -> None:
@@ -315,33 +241,43 @@ def wire_external_log() -> None:
     config.providers.mqtt.add_external_listener(on_external)
 
 
-@unwrap_rule_container
-def dispatch(rule: m.Config, force: bool = False, *, entry: m.LogEntry) -> None:
-    if not force and snapshot_manager.intercepts(rule):
-        return
-    what = rule.what.all()
+type _Job = tuple[Callable[..., None], m.DeviceEnum, engine.Command[Any]]
+
+
+def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
+    assert _ctx is not None
+    commands = m.squish(commands)
+    always = engine.Rule(engine.NEVER, tuple(engine.Clause(engine.ALWAYS, command) for command in commands))
+    survived = set(_ctx.engine.evaluate((always,), local_now(), force=force, bypass=m.Trigger.SYSTEM))
+
     stream: dict[Any, tuple[str, str]] = {}
-
-    def one(w: m.DeviceEnum) -> None:
-        if w in config.virtual_devices:
+    todo: list[_Job] = []
+    for command in commands:
+        w = command.channel.one()
+        if command not in survived:
+            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=f"`{type(w).__name__}`"))
+        elif w in config.virtual_devices:
             entry.add(entry.source, Log.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
-            return
+        elif (device_type := config.registry.devices.get(type(w).__name__)) is None or device_type.dispatch is None:
+            raise LookupError(f"no dispatch handler for `{type(w).__name__}`")
+        else:
+            todo.append((device_type.dispatch, w, command))
 
-        device_type = config.registry.devices.get(type(w).__name__)
-        if device_type is None or device_type.dispatch is None:
-            raise Exception("Unknown type")
+    with Pool(max_workers=max(1, len(todo))) as ex:
+        list(ex.map(partial(_dispatch_one, stream=stream, entry=entry), todo))
+
+
+def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.LogEntry) -> None:
+    handler, w, command = job
+    try:
+        handler(_ctx, w, command, stream)
+    except Exception as exc:
+        msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
+        notify(entry.add(entry.source, msg))
         try:
-            device_type.dispatch(_ctx, w, rule, stream)
-        except Exception as exc:
-            msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
-            notify(entry.add(entry.source, msg))
-            try:
-                config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
-            except Exception:
-                pass  # already recorded via notify() above; don't let error-reporting itself crash the worker
-
-    with Pool(max_workers=max(1, len(what))) as ex:
-        list(ex.map(one, what))
+            config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
+        except Exception:
+            pass
 
 
 def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, entry: m.LogEntry) -> None:
@@ -352,17 +288,17 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
 
     if severity is m.Alarm.EMERGENCY:
-        dispatch(config.routines[config.settings.emergency_routine], force=True, entry=entry)
+        dispatch(config.routines[config.settings.emergency_routine].commands, force=True, entry=entry)
         if text is not None:
             video_url = m.AlertVideo(f"{config.settings.base_url}/api/alert.mp4?text={quote(text)}")
-            dispatch(m.Config(m.Devices(orc.Chromecast), video_url), force=True, entry=entry)
+            dispatch((engine.Command(m.Devices(orc.Chromecast), video_url),), force=True, entry=entry)
             if not isinstance(device, orc.Chromecast):
-                dispatch(m.Config(m.Devices(device), m.Speak(text)), force=True, entry=entry)
+                dispatch((engine.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
     elif text is not None:
-        dispatch(m.Config(m.Devices(device), m.Speak(text)), force=True, entry=entry)
+        dispatch((engine.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
     else:
         assert path is not None
-        dispatch(m.Config(m.Devices(device), path), force=True, entry=entry)
+        dispatch((engine.Command(m.Devices(device), path),), force=True, entry=entry)
 
 
 def reboot_hubitat() -> None:
@@ -411,7 +347,7 @@ def device_command(id: str, state: str | None) -> None:
     for device_type in config.registry.devices.values():
         if device_type.dispatch is not None and device_type.handles(id):
             member = device_type.cls[id]
-            device_type.dispatch(_ctx, member, m.Config(m.Devices(member), parsed), {})
+            device_type.dispatch(_ctx, member, engine.Command(m.Devices(member), parsed), {})
             return
     raise Exception(f"Unknown device: {id}")
 
@@ -503,40 +439,53 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
         today = now.date()
 
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.settings.tz)
-        timescale, twilight_fn = _almanac()
-        day_start = timescale.from_datetime(local_midnight)
-        day_end = timescale.from_datetime(local_midnight + timedelta(days=1))
+        sunrise, sunset = _sun_times(local_midnight, config.settings.lat, config.settings.long, config.settings.sunset_lead_hours)
 
-        prev = int(twilight_fn(day_start).item())
-        times, twilight = almanac.find_discrete(day_start, day_end, twilight_fn)
-        sunrise = sunset = None
-
-        for t, curr in zip(times, twilight):
-            curr = int(curr)
-            if (prev, curr) == (3, 4):
-                sunrise = t.utc_datetime()
-            elif (prev, curr) == (4, 3):
-                sunset = t.utc_datetime() - timedelta(hours=config.settings.sunset_lead_hours)
-            prev = curr
-
-        if override := active_theme_override(today):
-            cfg = config.themes.get(override.name)
-        else:
-            cfg = config.themes.get(today.strftime("%A").lower()) or config.themes.get(base_theme(today))
-
-        assert cfg is not None  # the resolved theme is always present in config
-        for e in cfg.configs:
-            if e.when == m.SUNRISE:
-                time = sunrise
-            elif e.when == m.SUNSET:
-                time = sunset
-            else:
-                # e.when is a datetime.time here (normalized in __post_init__), not the SUNRISE/SUNSET str
-                time = now.replace(hour=e.when.hour, minute=e.when.minute, second=0)
-            if time is None:
-                continue
-            result.append((time.astimezone(config.settings.tz), e))
+        for e in _scheduled_theme(today).configs:
+            when = _entry_time(e, sunrise, sunset, now)
+            if when is not None:
+                result.append((when, e))
     return result
+
+
+def _scheduled_theme(today: date) -> m.Theme:
+    if override := active_theme_override(today):
+        theme = config.themes.get(override.name)
+    else:
+        theme = config.themes.get(today.strftime("%A").lower()) or config.themes.get(base_theme(today))
+    assert theme is not None
+    return theme
+
+
+def _entry_time(e: m.Routine, sunrise: datetime | None, sunset: datetime | None, now: datetime) -> datetime | None:
+    assert isinstance(e.trigger, engine.At)
+    when = e.trigger.when
+    if when == m.SUNRISE:
+        return sunrise
+    elif when == m.SUNSET:
+        return sunset
+    assert not isinstance(when, str)
+    return now.replace(hour=when.hour, minute=when.minute, second=0)
+
+
+@lru_cache(maxsize=1)
+def _almanac(lat: float, long: float) -> tuple[Any, Any]:
+    ephemeris = load_file(str(resources.files("orc_data") / "de421.bsp"))
+    return load.timescale(), almanac.dark_twilight_day(ephemeris, wgs84.latlon(lat, long))
+
+
+def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: int) -> tuple[datetime | None, datetime | None]:
+    ts, twilight = _almanac(lat, long)
+    start, end = ts.from_datetime(midnight), ts.from_datetime(midnight + timedelta(days=1))
+    prev, sunrise, sunset = int(twilight(start).item()), None, None
+    for t, curr in zip(*almanac.find_discrete(start, end, twilight)):
+        curr = int(curr)
+        if (prev, curr) == (3, 4):
+            sunrise = t.astimezone(midnight.tzinfo)
+        elif (prev, curr) == (4, 3):
+            sunset = t.astimezone(midnight.tzinfo) - timedelta(hours=sunset_lead_hours)
+        prev = curr
+    return sunrise, sunset
 
 
 def next_iot_job(present_names: set[str]) -> Job | None:
@@ -546,7 +495,7 @@ def next_iot_job(present_names: set[str]) -> Job | None:
             j
             for j in jobs
             if j.next_run_time
-            and not any(cfg.trigger == m.Trigger.SYSTEM for cfg in j.args[0].rule.items)
+            and not any(clause.command.tag == m.Trigger.SYSTEM for clause in j.args[0].rule.items)
             and matching_items(j.args[0].rule, j.next_run_time, present_names)
         ),
         None,
@@ -558,19 +507,28 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
     run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`"), present_names())
 
 
+def _squish_matched(matched: m.Commands, entry: m.LogEntry) -> m.Commands:
+    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
+        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
+
+    return m.squish(matched, on_conflict=log_conflict)
+
+
 def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
     now = local_now()
     if not (matched := matching_items(rule, now, pnames)):
         if not pnames:
             detail = "nobody home"
         else:
-            unmet = sorted({c.trigger for c in rule.items if c.trigger not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)})
+            unmet = sorted(
+                {clause.command.tag for clause in rule.items if clause.command.tag not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)}
+            )
             detail = ", ".join(unmet) if unmet else "no conditions met"
         entry.action += f" — {Log.RULE_SKIPPED.format(detail=detail)}"
         return
-    elif weather_triggers := {c.trigger for c in matched if c.trigger in _WEATHER_TRIGGERS}:
+    elif weather_triggers := {c.tag for c in matched if c.tag in _WEATHER_TRIGGERS}:
         entry.action += f" (weather: {', '.join(sorted(weather_triggers))})"
-    dispatch(_squish_matched(rule, matched, entry), force=force, entry=entry)
+    dispatch(_squish_matched(matched, entry), force=force, entry=entry)
 
 
 def rebuild_jobs(ctx: m.AppContext) -> None:
@@ -589,36 +547,54 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         scheduler.schedule_cron(func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
 
 
-def matched_presence(rule: m.Routine, people: set[str] | None = None) -> tuple[m.Config, ...]:
-    return tuple(
-        c
-        for c in rule.items
-        if c.trigger
-        and c.trigger != m.Trigger.SYSTEM
-        and c.trigger not in _WEATHER_TRIGGERS
-        and (people is None or (c.trigger == m.Trigger.ANYONE and people) or c.trigger in people)
-    )
+def _holds(clauses: Sequence[engine.Clause[m.Devices]], read: engine.Read, now: datetime) -> m.Commands:
+    assert _ctx is not None
+    return _ctx.engine.evaluate((engine.Rule(engine.NEVER, tuple(clauses)),), now, read=read, force=True, bypass=None)
+
+
+def _reads(clause: engine.Clause[m.Devices], channel: type | UnionType) -> bool:
+    return any(isinstance(ch, channel) for ch in clause.condition.channels)
+
+
+def has_presence(rule: m.Routine) -> bool:
+    return any(_reads(clause, m.PresenceChannel) for clause in rule.items)
 
 
 def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
-    presence = matched_presence(rule)
-    return bool(presence) and not matched_presence(rule, present_names)
+    presence = tuple(clause for clause in rule.items if _reads(clause, m.PresenceChannel))
+    if not presence:
+        return False
+    now = local_now()
+    return not _holds(presence, _build_reader(present_names, now), now)
 
 
-def matched_weather(rule: m.Routine, now: datetime) -> tuple[m.Config, ...]:
-    return tuple(
-        c
-        for c in rule.items
-        if c.trigger in _WEATHER_TRIGGERS
-        and c.trigger in config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
-    )
+def weather_active(rule: m.Routine, now: datetime) -> bool:
+    weather = tuple(clause for clause in rule.items if _reads(clause, m.WeatherChannel))
+    today = config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
+    return bool(_holds(weather, lambda _channel: today, now))
 
 
-def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> Sequence[m.Config]:
-    system = tuple(c for c in rule.items if not c.trigger or c.trigger == m.Trigger.SYSTEM)
-    presence = matched_presence(rule, pnames)
-    weather = matched_weather(rule, now) if pnames else ()
-    return system + presence + weather
+def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
+    assert _ctx is not None
+    return _ctx.engine.evaluate((rule,), now, read=_build_reader(pnames, now), force=True, bypass=None)
+
+
+def _build_reader(present: set[str], now: datetime) -> engine.Read:
+    @cache
+    def read(channel: engine.Channel) -> engine.Value:
+        match channel:
+            case m.PersonChannel(name):
+                return name in present
+            case m.AnyoneChannel():
+                return bool(present)
+            case m.WeatherChannel():
+                if not present:
+                    return frozenset()
+                return config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
+            case _:
+                raise KeyError(channel)
+
+    return read
 
 
 @requires_ctx
@@ -639,68 +615,60 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
 def replay_day(now: datetime, entry: m.LogEntry) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
-    # replace() keeps Routine type; squish_configs only reads .items, which Routine and Configs share
-    configs = (replace(cfg, items=matching_items(cfg, now, present)) for (when, cfg) in jobs if when <= now and not cfg.skip_replay)
-    dispatch(m.squish_configs(*configs), force=True, entry=entry)
+    matched = [c for (when, cfg) in jobs if when <= now and m.SKIP_REPLAY_TAG not in cfg.tags for c in matching_items(cfg, now, present)]
+    dispatch(tuple(matched), force=True, entry=entry)
 
 
 # --- Private helpers ---
 
 
-@lru_cache(maxsize=1)
-def _almanac() -> tuple[Any, Any]:
-    """Timescale and twilight function, loaded on first schedule build instead of at import."""
-    ephemeris = load_file(str(resources.files("orc_data") / "de421.bsp"))
-    return load.timescale(), almanac.dark_twilight_day(ephemeris, wgs84.latlon(config.settings.lat, config.settings.long))
-
-
-def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, int):
-        config.providers.mqtt.publish_light(w, brightness=rule.state)
+def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(command.value, int):
+        config.providers.mqtt.publish_light(w, brightness=command.value)
     else:
-        config.providers.mqtt.publish_light(w, on=rule.state == m.ON)
+        config.providers.mqtt.publish_light(w, on=command.value == m.ON)
 
 
-def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, int):
-        config.providers.chromecast.set_volume(w, rule.state)
-    elif isinstance(rule.state, m.Speak):
-        config.providers.chromecast.speak(w, rule.state)
-    elif isinstance(rule.state, m.AlertVideo):
-        config.providers.chromecast.play(w, rule.state, "Alert")
-    elif isinstance(rule.state, m.YouTubeId):
-        if rule.state not in stream:
-            stream[rule.state] = config.providers.chromecast.fetch_youtube_stream_metadata(rule.state)
-        url, title = stream[rule.state]
+def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(command.value, int):
+        config.providers.chromecast.set_volume(w, command.value)
+    elif isinstance(command.value, m.Speak):
+        config.providers.chromecast.speak(w, command.value)
+    elif isinstance(command.value, m.AlertVideo):
+        config.providers.chromecast.play(w, command.value, "Alert")
+    elif isinstance(command.value, m.YouTubeId):
+        if command.value not in stream:
+            stream[command.value] = config.providers.chromecast.fetch_youtube_stream_metadata(command.value)
+        url, title = stream[command.value]
         config.providers.chromecast.play(w, m.Stream(url), title)
-    elif rule.state == m.STOP:
+    elif command.value == m.STOP:
         config.providers.chromecast.stop(w)
-    elif rule.state == m.PAUSE:
+    elif command.value == m.PAUSE:
         config.providers.chromecast.pause(w)
-    elif rule.state == m.RESUME:
+    elif command.value == m.RESUME:
         config.providers.chromecast.resume(w)
     else:
-        raise ValueError(f"Unsupported Chromecast state: {rule.state!r}")
+        raise ValueError(f"Unsupported Chromecast state: {command.value!r}")
 
 
-def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, int):
-        config.providers.audio.set_volume(w, rule.state)
-    elif isinstance(rule.state, m.Speak):
-        config.providers.audio.speak(w, rule.state)
-    elif rule.state in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
-        raise ValueError(f"USB devices don't support state {rule.state!r}")
+def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(command.value, int):
+        config.providers.audio.set_volume(w, command.value)
+    elif isinstance(command.value, m.Speak):
+        config.providers.audio.speak(w, command.value)
+    elif command.value in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
+        raise ValueError(f"USB devices don't support state {command.value!r}")
     else:
-        config.providers.audio.alert(w, rule.state)
+        config.providers.audio.alert(w, command.value)
 
 
-def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, rule: m.Config, stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(rule.state, m.AcCommand):
-        ac_command(w, m.ON, rule.state.mode, rule.state.fan, rule.state.temp)
-    elif rule.state in (m.ON, m.OFF):
-        ac_command(w, rule.state)
+def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+    if isinstance(command.value, m.AcCommand):
+        ac_command(w, m.ON, command.value.mode, command.value.fan, command.value.temp)
+    elif command.value in (m.ON, m.OFF):
+        ac_command(w, command.value)
     else:
-        raise ValueError(f"AC devices don't support state {rule.state!r}")
+        raise ValueError(f"AC devices don't support state {command.value!r}")
 
 
 def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
@@ -713,13 +681,6 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
             device = config.settings.emergency_device
     assert device is not None
     return device
-
-
-def _squish_matched(rule: m.Routine, matched: Sequence[m.Config], entry: m.LogEntry) -> m.Configs:
-    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
-        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
-
-    return m.squish_configs(replace(rule, items=matched), on_conflict=log_conflict)
 
 
 @requires_ctx

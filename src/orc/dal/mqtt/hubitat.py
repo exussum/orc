@@ -19,6 +19,7 @@ import orc
 from orc import model as m
 from orc.collections import LockedDict
 from orc.dal import sqlite
+from orc.kernel import engine
 
 _log = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ def snapshot() -> list[m.DeviceState]:
     return sorted(_devices.values(), key=lambda d: d.id)
 
 
-def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
+def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Commands:
     """Light states from the standing subscriber's device documents (updated on every
     device event, whatever channel commanded it). Virtual devices (negative synthetic
     id), devices not selected in the MQTT Export app, and an unpopulated cache (broker
@@ -142,7 +143,7 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Configs:
         switch = attrs.get("switch", m.OFF)
         return int(attrs["level"]) if ("level" in attrs and switch == m.ON) else switch
 
-    return m.Configs(*(m.Config(what=m.Devices(light), state=state(light)) for light in lights))
+    return tuple(engine.Command(m.Devices(light), state(light)) for light in lights)
 
 
 def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:

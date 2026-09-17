@@ -29,7 +29,7 @@ class Sensor(DeviceEnum):
 
 @pytest.fixture(autouse=True)
 def _device_enums(monkeypatch):
-    from orc import declarations
+    from orc.kernel import declarations
 
     enums = {"Light": Light, "Chromecast": Chromecast, "Sensor": Sensor}
     monkeypatch.setattr(orc.config, "registry", declarations.Declarations().build(enums))
