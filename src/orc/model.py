@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.base import BaseScheduler
 
+from orc.kernel import engine
+
 if TYPE_CHECKING:
     from cryptography import x509
     from cryptography.hazmat.primitives.asymmetric import rsa
@@ -35,6 +37,8 @@ class Person(NamedTuple):
 
 type Listener = Callable[[DeviceState, str, Any, Any], None]
 type ButtonListener = Callable[[int, int, str], None]
+type DeviceCommand = engine.Command[Any, Devices]
+type Commands = tuple[DeviceCommand, ...]
 
 
 class ThemeOverride(NamedTuple):
@@ -102,6 +106,8 @@ class DeviceStatus(NamedTuple):
 
 SUNRISE = "sunrise"
 SUNSET = "sunset"
+
+SKIP_REPLAY_TAG = "skip-replay"
 
 OFF = "off"
 ON = "on"
@@ -374,6 +380,33 @@ class AdhocConfig(Configs):
 
 
 @dataclass
+class AdhocAction:
+    commands: Commands
+    snapshot: timedelta | None = None
+    delay: timedelta = field(default_factory=timedelta)
+    section: str = "scene"
+    reset: bool = True
+
+    def __init__(
+        self,
+        *commands: DeviceCommand,
+        snapshot: timedelta | None = None,
+        delay: timedelta = timedelta(),
+        section: str = "scene",
+        reset: bool = True,
+    ) -> None:
+        if snapshot and delay:
+            raise ValueError("snapshot and delay cannot both be set")
+        if snapshot and not reset:
+            raise ValueError("snapshot and reset=false cannot both be set")
+        self.commands = tuple(commands)
+        self.snapshot = snapshot
+        self.delay = delay
+        self.section = section
+        self.reset = reset
+
+
+@dataclass
 class Routine:
     name: str
     when: str | time
@@ -418,6 +451,7 @@ class AppContext:
     snapshot_manager: SnapshotManager
     scheduler: BaseScheduler
     version_manager: VersionManager
+    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([]))
     plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
@@ -446,7 +480,7 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
 
 
 @dataclass(frozen=True)
-class Devices:
+class Devices(engine.Channel):
     members: tuple[DeviceEnum, ...]
 
     def __init__(self, what: "DeviceEnum | type[DeviceEnum] | Iterable[DeviceEnum] | Devices") -> None:
@@ -465,6 +499,40 @@ class Devices:
         if len(self.members) != 1:
             raise ValueError(f"expected exactly one device, got {len(self.members)}: {self.members}")
         return self.members[0]
+
+
+@dataclass(frozen=True)
+class PersonChannel(engine.Channel):
+    name: str
+
+
+@dataclass(frozen=True)
+class AnyoneChannel(engine.Channel):
+    pass
+
+
+@dataclass(frozen=True)
+class WeatherChannel(engine.Channel):
+    pass
+
+
+PresenceChannel = PersonChannel | AnyoneChannel
+
+
+@dataclass(frozen=True)
+class MqttDeviceChannel(engine.Channel):
+    device: DeviceEnum
+    attribute: str
+
+
+@dataclass(frozen=True)
+class AcChannel(engine.Channel):
+    device: DeviceEnum
+
+
+@dataclass(frozen=True)
+class CastChannel(engine.Channel):
+    device: DeviceEnum
 
 
 @dataclass(frozen=True)
