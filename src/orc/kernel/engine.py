@@ -62,6 +62,14 @@ class Transition:
 
 
 @dataclass(frozen=True)
+class Changed:
+    channels: tuple[Channel, ...]
+
+    def fired(self, event: Event) -> bool:
+        return event.channel in self.channels
+
+
+@dataclass(frozen=True)
 class Never:
     def fired(self, event: Event) -> bool:
         return False
