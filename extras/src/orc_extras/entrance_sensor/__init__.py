@@ -48,7 +48,6 @@ def _rule(ctx: AppContext, **values: Any) -> Rule:
 
 
 class Rules(NamedTuple):
-    enter: list[Rule]
     inside: list[Rule]
     present: list[Rule]
     absent: list[Rule]
