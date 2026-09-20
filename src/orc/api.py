@@ -124,6 +124,10 @@ def device_states() -> list[m.DeviceState]:
     return config.providers.mqtt.snapshot()
 
 
+def device_state(target: str) -> m.DeviceState | None:
+    return next((s for s in device_states() if str(s.id) == target or s.name == target), None)
+
+
 def capture_lights() -> m.Commands:
     return config.providers.mqtt.fetch_light_states(tuple(orc.Light))
 

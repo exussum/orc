@@ -1,3 +1,4 @@
+import math
 import sys
 from dataclasses import dataclass
 from datetime import timedelta
@@ -8,11 +9,21 @@ from apscheduler.triggers.date import DateTrigger
 from orc import model as m
 from orc.kernel import engine
 from orc.plugins import requires_ctx
+from orc.security import safe_eval
 
 JOB_ID = "react"
 COOLDOWN = timedelta(seconds=10)  # a (rule, device) won't re-fire within this window — breaks flapping loops
 
 TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "contact"}
+
+
+def _dewpoint(temp_f: float, humidity: float) -> float:
+    temp_c = (temp_f - 32) * 5 / 9
+    gamma = math.log(humidity / 100.0) + (17.62 * temp_c) / (243.12 + temp_c)
+    return (243.12 * gamma) / (17.62 - gamma)
+
+
+FUNCTIONS = {"dewpoint": _dewpoint}
 
 
 class React(NamedTuple):
@@ -43,6 +54,53 @@ class AcIs:
         return (self.channel,)
 
 
+@dataclass(frozen=True)
+class Formula(engine.Channel):
+    device: m.DeviceEnum
+    expr: str
+
+
+@dataclass(frozen=True)
+class DeviceChanged:
+    device: m.DeviceEnum
+
+    def fired(self, event: engine.Event) -> bool:
+        channel = event.channel
+        return isinstance(channel, m.MqttDeviceChannel) and channel.device == self.device
+
+
+@dataclass(frozen=True)
+class Range:
+    channel: engine.Channel
+    low: float
+    high: float
+
+    def holds(self, read: engine.Read) -> bool:
+        value = read(self.channel)
+        if not isinstance(value, (int, float, str)):
+            return False
+        try:
+            return self.low <= float(value) <= self.high
+        except ValueError:
+            return False
+
+    @property
+    def channels(self) -> tuple[engine.Channel, ...]:
+        return (self.channel,)
+
+
+@dataclass(frozen=True)
+class Present:
+    names: tuple[str, ...]
+
+    def holds(self, read: engine.Read) -> bool:
+        return any(read(m.PersonChannel(name)) for name in self.names)
+
+    @property
+    def channels(self) -> tuple[engine.Channel, ...]:
+        return tuple(m.PersonChannel(name) for name in self.names)
+
+
 def condition(when: When | None) -> tuple[engine.Condition, ...]:
     if when is None:
         return ()
@@ -55,15 +113,24 @@ def condition(when: When | None) -> tuple[engine.Condition, ...]:
 
 
 def source_of(rule: engine.Rule[m.Devices]) -> m.DeviceEnum:
-    channel = _transition(rule).channel
-    assert isinstance(channel, m.MqttDeviceChannel)
-    return channel.device
-
-
-def _transition(rule: engine.Rule[m.Devices]) -> engine.Transition:
     trigger = rule.trigger
-    assert isinstance(trigger, engine.Transition)
-    return trigger
+    if isinstance(trigger, engine.Transition):
+        assert isinstance(trigger.channel, m.MqttDeviceChannel)
+        return trigger.channel.device
+    assert isinstance(trigger, DeviceChanged)
+    return trigger.device
+
+
+def _trigger_label(rule: engine.Rule[m.Devices]) -> Any:
+    trigger = rule.trigger
+    if isinstance(trigger, engine.Transition):
+        return trigger.value
+    assert isinstance(trigger, DeviceChanged)
+    condition = rule.items[0].conditions[0]
+    assert isinstance(condition, Range)
+    channel = condition.channel
+    assert isinstance(channel, Formula)
+    return channel.expr
 
 
 def _reader(ctx: m.AppContext) -> engine.Read:
@@ -78,10 +145,29 @@ def _reader(ctx: m.AppContext) -> engine.Read:
             case m.CastChannel(device):
                 sound = next((s for s in ctx.api.capture_sounds() if s.what is device), None)
                 return sound.playback if sound else None
+            case m.PersonChannel(name):
+                return name in ctx.api.present_names()
+            case Formula(device, expr):
+                target = str(device.value)
+                found = ctx.api.device_state(target)
+                if found is None:
+                    raise KeyError(target)
+                ns: dict[str, Any] = {**FUNCTIONS, **{name: _num(value) for name, value in found.attributes.items()}}
+                try:
+                    return safe_eval(expr, ns)
+                except Exception as exc:
+                    raise ValueError(f"react rule `{expr}` on `{device.name}`: {exc}") from exc
             case _:
                 raise KeyError(channel)
 
     return read
+
+
+def _num(value: Any) -> Any:
+    try:
+        return float(value)
+    except TypeError, ValueError:
+        return value
 
 
 def _state(ctx: m.AppContext) -> React:
@@ -132,6 +218,12 @@ def _unmet(conditions: tuple[engine.Condition, ...]) -> str:
 
 
 def _describe(cond: engine.Condition) -> str:
+    if isinstance(cond, Range):
+        channel = cond.channel
+        assert isinstance(channel, Formula)
+        return f"`{channel.device.label or channel.device.name}` {channel.expr} not in {cond.low}-{cond.high}"
+    elif isinstance(cond, Present):
+        return f"nobody in {', '.join(cond.names)} is home"
     channel = cond.channels[0]
     assert isinstance(channel, m.AcChannel | m.MqttDeviceChannel | m.CastChannel)
     return f"`{channel.device.label or channel.device.name}` is not {_wanted(cond)}"
@@ -143,7 +235,7 @@ def _apply(ctx: m.AppContext, what: m.Devices, action: Any, entry: m.LogEntry) -
 
 def _report(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
     rule = _state(ctx).rules[report.key]
-    state = _transition(rule).value
+    state = _trigger_label(rule)
     command = rule.items[0].command
     if report.disposition is engine.Disposition.FIRED:
         entry = ctx.api.log(Log.REACT, f"`{name}` {state}{note} → set {_targets(command.channel)} {command.value}")
