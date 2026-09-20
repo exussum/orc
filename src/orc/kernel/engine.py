@@ -171,11 +171,13 @@ class SnapShot[C: Channel = Channel](NamedTuple):
 
 
 class Runtime:
-    def __init__(self, rules: Sequence[Rule] = ()) -> None:
+    def __init__(self, rules: Sequence[Rule] = (), *, bypass: Any = None, override_key: str | None = None) -> None:
         self._rules: list[Rule] = []
         self._last_fired: dict[int, datetime] = {}
         self._snapshots: dict[str, tuple[Any, datetime]] = {}
         self._lock = RLock()
+        self._bypass = bypass
+        self._override_key = override_key
         self.add_rules(rules)
 
     def on_event(self, event: Event, now: datetime, read: Read) -> tuple[Reaction, ...]:
@@ -206,7 +208,7 @@ class Runtime:
         last = self._last_fired.get(key)
         if last is not None and now - last < rule.cooldown:
             return Report(key, Disposition.COOLED, now - last)
-        if not self.evaluate([rule], now, read=read, force=True, bypass=None):
+        if not self.evaluate([rule], now, read=read, force=True):
             return Report(key, Disposition.BLOCKED)
         self._last_fired[key] = now
         return Report(key, Disposition.FIRED)
@@ -235,23 +237,26 @@ class Runtime:
             return {key: payload for key, (payload, deadline) in self._snapshots.items() if now <= deadline}
 
     def evaluate[C: Channel](
-        self, rules: Iterable[Rule[C]], now: datetime, *, read: Read = _no_read, force: bool, bypass: Any
+        self, rules: Iterable[Rule[C]], now: datetime, *, read: Read = _no_read, force: bool
     ) -> tuple[Command[Any, C], ...]:
         with self._lock:
-            active = [key for key, (_, deadline) in self._snapshots.items() if now <= deadline]
+            override_key = self._override_key
+            snapshot = self._snapshots.get(override_key) if override_key is not None else None
+            active = snapshot is not None and now <= snapshot[1]
             out: list[Command[Any, C]] = []
             for rule in rules:
                 for condition, command in rule.items:
                     if not condition.holds(read):
                         continue
-                    if not force and active and command.tag != bypass:
-                        continue
-                    if not force and command.tag == bypass:
-                        for key in active:
-                            snapshot, deadline = self._snapshots[key]
-                            merged = {c.channel: c for c in snapshot.routine}
-                            merged[command.channel] = command
-                            self._snapshots[key] = (snapshot._replace(routine=tuple(merged.values())), deadline)
+                    if not force:
+                        if command.tag == self._bypass:
+                            if override_key is not None and snapshot is not None and active:
+                                payload, deadline = snapshot
+                                merged = {c.channel: c for c in payload.routine}
+                                merged[command.channel] = command
+                                self._snapshots[override_key] = (payload._replace(routine=tuple(merged.values())), deadline)
+                        elif active:
+                            continue
                     out.append(command)
             return tuple(out)
 

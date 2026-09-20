@@ -117,6 +117,14 @@ class TestIntercepts:
         assert not api._ctx.engine.snapshots(api.local_now())
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
+    def test_unrelated_plugin_snapshot_does_not_suppress(self, update_light, snapshot_config, entry):
+        command = engine.Command(m.Devices(orc.Light.c), m.ON)
+
+        api._ctx.engine.save_snapshot("entrance_sensor", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
+        api.dispatch((command,), entry=entry)
+
+        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
+
     def test_snapshot_bypassed(self, update_light, snapshot_config, entry):
         command = engine.Command(m.Devices(orc.Light.c), m.ON)
 

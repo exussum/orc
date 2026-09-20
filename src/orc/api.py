@@ -39,7 +39,7 @@ from orc.locale import Log
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
-ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
+ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
 _PRESENCE_CRON_JOB_ID = "presence-cron"
 _EXTERNAL_GROUP_WINDOW = timedelta(seconds=5)
@@ -248,7 +248,7 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
     assert _ctx is not None
     commands = m.squish(commands)
     always = engine.Rule(engine.NEVER, tuple(engine.Clause(engine.ALWAYS, command) for command in commands))
-    survived = set(_ctx.engine.evaluate((always,), local_now(), force=force, bypass=m.Trigger.SYSTEM))
+    survived = set(_ctx.engine.evaluate((always,), local_now(), force=force))
 
     stream: dict[Any, tuple[str, str]] = {}
     todo: list[_Job] = []
@@ -549,7 +549,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
 
 def _holds(clauses: Sequence[engine.Clause[m.Devices]], read: engine.Read, now: datetime) -> m.Commands:
     assert _ctx is not None
-    return _ctx.engine.evaluate((engine.Rule(engine.NEVER, tuple(clauses)),), now, read=read, force=True, bypass=None)
+    return _ctx.engine.evaluate((engine.Rule(engine.NEVER, tuple(clauses)),), now, read=read, force=True)
 
 
 def _reads(clause: engine.Clause[m.Devices], channel: type | UnionType) -> bool:
@@ -576,7 +576,7 @@ def weather_active(rule: m.Routine, now: datetime) -> bool:
 
 def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
     assert _ctx is not None
-    return _ctx.engine.evaluate((rule,), now, read=_build_reader(pnames, now), force=True, bypass=None)
+    return _ctx.engine.evaluate((rule,), now, read=_build_reader(pnames, now), force=True)
 
 
 def _build_reader(present: set[str], now: datetime) -> engine.Read:
