@@ -104,21 +104,8 @@ class In:
         return (self.channel,)
 
 
-@dataclass(frozen=True)
-class Always:
-    def holds(self, read: Read) -> bool:
-        return True
-
-    @property
-    def channels(self) -> tuple[Channel, ...]:
-        return ()
-
-
-ALWAYS = Always()
-
-
 class Clause[C: Channel = Channel](NamedTuple):
-    condition: Condition
+    conditions: tuple[Condition, ...]
     command: Command[Any, C]
 
 
@@ -245,9 +232,10 @@ class Runtime:
             active = snapshot is not None and now <= snapshot[1]
             out: list[Command[Any, C]] = []
             for rule in rules:
-                for condition, command in rule.items:
-                    if not condition.holds(read):
+                for clause in rule.items:
+                    if not all(cond.holds(read) for cond in clause.conditions):
                         continue
+                    command = clause.command
                     if not force:
                         if command.tag == self._bypass:
                             if override_key is not None and snapshot is not None and active:

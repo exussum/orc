@@ -43,15 +43,15 @@ class AcIs:
         return (self.channel,)
 
 
-def condition(when: When | None) -> engine.Condition:
+def condition(when: When | None) -> tuple[engine.Condition, ...]:
     if when is None:
-        return engine.ALWAYS
+        return ()
     elif isinstance(when.state, m.AcState):
-        return AcIs(m.AcChannel(when.device), when.state)
+        return (AcIs(m.AcChannel(when.device), when.state),)
     elif isinstance(when.state, m.Playback):
-        return engine.Is(m.CastChannel(when.device), when.state)
+        return (engine.Is(m.CastChannel(when.device), when.state),)
     else:
-        return engine.Is(m.MqttDeviceChannel(when.device, TRIGGERS[when.state]), when.state)
+        return (engine.Is(m.MqttDeviceChannel(when.device, TRIGGERS[when.state]), when.state),)
 
 
 def source_of(rule: engine.Rule[m.Devices]) -> m.DeviceEnum:
@@ -127,7 +127,11 @@ def _wanted(cond: engine.Condition) -> Any:
     return cond.value.value if isinstance(cond.value, m.Playback) else cond.value
 
 
-def _unmet(cond: engine.Condition) -> str:
+def _unmet(conditions: tuple[engine.Condition, ...]) -> str:
+    return " and ".join(_describe(cond) for cond in conditions)
+
+
+def _describe(cond: engine.Condition) -> str:
     channel = cond.channels[0]
     assert isinstance(channel, m.AcChannel | m.MqttDeviceChannel | m.CastChannel)
     return f"`{channel.device.label or channel.device.name}` is not {_wanted(cond)}"
@@ -148,7 +152,7 @@ def _report(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> N
         assert report.since is not None
         ctx.api.log(Log.REACT, f"`{name}` {state}{note} — skipped, rule fired {int(report.since.total_seconds())}s ago (cooldown)")
     else:
-        ctx.api.log(Log.REACT, f"`{name}` {state}{note} — skipped, {_unmet(rule.items[0].condition)}")
+        ctx.api.log(Log.REACT, f"`{name}` {state}{note} — skipped, {_unmet(rule.items[0].conditions)}")
 
 
 @requires_ctx

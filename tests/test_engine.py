@@ -37,21 +37,22 @@ def test_in_holds_when_value_is_among_the_reading():
     assert not condition.holds(read_from({"weather": frozenset()}))
 
 
-def test_always_holds_without_reading():
+def test_empty_conditions_fire_without_reading():
     def read(channel):
-        raise AssertionError("ALWAYS must not read the world")
+        raise AssertionError("empty conditions must not call read")
 
-    assert e.ALWAYS.holds(read)
+    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),))
+    assert e.Runtime([rule]).on_event(DOOR_OPEN, T0, read) == (e.Report(hash(rule), e.Disposition.FIRED),)
 
 
 def test_runtime_immediate_rule_reports_fired():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause(e.ALWAYS, LIGHT),))
+    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),))
     reaction = e.Runtime([rule]).on_event(DOOR_OPEN, T0, read_from({}))
     assert reaction == (e.Report(hash(rule), e.Disposition.FIRED),)
 
 
 def test_runtime_cooldown_reports_cooled_with_elapsed():
-    rt = e.Runtime([e.Rule(e.Transition("door", "open"), (e.Clause(e.ALWAYS, LIGHT),), cooldown=timedelta(seconds=10))])
+    rt = e.Runtime([e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), cooldown=timedelta(seconds=10))])
     assert rt.on_event(DOOR_OPEN, T0, read_from({}))[0].disposition is e.Disposition.FIRED
     cooled = rt.on_event(DOOR_OPEN, T0 + timedelta(seconds=5), read_from({}))[0]
     assert cooled.disposition is e.Disposition.COOLED
@@ -60,31 +61,31 @@ def test_runtime_cooldown_reports_cooled_with_elapsed():
 
 
 def test_runtime_condition_failure_reports_blocked():
-    rt = e.Runtime([e.Rule(e.Transition("door", "open"), (e.Clause(e.Is("ac", "on"), LIGHT),))])
+    rt = e.Runtime([e.Rule(e.Transition("door", "open"), (e.Clause((e.Is("ac", "on"),), LIGHT),))])
     assert rt.on_event(DOOR_OPEN, T0, read_from({"ac": "off"}))[0].disposition is e.Disposition.BLOCKED
 
 
 def test_runtime_delayed_rule_defers_without_reporting():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause(e.ALWAYS, LIGHT),), timedelta(minutes=5))
+    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
     reaction = e.Runtime([rule]).on_event(DOOR_OPEN, T0, read_from({}))
     assert reaction == (e.Deferred(hash(rule), rule, T0 + timedelta(minutes=5)),)
 
 
 def test_runtime_on_fire_reports_fired():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause(e.ALWAYS, LIGHT),), timedelta(minutes=5))
+    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
     rt = e.Runtime([rule])
     (deferred,) = rt.on_event(DOOR_OPEN, T0, read_from({}))
     assert rt.on_fire(deferred, T0 + timedelta(minutes=5), read_from({})) == e.Report(hash(rule), e.Disposition.FIRED)
 
 
 def test_runtime_reverse_edge_cancels_pending():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause(e.ALWAYS, LIGHT),), timedelta(minutes=5))
+    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
     rt = e.Runtime([rule])
     assert rt.on_event(e.Event("door", "open", "closed"), T0, read_from({})) == (e.Cancel(hash(rule)),)
 
 
 def test_runtime_on_fire_rechecks_condition():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause(e.Is("ac", "on"), LIGHT),), timedelta(minutes=5))
+    rule = e.Rule(e.Transition("door", "open"), (e.Clause((e.Is("ac", "on"),), LIGHT),), timedelta(minutes=5))
     rt = e.Runtime([rule])
     (deferred,) = rt.on_event(DOOR_OPEN, T0, read_from({}))
     fired = rt.on_fire(deferred, T0 + timedelta(minutes=5), read_from({"ac": "off"}))
@@ -133,13 +134,13 @@ def test_snapshots_lists_only_live():
 
 
 def _gate(rt, commands, now, *, force):
-    rules = [e.Rule(e.NEVER, (e.Clause(e.ALWAYS, c),)) for c in commands]
+    rules = [e.Rule(e.NEVER, (e.Clause((), c),)) for c in commands]
     return rt.evaluate(rules, now, force=force)
 
 
 def test_evaluate_keeps_only_rules_whose_condition_holds():
     rt = e.Runtime([])
-    rule = e.Rule(e.NEVER, (e.Clause(e.Is("ac", "on"), LIGHT),))
+    rule = e.Rule(e.NEVER, (e.Clause((e.Is("ac", "on"),), LIGHT),))
     assert rt.evaluate([rule], T0, read=read_from({"ac": "on"}), force=True) == (LIGHT,)
     assert rt.evaluate([rule], T0, read=read_from({"ac": "off"}), force=True) == ()
 
