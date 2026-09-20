@@ -177,7 +177,7 @@ conversion itself, as `_rule`/`_timed` do above:
   makes every field required, so a missing setting fails at load.
 - **`group(...)` commands** (`rules`, `timed`) call their factory once per
   line with the line's fields as keyword arguments; rows collect in dicts of
-  lists keyed by the first placeholder: `sensor.rules["enter"]`. A grouped
+  lists keyed by the first placeholder: `sensor.rules["present"]`. A grouped
   command with `define`/`append` patterns hoists shared values: `define`
   names a group and carries its parameters (here the time window), `append`
   adds a row, and every row carries the group's parameters merged in. This
@@ -189,8 +189,9 @@ This plugin's `timed` groups hold device rows, one group per time window;
 the groups are scanned in file order and the first one whose window contains
 the current time wins, so an overlapping group placed higher up overrides
 the ones below it. The winning group is dispatched when the sensor goes
-active, together with the `enter` rules; the cleanup job dispatches only
-`rules` rows (`present`, `absent`, `shutdown`).
+active; reactions to arrival itself (e.g. pausing media, turning on a light)
+belong in a `react` rule on the same sensor instead. The cleanup job
+dispatches only `rules` rows (`present`, `absent`, `shutdown`).
 
 Because this package is outside the `orc` package, the config name is
 namespaced as `<package>/<name>`, so the file lives at:
@@ -214,8 +215,6 @@ message log_door_open 'Trigger sensor off: skip (patio door open)'
 message log_absent    'Trigger sensor off: skip (sounds playing)'
 message log_shutdown  'Trigger sensor off: applying OFF'
 
-rules enter    Light      on
-rules enter    Chromecast pause
 rules inside   Light      off
 rules present  Chromecast stop
 rules absent   Chromecast resume
