@@ -14,6 +14,8 @@ CONFIG = "orc_extras/react"
 GRAMMAR = """
 react <devices> turns <state> set <action> [if <device> is <condition>] [--delay=<minutes>]
 react <devices> turns <state> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
+react <devices> <expr> between <low> and <high> set <target> <action> [--delay=<minutes>]
+react <devices> <expr> between <low> and <high> present <people> set <target> <action> [--delay=<minutes>]
 """
 
 
@@ -54,7 +56,27 @@ def _parse_when(device: DeviceEnum, condition: str, objects: dict[str, Any]) -> 
     return When(device, condition)
 
 
+def _range_rule(objects: dict[str, Any], args: Any) -> None:
+    action = Cast.state(args.action)
+    target = _parse_target(args.target, action, objects)
+    assert target is not None
+    people = tuple(name.strip() for name in args.people.split(",")) if args.people else ()
+    delay = timedelta(minutes=args.delay) if args.delay else timedelta()
+    for source in Cast.devices(args.devices, objects).all():
+        formula = plugins.Formula(source, args.expr)
+        conditions: list[engine.Condition] = [plugins.Range(formula, args.low, args.high)]
+        if people:
+            conditions.append(plugins.Present(people))
+        command = engine.Command(target, action)
+        objects["react"].append(
+            engine.Rule(plugins.DeviceChanged(source), (engine.Clause(tuple(conditions), command),), delay, cooldown=plugins.COOLDOWN)
+        )
+
+
 def _rule(objects: dict[str, Any], args: Any) -> None:
+    if args.low is not None:
+        _range_rule(objects, args)
+        return
     attribute = TRIGGERS.get(args.state)
     if attribute is None:
         raise ValueError(f"Invalid trigger state {args.state!r}: expected one of {sorted(TRIGGERS)}")
@@ -74,7 +96,9 @@ def declare(declarations: Any) -> None:
 
 
 def setup(ctx: AppContext) -> None:
-    cfg = load_plugin_config(CONFIG, ctx.config, GRAMMAR, serializers={"react": each(_rule, default=list, types={"delay": int})})
+    cfg = load_plugin_config(
+        CONFIG, ctx.config, GRAMMAR, serializers={"react": each(_rule, default=list, types={"delay": int, "low": int, "high": int})}
+    )
     engine_rules = cfg.react
     ctx.engine.add_rules(engine_rules)
     sources = {plugins.source_of(er).value: plugins.source_of(er) for er in engine_rules}
