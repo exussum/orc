@@ -12,8 +12,8 @@ from orc_extras.react.plugins import TRIGGERS, When
 
 CONFIG = "orc_extras/react"
 GRAMMAR = """
-react <devices> turns <state> set <action> [if <device> is <condition>] [--delay=<minutes>]
-react <devices> turns <state> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
+react <devices> turns <state> set <action> [(if <device> is <condition>)] [--delay=<minutes>]
+react <devices> turns <state> set <target> <action> [(if <device> is <condition>)] [--delay=<minutes>]
 react <devices> <expr> between <low> and <high> set <target> <action> [--delay=<minutes>]
 react <devices> <expr> between <low> and <high> present <people> set <target> <action> [--delay=<minutes>]
 """
