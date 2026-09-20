@@ -116,15 +116,15 @@ def _fire_pending(ctx):
 
 
 # The fixture's first line (`react Light ...`) fans out to lamp + desk, so the
-# compiled rules are: 0 lamp/on, 1 desk/on, 2..6 the single-device lines 2..6.
+# compiled rules are: 0 lamp/on, 1 desk/on, 2..7 the single-device lines 2..7.
 def test_config_registers_listener(ctx):
     rules, _ = _setup(ctx)
-    assert len(rules) == 7  # line 1 fans out to lamp + desk; lines 2..6 are single-device
+    assert len(rules) == 8  # line 1 fans out to lamp + desk; lines 2..7 are single-device
     assert rules[0].trigger == engine.Transition(m.MqttDeviceChannel(Light.lamp, "switch"), m.ON)
     assert rules[1].trigger == engine.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
     assert rules[0].items[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
     assert rules[0].delay == timedelta(minutes=10)
-    assert ctx.plugin_state[plugins].sources == {1: Light.lamp, 2: Light.desk}
+    assert ctx.plugin_state[plugins].sources == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
 
 
 def test_switch_on_schedules_reaction(ctx):
@@ -213,6 +213,16 @@ def test_if_clause_covers_lights_and_chromecasts(ctx):
     rules, _ = _setup(ctx)
     assert rules[5].items[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
     assert rules[6].items[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
+
+
+def test_motion_trigger_with_target_and_no_if_clause(ctx):
+    # regression: docopt's optional-group matching lets the bracketed `if <device> is
+    # <condition>` absorb a stray token even without the literal if/is present, which
+    # made a bare `set <target> <action>` (no if clause) misparse as `set <action>`
+    rules, _ = _setup(ctx)
+    assert rules[7].trigger == engine.Transition(m.MqttDeviceChannel(Sensor.living, "motion"), "active")
+    assert rules[7].items[0].conditions == ()
+    assert rules[7].items[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
 
 
 def test_when_requires_a_known_condition():
