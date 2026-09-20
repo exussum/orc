@@ -77,6 +77,6 @@ def setup(ctx: AppContext) -> None:
     cfg = load_plugin_config(CONFIG, ctx.config, GRAMMAR, serializers={"react": each(_rule, default=list, types={"delay": int})})
     engine_rules = cfg.react
     ctx.engine.add_rules(engine_rules)
-    sources = {str(plugins.source_of(er).value): plugins.source_of(er) for er in engine_rules}
+    sources = {plugins.source_of(er).value: plugins.source_of(er) for er in engine_rules}
     ctx.plugin_state[plugins] = plugins.React({hash(er): er for er in engine_rules}, sources)
     ctx.api.add_listener(partial(plugins._on_event, ctx))
