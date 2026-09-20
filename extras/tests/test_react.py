@@ -168,8 +168,8 @@ def test_contact_open_triggers_immediate_rule(ctx):
 
 def test_if_clause_parses_device_and_condition(ctx):
     rules, _ = _setup(ctx)
-    assert rules[2].items[0].condition == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
-    assert rules[3].items[0].condition == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
+    assert rules[2].items[0].conditions[0] == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
+    assert rules[3].items[0].conditions[0] == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
 
 
 def test_set_clause_parses_explicit_target(ctx):
@@ -188,8 +188,8 @@ def test_target_must_match_action_kind():
 
 def test_if_clause_covers_lights_and_chromecasts(ctx):
     rules, _ = _setup(ctx)
-    assert rules[5].items[0].condition == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
-    assert rules[6].items[0].condition == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
+    assert rules[5].items[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert rules[6].items[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
 
 
 def test_when_requires_a_known_condition():
@@ -280,10 +280,12 @@ def test_reader_resolves_ac_playback_and_attr(ctx):
 
 
 def test_condition_maps_when_by_kind():
-    assert plugins.condition(None) is engine.ALWAYS
-    assert plugins.condition(plugins.When(Ac.living, m.AcState.ON)) == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
-    assert plugins.condition(plugins.When(Chromecast.tv, m.Playback.PLAYING)) == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
-    assert plugins.condition(plugins.When(Light.desk, m.ON)) == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert plugins.condition(None) == ()
+    assert plugins.condition(plugins.When(Ac.living, m.AcState.ON)) == (plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON),)
+    assert plugins.condition(plugins.When(Chromecast.tv, m.Playback.PLAYING)) == (
+        engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING),
+    )
+    assert plugins.condition(plugins.When(Light.desk, m.ON)) == (engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON),)
 
 
 def test_ac_is_bitmask_respects_flag_membership():
