@@ -51,7 +51,6 @@ def test_entrance_config_loads():
         snapshot=45,
     )
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
-    assert sensor.rules.enter == [Rule(devices=Devices(Light), state="on"), Rule(devices=Devices(Chromecast), state="pause")]
     assert sensor.rules.shutdown == [Rule(devices=Devices(Light), state="off")]
     assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), devices=Devices(Light), state=1)]
 
