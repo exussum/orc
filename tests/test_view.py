@@ -15,13 +15,13 @@ from orc.view import VersionManager, bp
 
 
 def _routine(name, when, *commands, skip_replay=False):
-    clauses = tuple(engine.Clause(loader._condition(c.tag), c) for c in commands)
+    clauses = tuple(engine.Clause(loader._conditions(c.tag), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
     return engine.Rule(engine.At(when), clauses, name=name, tags=tags)
 
 
 def _room(*commands):
-    return engine.Rule(engine.NEVER, tuple(engine.Clause(engine.ALWAYS, c) for c in commands))
+    return engine.Rule(engine.NEVER, tuple(engine.Clause((), c) for c in commands))
 
 
 @pytest.fixture
