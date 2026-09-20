@@ -147,6 +147,8 @@ def _reader(ctx: m.AppContext) -> engine.Read:
                 return sound.playback if sound else None
             case m.PersonChannel(name):
                 return name in ctx.api.present_names()
+            case m.AnyoneChannel():
+                return bool(ctx.api.present_names())
             case Formula(device, expr):
                 target = str(device.value)
                 found = ctx.api.device_state(target)
@@ -224,6 +226,8 @@ def _describe(cond: engine.Condition) -> str:
         return f"`{channel.device.label or channel.device.name}` {channel.expr} not in {cond.low}-{cond.high}"
     elif isinstance(cond, Present):
         return f"nobody in {', '.join(cond.names)} is home"
+    elif isinstance(cond, engine.Is) and isinstance(cond.channel, m.AnyoneChannel):
+        return "nobody is home"
     channel = cond.channels[0]
     assert isinstance(channel, m.AcChannel | m.MqttDeviceChannel | m.CastChannel)
     return f"`{channel.device.label or channel.device.name}` is not {_wanted(cond)}"
