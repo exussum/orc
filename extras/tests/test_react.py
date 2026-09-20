@@ -46,6 +46,19 @@ def _device_enums(monkeypatch):
     )
 
 
+def _world_read(mock):
+    def read(channel):
+        match channel:
+            case m.PersonChannel(name):
+                return name in mock.api.present_names()
+            case m.AnyoneChannel():
+                return bool(mock.api.present_names())
+            case _:
+                raise KeyError(channel)
+
+    return read
+
+
 @pytest.fixture
 def ctx():
     mock = MagicMock()
@@ -57,6 +70,7 @@ def ctx():
     mock.api.device_state.side_effect = lambda target: next(
         (s for s in mock.api.device_states.return_value if str(s.id) == target or s.name == target), None
     )
+    mock.api.world_reader.return_value = _world_read(mock)
     mock.config.settings.tz = _UTC
     mock.config.registry = orc.config.registry
     mock.plugin_state = {}

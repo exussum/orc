@@ -583,6 +583,21 @@ def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Comman
     return _ctx.engine.evaluate((rule,), now, read=_build_reader(pnames, now), force=True)
 
 
+def world_reader() -> engine.Read:
+    def read(channel: engine.Channel) -> engine.Value:
+        match channel:
+            case m.PersonChannel(name):
+                return name in present_names()
+            case m.AnyoneChannel():
+                return bool(present_names())
+            case m.WeatherChannel():
+                return config.providers.weather.fetch_weather(local_now(), config.settings.lat, config.settings.long)
+            case _:
+                raise KeyError(channel)
+
+    return read
+
+
 def _build_reader(present: set[str], now: datetime) -> engine.Read:
     @cache
     def read(channel: engine.Channel) -> engine.Value:
