@@ -13,27 +13,27 @@ FIXTURE = Path(__file__).parent / "fixture"
 
 
 def test_condition_system_is_unconditional():
-    assert loader._condition(None) is engine.ALWAYS
-    assert loader._condition("SYSTEM") is engine.ALWAYS
+    assert loader._conditions(None) == ()
+    assert loader._conditions("SYSTEM") == ()
 
 
 def test_condition_anyone():
-    assert loader._condition("ANYONE") == engine.Is(m.AnyoneChannel(), True)
+    assert loader._conditions("ANYONE") == (engine.Is(m.AnyoneChannel(), True),)
 
 
 def test_condition_weather_is_membership():
-    assert loader._condition("SUNNY") == engine.In(m.WeatherChannel(), m.WeatherCondition.SUNNY)
+    assert loader._conditions("SUNNY") == (engine.In(m.WeatherChannel(), m.WeatherCondition.SUNNY),)
 
 
 def test_condition_person():
-    assert loader._condition("alice") == engine.Is(m.PersonChannel("alice"), True)
+    assert loader._conditions("alice") == (engine.Is(m.PersonChannel("alice"), True),)
 
 
 def test_condition_holds_against_world():
     world = {m.AnyoneChannel(): True, m.PersonChannel("bob"): False}
     read = world.__getitem__
-    assert loader._condition("ANYONE").holds(read)
-    assert not loader._condition("bob").holds(read)
+    assert loader._conditions("ANYONE")[0].holds(read)
+    assert not loader._conditions("bob")[0].holds(read)
 
 
 def parse(case, **kwargs):
