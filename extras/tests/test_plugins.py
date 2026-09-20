@@ -59,9 +59,9 @@ def ctx():
     return mock
 
 
-# Mirrors the shape of the provisioned config: walking in pauses the media and
-# lights the entrance for the current window; the Night window stops the media
-# outright; the cleanup job settles the house depending on who is home.
+# Mirrors the shape of the provisioned config: walking in lights the entrance
+# for the current window; the Night window stops the media outright; the
+# cleanup job settles the house depending on who is home.
 @pytest.fixture
 def sensor():
     timed = {
@@ -72,7 +72,6 @@ def sensor():
         ],
     }
     rules = entrance_sensor.Rules(
-        enter=[_row(Light.lamp, m.ON), _row(Chromecast.cc, m.PAUSE)],
         inside=[_row(Light.day_bulb, m.OFF), _row(Light.night_bulb, m.OFF)],
         present=[_row(Chromecast.cc, m.STOP)],
         absent=[_row(Chromecast.cc, m.RESUME)],
@@ -130,34 +129,17 @@ def _trigger_sensor(ctx, sensor, device_id, event):
 # --- Walking in ---
 
 
-def test_day_walk_in_brightens_entrance_and_pauses_media(ctx, sensor):
+def test_day_walk_in_brightens_entrance(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with(
-        m.squish(
-            (
-                engine.Command(m.Devices(Light.day_bulb), 20),
-                engine.Command(m.Devices(Light.lamp), m.ON),
-                engine.Command(m.Devices(Chromecast.cc), m.PAUSE),
-            )
-        ),
-        force=True,
-        entry=ANY,
-    )
+    ctx.api.dispatch.assert_called_once_with(m.squish((engine.Command(m.Devices(Light.day_bulb), 20),)), force=True, entry=ANY)
 
 
 def test_night_walk_in_dims_entrance_and_stops_media(ctx, sensor):
-    # The Night window's stop beats enter's pause: timed rows outrank enter rules
     ctx.api.local_now.return_value = _NIGHTTIME
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.dispatch.assert_called_once_with(
-        m.squish(
-            (
-                engine.Command(m.Devices(Light.night_bulb), 1),
-                engine.Command(m.Devices(Light.lamp), m.ON),
-                engine.Command(m.Devices(Chromecast.cc), m.STOP),
-            )
-        ),
+        m.squish((engine.Command(m.Devices(Light.night_bulb), 1), engine.Command(m.Devices(Chromecast.cc), m.STOP))),
         force=True,
         entry=ANY,
     )
@@ -175,13 +157,11 @@ def test_walk_in_uses_first_window_that_contains_now(ctx, sensor):
     assert engine.Command(m.Devices(Light.day_bulb), 20) not in executed
 
 
-def test_walk_in_outside_any_window_runs_enter_only(ctx, sensor):
+def test_walk_in_outside_any_window_dispatches_nothing(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     sensor.timed = {"Morning": [_row(Light.day_bulb, 20, start=time(8), stop=time(9))]}
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with(
-        m.squish((engine.Command(m.Devices(Light.lamp), m.ON), engine.Command(m.Devices(Chromecast.cc), m.PAUSE))), force=True, entry=ANY
-    )
+    ctx.api.dispatch.assert_called_once_with(m.squish(()), force=True, entry=ANY)
 
 
 def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
@@ -197,8 +177,6 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
     assert {c.channel.one(): c.value for c in executed} == {
         Light.saved: m.ON,  # restored
         Light.day_bulb: 20,  # follows the current window, never the snapshot
-        Light.lamp: m.ON,
-        Chromecast.cc: m.PAUSE,
     }
     ctx.engine.take_snapshot.assert_called_once()
 
