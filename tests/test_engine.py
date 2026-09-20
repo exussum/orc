@@ -132,43 +132,50 @@ def test_snapshots_lists_only_live():
     assert snaps.snapshots(T0 + timedelta(minutes=1)) == {"live": "a"}
 
 
-def _gate(rt, commands, now, *, force, bypass):
+def _gate(rt, commands, now, *, force):
     rules = [e.Rule(e.NEVER, (e.Clause(e.ALWAYS, c),)) for c in commands]
-    return rt.evaluate(rules, now, force=force, bypass=bypass)
+    return rt.evaluate(rules, now, force=force)
 
 
 def test_evaluate_keeps_only_rules_whose_condition_holds():
     rt = e.Runtime([])
     rule = e.Rule(e.NEVER, (e.Clause(e.Is("ac", "on"), LIGHT),))
-    assert rt.evaluate([rule], T0, read=read_from({"ac": "on"}), force=True, bypass=None) == (LIGHT,)
-    assert rt.evaluate([rule], T0, read=read_from({"ac": "off"}), force=True, bypass=None) == ()
+    assert rt.evaluate([rule], T0, read=read_from({"ac": "on"}), force=True) == (LIGHT,)
+    assert rt.evaluate([rule], T0, read=read_from({"ac": "off"}), force=True) == ()
 
 
 def test_evaluate_forced_passes_all_without_recording():
-    rt = e.Runtime([])
+    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
     rt.save_snapshot("s", e.SnapShot((), T1), T1)
     cmd = e.Command("light", "on", tag="Alice")
-    assert _gate(rt, (cmd,), T0, force=True, bypass="SYSTEM") == (cmd,)
+    assert _gate(rt, (cmd,), T0, force=True) == (cmd,)
     assert rt.snapshots(T0)["s"].routine == ()
 
 
 def test_evaluate_passes_all_when_no_snapshot_active():
     cmd = e.Command("light", "on", tag="Alice")
-    assert _gate(e.Runtime([]), (cmd,), T0, force=False, bypass="SYSTEM") == (cmd,)
+    assert _gate(e.Runtime([], bypass="SYSTEM", override_key="s"), (cmd,), T0, force=False) == (cmd,)
 
 
-def test_evaluate_suppresses_non_bypass_while_active():
-    rt = e.Runtime([])
+def test_evaluate_suppresses_non_bypass_while_override_snapshot_active():
+    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
     rt.save_snapshot("s", e.SnapShot((), T1), T1)
     cmd = e.Command("light", "on", tag="Alice")
-    assert _gate(rt, (cmd,), T0, force=False, bypass="SYSTEM") == ()
+    assert _gate(rt, (cmd,), T0, force=False) == ()
 
 
-def test_evaluate_records_bypass_into_every_active_snapshot():
-    rt = e.Runtime([])
-    rt.save_snapshot("a", e.SnapShot((e.Command("light", "off"),), T1), T1)
-    rt.save_snapshot("b", e.SnapShot((), T1), T1)
+def test_evaluate_ignores_snapshots_under_other_keys():
+    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
+    rt.save_snapshot("entrance_sensor", e.SnapShot((), T1), T1)
+    cmd = e.Command("light", "on", tag="Alice")
+    assert _gate(rt, (cmd,), T0, force=False) == (cmd,)
+
+
+def test_evaluate_records_bypass_into_override_snapshot_only():
+    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
+    rt.save_snapshot("s", e.SnapShot((e.Command("light", "off"),), T1), T1)
+    rt.save_snapshot("other", e.SnapShot((), T1), T1)
     cmd = e.Command("light", "on", tag="SYSTEM")
-    assert _gate(rt, (cmd,), T0, force=False, bypass="SYSTEM") == (cmd,)
-    assert rt.snapshots(T0)["a"].routine == (cmd,)
-    assert rt.snapshots(T0)["b"].routine == (cmd,)
+    assert _gate(rt, (cmd,), T0, force=False) == (cmd,)
+    assert rt.snapshots(T0)["s"].routine == (cmd,)
+    assert rt.snapshots(T0)["other"].routine == ()
