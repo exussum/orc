@@ -341,6 +341,8 @@ def test_range_rule_parses_expressions(ctx):
     assert rules[0].items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == plugins.DeviceChanged(Sensor.living)
     assert rules[1].items[0].conditions == (plugins.Range(dewpoint, 10, 16), plugins.Present(("alice", "bob")))
+    assert rules[2].trigger == plugins.DeviceChanged(Sensor.living)
+    assert rules[2].items[0].conditions == (plugins.Range(dewpoint, 15, 40), engine.Is(m.AnyoneChannel(), True))
 
 
 def test_value_in_range_sets_the_ac(ctx):
@@ -370,6 +372,21 @@ def test_computed_expression_over_two_attributes(ctx):
 def test_presence_gates_the_range_rule(ctx):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
     _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac, people=("alice", "bob")), {5: Sensor.living})
+    ctx.api.present_names.return_value = set()
+    _range_event(ctx, Sensor.living, {"temperature": 70})
+    ctx.api.dispatch.assert_not_called()
+    ctx.api.present_names.return_value = {"alice"}
+    _range_event(ctx, Sensor.living, {"temperature": 70})
+    assert _dispatched(ctx) == [(Ac.living, ac)]
+
+
+def test_presence_anyone_gates_the_range_rule(ctx):
+    ac = m.AcCommand(m.AcMode.COOL, "low", 72)
+    formula = plugins.Formula(Sensor.living, "temperature")
+    conditions = (plugins.Range(formula, 68, 75), engine.Is(m.AnyoneChannel(), True))
+    command = engine.Command(m.Devices(Ac), ac)
+    rule = engine.Rule(plugins.DeviceChanged(Sensor.living), (engine.Clause(conditions, command),), cooldown=plugins.COOLDOWN)
+    _install(ctx, [rule], {5: Sensor.living})
     ctx.api.present_names.return_value = set()
     _range_event(ctx, Sensor.living, {"temperature": 70})
     ctx.api.dispatch.assert_not_called()
