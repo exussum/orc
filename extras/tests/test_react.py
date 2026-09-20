@@ -33,11 +33,17 @@ class Chromecast(DeviceEnum):
     tv = "host9"
 
 
+class Sensor(DeviceEnum):
+    living = 5
+
+
 @pytest.fixture(autouse=True)
 def _device_enums(monkeypatch):
     from orc.kernel import declarations
 
-    monkeypatch.setattr(orc.config, "registry", declarations.Declarations().build({"Light": Light, "AC": Ac, "Chromecast": Chromecast}))
+    monkeypatch.setattr(
+        orc.config, "registry", declarations.Declarations().build({"Light": Light, "AC": Ac, "Chromecast": Chromecast, "Sensor": Sensor})
+    )
 
 
 @pytest.fixture
@@ -48,6 +54,9 @@ def ctx():
     mock.scheduler = create_autospec(BaseScheduler, instance=True)
     mock.api.JOBSTORE_MEMORY = "memory"
     mock.api.local_now.return_value = _NOW
+    mock.api.device_state.side_effect = lambda target: next(
+        (s for s in mock.api.device_states.return_value if str(s.id) == target or s.name == target), None
+    )
     mock.config.settings.tz = _UTC
     mock.config.registry = orc.config.registry
     mock.plugin_state = {}
@@ -279,6 +288,17 @@ def test_reader_resolves_ac_playback_and_attr(ctx):
     assert read(m.MqttDeviceChannel(Light.desk, "switch")) == m.ON
 
 
+def test_reader_formula_evaluates_and_raises_with_context(ctx):
+    ctx.api.device_states.return_value = [
+        m.DeviceState(id=5, name="sensor", attributes={"temperature": 77, "humidity": 60}, last_activity=None)
+    ]
+    read = plugins._reader(ctx)
+    assert read(plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(16.7, abs=0.2)
+    ctx.api.device_states.return_value = [m.DeviceState(id=5, name="sensor", attributes={"humidity": 60}, last_activity=None)]
+    with pytest.raises(ValueError, match="dewpoint"):
+        read(plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)"))
+
+
 def test_condition_maps_when_by_kind():
     assert plugins.condition(None) == ()
     assert plugins.condition(plugins.When(Ac.living, m.AcState.ON)) == (plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON),)
@@ -292,3 +312,67 @@ def test_ac_is_bitmask_respects_flag_membership():
     assert not plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL).holds(lambda channel: m.AcState.ON)
     assert plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON).holds(lambda channel: m.AcState.COOL)
     assert not plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL).holds(lambda channel: None)
+
+
+def _make_range(sensor, expr, low, high, target, action, people=None):
+    formula = plugins.Formula(sensor, expr)
+    conditions = [plugins.Range(formula, low, high)]
+    if people:
+        conditions.append(plugins.Present(people))
+    command = engine.Command(target, action)
+    return [engine.Rule(plugins.DeviceChanged(sensor), (engine.Clause(tuple(conditions), command),), cooldown=plugins.COOLDOWN)]
+
+
+def _range_event(ctx, sensor, attributes):
+    device = m.DeviceState(id=sensor.value, name="sensor", attributes=attributes, last_activity=None)
+    ctx.api.device_states.return_value = [device]
+    changed = next(iter(attributes))
+    plugins._on_event(ctx, device, changed, None, attributes[changed])
+
+
+def test_range_rule_parses_expressions(ctx):
+    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_range.orc").read_text()}
+    react.setup(ctx)
+    rules = list(ctx.plugin_state[plugins].rules.values())
+    temp = plugins.Formula(Sensor.living, "temperature")
+    dewpoint = plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)")
+    assert rules[0].trigger == plugins.DeviceChanged(Sensor.living)
+    assert rules[0].items[0].conditions == (plugins.Range(temp, 68, 75),)
+    assert rules[0].items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
+    assert rules[1].trigger == plugins.DeviceChanged(Sensor.living)
+    assert rules[1].items[0].conditions == (plugins.Range(dewpoint, 10, 16), plugins.Present(("alice", "bob")))
+
+
+def test_value_in_range_sets_the_ac(ctx):
+    ac = m.AcCommand(m.AcMode.COOL, "low", 72)
+    _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})
+    _range_event(ctx, Sensor.living, {"temperature": 70})
+    assert _dispatched(ctx) == [(Ac.living, ac)]
+
+
+def test_value_out_of_range_does_nothing(ctx):
+    ac = m.AcCommand(m.AcMode.COOL, "low", 72)
+    _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})
+    _range_event(ctx, Sensor.living, {"temperature": 80})
+    ctx.api.dispatch.assert_not_called()
+
+
+def test_computed_expression_over_two_attributes(ctx):
+    ac = m.AcCommand(m.AcMode.FAN_ONLY, "low", 70)
+    _install(ctx, _make_range(Sensor.living, "dewpoint(temperature,humidity)", 15, 18, m.Devices(Ac), ac), {5: Sensor.living})
+    _range_event(ctx, Sensor.living, {"temperature": 77, "humidity": 60})
+    assert _dispatched(ctx) == [(Ac.living, ac)]
+    ctx.api.dispatch.reset_mock()
+    _range_event(ctx, Sensor.living, {"temperature": 77, "humidity": 20})
+    ctx.api.dispatch.assert_not_called()
+
+
+def test_presence_gates_the_range_rule(ctx):
+    ac = m.AcCommand(m.AcMode.COOL, "low", 72)
+    _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac, people=("alice", "bob")), {5: Sensor.living})
+    ctx.api.present_names.return_value = set()
+    _range_event(ctx, Sensor.living, {"temperature": 70})
+    ctx.api.dispatch.assert_not_called()
+    ctx.api.present_names.return_value = {"alice"}
+    _range_event(ctx, Sensor.living, {"temperature": 70})
+    assert _dispatched(ctx) == [(Ac.living, ac)]

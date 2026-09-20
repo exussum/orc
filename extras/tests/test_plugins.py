@@ -43,6 +43,10 @@ def _snapshot(*commands, end=_FUTURE):
     return m.SnapShot(routine=tuple(commands), end=end)
 
 
+def _device_state_side_effect(mock):
+    return lambda target: next((s for s in mock.api.device_states.return_value if str(s.id) == target or s.name == target), None)
+
+
 @pytest.fixture
 def ctx():
     mock = MagicMock()
@@ -50,6 +54,7 @@ def ctx():
     mock.api = create_autospec(api)
     mock.scheduler = create_autospec(BaseScheduler, instance=True)
     mock.api.JOBSTORE_MEMORY = "memory"
+    mock.api.device_state.side_effect = _device_state_side_effect(mock)
     mock.config.settings.tz = _UTC
     return mock
 
@@ -101,6 +106,7 @@ def plugin_ctx():
     mock.api.last_seen.return_value = []
     mock.api.check_presence.return_value = set()
     mock.api.capture_sounds.return_value = []
+    mock.api.device_state.side_effect = _device_state_side_effect(mock)
     return mock
 
 
