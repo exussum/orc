@@ -159,6 +159,9 @@ class Trigger(str, Enum):
     ANYONE = "ANYONE"
 
 
+ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
+
+
 class WeatherCondition(str, Enum):
     SUNNY = "SUNNY"
     CLOUDY = "CLOUDY"
@@ -393,7 +396,7 @@ class AppContext:
 
     scheduler: BaseScheduler
     version_manager: VersionManager
-    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([]))
+    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([], bypass=Trigger.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT))
     plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
