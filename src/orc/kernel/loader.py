@@ -243,19 +243,19 @@ def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None
     return engine.Command[str](devices, state, tag=trigger)
 
 
-def _condition(trigger: str | None) -> engine.Condition:
+def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
     if trigger in (None, m.Trigger.SYSTEM):
-        return engine.ALWAYS
+        return ()
     elif trigger in _WEATHER_TRIGGERS:
-        return engine.In(m.WeatherChannel(), m.WeatherCondition(trigger))
+        return (engine.In(m.WeatherChannel(), m.WeatherCondition(trigger)),)
     elif trigger == m.Trigger.ANYONE:
-        return engine.Is(m.AnyoneChannel(), True)
+        return (engine.Is(m.AnyoneChannel(), True),)
     else:
-        return engine.Is(m.PersonChannel(trigger), True)
+        return (engine.Is(m.PersonChannel(trigger), True),)
 
 
 def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Clause:
-    return engine.Clause(_condition(trigger), _command(objects, args, trigger))
+    return engine.Clause(_conditions(trigger), _command(objects, args, trigger))
 
 
 def _resolve_function(value: str) -> Callable[..., Any]:
@@ -303,7 +303,7 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
     rooms = objects["room"]
     base = rooms.get(args.name, engine.Rule(engine.NEVER, (), name=args.name))
-    rooms[args.name] = replace(base, items=(*base.items, engine.Clause(engine.ALWAYS, _command(objects, args))))
+    rooms[args.name] = replace(base, items=(*base.items, engine.Clause((), _command(objects, args))))
 
 
 def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:

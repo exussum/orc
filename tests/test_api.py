@@ -19,7 +19,7 @@ PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
 
 
 def _routine(name, when, *commands, skip_replay=False):
-    clauses = tuple(engine.Clause(loader._condition(c.tag), c) for c in commands)
+    clauses = tuple(engine.Clause(loader._conditions(c.tag), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
     return engine.Rule(engine.At(when), clauses, name=name, tags=tags)
 

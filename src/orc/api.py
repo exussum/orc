@@ -247,7 +247,7 @@ type _Job = tuple[Callable[..., None], m.DeviceEnum, engine.Command[Any]]
 def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
     assert _ctx is not None
     commands = m.squish(commands)
-    always = engine.Rule(engine.NEVER, tuple(engine.Clause(engine.ALWAYS, command) for command in commands))
+    always = engine.Rule(engine.NEVER, tuple(engine.Clause((), command) for command in commands))
     survived = set(_ctx.engine.evaluate((always,), local_now(), force=force))
 
     stream: dict[Any, tuple[str, str]] = {}
@@ -553,7 +553,7 @@ def _holds(clauses: Sequence[engine.Clause[m.Devices]], read: engine.Read, now: 
 
 
 def _reads(clause: engine.Clause[m.Devices], channel: type | UnionType) -> bool:
-    return any(isinstance(ch, channel) for ch in clause.condition.channels)
+    return any(isinstance(ch, channel) for cond in clause.conditions for ch in cond.channels)
 
 
 def has_presence(rule: m.Routine) -> bool:
