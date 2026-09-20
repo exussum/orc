@@ -145,10 +145,6 @@ def _reader(ctx: m.AppContext) -> engine.Read:
             case m.CastChannel(device):
                 sound = next((s for s in ctx.api.capture_sounds() if s.what is device), None)
                 return sound.playback if sound else None
-            case m.PersonChannel(name):
-                return name in ctx.api.present_names()
-            case m.AnyoneChannel():
-                return bool(ctx.api.present_names())
             case Formula(device, expr):
                 target = str(device.value)
                 found = ctx.api.device_state(target)
@@ -160,7 +156,7 @@ def _reader(ctx: m.AppContext) -> engine.Read:
                 except Exception as exc:
                     raise ValueError(f"react rule `{expr}` on `{device.name}`: {exc}") from exc
             case _:
-                raise KeyError(channel)
+                return ctx.api.world_reader()(channel)
 
     return read
 
