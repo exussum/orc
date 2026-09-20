@@ -134,6 +134,8 @@ def _trigger_label(rule: engine.Rule[m.Devices]) -> Any:
 
 
 def _reader(ctx: m.AppContext) -> engine.Read:
+    world_read = ctx.api.world_reader()
+
     def read(channel: engine.Channel) -> engine.Value:
         match channel:
             case m.MqttDeviceChannel(device, attribute):
@@ -156,7 +158,7 @@ def _reader(ctx: m.AppContext) -> engine.Read:
                 except Exception as exc:
                     raise ValueError(f"react rule `{expr}` on `{device.name}`: {exc}") from exc
             case _:
-                return ctx.api.world_reader()(channel)
+                return world_read(channel)
 
     return read
 
