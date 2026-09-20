@@ -6,7 +6,7 @@ from command_cfg import each
 
 from orc.kernel import engine
 from orc.kernel.loader import Cast, load_plugin_config, validate_ac_state
-from orc.model import AcCommand, AcState, AppContext, DeviceEnum, Devices, MqttDeviceChannel, Playback
+from orc.model import AcCommand, AcState, AnyoneChannel, AppContext, DeviceEnum, Devices, MqttDeviceChannel, Playback, Trigger
 from orc_extras.react import plugins
 from orc_extras.react.plugins import TRIGGERS, When
 
@@ -60,12 +60,14 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     action = Cast.state(args.action)
     target = _parse_target(args.target, action, objects)
     assert target is not None
-    people = tuple(name.strip() for name in args.people.split(",")) if args.people else ()
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     for source in Cast.devices(args.devices, objects).all():
         formula = plugins.Formula(source, args.expr)
         conditions: list[engine.Condition] = [plugins.Range(formula, args.low, args.high)]
-        if people:
+        if args.people == Trigger.ANYONE:
+            conditions.append(engine.Is(AnyoneChannel(), True))
+        elif args.people:
+            people = tuple(name.strip() for name in args.people.split(","))
             conditions.append(plugins.Present(people))
         command = engine.Command(target, action)
         objects["react"].append(
