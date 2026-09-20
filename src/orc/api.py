@@ -569,51 +569,41 @@ def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
     if not presence:
         return False
     now = local_now()
-    return not _holds(presence, _build_reader(present_names, now), now)
+    return not _holds(presence, world_reader(present_names, now), now)
 
 
 def weather_active(rule: m.Routine, now: datetime) -> bool:
     weather = tuple(clause for clause in rule.items if _reads(clause, m.WeatherChannel))
-    today = config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
+    today = _fetch_weather(now)
     return bool(_holds(weather, lambda _channel: today, now))
 
 
 def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
     assert _ctx is not None
-    return _ctx.engine.evaluate((rule,), now, read=_build_reader(pnames, now), force=True)
+    return _ctx.engine.evaluate((rule,), now, read=world_reader(pnames, now), force=True)
 
 
-def world_reader() -> engine.Read:
-    def read(channel: engine.Channel) -> engine.Value:
-        match channel:
-            case m.PersonChannel(name):
-                return name in present_names()
-            case m.AnyoneChannel():
-                return bool(present_names())
-            case m.WeatherChannel():
-                return config.providers.weather.fetch_weather(local_now(), config.settings.lat, config.settings.long)
-            case _:
-                raise KeyError(channel)
+def world_reader(present: set[str] | None = None, now: datetime | None = None) -> engine.Read:
+    pnames = present_names() if present is None else present
+    when = local_now() if now is None else now
 
-    return read
-
-
-def _build_reader(present: set[str], now: datetime) -> engine.Read:
     @cache
     def read(channel: engine.Channel) -> engine.Value:
         match channel:
             case m.PersonChannel(name):
-                return name in present
+                return name in pnames
             case m.AnyoneChannel():
-                return bool(present)
+                return bool(pnames)
             case m.WeatherChannel():
-                if not present:
-                    return frozenset()
-                return config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
+                return _fetch_weather(when) if pnames else frozenset()
             case _:
                 raise KeyError(channel)
 
     return read
+
+
+def _fetch_weather(now: datetime) -> frozenset[m.WeatherCondition]:
+    return config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
 
 
 @requires_ctx
