@@ -31,8 +31,8 @@ class Chromecast(DeviceEnum):
 
 
 class Sensor(DeviceEnum):
-    entrance = "front door motion sensor"
-    patio = "balcony door"
+    entrance = 16
+    patio = 56
 
 
 def _row(device, state, start="", stop=""):
@@ -114,7 +114,7 @@ def _trigger_sensor(ctx, sensor, device_id, event):
     old = "inactive" if event == "active" else "active"
     name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
     device = m.DeviceState(id=int(device_id), name=name, attributes={"motion": event}, last_activity=None)
-    plugins._on_sensor_event(ctx, sensor, {"front door motion sensor", "balcony door"}, device, "motion", old, event)
+    plugins._on_sensor_event(ctx, sensor, device, "motion", old, event)
     queued = [c for c in ctx.scheduler.add_job.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.add_job.reset_mock()
     for call in queued:
@@ -315,31 +315,33 @@ def _device(id=16, name="front door motion sensor", battery="100", attributes=No
 
 def test_critical_battery_report_logs(plugin_ctx, sensor):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugins._on_sensor_event(plugin_ctx, sensor, {"front door motion sensor"}, _device(battery="5"), "battery", "5", "5")
+    plugins._on_sensor_event(plugin_ctx, sensor, _device(battery="5"), "battery", "5", "5")
     plugin_ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, "Low battery on `front door motion sensor` (CRITICAL)")
 
 
 def test_healthy_battery_report_does_not_log(plugin_ctx, sensor):
-    plugins._on_sensor_event(plugin_ctx, sensor, {"front door motion sensor"}, _device(battery="80"), "battery", None, "80")
+    plugins._on_sensor_event(plugin_ctx, sensor, _device(battery="80"), "battery", None, "80")
     plugin_ctx.api.log.assert_not_called()
 
 
 def test_unwatched_device_is_ignored(plugin_ctx, sensor):
-    plugins._on_sensor_event(plugin_ctx, sensor, {"front door motion sensor"}, _device(name="other", battery="5"), "battery", None, "5")
+    plugins._on_sensor_event(plugin_ctx, sensor, _device(id=99, name="other", battery="5"), "battery", None, "5")
     plugin_ctx.api.log.assert_not_called()
 
 
-def test_battery_state_reads_the_device_cache(plugin_ctx):
+def test_battery_state_reads_the_device_cache(plugin_ctx, sensor):
     _seed_devices(plugin_ctx, _device(battery="80"))
-    assert plugins.battery_state(plugin_ctx, {"front door motion sensor"}) == [
-        m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None})
+    assert plugins.battery_state(plugin_ctx, sensor) == [
+        m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None}),
+        m.DeviceStatus(name="patio", details={"battery": None, "last_activity": None}),
     ]
 
 
-def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx):
+def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx, sensor):
     _seed_devices(plugin_ctx)
-    assert plugins.battery_state(plugin_ctx, {"front door motion sensor"}) == [
-        m.DeviceStatus(name="front door motion sensor", details={"battery": None, "last_activity": None})
+    assert plugins.battery_state(plugin_ctx, sensor) == [
+        m.DeviceStatus(name="entrance", details={"battery": None, "last_activity": None}),
+        m.DeviceStatus(name="patio", details={"battery": None, "last_activity": None}),
     ]
 
 
@@ -352,14 +354,14 @@ def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
     assert title == "Entrance Sensors"
     _seed_devices(plugin_ctx, _device(battery="80"))
     assert provider() == [
-        m.DeviceStatus(name="balcony door", details={"battery": None, "last_activity": None}),
         m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None}),
+        m.DeviceStatus(name="patio", details={"battery": None, "last_activity": None}),
     ]
 
 
 def _motion(ctx, sensor, old, new):
     device = _device(attributes={"motion": new})
-    plugins._on_sensor_event(ctx, sensor, {16, 56}, device, "motion", old, new)
+    plugins._on_sensor_event(ctx, sensor, device, "motion", old, new)
 
 
 def test_motion_republish_does_not_fire(ctx, sensor):

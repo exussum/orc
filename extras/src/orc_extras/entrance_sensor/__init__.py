@@ -91,6 +91,5 @@ def setup(ctx: AppContext) -> None:
         },
     )
     sensor.rules = Rules(**sensor.rules)
-    names = {str(sensor.setting.entrance.value), str(sensor.setting.patio_door.value)}
-    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor, names))
-    ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, names))
+    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor))
+    ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, sensor))

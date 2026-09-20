@@ -17,7 +17,7 @@ TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "conta
 
 class React(NamedTuple):
     rules: dict[int, engine.Rule[m.Devices]]
-    sources: dict[str, m.DeviceEnum]
+    sources: dict[int, m.DeviceEnum]
 
 
 class Log(m.LogSourceEnum):
@@ -70,8 +70,7 @@ def _reader(ctx: m.AppContext) -> engine.Read:
     def read(channel: engine.Channel) -> engine.Value:
         match channel:
             case m.MqttDeviceChannel(device, attribute):
-                target = str(device.value)
-                found = next((s for s in ctx.api.device_states() if str(s.id) == target or s.name == target), None)
+                found = next((s for s in ctx.api.device_states() if s.id == device.value), None)
                 return found.attributes.get(attribute) if found else None
             case m.AcChannel(device):
                 status = next((s for s in ctx.api.capture_acs() if s.what is device), None)
@@ -93,7 +92,7 @@ def _state(ctx: m.AppContext) -> React:
 
 def _on_event(ctx: m.AppContext, device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
     state = _state(ctx)
-    source = state.sources.get(str(device.id)) or state.sources.get(device.name)
+    source = state.sources.get(device.id)
     if source is None:
         return
     event = engine.Event(m.MqttDeviceChannel(source, attribute), old, new)
