@@ -272,7 +272,7 @@ def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any
         vals = [r[idx] for r in rows]
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{type_name}': {duplicates}")
-    if type_name in ("Light", "Button"):
+    if type_name in ("Light", "Button", "Sensor"):
         members = {
             name: (*zigbee_config.get(target, (-(i + 1), frozenset())), room, label) for i, (name, target, room, label) in enumerate(rows)
         }
