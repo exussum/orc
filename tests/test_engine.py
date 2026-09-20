@@ -24,6 +24,13 @@ def test_transition_ignores_other_channel_and_other_value():
     assert not trigger.fired(e.Event("door", "open", "closed"))
 
 
+def test_changed_fires_on_any_listed_channel_regardless_of_value():
+    trigger = e.Changed(("temp", "humidity"))
+    assert trigger.fired(e.Event("temp", 70, 71))
+    assert trigger.fired(e.Event("humidity", 50, 50))
+    assert not trigger.fired(e.Event("battery", 90, 89))
+
+
 def test_is_holds_reads_the_world():
     condition = e.Is("ac", "on")
     assert condition.holds(read_from({"ac": "on"}))
