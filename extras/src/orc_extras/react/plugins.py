@@ -14,7 +14,7 @@ from orc.security import safe_eval
 JOB_ID = "react"
 COOLDOWN = timedelta(seconds=10)  # a (rule, device) won't re-fire within this window — breaks flapping loops
 
-TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "contact"}
+TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "contact", "active": "motion", "inactive": "motion"}
 
 
 def _dewpoint(temp_f: float, humidity: float) -> float:
