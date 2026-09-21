@@ -16,7 +16,6 @@ from apscheduler.job import Job
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
-import orc
 from orc import config, plugins
 from orc import model as m
 from orc.dal import net, scheduler, sqlite
@@ -129,16 +128,16 @@ def device_state(target: str) -> m.DeviceState | None:
 
 
 def capture_lights() -> m.Commands:
-    return config.providers.mqtt.fetch_light_states(tuple(orc.Light))
+    return config.providers.mqtt.fetch_light_states(tuple(config.devices.Light))
 
 
 def capture_sounds() -> tuple[m.SoundState, ...]:
-    devices: tuple[m.DeviceEnum, ...] = (*orc.Chromecast, *orc.USB)
+    devices: tuple[m.DeviceEnum, ...] = (*config.devices.Chromecast, *config.devices.USB)
     if not devices:
         return ()
 
     def fetch(w: m.DeviceEnum) -> m.SoundState:
-        provider = config.providers.chromecast if isinstance(w, orc.Chromecast) else config.providers.audio
+        provider = config.providers.chromecast if isinstance(w, config.devices.Chromecast) else config.providers.audio
         return provider.fetch_state(w)
 
     with Pool(max_workers=len(devices)) as ex:
@@ -146,7 +145,18 @@ def capture_sounds() -> tuple[m.SoundState, ...]:
 
 
 def capture_acs() -> tuple[m.AcStatus, ...]:
-    return tuple(m.AcStatus(w, ac_state(w)) for w in orc.AC)
+    return tuple(m.AcStatus(w, ac_state(w)) for w in config.devices.AC)
+
+
+def capture_sensors() -> list[m.DeviceStatus]:
+    found = {s.id: s for s in device_states()}
+    return [
+        m.DeviceStatus(
+            name=found[sensor.value].name if sensor.value in found else sensor.label or sensor.name,
+            details=found[sensor.value].attributes if sensor.value in found else {},
+        )
+        for sensor in config.devices.Sensor
+    ]
 
 
 def add_state_provider(title: str, provider: Callable[[], Any]) -> None:
@@ -259,13 +269,13 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
     for command in commands:
         w = command.channel.one()
         if command not in survived:
-            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=f"`{type(w).__name__}`"))
+            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"))
         elif w in config.virtual_devices:
             entry.add(entry.source, Log.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
-        elif (device_type := config.registry.devices.get(type(w).__name__)) is None or device_type.dispatch is None:
-            raise LookupError(f"no dispatch handler for `{type(w).__name__}`")
+        elif (dispatch_handler := config.registry.dispatch_handlers.get(w.kind)) is None:
+            raise LookupError(f"no dispatch handler for `{w.kind}`")
         else:
-            todo.append((device_type.dispatch, w, command))
+            todo.append((dispatch_handler, w, command))
 
     with Pool(max_workers=max(1, len(todo))) as ex:
         list(ex.map(partial(_dispatch_one, stream=stream, entry=entry), todo))
@@ -288,15 +298,15 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
     if (text is None) == (path is None):
         raise ValueError("alert() requires exactly one of text or path")
     device = _alarm_device(severity)
-    if path is not None and not isinstance(device, orc.USB):
+    if path is not None and not isinstance(device, config.devices.USB):
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
 
     if severity is m.Alarm.EMERGENCY:
         dispatch(config.routines[config.settings.emergency_routine].commands, force=True, entry=entry)
         if text is not None:
             video_url = m.AlertVideo(f"{config.settings.base_url}/api/alert.mp4?text={quote(text)}")
-            dispatch((engine.Command(m.Devices(orc.Chromecast), video_url),), force=True, entry=entry)
-            if not isinstance(device, orc.Chromecast):
+            dispatch((engine.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, entry=entry)
+            if not isinstance(device, config.devices.Chromecast):
                 dispatch((engine.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
     elif text is not None:
         dispatch((engine.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
@@ -348,10 +358,11 @@ def device_command(id: str, state: str | None) -> None:
         parsed = Cast.state(state)
     else:
         parsed = state
-    for device_type in config.registry.devices.values():
-        if device_type.dispatch is not None and device_type.handles(id):
-            member = device_type.cls[id]
-            device_type.dispatch(_ctx, member, engine.Command(m.Devices(member), parsed), {})
+    for name, cls in config.devices.items():
+        dispatch_handler = config.registry.dispatch_handlers.get(name)
+        if dispatch_handler is not None and id in cls.__members__:
+            member = cls[id]
+            dispatch_handler(_ctx, member, engine.Command(m.Devices(member), parsed), {})
             return
     raise Exception(f"Unknown device: {id}")
 
