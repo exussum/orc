@@ -65,8 +65,8 @@ def test_build_carries_dispatch_and_missing():
     builder = declarations.Declarations()
     builder.declare_dispatch("FakeType", handler)
     reg = builder.build({"FakeType": FakeType, "NoDispatch": FakeType})
-    assert reg.devices["FakeType"].dispatch is handler
-    assert reg.devices["NoDispatch"].dispatch is None
+    assert reg.dispatch_handlers["FakeType"] is handler
+    assert reg.dispatch_handlers.get("NoDispatch") is None
 
 
 def test_declare_wires_every_piece():
@@ -85,7 +85,7 @@ def test_declare_wires_every_piece():
         setup=[hook],
     )
     reg = builder.build({"Acme": Acme})
-    assert reg.devices["Acme"].dispatch is handler
+    assert reg.dispatch_handlers["Acme"] is handler
     assert reg.state_providers == {}
     assert hook in reg.setup_hooks
 

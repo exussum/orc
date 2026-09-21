@@ -23,7 +23,7 @@ def off(ctx: AppContext, tv: DeviceEnum) -> None:
 
 
 def pair_tv(ctx: AppContext, device: str, *, entry: LogEntry) -> None:
-    pair(ctx, ctx.orc.WebOS[device].value)
+    pair(ctx, ctx.config.devices.WebOS[device].value)
 
 
 if TYPE_CHECKING:

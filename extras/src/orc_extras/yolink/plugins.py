@@ -52,9 +52,7 @@ def _states(ctx: m.AppContext) -> LockedDict[str, SensorState]:
 
 
 def _leak_devices(ctx: m.AppContext) -> Any:
-    # orc.Leak is attached to the orc package at runtime once this plugin registers the
-    # "Leak" device type; mypy can't see the dynamic attribute, so read it via ctx.orc
-    return ctx.orc.Leak
+    return ctx.config.devices.Leak
 
 
 def start(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback) -> None:
