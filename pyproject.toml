@@ -83,9 +83,13 @@ dev = [
     "orc_extras[lg_ac]",
 ]
 
+[tool.uv.workspace]
+members = ["extras", "data"]
+
 [tool.uv.sources]
-orc_data = { path = "data" }
-orc_extras = { path = "extras", editable = true }
+orc = { workspace = true }
+orc_data = { workspace = true }
+orc_extras = { workspace = true }
 command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v1.0.1" }
 
 
