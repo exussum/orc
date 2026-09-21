@@ -68,7 +68,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
 
 def setup(ctx: AppContext) -> None:
     backend = cast(CloudBackend, resolve_backend(ctx.config.plugin_for(orc_extras.yolink).backend))
-    ctx.plugin_state[orc_extras.yolink] = plugins.states_for(ctx.orc.Leak)
+    ctx.plugin_state[orc_extras.yolink] = plugins.states_for(ctx.config.devices.Leak)
     ctx.api.add_state_provider("Leak Sensors", partial(leak_state, ctx))
     plugins.start(ctx, backend, partial(_on_transition, ctx))
 

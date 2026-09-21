@@ -15,6 +15,7 @@ Chromecast: type[m.DeviceEnum] = m.DeviceEnum("Chromecast", {}, module="orc")  #
 BroadLink: type[m.DeviceEnum] = m.DeviceEnum("BroadLink", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 AC: type[m.DeviceEnum] = m.DeviceEnum("AC", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 USB: type[m.DeviceEnum] = m.DeviceEnum("USB", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
+Sensor: type[m.DeviceEnum] = m.DeviceEnum("Sensor", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 
 
 class ConfigNotLoadedError(AttributeError):
@@ -44,6 +45,10 @@ class Config:
         self.reset_config = self.routines["ROUTINE_RESET"]
         self.schedule_routines = {r.name: r for theme in self.themes.values() for r in theme.configs}
         self.rooms = parsed.room
+
+    @property
+    def devices(self) -> "m.DeviceNamespace":
+        return self.registry.devices
 
     def plugin(self, id: str) -> m.CallablePlugin | None:
         return next((p for p in self.plugins if p.name == id and isinstance(p, m.CallablePlugin)), None)

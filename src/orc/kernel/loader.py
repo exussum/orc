@@ -376,7 +376,7 @@ def load_plugin_config(
     text = config.plugin_configs[name]
     # Seed the parse with the sealed device registry so Cast.devices/Cast.device
     # resolve in plugin configs the same way they do in the main config.
-    device = raw(lambda rows, objects: SimpleNamespace(enums={n: dt.cls for n, dt in config.registry.devices.items()}))
+    device = raw(lambda rows, objects: SimpleNamespace(enums=dict(config.registry.devices.items())))
     return SimpleNamespace(**command_cfg.load(text, grammar, {"device": device, **serializers}, variables=os.environ))
 
 

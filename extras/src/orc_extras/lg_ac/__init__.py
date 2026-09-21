@@ -71,7 +71,7 @@ def setup(ctx: AppContext) -> None:
     if s.capture:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
     thinq.set_event_listener(lambda msg: ctx.api.log(LogSource.LG_AC, msg, amend=True))
-    thinq.start("127.0.0.1", s.mqtt_port, clip_ids=[str(device.value) for device in ctx.orc.AC])
+    thinq.start("127.0.0.1", s.mqtt_port, clip_ids=[str(device.value) for device in ctx.config.devices.AC])
     ctx.api.set_ac_handler(partial(_handle_ac, thinq))
     ctx.api.set_ac_state_handler(partial(_ac_state, thinq))
     ctx.api.add_state_provider("AC", partial(_ac_status, thinq, ctx))
@@ -80,7 +80,7 @@ def setup(ctx: AppContext) -> None:
 def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
     rows = []
     connected = transport.devices()
-    for device in ctx.orc.AC:
+    for device in ctx.config.devices.AC:
         device_id = str(device.value)
         state = transport.fetch_state(device_id)
         rows.append(

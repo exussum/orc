@@ -1,11 +1,11 @@
 import importlib
 from collections import defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, ItemsView, Iterable, ValuesView
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, Flag, StrEnum, auto
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self
 from zoneinfo import ZoneInfo
 
@@ -423,6 +423,10 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
         obj.label = label
         return obj
 
+    @property
+    def kind(self) -> str:
+        return type(self).__name__
+
 
 @dataclass(frozen=True)
 class Devices(engine.Channel):
@@ -484,20 +488,28 @@ class CastChannel(engine.Channel):
     device: DeviceEnum
 
 
-@dataclass(frozen=True)
-class DeviceType:
-    """A registered device type with everything plugins declared about it, so
-    consumers iterate whole devices rather than parallel per-attribute maps.
-    ``cls`` is the runtime-built enum class, so callers reach members via
-    ``cls[name]``."""
+class DeviceNamespace(SimpleNamespace):
+    """Device type name -> enum class, built fresh per config load, reached as
+    ``registry.devices.Light`` (dot access, no per-device wrapper). A name in
+    _KNOWN_DEVICE_TYPES that this particular config never declared resolves to an
+    empty enum instead of raising, so core code can read e.g. ``registry.devices.Sensor``
+    unconditionally regardless of whether a given config declares that type."""
 
-    cls: type[DeviceEnum]
-    icon: str
-    controllable: bool
-    dispatch: Callable[..., None] | None
+    _KNOWN_DEVICE_TYPES: ClassVar[frozenset[str]] = frozenset({"Light", "Chromecast", "BroadLink", "AC", "USB", "Sensor"})
 
-    def handles(self, name: str) -> bool:
-        return name in self.cls.__members__
+    def __getattr__(self, name: str) -> type[DeviceEnum]:
+        if name not in self._KNOWN_DEVICE_TYPES:
+            raise AttributeError(name)
+        return DeviceEnum(name, {}, module="orc")  # type: ignore[call-arg,arg-type,return-value]
+
+    def __contains__(self, name: str) -> bool:
+        return name in vars(self)
+
+    def items(self) -> ItemsView[str, type[DeviceEnum]]:
+        return vars(self).items()
+
+    def values(self) -> ValuesView[type[DeviceEnum]]:
+        return vars(self).values()
 
 
 @dataclass
@@ -508,12 +520,17 @@ class Registry:
     ``scripts`` maps served filename to the plugin's JS file on disk; all enabled
     plugins' files are served in the ``/hooks.js`` bundle and register themselves
     with the browser hooks. ``button_labels`` are keyed by button/action id, not device
-    type, so they sit alongside ``devices`` rather than folding into a DeviceType.
+    type, so they sit alongside ``devices``. ``device_icons``/``controllable_devices``/
+    ``dispatch_handlers`` are likewise keyed by device type name, alongside ``devices``
+    rather than folding into a per-device wrapper record.
     ``state_providers`` are registered by setup hooks (``api.add_state_provider``)
     and called fresh by consumers on each request, so the returned rows reflect live
     device state."""
 
-    devices: dict[str, DeviceType]
+    devices: DeviceNamespace
+    device_icons: dict[str, str]
+    controllable_devices: frozenset[str]
+    dispatch_handlers: dict[str, Callable[..., None]]
     scripts: dict[str, Path]
     button_labels: dict[str, str]
     state_providers: dict[str, Callable[[], Any]]

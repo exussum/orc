@@ -16,7 +16,7 @@ def set_volume(serial: str, pct: int) -> None:
     if sys.platform == "darwin":
         import orc
 
-        if len(orc.USB) > 1:
+        if len(orc.config.devices.USB) > 1:
             print(f"warning: osascript ignores {serial!r} and adjusts the system default output device", file=sys.stderr)
         subprocess.run(["osascript", "-e", f"set volume output volume {pct}"], check=True)
     elif sys.platform.startswith("linux"):

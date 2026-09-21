@@ -1,5 +1,3 @@
-from enum import Enum
-
 import pytest
 
 from orc import model as m
@@ -25,14 +23,17 @@ def core_registry(monkeypatch):
         b = (2, frozenset())
         c = (3, frozenset())
 
-    class Chromecast(Enum):
+    class Chromecast(DeviceEnum):
         x = 1
 
-    class USB(Enum):
+    class USB(DeviceEnum):
         speaker = "Speaker"
 
     class AC(DeviceEnum):
         unit = "clip-1"
+
+    class Sensor(DeviceEnum):
+        living = 5
 
     # Register core dispatch into a fresh builder, then build the registry from the test
     # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.
@@ -42,7 +43,10 @@ def core_registry(monkeypatch):
     monkeypatch.setattr(orc, "Chromecast", Chromecast, raising=False)
     monkeypatch.setattr(orc, "USB", USB, raising=False)
     monkeypatch.setattr(orc, "AC", AC, raising=False)
-    monkeypatch.setattr(orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast, "USB": USB, "AC": AC}))
+    monkeypatch.setattr(orc, "Sensor", Sensor, raising=False)
+    monkeypatch.setattr(
+        orc.config, "registry", builder.build({"Light": Light, "Chromecast": Chromecast, "USB": USB, "AC": AC, "Sensor": Sensor})
+    )
     yield
 
 

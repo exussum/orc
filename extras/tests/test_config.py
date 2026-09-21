@@ -39,6 +39,7 @@ def test_entrance_config_loads():
     ctx = MagicMock()
     ctx.api = create_autospec(api)
     ctx.config.registry = orc.config.registry
+    ctx.config.devices = orc.config.devices
     ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor.orc").read_text()}
     entrance_sensor.setup(ctx)
     sensor = ctx.api.add_listener.call_args.args[0].args[1]
