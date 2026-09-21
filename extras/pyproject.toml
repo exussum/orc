@@ -21,6 +21,9 @@ lg_ac = [
 [project.scripts]
 lg-ac-calibrate = "orc_extras.lg_ac.calibrate:main"
 
+[tool.uv.sources]
+command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v1.0.1" }
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/orc_extras"]
 
