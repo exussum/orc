@@ -98,7 +98,7 @@ def _make(devices, attribute, state, action, target=None, delay=None, when=None)
 
 def _install(ctx, engine_rules, sources):
     ctx.engine.add_rules(engine_rules)
-    ctx.plugin_state[plugins] = plugins.React({hash(er): er for er in engine_rules}, sources)
+    ctx.plugin_state[plugins] = plugins.React({hash(er): er for er in engine_rules}, sources, plugins.LastFired())
 
 
 def _switch(ctx, listener, device_id, old, new):
@@ -159,6 +159,31 @@ def test_run_react_dispatches_the_action(ctx):
     plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     assert _dispatched(ctx) == [(Light.lamp, m.OFF)]
+
+
+def test_second_consecutive_fire_amends_the_log_entry(ctx):
+    _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {1: Light.lamp})
+    device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    ctx.api.local_now.return_value = _NOW + timedelta(seconds=plugins.COOLDOWN.total_seconds() + 1)
+    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    assert [call.kwargs.get("amend", False) for call in ctx.api.log.call_args_list] == [False, True]
+
+
+def test_different_rule_between_does_not_amend(ctx):
+    _install(
+        ctx,
+        [
+            *_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF),
+            *_make(m.Devices(Light.desk), "switch", m.ON, m.OFF),
+        ],
+        {1: Light.lamp, 2: Light.desk},
+    )
+    lamp = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
+    desk = m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)
+    plugins._on_event(ctx, lamp, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, desk, "switch", m.OFF, m.ON)
+    assert [call.kwargs.get("amend", False) for call in ctx.api.log.call_args_list] == [False, False]
 
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx):
@@ -243,7 +268,7 @@ def test_when_gates_immediate_rule_on_ac_state(ctx):
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
     plugins._on_event(ctx, device, "contact", "closed", "open")
     ctx.api.dispatch.assert_not_called()
-    ctx.api.log.assert_called_with(plugins.Log.REACT, "`balcony door` open — skipped, `living` is not on")
+    ctx.api.log.assert_not_called()
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
     plugins._on_event(ctx, device, "contact", "closed", "open")
     assert _dispatched(ctx) == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
@@ -257,7 +282,7 @@ def test_when_mode_predicate_requires_that_mode(ctx):
     plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
-    ctx.api.log.assert_called_with(plugins.Log.REACT, "`lamp` on 10m ago — skipped, `living` is not cool")
+    ctx.api.log.assert_not_called()
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
     plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
