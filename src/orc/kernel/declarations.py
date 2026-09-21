@@ -9,7 +9,7 @@ from command_cfg import ConfigError
 from flask import Blueprint
 
 from orc import plugins as core_plugins
-from orc.model import _CLASS_SORT, DeviceEnum, DeviceType, Registry
+from orc.model import _CLASS_SORT, DeviceEnum, DeviceNamespace, Registry
 
 
 @dataclass
@@ -55,17 +55,11 @@ class Declarations:
                 self.setup_hooks.append(hook)
 
     def build(self, enums: dict[str, type[DeviceEnum]]) -> Registry:
-        devices = {
-            name: DeviceType(
-                cls=cls,
-                icon=self.device_icons.get(name, "light-bulb"),
-                controllable=name in self.controllable_devices,
-                dispatch=self.dispatch_handlers.get(name),
-            )
-            for name, cls in enums.items()
-        }
         return Registry(
-            devices=devices,
+            devices=DeviceNamespace(**enums),
+            device_icons=dict(self.device_icons),
+            controllable_devices=frozenset(self.controllable_devices),
+            dispatch_handlers=dict(self.dispatch_handlers),
             scripts=dict(self.scripts),
             button_labels=dict(self.button_labels),
             state_providers=dict(self.state_providers),

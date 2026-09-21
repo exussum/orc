@@ -65,6 +65,19 @@
                             {% endfor %}
                         </table>
                     </div>
+                    <div class="font-semibold mb-1">Sensors</div>
+                    <ul class="list-disc list-inside mb-3">
+                        {% for row in sensors %}
+                            <li>
+                                {{ row.name }}
+                                <ul class="list-disc list-inside ml-4">
+                                    {% for k, v in row.details.items() %}
+                                        <li>{{ k }}: {{ v if v is not none else '—' }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </li>
+                        {% endfor %}
+                    </ul>
                     {% for title, rows in plugin_states %}
                         <div class="font-semibold mb-1">{{ title }}</div>
                         <ul class="list-disc list-inside mb-3">

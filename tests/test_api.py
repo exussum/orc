@@ -192,6 +192,17 @@ def test_capture_acs_reads_each_device_through_the_handler():
     assert api.capture_acs() == (m.AcStatus(orc.AC.unit, None),)
 
 
+def test_capture_sensors_reads_the_device_cache():
+    device = m.DeviceState(id=orc.Sensor.living.value, name="living room sensor", attributes={"temperature": 70}, last_activity=None)
+    with patch.object(mqtt_stub, "snapshot", return_value=[device]):
+        assert api.capture_sensors() == [m.DeviceStatus(name="living room sensor", details={"temperature": 70})]
+
+
+def test_capture_sensors_lists_sensors_missing_from_the_cache():
+    with patch.object(mqtt_stub, "snapshot", return_value=[]):
+        assert api.capture_sensors() == [m.DeviceStatus(name=orc.Sensor.living.name, details={})]
+
+
 def test_dispatch_usb_rejects_on_off_state(entry):
     from orc.dal.audio import stub as audio_stub
 

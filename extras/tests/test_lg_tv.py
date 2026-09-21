@@ -1,4 +1,3 @@
-from enum import Enum
 from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
@@ -19,20 +18,22 @@ def mock_registry(monkeypatch):
     ``name=(enum_cls, dispatch | None)``; the enum is also attached to ``orc``."""
 
     def install(ctx, **dispatch_by_type):
-        ctx.orc = orc
         for name, (cls, _) in dispatch_by_type.items():
             monkeypatch.setattr(orc, name, cls, raising=False)
+        devices = m.DeviceNamespace(**{name: cls for name, (cls, _) in dispatch_by_type.items()})
         registry = m.Registry(
-            devices={
-                name: m.DeviceType(cls=cls, icon="", controllable=False, dispatch=dispatch)
-                for name, (cls, dispatch) in dispatch_by_type.items()
-            },
+            devices=devices,
+            device_icons={},
+            controllable_devices=frozenset(),
+            dispatch_handlers={name: dispatch for name, (_, dispatch) in dispatch_by_type.items() if dispatch is not None},
             scripts={},
             button_labels={},
             state_providers={},
             setup_hooks=[],
         )
         monkeypatch.setattr(orc.config, "registry", registry)
+        ctx.config.registry = registry
+        ctx.config.devices = devices
         api.set_ctx(ctx)
         return registry
 
@@ -42,13 +43,13 @@ def mock_registry(monkeypatch):
 class TestDispatchLGTV:
     @pytest.fixture(autouse=True)
     def _lg_tv_enums(self, mock_registry):
-        class LGTV(Enum):
+        class LGTV(m.DeviceEnum):
             living_room = 1
 
-        class WebOS(Enum):
+        class WebOS(m.DeviceEnum):
             living_room = 1
 
-        class BroadLink(Enum):
+        class BroadLink(m.DeviceEnum):
             living_room = 1
 
         self.ctx = MagicMock()
@@ -94,8 +95,7 @@ def test_lg_tv_registers_with_core():
     assert name == "TV"
     assert provider.func is lg_tv.tv_state
 
-    lg_tv_dev = config.registry.devices["LGTV"]
-    assert lg_tv_dev.dispatch is lg_tv._dispatch
-    assert lg_tv_dev.controllable
-    assert lg_tv_dev.icon == "tv"
+    assert config.registry.dispatch_handlers["LGTV"] is lg_tv._dispatch
+    assert "LGTV" in config.registry.controllable_devices
+    assert config.registry.device_icons["LGTV"] == "tv"
     assert config.registry.scripts["lg_tv.js"].is_file()

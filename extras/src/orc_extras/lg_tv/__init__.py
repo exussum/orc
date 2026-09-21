@@ -23,7 +23,7 @@ def setup(ctx: "m.AppContext") -> None:
 
 
 def _dispatch(ctx: "m.AppContext", w: "m.DeviceEnum", command: "engine.Command[Any]", stream: dict[Any, tuple[str, str]]) -> None:
-    webos_device, bl_device = ctx.orc.WebOS[w.name], ctx.orc.BroadLink[w.name]
+    webos_device, bl_device = ctx.config.devices.WebOS[w.name], ctx.config.devices.BroadLink[w.name]
     if command.value == m.OFF:
         plugins.off(ctx, webos_device)
     elif command.value == m.ON:
@@ -40,9 +40,9 @@ def tv_state(ctx: "m.AppContext", backend: "WebOsBackend") -> list[m.DeviceStatu
             name=w.name,
             label=w.label,
             action="Pair LG TV",
-            details={"state": "off" if backend.is_off(ctx.orc.WebOS[w.name]) else "on"},
+            details={"state": "off" if backend.is_off(ctx.config.devices.WebOS[w.name]) else "on"},
         )
-        for w in ctx.orc.LGTV
+        for w in ctx.config.devices.LGTV
     ]
 
 
