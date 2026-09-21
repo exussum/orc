@@ -317,7 +317,7 @@ def test_reader_formula_evaluates_and_raises_with_context(ctx):
         m.DeviceState(id=5, name="sensor", attributes={"temperature": 77, "humidity": 60}, last_activity=None)
     ]
     read = plugins._reader(ctx)
-    assert read(plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(16.7, abs=0.2)
+    assert read(plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(62.1, abs=0.2)
     ctx.api.device_states.return_value = [m.DeviceState(id=5, name="sensor", attributes={"humidity": 60}, last_activity=None)]
     with pytest.raises(ValueError, match="dewpoint"):
         read(plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)"))
@@ -364,9 +364,9 @@ def test_range_rule_parses_expressions(ctx):
     assert rules[0].items[0].conditions == (plugins.Range(temp, 68, 75),)
     assert rules[0].items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == plugins.DeviceChanged(Sensor.living)
-    assert rules[1].items[0].conditions == (plugins.Range(dewpoint, 10, 16), plugins.Present(("alice", "bob")))
+    assert rules[1].items[0].conditions == (plugins.Range(dewpoint, 50, 60), plugins.Present(("alice", "bob")))
     assert rules[2].trigger == plugins.DeviceChanged(Sensor.living)
-    assert rules[2].items[0].conditions == (plugins.Range(dewpoint, 15, 40), engine.Is(m.AnyoneChannel(), True))
+    assert rules[2].items[0].conditions == (plugins.Range(dewpoint, 59, 104), engine.Is(m.AnyoneChannel(), True))
 
 
 def test_value_in_range_sets_the_ac(ctx):
@@ -385,7 +385,7 @@ def test_value_out_of_range_does_nothing(ctx):
 
 def test_computed_expression_over_two_attributes(ctx):
     ac = m.AcCommand(m.AcMode.FAN_ONLY, "low", 70)
-    _install(ctx, _make_range(Sensor.living, "dewpoint(temperature,humidity)", 15, 18, m.Devices(Ac), ac), {5: Sensor.living})
+    _install(ctx, _make_range(Sensor.living, "dewpoint(temperature,humidity)", 59, 64, m.Devices(Ac), ac), {5: Sensor.living})
     _range_event(ctx, Sensor.living, {"temperature": 77, "humidity": 60})
     assert _dispatched(ctx) == [(Ac.living, ac)]
     ctx.api.dispatch.reset_mock()
