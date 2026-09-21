@@ -36,6 +36,10 @@ device only LGTV
 device only WebOS
 device only Leak
 
+device define Sensor
+device add Sensor LIVING_ROOM 'living room sensor'
+device seal Sensor
+
 routine define ROUTINE_RESET      Reset
 routine append ROUTINE_RESET      Light      off  --trigger SYSTEM
 routine define ROUTINE_LIGHTS_ON  'Lights On'

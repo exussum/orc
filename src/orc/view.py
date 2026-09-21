@@ -122,6 +122,7 @@ def cfg() -> str:
         theme_override=api.current_theme_override(),
         lights=api.capture_lights(),
         sounds=api.capture_sounds(),
+        sensors=api.capture_sensors(),
         retry_stats={s.id: s for s in api.fetch_retry_stats()},
         durations=dict(api.fetch_durations()),
         plugin_states=states,
@@ -137,7 +138,7 @@ def cfg() -> str:
 def device() -> str:
     light_states = {c.channel.one().name: c.value for c in api.capture_lights()}
     sound_states = {c.what.name: c.volume for c in api.capture_sounds()}
-    all_devices = list(chain.from_iterable(dt.cls for dt in config.registry.devices.values() if dt.controllable))
+    all_devices = list(chain.from_iterable(cls for name, cls in config.devices.items() if name in config.registry.controllable_devices))
 
     def make_device(d: Any) -> SimpleNamespace:
         level = _to_level(light_states.get(d.name))
@@ -145,10 +146,10 @@ def device() -> str:
         return SimpleNamespace(
             name=d.label,
             id=d.name,
-            type=type(d).__name__,
-            icon=config.registry.devices[type(d).__name__].icon,
+            type=d.kind,
+            icon=config.registry.device_icons.get(d.kind, "light-bulb"),
             capabilities=capabilities,
-            toggle=type(d).__name__ not in ("AC", "Chromecast", "USB") and "change_level" not in capabilities,
+            toggle=d.kind not in ("AC", "Chromecast", "USB") and "change_level" not in capabilities,
             level=level,
             on=level > 0,
             volume=sound_states.get(d.name, 0),
@@ -156,7 +157,7 @@ def device() -> str:
 
     def sort_key(d: Any) -> tuple[int, bool, str]:
         has_level = "change_level" in {c.name for c in d.capabilities}
-        return (_DEVICE_TYPE_ORDER.get(type(d).__name__, 99), has_level, d.name)
+        return (_DEVICE_TYPE_ORDER.get(d.kind, 99), has_level, d.name)
 
     rooms = sorted({d.room for d in all_devices}, key=lambda r: r or "")
     devices_grouped = {room: [make_device(d) for d in sorted((d for d in all_devices if d.room == room), key=sort_key)] for room in rooms}

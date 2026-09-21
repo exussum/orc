@@ -19,7 +19,7 @@ timed append <name> <devices> <state>
 
 
 def _devices(ctx: AppContext) -> dict[str, type]:
-    return {name: dt.cls for name, dt in ctx.config.registry.devices.items()}
+    return dict(ctx.config.devices.items())
 
 
 class Settings(NamedTuple):

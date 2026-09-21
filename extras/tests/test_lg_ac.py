@@ -292,7 +292,11 @@ def test_ac_state_stale_id_is_none():
 
 def test_ac_status_rows_decode_per_device():
     stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 77, 72)}, devices=["clip-1"])
-    ctx = SimpleNamespace(orc=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),)))
+    ctx = SimpleNamespace(
+        config=SimpleNamespace(
+            devices=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),))
+        )
+    )
     assert lg_ac._ac_status(stub, ctx) == [
         DeviceStatus(
             name="LIVING_ROOM_AC",
@@ -303,7 +307,9 @@ def test_ac_status_rows_decode_per_device():
 
 
 def test_ac_status_disconnected_device_is_blank():
-    ctx = SimpleNamespace(orc=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label=None),)))
+    ctx = SimpleNamespace(
+        config=SimpleNamespace(devices=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label=None),)))
+    )
     assert lg_ac._ac_status(stub, ctx) == [
         DeviceStatus(
             name="LIVING_ROOM_AC",
