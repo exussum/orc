@@ -2,7 +2,7 @@ from datetime import time
 from functools import partial
 from typing import Any, NamedTuple
 
-from command_cfg import group, scalar
+from command_cfg import each, group, scalar
 
 from orc.kernel.loader import Cast, load_plugin_config, resolve_device
 from orc.model import AppContext, DeviceEnum
@@ -70,6 +70,18 @@ def _timed(ctx: AppContext, **values: Any) -> Timed:
     )
 
 
+def _process_timed(ctx: AppContext, clocks: dict[str, tuple[str, str]], objects: dict[str, Any], row: Any) -> None:
+    groups: dict[str, list[Timed]] = objects["timed"]
+    if row.define:
+        clocks[row.name] = (row.start, row.stop)
+        groups[row.name] = []
+    elif row.append:
+        if row.name not in clocks:
+            raise ValueError(f"unknown timed group {row.name!r} — add 'timed define {row.name} ...' on an earlier line")
+        start, stop = clocks[row.name]
+        groups[row.name].append(_timed(ctx, start=start, stop=stop, devices=row.devices, state=row.state))
+
+
 def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup])
 
@@ -86,7 +98,7 @@ def setup(ctx: AppContext) -> None:
             ),
             "message": scalar(Messages),
             "rules": group(partial(_rule, ctx)),
-            "timed": group(partial(_timed, ctx)),
+            "timed": each(partial(_process_timed, ctx, {}), default=dict),
         },
     )
     sensor.rules = Rules(**sensor.rules)
