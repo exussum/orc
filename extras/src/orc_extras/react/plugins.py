@@ -20,7 +20,8 @@ TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "conta
 def _dewpoint(temp_f: float, humidity: float) -> float:
     temp_c = (temp_f - 32) * 5 / 9
     gamma = math.log(humidity / 100.0) + (17.62 * temp_c) / (243.12 + temp_c)
-    return (243.12 * gamma) / (17.62 - gamma)
+    dewpoint_c = (243.12 * gamma) / (17.62 - gamma)
+    return dewpoint_c * 9 / 5 + 32
 
 
 FUNCTIONS = {"dewpoint": _dewpoint}
