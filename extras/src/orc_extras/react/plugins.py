@@ -27,9 +27,15 @@ def _dewpoint(temp_f: float, humidity: float) -> float:
 FUNCTIONS = {"dewpoint": _dewpoint}
 
 
+@dataclass
+class LastFired:
+    key: int | None = None
+
+
 class React(NamedTuple):
     rules: dict[int, engine.Rule[m.Devices]]
     sources: dict[int, m.DeviceEnum]
+    last_fired: LastFired
 
 
 class Log(m.LogSourceEnum):
@@ -207,47 +213,21 @@ def _targets(what: m.Devices) -> str:
     return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
-def _wanted(cond: engine.Condition) -> Any:
-    if isinstance(cond, AcIs):
-        return (cond.allowed.name or "").lower()
-    assert isinstance(cond, engine.Is)
-    return cond.value.value if isinstance(cond.value, m.Playback) else cond.value
-
-
-def _unmet(conditions: tuple[engine.Condition, ...]) -> str:
-    return " and ".join(_describe(cond) for cond in conditions)
-
-
-def _describe(cond: engine.Condition) -> str:
-    if isinstance(cond, Range):
-        channel = cond.channel
-        assert isinstance(channel, Formula)
-        return f"`{channel.device.label or channel.device.name}` {channel.expr} not in {cond.low}-{cond.high}"
-    elif isinstance(cond, Present):
-        return f"nobody in {', '.join(cond.names)} is home"
-    elif isinstance(cond, engine.Is) and isinstance(cond.channel, m.AnyoneChannel):
-        return "nobody is home"
-    channel = cond.channels[0]
-    assert isinstance(channel, m.AcChannel | m.MqttDeviceChannel | m.CastChannel)
-    return f"`{channel.device.label or channel.device.name}` is not {_wanted(cond)}"
-
-
 def _apply(ctx: m.AppContext, what: m.Devices, action: Any, entry: m.LogEntry) -> None:
     ctx.api.dispatch((engine.Command(what, action, tag=m.Trigger.SYSTEM),), entry=entry)
 
 
 def _report(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
-    rule = _state(ctx).rules[report.key]
-    state = _trigger_label(rule)
+    if report.disposition is not engine.Disposition.FIRED:
+        return
+    plugin_state = _state(ctx)
+    rule = plugin_state.rules[report.key]
+    trigger = _trigger_label(rule)
     command = rule.items[0].command
-    if report.disposition is engine.Disposition.FIRED:
-        entry = ctx.api.log(Log.REACT, f"`{name}` {state}{note} → set {_targets(command.channel)} {command.value}")
-        _apply(ctx, command.channel, command.value, entry)
-    elif report.disposition is engine.Disposition.COOLED:
-        assert report.since is not None
-        ctx.api.log(Log.REACT, f"`{name}` {state}{note} — skipped, rule fired {int(report.since.total_seconds())}s ago (cooldown)")
-    else:
-        ctx.api.log(Log.REACT, f"`{name}` {state}{note} — skipped, {_unmet(rule.items[0].conditions)}")
+    amend = plugin_state.last_fired.key == report.key
+    plugin_state.last_fired.key = report.key
+    entry = ctx.api.log(Log.REACT, f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}", amend=amend)
+    _apply(ctx, command.channel, command.value, entry)
 
 
 @requires_ctx
