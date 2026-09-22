@@ -1,5 +1,5 @@
 import base64
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -96,11 +96,6 @@ def fmdn_eids(eik: bytes, counter: int) -> tuple[bytes, bytes, bytes]:
     modern_key = ec.derive_private_key(r % (_P256_ORDER - 1) + 1, ec.SECP256R1()).public_key()
     modern = modern_key.public_numbers().x.to_bytes(32, "big")
     return legacy, modern, modern[:20]
-
-
-def fmdn_resolve(eids: Iterable[bytes], eik: bytes, counters: Iterable[int]) -> bool:
-    heard = set(eids)
-    return any(not heard.isdisjoint(fmdn_eids(eik, counter)) for counter in counters)
 
 
 def _fmdn_prf(eik: bytes, counter: int) -> bytes:

@@ -1,4 +1,5 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from orc import security
@@ -56,30 +57,46 @@ class TestMarketHoliday:
         assert self._market_holiday(date(2026, 11, 30)) is False
 
 
-class TestScanBle:
+class TestBleListener:
     EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
     ANCHOR = int(NOW.timestamp()) - 5000
 
-    def _scan(self, frames, tags):
-        async def heard_over_the_air():
-            return frames
-
-        with patch.object(net, "_scan_ble", heard_over_the_air):
-            return net.scan_ble(tags, self.NOW)
+    def _hear(self, frames, tags):
+        with patch.object(net.BleListener, "_now", return_value=self.NOW):
+            listener = net.BleListener(tags, timezone.utc)
+            listener._index = net._eid_index(tags, self.NOW)
+            for frame in frames:
+                listener._seen(None, SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
+        return listener
 
     def test_heard_tag_names_person(self):
-        frames = {security.fmdn_eids(self.EIK, 5000)[1]}
-        assert self._scan(frames, {"Alice": BleKey(self.EIK, self.ANCHOR)}) == {"Alice"}
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert listener.present(self.NOW) == {"Alice"}
 
     def test_neighbour_window_still_matches(self):
         # a slightly-off pair date lands the true window one rotation from expected
-        frames = {security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[0]}
-        assert self._scan(frames, {"Alice": BleKey(self.EIK, self.ANCHOR)}) == {"Alice"}
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[0]
+        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert listener.present(self.NOW) == {"Alice"}
 
     def test_silence_names_nobody(self):
-        assert self._scan(set(), {"Alice": BleKey(self.EIK, self.ANCHOR)}) == set()
+        listener = self._hear([], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert listener.present(self.NOW) == set()
 
     def test_wrong_key_names_nobody(self):
-        frames = {security.fmdn_eids(self.EIK, 5000)[1]}
-        assert self._scan(frames, {"Alice": BleKey(bytes(32), self.ANCHOR)}) == set()
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        listener = self._hear([frame], {"Alice": BleKey(bytes(32), self.ANCHOR)})
+        assert listener.present(self.NOW) == set()
+
+    def test_delete_presence_clears_the_hearing(self):
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        listener.delete_presence(["Alice"])
+        assert listener.present(self.NOW) == set()
+
+    def test_old_hearing_expires(self):
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert listener.present(self.NOW + timedelta(seconds=net._BLE_FRESH_SECONDS + 1)) == set()
