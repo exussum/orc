@@ -3,7 +3,7 @@ import os
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta, tzinfo
 from functools import partial
 from types import MappingProxyType, ModuleType, SimpleNamespace
 from typing import Any
@@ -52,6 +52,8 @@ routine append <id> <devices> <state> [--trigger=<trigger>]
 
 setting <key> <value>
 
+tag <person> <secret> <pair_date>
+
 theme <name> <routine> <time>
 """
 
@@ -83,6 +85,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
                 "emergency_device": Cast.device,
             },
         ),
+        "tag": array(m.BleTag),
     }
     objects = command_cfg.load(text, GRAMMAR, serializers, variables=os.environ)
     if unsealed := objects["device"].members.keys() - objects["device"].enums.keys():
@@ -99,6 +102,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         room=objects["room"],
         routine=objects["routine"],
         setting=objects["setting"] or m.Settings.build(),
+        tag=objects["tag"],
         theme=objects["theme"],
     )
 
@@ -117,6 +121,33 @@ def validate(config: SimpleNamespace) -> None:
         raise ConfigError(f"Missing required settings: {', '.join(unset)}")
     if config.setting.emergency_routine not in config.routine:
         raise ConfigError(f"Unknown routine {config.setting.emergency_routine!r}: expected one of {tuple(config.routine)}")
+    for tag in config.tag:
+        if tag.person not in config.person:
+            raise ConfigError(f"Unknown person {tag.person!r} in tag line: expected one of {tuple(config.person)}")
+        try:
+            datetime.fromisoformat(tag.pair_date)
+        except ValueError:
+            raise ConfigError(f"Invalid pair_date {tag.pair_date!r} in tag line: expected ISO 8601") from None
+
+
+def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, m.BleKey]:
+    """Per-person EID keys; empty when secrets aren't loaded (the bootstrap parse)."""
+    if not secrets.other:
+        return {}
+    keys = {}
+    for tag in tags:
+        error = ConfigError(f"Secret {tag.secret!r}: expected a 32-byte hex EIK")
+        try:
+            eik = bytes.fromhex(secrets[tag.secret])
+        except ValueError as exc:
+            raise error from exc
+        if len(eik) != 32:
+            raise error
+        pair_date = datetime.fromisoformat(tag.pair_date)
+        if not pair_date.tzinfo:
+            pair_date = pair_date.replace(tzinfo=tz)
+        keys[tag.person] = m.BleKey(eik, int(pair_date.timestamp()))
+    return keys
 
 
 _ERR_PARAMS = "Invalid parameter {}={!r}"
