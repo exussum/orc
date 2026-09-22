@@ -49,13 +49,13 @@ def test_empty_conditions_fire_without_reading():
         raise AssertionError("empty conditions must not call read")
 
     rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),))
-    assert e.Runtime([rule]).on_event(DOOR_OPEN, T0, read) == (e.Report(hash(rule), e.Disposition.FIRED),)
+    assert e.Runtime([rule]).on_event(DOOR_OPEN, T0, read) == (e.Report(rule, e.Disposition.FIRED),)
 
 
 def test_runtime_immediate_rule_reports_fired():
     rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),))
     reaction = e.Runtime([rule]).on_event(DOOR_OPEN, T0, read_from({}))
-    assert reaction == (e.Report(hash(rule), e.Disposition.FIRED),)
+    assert reaction == (e.Report(rule, e.Disposition.FIRED),)
 
 
 def test_runtime_cooldown_reports_cooled_with_elapsed():
@@ -75,20 +75,20 @@ def test_runtime_condition_failure_reports_blocked():
 def test_runtime_delayed_rule_defers_without_reporting():
     rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
     reaction = e.Runtime([rule]).on_event(DOOR_OPEN, T0, read_from({}))
-    assert reaction == (e.Deferred(hash(rule), rule, T0 + timedelta(minutes=5)),)
+    assert reaction == (e.Deferred(rule, T0 + timedelta(minutes=5)),)
 
 
 def test_runtime_on_fire_reports_fired():
     rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
     rt = e.Runtime([rule])
     (deferred,) = rt.on_event(DOOR_OPEN, T0, read_from({}))
-    assert rt.on_fire(deferred, T0 + timedelta(minutes=5), read_from({})) == e.Report(hash(rule), e.Disposition.FIRED)
+    assert rt.on_fire(deferred, T0 + timedelta(minutes=5), read_from({})) == e.Report(rule, e.Disposition.FIRED)
 
 
 def test_runtime_reverse_edge_cancels_pending():
     rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
     rt = e.Runtime([rule])
-    assert rt.on_event(e.Event("door", "open", "closed"), T0, read_from({})) == (e.Cancel(hash(rule)),)
+    assert rt.on_event(e.Event("door", "open", "closed"), T0, read_from({})) == (e.Cancel(rule),)
 
 
 def test_runtime_on_fire_rechecks_condition():

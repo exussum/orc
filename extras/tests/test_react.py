@@ -79,8 +79,7 @@ def ctx():
 
 def _setup(ctx):
     ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react.orc").read_text()}
-    react.setup(ctx)
-    rules = list(ctx.plugin_state[plugins].rules.values())
+    rules = react.setup(ctx)
     listener = ctx.api.add_listener.call_args.args[0]
     return rules, listener
 
@@ -98,7 +97,7 @@ def _make(devices, attribute, state, action, target=None, delay=None, when=None)
 
 def _install(ctx, engine_rules, sources):
     ctx.engine.add_rules(engine_rules)
-    ctx.plugin_state[plugins] = plugins.React({hash(er): er for er in engine_rules}, sources, plugins.LastFired())
+    ctx.plugin_state[plugins] = plugins.React(sources, plugins.LastFired())
 
 
 def _switch(ctx, listener, device_id, old, new):
@@ -381,8 +380,7 @@ def _range_event(ctx, sensor, attributes):
 
 def test_range_rule_parses_expressions(ctx):
     ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_range.orc").read_text()}
-    react.setup(ctx)
-    rules = list(ctx.plugin_state[plugins].rules.values())
+    rules = react.setup(ctx)
     temp = plugins.Formula(Sensor.living, "temperature")
     dewpoint = plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[0].trigger == plugins.DeviceChanged(Sensor.living)

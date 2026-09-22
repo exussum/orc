@@ -139,21 +139,20 @@ class Disposition(Enum):
 
 @dataclass(frozen=True)
 class Report:
-    key: int
+    rule: Rule
     disposition: Disposition
     since: timedelta | None = None
 
 
 @dataclass(frozen=True)
 class Deferred:
-    key: int
     rule: Rule
     when: datetime
 
 
 @dataclass(frozen=True)
 class Cancel:
-    key: int
+    rule: Rule
 
 
 type Reaction = Report | Deferred | Cancel
@@ -181,11 +180,11 @@ class Runtime:
             for rule in self._rules:
                 if rule.trigger.fired(event):
                     if rule.delay:
-                        out.append(Deferred(hash(rule), rule, now + rule.delay))
+                        out.append(Deferred(rule, now + rule.delay))
                     else:
                         out.append(self._fire(rule, now, read))
                 elif rule.delay and isinstance(rule.trigger, Transition) and rule.trigger.channel == event.channel:
-                    out.append(Cancel(hash(rule)))
+                    out.append(Cancel(rule))
             return tuple(out)
 
     def on_fire(self, deferred: Deferred, now: datetime, read: Read) -> Report:
@@ -202,11 +201,11 @@ class Runtime:
         key = hash(rule)
         last = self._last_fired.get(key)
         if last is not None and now - last < rule.cooldown:
-            return Report(key, Disposition.COOLED, now - last)
+            return Report(rule, Disposition.COOLED, now - last)
         if not self.evaluate([rule], now, read=read, force=True):
-            return Report(key, Disposition.BLOCKED)
+            return Report(rule, Disposition.BLOCKED)
         self._last_fired[key] = now
-        return Report(key, Disposition.FIRED)
+        return Report(rule, Disposition.FIRED)
 
     def save_snapshot(self, key: str, payload: Any, deadline: datetime) -> None:
         with self._lock:
