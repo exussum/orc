@@ -211,9 +211,8 @@ secret, or a `tag` line's EIK):
 
 ## BLE tag presence (Find Hub)
 
-Alongside the LAN probe, each presence check can listen for Google Find Hub
-(FMDN) BLE tags — for example, a Chipolo POP. A `tag` line binds a tag to a
-person:
+Alongside the LAN probe, orc can track Google Find Hub (FMDN) BLE tags — for
+example, a Chipolo POP. A `tag` line binds a tag to a person:
 
 ```
 person Spence spences-phone.example aa:bb:cc:dd:ee:ff
@@ -230,9 +229,11 @@ within ~15 minutes is enough — the match checks the neighbouring rotation
 windows — and the exported value is exact, so this is a non-issue in
 practice.
 
-Matching is fully local: each check computes the tag's rotating ephemeral ID
-(EID) from the key and pair date and listens for it while the LAN probe
-runs — after the one-time key export, nothing talks to Google.
+Matching is fully local: a background listener computes the tag's rotating
+ephemeral ID (EID) from the key and pair date and hears every advertisement
+the tag sends, so each presence check reads the last time the tag was heard
+instead of gambling on a scan window. After the one-time key export, nothing
+talks to Google.
 
 The EID scheme is Google's public
 [Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).
