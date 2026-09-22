@@ -1,5 +1,5 @@
 import re
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -122,6 +122,46 @@ def test_validate_accepts_complete_config():
     parsed = parse("core")
     parsed.provider = parse("provider").provider
     validate(parsed)
+
+
+def test_tag_lines_parse():
+    assert parse("core").tag == [m.BleTag("Spence", "EIK_SPENCE", "2026-01-02T03:04:05+00:00")]
+
+
+def test_validate_unknown_tag_person():
+    with pytest.raises(ConfigError, match="Unknown person 'Bob' in tag line"):
+        validate(parse("tag_unknown_person"))
+
+
+def test_validate_bad_tag_pair_date():
+    with pytest.raises(ConfigError, match="Invalid pair_date 'yesterday' in tag line"):
+        validate(parse("tag_bad_pair_date"))
+
+
+def test_ble_keys_empty_without_secrets():
+    tags = [m.BleTag("Spence", "EIK_SPENCE", "2026-01-02T03:04:05+00:00")]
+    assert loader.ble_keys(tags, m.Secrets(), timezone.utc) == {}
+
+
+def test_ble_keys_derives_eik_and_anchor():
+    secrets = m.Secrets(other={"EIK_SPENCE": "ab" * 32})
+    tags = [m.BleTag("Spence", "EIK_SPENCE", "2026-01-02T03:04:05+00:00")]
+    anchor = int(datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp())
+    assert loader.ble_keys(tags, secrets, timezone.utc) == {"Spence": m.BleKey(bytes.fromhex("ab" * 32), anchor)}
+
+
+def test_ble_keys_naive_pair_date_reads_config_tz():
+    secrets = m.Secrets(other={"EIK_SPENCE": "ab" * 32})
+    tags = [m.BleTag("Spence", "EIK_SPENCE", "2026-01-02T03:04:05")]
+    anchor = int(datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp())
+    assert loader.ble_keys(tags, secrets, timezone.utc)["Spence"].anchor == anchor
+
+
+def test_ble_keys_rejects_short_eik():
+    secrets = m.Secrets(other={"EIK_SPENCE": "abcd"})
+    tags = [m.BleTag("Spence", "EIK_SPENCE", "2026-01-02T03:04:05+00:00")]
+    with pytest.raises(ConfigError, match="expected a 32-byte hex EIK"):
+        loader.ble_keys(tags, secrets, timezone.utc)
 
 
 def test_ad_hoc_define_with_inline_first_item():
