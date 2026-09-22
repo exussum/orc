@@ -428,12 +428,12 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
 
 def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
     pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
-    if not pairs:
+    if not pairs and not config.ble_tags:
         return present_names()
     before = present_names()
-    present, errors = net.scan_presence(pairs)
+    present, errors = net.scan_presence(pairs, config.ble_tags, local_now())
     for name, exc in errors:
-        msg = Log.PRESENCE_PING_FAILED.format(name=name, exc=exc)
+        msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
         entry = log(source, msg, should_notify=True)
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
     mark_present(present, local_now())

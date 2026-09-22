@@ -17,7 +17,7 @@ class Log:
     DISPATCH_FAILED: str = "Dispatch failed for `{device}`: {exc}"
     VIRTUAL_DEVICE_SKIPPED: str = "Skipped `{device}`: virtual device, nothing to dispatch"
 
-    PRESENCE_PING_FAILED: str = "Presence ping failed for `{name}`: {exc}"
+    PRESENCE_SCAN_FAILED: str = "Presence scan failed for `{name}`: {exc}"
     PRESENCE_DETECTED: str = "Presence detected: `{name}`"
     PRESENCE_LOST: str = "Presence lost: `{name}`"
     PRESENCE_EXPIRED: str = "Presence expired: `{name}`"

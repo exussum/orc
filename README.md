@@ -19,8 +19,9 @@ calendar events, and a line-based config file.
   LG webOS TV (aiowebostv + BroadLink IR), monitors YoLink leak sensors
   (fatal-level audio alert on water detection), and runs the
   entrance-sensor automation.
-- Tracks network presence of configured devices/people and gates
-  person-specific routine steps on who is currently home.
+- Tracks presence of configured people — by LAN probe (ARP/mDNS) and,
+  optionally, Google Find Hub (FMDN) BLE tags — and gates person-specific
+  routine steps on who is currently home.
 - Serves a small Flask UI for manual control, schedule inspection, theme
   override, and an activity log.
 
@@ -103,8 +104,9 @@ Steps:
 2. **Create a config directory, for example `/etc/orc`.** Copy
    `src/config.orc` into it as a starting point. Devices, people, routines,
    themes, room configs, and plugins are all defined there — the sample
-   file demonstrates every command except `person`, which is omitted so a
-   stub-backed dev run never attempts privileged presence scans. Per-plugin
+   file demonstrates every command except `person` and `tag`, which are
+   omitted so a stub-backed dev run never attempts privileged presence
+   scans. Per-plugin
    configs go in a `plugins/` subdirectory of the config directory — copyable
    samples for each plugin are in `examples/configs/`.
 
@@ -196,9 +198,9 @@ With the default `secrets` provider (`orc.dal.secrets.bws`), secrets are
 pulled from Bitwarden Secrets Manager by name. The first two are
 required — startup fails without them; the rest are optional: the MQTT
 pair credentials the Hubitat MQTT connection. Any other key is read on
-demand by whichever plugin config names it (for example,
-`YOLINK_ID`/`YOLINK_SECRET` for the yolink plugin, or a calendar feed's
-secret):
+demand by whichever config line names it (for example,
+`YOLINK_ID`/`YOLINK_SECRET` for the yolink plugin, a calendar feed's
+secret, or a `tag` line's EIK):
 
 | Key                    | Used for                                           |
 | ---------------------- | -------------------------------------------------- |
@@ -206,6 +208,38 @@ secret):
 | `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates       |
 | `MQTT_USER`            | Hubitat MQTT broker username (optional)            |
 | `MQTT_PASSWORD`        | Hubitat MQTT broker password (optional)            |
+
+## BLE tag presence (Find Hub)
+
+Alongside the LAN probe, each presence check can listen for Google Find Hub
+(FMDN) BLE tags — for example, a Chipolo POP. A `tag` line binds a tag to a
+person:
+
+```
+person Spence spences-phone.example aa:bb:cc:dd:ee:ff
+tag    Spence EIK_SPENCE 2026-09-22T13:48:37+00:00
+```
+
+Set the tag up with Google Find Hub on an Android phone (tags on Apple Find
+My can't be matched — there's no key export), then export its identity key
+and pair date with GoogleFindMyTools. Store the key (hex-encoded, 32 bytes)
+in the secrets provider under the name the `tag` line references
+(`EIK_SPENCE` above), and put the pair date (ISO 8601) directly in the line.
+A naive value (no offset) is read in the configured timezone. Accuracy
+within ~15 minutes is enough — the match checks the neighbouring rotation
+windows — and the exported value is exact, so this is a non-issue in
+practice.
+
+Matching is fully local: each check computes the tag's rotating ephemeral ID
+(EID) from the key and pair date and listens for it while the LAN probe
+runs — after the one-time key export, nothing talks to Google.
+
+The EID scheme is Google's public
+[Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).
+The variant semantics and golden test vectors follow **BSkando**'s
+**GoogleFindMy-HA** (MIT) — https://github.com/BSkando/GoogleFindMy-HA — and
+identity keys are exported with **leonboe1**'s **GoogleFindMyTools** —
+https://github.com/leonboe1/GoogleFindMyTools.
 
 ## Running
 
@@ -245,12 +279,12 @@ bounces the `orc` supervisor job.
   device cache), `hubitat/` (Hubitat Maker API), `chromecast/`,
   `holiday/` (market holidays), `weather/` (open-meteo), `blaster/`
   (BroadLink IR), `secrets/` (Bitwarden). Plus `audio.py` (pyaudio + piper
-  TTS), `net.py` (presence scanning), `scheduler.py`, `sqlite.py`,
-  `interfaces.py` (the `Provider` capability contracts)
+  TTS), `net.py` (presence scanning: LAN probe + BLE), `scheduler.py`,
+  `sqlite.py`, `interfaces.py` (the `Provider` capability contracts)
 - `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `synchronized`, `audio_lock`, `silence_fd`
 - `src/orc/declarations.py` — per-config-load plugin declaration collection, built into the device/plugin `Registry`
 - `src/orc/plugins.py` — built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
-- `src/orc/security.py` — `safe_eval` for config expressions, URL allowlisting
+- `src/orc/security.py` — `safe_eval` for config expressions, certificate helpers, FMDN EID math
 - `src/orc/_build.py` — build SHA/time stamped at release
 - `src/orc/locale.py` — log-message string constants
 - `src/orc/view.py` + `templates/` + `static/` — Flask UI (schedule, device, presence, log, config views)

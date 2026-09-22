@@ -38,6 +38,7 @@ room Bedroom Light.LAMP on
 device only Button REMOTE scene
 
 person Spence host9 aa:bb
+tag Spence EIK_SPENCE 2026-01-02T03:04:05+00:00
 routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger Spence
 
 ad_hoc define Silence           --no-reset Chromecast.CC stop

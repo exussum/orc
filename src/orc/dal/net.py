@@ -1,11 +1,22 @@
+import asyncio
 import socket
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
+from bleak import BleakScanner
+from bleak.backends.device import BLEDevice
+from bleak.backends.scanner import AdvertisementData
 from scapy.layers.dns import DNS, DNSQR
 from scapy.layers.inet import IP, UDP
 from scapy.layers.l2 import ARP, Ether
 from scapy.sendrecv import AsyncSniffer, sendp
+
+from orc import model as m
+from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_parse, fmdn_resolve
+
+_WINDOW_SECONDS = 3
 
 
 def _resolve_targets(
@@ -57,12 +68,13 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
         / UDP(sport=5353, dport=5353)
         / DNS(rd=0, qd=DNSQR(qname="_services._dns-sd._udp.local", qtype="PTR"))
     )
-    sniffer = AsyncSniffer(filter="arp or udp port 5353", store=True, timeout=3)
+    sniffer = AsyncSniffer(filter="arp or udp port 5353", store=True, timeout=_WINDOW_SECONDS)
     sniffer.start()
-    # Burst the whole probe list at once, repeat 3x a second apart. sendp's `inter`
-    # spaces *every* packet, so it would scale with the target count; a manual loop
-    # keeps the window fixed regardless of how many devices we track.
-    for _ in range(3):
+    # Burst the whole probe list at once, repeat once a second across the window.
+    # sendp's `inter` spaces *every* packet, so it would scale with the target
+    # count; a manual loop keeps the window fixed regardless of how many devices
+    # we track.
+    for _ in range(_WINDOW_SECONDS):
         sendp(probes, verbose=False)
         time.sleep(1)
     sniffer.join()
@@ -75,11 +87,55 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
     return {name for ip, (name, _) in targets.items() if ip in responded}
 
 
-def scan_presence(pairs: list[tuple[str, str, str]]) -> tuple[set[str], list[tuple[str, Exception]]]:
-    """Return the person names reachable on the LAN, plus any hostname-resolution failures.
+def scan_presence(
+    pairs: list[tuple[str, str, str]], tags: Mapping[str, m.BleKey], now: datetime
+) -> tuple[set[str], list[tuple[str, Exception]]]:
+    """Return the person names heard on the LAN or over BLE, plus any scan failures.
 
     For each (name, host, mac), resolves host to an IP and probes it. A device counts as
     present if its IP appears as an ARP reply or an mDNS packet during the sniff window.
+    Each tag's rotating EID is matched against the BLE advertisements heard meanwhile.
     """
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        heard = pool.submit(scan_ble, tags, now)
+        lan = pool.submit(_scan_lan, pairs)
+    names, errors = lan.result()
+    try:
+        names |= heard.result()
+    except Exception as exc:
+        errors.append(("BLE", exc))
+    return names, errors
+
+
+def scan_ble(tags: Mapping[str, m.BleKey], now: datetime) -> set[str]:
+    if not tags:
+        return set()
+    heard = asyncio.run(_scan_ble())
+    ts = int(now.timestamp())
+    # The tag's clock zero is its pair date, so the current counter is now - anchor;
+    # the ±1 neighbour windows cover boundary timing and the tag's crystal drift.
+    return {
+        person
+        for person, key in tags.items()
+        for expected in (ts - key.anchor,)
+        if fmdn_resolve(heard, key.eik, (expected - FMDN_ROTATION_SECONDS, expected, expected + FMDN_ROTATION_SECONDS))
+    }
+
+
+def _scan_lan(pairs: list[tuple[str, str, str]]) -> tuple[set[str], list[tuple[str, Exception]]]:
     targets, errors = _resolve_targets(pairs)
     return _probe_lan(targets), errors
+
+
+async def _scan_ble() -> set[bytes]:
+    heard: set[bytes] = set()
+
+    def seen(device: BLEDevice, data: AdvertisementData) -> None:
+        frame = data.service_data.get(FMDN_SERVICE_UUID)
+        parsed = fmdn_parse(frame) if frame else None
+        if parsed:
+            heard.add(parsed)
+
+    async with BleakScanner(seen):
+        await asyncio.sleep(_WINDOW_SECONDS)
+    return heard
