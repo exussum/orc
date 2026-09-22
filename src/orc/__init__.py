@@ -8,7 +8,7 @@ from command_cfg import ConfigError
 
 from orc import model as m
 from orc.kernel.declarations import collect_declarations
-from orc.kernel.loader import parse_config, validate
+from orc.kernel.loader import ble_keys, parse_config, validate
 
 Light: type[m.DeviceEnum] = m.DeviceEnum("Light", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 Chromecast: type[m.DeviceEnum] = m.DeviceEnum("Chromecast", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
@@ -75,6 +75,7 @@ class Config:
         self.virtual_devices = {e for e in parsed.enums.get("Light", ()) if isinstance(e.value, int) and e.value < 0}
 
         self.people = parsed.person
+        self.ble_tags = ble_keys(parsed.tag, self.secrets, parsed.setting.tz)
         self.providers = parsed.provider
         self.routines = parsed.routine
         self.themes = parsed.theme
