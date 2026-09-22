@@ -122,14 +122,14 @@ def test_snapshots_peek_reads_without_popping():
 def test_snapshots_get_pops_live_payload():
     snaps = e.Runtime([])
     snaps.save_snapshot("s", "scene", T1)
-    assert snaps.take_snapshot("s", T0) == "scene"
+    assert snaps.pop_snapshot("s", T0) == "scene"
     assert snaps.read_snapshot("s", T0) is None
 
 
 def test_snapshots_get_expired_returns_none_but_pops():
     snaps = e.Runtime([])
     snaps.save_snapshot("s", "scene", T0)
-    assert snaps.take_snapshot("s", T1) is None
+    assert snaps.pop_snapshot("s", T1) is None
     assert snaps.snapshots(T0) == {}
 
 

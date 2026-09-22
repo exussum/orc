@@ -221,7 +221,7 @@ class Runtime:
             entry = self._snapshots.get(key)
             return entry[0] if entry and now <= entry[1] else None
 
-    def take_snapshot(self, key: str, now: datetime) -> Any:
+    def pop_snapshot(self, key: str, now: datetime) -> Any:
         with self._lock:
             entry = self._snapshots.pop(key, None)
             return entry[0] if entry and now <= entry[1] else None
@@ -265,7 +265,7 @@ class Runtime:
         ctx.api.dispatch(commands, force=True, entry=entry)
 
     def restore_scene(self, ctx: Any, name: str, commands: tuple[Command[Any], ...], entry: Any) -> None:
-        snapshot = self.take_snapshot(name, ctx.api.local_now())
+        snapshot = self.pop_snapshot(name, ctx.api.local_now())
         if snapshot:
             commands = snapshot.routine
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_RESTORED.format(name=snapshot.label))

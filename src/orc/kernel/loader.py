@@ -161,7 +161,9 @@ def _is_fqdn(value: str) -> bool:
 
 # "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
 # they render no button and are not auto-invoked, unlike the other sections.
-_VALID_SECTIONS = frozenset({"scene", "system", "device"})
+# "none" renders no button anywhere: for entries referenced by name (remotes,
+# plugin configs) rather than run from the UI.
+_VALID_SECTIONS = frozenset({"scene", "system", "device", "none"})
 _ERR_FUNCTION = (
     "Cannot load function {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. "
     "Ensure the module exists and the function is defined within it."
