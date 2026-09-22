@@ -364,9 +364,10 @@ def test_ac_is_bitmask_respects_flag_membership():
 
 def _make_range(sensor, expr, low, high, target, action, people=None):
     formula = plugins.Formula(sensor, expr)
-    conditions = [plugins.Range(formula, low, high)]
+    conditions = []
     if people:
         conditions.append(plugins.Present(people))
+    conditions.append(plugins.Range(formula, low, high))
     command = engine.Command(target, action)
     return [engine.Rule(plugins.DeviceChanged(sensor), (engine.Clause(tuple(conditions), command),), cooldown=plugins.COOLDOWN)]
 
@@ -387,9 +388,9 @@ def test_range_rule_parses_expressions(ctx):
     assert rules[0].items[0].conditions == (plugins.Range(temp, 68, 75),)
     assert rules[0].items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == plugins.DeviceChanged(Sensor.living)
-    assert rules[1].items[0].conditions == (plugins.Range(dewpoint, 50, 60), plugins.Present(("alice", "bob")))
+    assert rules[1].items[0].conditions == (plugins.Present(("alice", "bob")), plugins.Range(dewpoint, 50, 60))
     assert rules[2].trigger == plugins.DeviceChanged(Sensor.living)
-    assert rules[2].items[0].conditions == (plugins.Range(dewpoint, 59, 104), engine.Is(m.AnyoneChannel(), True))
+    assert rules[2].items[0].conditions == (engine.Is(m.AnyoneChannel(), True), plugins.Range(dewpoint, 59, 104))
 
 
 def test_value_in_range_sets_the_ac(ctx):
@@ -438,7 +439,7 @@ def test_presence_gates_the_range_rule(ctx):
 def test_presence_anyone_gates_the_range_rule(ctx):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
     formula = plugins.Formula(Sensor.living, "temperature")
-    conditions = (plugins.Range(formula, 68, 75), engine.Is(m.AnyoneChannel(), True))
+    conditions = (engine.Is(m.AnyoneChannel(), True), plugins.Range(formula, 68, 75))
     command = engine.Command(m.Devices(Ac), ac)
     rule = engine.Rule(plugins.DeviceChanged(Sensor.living), (engine.Clause(conditions, command),), cooldown=plugins.COOLDOWN)
     _install(ctx, [rule], {5: Sensor.living})
