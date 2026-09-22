@@ -17,6 +17,9 @@ from orc import model as m
 from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_parse, fmdn_resolve
 
 _WINDOW_SECONDS = 3
+# A tag can't be solicited like the LAN probes' targets - it advertises every ~2s
+# and orc can only listen, so the BLE window must span several cycles to hear one.
+_BLE_WINDOW_SECONDS = 10
 
 
 def _resolve_targets(
@@ -137,5 +140,5 @@ async def _scan_ble() -> set[bytes]:
             heard.add(parsed)
 
     async with BleakScanner(seen):
-        await asyncio.sleep(_WINDOW_SECONDS)
+        await asyncio.sleep(_BLE_WINDOW_SECONDS)
     return heard
