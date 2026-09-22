@@ -436,6 +436,34 @@ class TestPresence:
                 api.check_presence()
         assert api.present_names() == {"Bob"}
 
+    TAGS = {"Alice": m.BleKey(bytes(32), 0)}
+
+    def test_check_presence_hears_ble_tag(self):
+        with (
+            patch.object(config, "people", {}),
+            patch.object(config, "ble_tags", self.TAGS),
+            patch.object(net, "scan_ble", return_value={"Alice"}),
+        ):
+            api.check_presence()
+        assert api.present_names() == {"Alice"}
+
+    def test_check_presence_ble_silence_marks_nothing(self):
+        with (
+            patch.object(config, "people", {}),
+            patch.object(config, "ble_tags", self.TAGS),
+            patch.object(net, "scan_ble", return_value=set()),
+        ):
+            api.check_presence()
+        assert api.present_names() == set()
+
+    def test_check_presence_survives_ble_scan_failure(self):
+        with (
+            patch.object(config, "people", {}),
+            patch.object(config, "ble_tags", self.TAGS),
+            patch.object(net, "scan_ble", side_effect=RuntimeError("adapter down")),
+        ):
+            assert api.check_presence() == set()
+
 
 def test_context_executor_copies_closure_job():
     """_do_submit_job must not raise for closure callables (Job uses __slots__, not __dict__)."""

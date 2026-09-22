@@ -27,6 +27,17 @@ class Person(NamedTuple):
     mac: str
 
 
+class BleTag(NamedTuple):
+    person: str
+    secret: str
+    pair_date: str
+
+
+class BleKey(NamedTuple):
+    eik: bytes
+    anchor: int  # unix seconds of the tag's clock zero (its pair date)
+
+
 type Listener = Callable[[DeviceState, str, Any, Any], None]
 type ButtonListener = Callable[[int, int, str], None]
 type DeviceCommand = engine.Command[Any, Devices]
@@ -377,8 +388,9 @@ class Secrets:
     mqtt_user: str = ""
     mqtt_password: str = ""
 
-    # Plugin-consumed secrets; core never reads these. A key with an in-repo
-    # consumer belongs on a typed field instead.
+    # Dynamically named secrets: plugin-consumed keys and per-tag BLE EIKs
+    # (named by `tag` config lines). A key with a fixed in-repo consumer
+    # belongs on a typed field instead.
     other: dict[str, str] = field(default_factory=dict)
 
     def __getitem__(self, key: str) -> str:
