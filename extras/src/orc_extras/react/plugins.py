@@ -69,6 +69,7 @@ class Formula(engine.Channel):
 @dataclass(frozen=True)
 class DeviceChanged:
     device: m.DeviceEnum
+    expr: str
 
     def fired(self, event: engine.Event) -> bool:
         return isinstance(event.channel, m.MqttDeviceChannel) and event.channel.device == self.device
@@ -136,9 +137,7 @@ def _trigger_label(rule: engine.Rule) -> Any:
     if isinstance(trigger, engine.Transition):
         return trigger.value
     assert isinstance(trigger, DeviceChanged)
-    condition = next(c for c in rule.items[0].conditions if isinstance(c, Range))
-    assert isinstance(condition.channel, Formula)
-    return condition.channel.expr
+    return trigger.expr
 
 
 def _reader(ctx: m.AppContext) -> engine.Read:
@@ -193,7 +192,7 @@ def _on_event(ctx: m.AppContext, device: m.DeviceState, attribute: str, old: Any
     for reaction in ctx.engine.on_event(event, ctx.api.local_now(), _reader(ctx)):
         match reaction:
             case engine.Report():
-                _report(ctx, reaction, device.name, "")
+                _dispatch(ctx, reaction, device.name, "")
             case engine.Deferred():
                 ctx.scheduler.add_job(
                     _run_react,
@@ -217,11 +216,7 @@ def _targets(what: engine.Channel) -> str:
         raise TypeError("Only accepts orc.models.Devices")
 
 
-def _apply(ctx: m.AppContext, what: engine.Channel, action: Any, entry: m.LogEntry) -> None:
-    ctx.api.dispatch((engine.Command(what, action, tag=m.Trigger.SYSTEM),), entry=entry)
-
-
-def _report(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
+def _dispatch(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
     if report.disposition is not engine.Disposition.FIRED:
         return
     plugin_state = _state(ctx)
@@ -230,10 +225,10 @@ def _report(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> N
     amend = plugin_state.last_fired.rule == report.rule
     plugin_state.last_fired.rule = report.rule
     entry = ctx.api.log(Log.REACT, f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}", amend=amend)
-    _apply(ctx, command.channel, command.value, entry)
+    ctx.api.dispatch((engine.Command(command.channel, command.value, tag=m.Trigger.SYSTEM),), entry=entry)
 
 
 @requires_ctx
 def _run_react(deferred: engine.Deferred, name: str, *, ctx: m.AppContext) -> None:
     report = ctx.engine.on_fire(deferred, ctx.api.local_now(), _reader(ctx))
-    _report(ctx, report, name, f" {int(deferred.rule.delay.total_seconds() // 60)}m ago")
+    _dispatch(ctx, report, name, f" {int(deferred.rule.delay.total_seconds() // 60)}m ago")

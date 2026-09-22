@@ -72,7 +72,9 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
         conditions.append(plugins.Range(formula, args.low, args.high))
         command = engine.Command(target, action)
         objects["react"].append(
-            engine.Rule(plugins.DeviceChanged(source), (engine.Clause(tuple(conditions), command),), delay, cooldown=plugins.COOLDOWN)
+            engine.Rule(
+                plugins.DeviceChanged(source, args.expr), (engine.Clause(tuple(conditions), command),), delay, cooldown=plugins.COOLDOWN
+            )
         )
 
 
