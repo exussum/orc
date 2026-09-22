@@ -5,7 +5,6 @@ from typing import Any, Sequence
 from apscheduler.triggers.date import DateTrigger
 
 from orc import model as m
-from orc.kernel import engine
 from orc.plugins import requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
@@ -58,12 +57,12 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
     if new == sensor.setting.active_event:
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
-        restore = _restorable(ctx, sensor, ctx.engine.take_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
-        timed_name, timed_rows = _timed_rows(ctx, sensor)
+        restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
+        timed_name, timed_commands = _timed_commands(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
-        ctx.api.dispatch(m.squish((*restore, *_to_commands(timed_rows))), force=True, entry=log_entry)
+        ctx.api.dispatch(m.squish((*restore, *timed_commands)), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
-        ctx.api.dispatch(_to_commands(sensor.rules.inside, tag=m.Trigger.SYSTEM), entry=log_entry)
+        ctx.api.dispatch(sensor.rules.inside, entry=log_entry)
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
@@ -79,20 +78,20 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
 def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     ctx.api.expire_presence(list(ctx.api.last_seen()))
     present = ctx.api.check_presence(silent=True)
-    door_open = not present and _door_open(ctx, sensor)
+    people = present - {sensor.setting.listener}
+    door_open = not people and _door_open(ctx, sensor)
 
-    if present or door_open:
-        ctx.api.dispatch(_to_commands(sensor.rules.present), entry=log_entry)
+    if people or door_open:
+        ctx.api.dispatch(sensor.rules.present, entry=log_entry)
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
-    elif any(s.content for s in ctx.api.capture_sounds()):
-        # Visitor left, pet still listening: restore the pre-visit state
+    elif sensor.setting.listener in present:
+        # Visitor left, the listener stayed: restore the pre-visit state
         ctx.engine.restore_scene(ctx, SNAPSHOT_NAME, (), log_entry)
-        ctx.api.dispatch(_to_commands(sensor.rules.absent), entry=log_entry)
+        ctx.api.dispatch(sensor.rules.absent, entry=log_entry)
         msg = sensor.message.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
-        ctx.engine.override_scene(ctx, SNAPSHOT_NAME, _to_commands(sensor.rules.shutdown), end, SNAPSHOT_NAME, log_entry)
-        ctx.api.dispatch(_to_commands(sensor.rules.absent), entry=log_entry)
+        ctx.engine.override_scene(ctx, SNAPSHOT_NAME, sensor.rules.shutdown, end, SNAPSHOT_NAME, log_entry)
         msg = sensor.message.log_shutdown
     log_entry.add(Log.ENTRANCE, msg)
 
@@ -126,7 +125,7 @@ def _sensor(devices: Sequence[m.DeviceState], device_id: int) -> m.DeviceState |
     return next((d for d in devices if d.id == device_id), None)
 
 
-def _timed_rows(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, Sequence[Any]]:
+def _timed_commands(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, m.Commands]:
     # First group whose window contains now wins; a group's window is its first row.
     t = ctx.api.local_now().time()
 
@@ -136,7 +135,7 @@ def _timed_rows(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, Sequen
         return t >= row.start or t < row.stop  # window wraps midnight
 
     return next(
-        ((name, rows) for (name, rows) in sensor.timed.items() if rows and in_window(rows[0])),
+        ((name, tuple(c for row in rows for c in row.commands)) for (name, rows) in sensor.timed.items() if rows and in_window(rows[0])),
         ("(no window found)", ()),
     )
 
@@ -146,9 +145,5 @@ def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot
     # lights is plugin-caused, not household state - don't replay it.
     if snapshot is None:
         return ()
-    inside = {d for r in sensor.rules.inside for d in r.devices.all()}
+    inside = {d for c in sensor.rules.inside for d in c.channel.all()}
     return tuple(c for c in snapshot.routine if c.channel.one() not in inside)
-
-
-def _to_commands(rows: Sequence[Any], tag: str | None = None) -> m.Commands:
-    return tuple(engine.Command[str, m.Devices](r.devices, r.state, tag=tag) for r in rows)
