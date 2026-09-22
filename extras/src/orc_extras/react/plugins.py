@@ -29,11 +29,10 @@ FUNCTIONS = {"dewpoint": _dewpoint}
 
 @dataclass
 class LastFired:
-    key: int | None = None
+    rule: engine.Rule | None = None
 
 
 class React(NamedTuple):
-    rules: dict[int, engine.Rule[m.Devices]]
     sources: dict[int, m.DeviceEnum]
     last_fired: LastFired
 
@@ -128,7 +127,7 @@ def source_of(rule: engine.Rule[m.Devices]) -> m.DeviceEnum:
     return trigger.device
 
 
-def _trigger_label(rule: engine.Rule[m.Devices]) -> Any:
+def _trigger_label(rule: engine.Rule) -> Any:
     trigger = rule.trigger
     if isinstance(trigger, engine.Transition):
         return trigger.value
@@ -198,22 +197,25 @@ def _on_event(ctx: m.AppContext, device: m.DeviceState, attribute: str, old: Any
                     _run_react,
                     DateTrigger(reaction.when, timezone=ctx.config.settings.tz),
                     name=f"React {device.name}",
-                    id=f"{JOB_ID}-{reaction.key}",
+                    id=f"{JOB_ID}-{hash(reaction.rule)}",
                     replace_existing=True,
                     jobstore=ctx.api.JOBSTORE_MEMORY,
                     args=(reaction, device.name),
                 )
             case engine.Cancel():
-                job_id = f"{JOB_ID}-{reaction.key}"
+                job_id = f"{JOB_ID}-{hash(reaction.rule)}"
                 if ctx.scheduler.get_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY):
                     ctx.scheduler.remove_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY)
 
 
-def _targets(what: m.Devices) -> str:
-    return ", ".join(f"`{d.label or d.name}`" for d in what.all())
+def _targets(what: engine.Channel) -> str:
+    if isinstance(what, m.Devices):
+        return ", ".join(f"`{d.label or d.name}`" for d in what.all())
+    else:
+        raise TypeError("Only accepts orc.models.Devices")
 
 
-def _apply(ctx: m.AppContext, what: m.Devices, action: Any, entry: m.LogEntry) -> None:
+def _apply(ctx: m.AppContext, what: engine.Channel, action: Any, entry: m.LogEntry) -> None:
     ctx.api.dispatch((engine.Command(what, action, tag=m.Trigger.SYSTEM),), entry=entry)
 
 
@@ -221,11 +223,10 @@ def _report(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> N
     if report.disposition is not engine.Disposition.FIRED:
         return
     plugin_state = _state(ctx)
-    rule = plugin_state.rules[report.key]
-    trigger = _trigger_label(rule)
-    command = rule.items[0].command
-    amend = plugin_state.last_fired.key == report.key
-    plugin_state.last_fired.key = report.key
+    trigger = _trigger_label(report.rule)
+    command = report.rule.items[0].command
+    amend = plugin_state.last_fired.rule == report.rule
+    plugin_state.last_fired.rule = report.rule
     entry = ctx.api.log(Log.REACT, f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}", amend=amend)
     _apply(ctx, command.channel, command.value, entry)
 
@@ -233,5 +234,4 @@ def _report(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> N
 @requires_ctx
 def _run_react(deferred: engine.Deferred, name: str, *, ctx: m.AppContext) -> None:
     report = ctx.engine.on_fire(deferred, ctx.api.local_now(), _reader(ctx))
-    rule = _state(ctx).rules[report.key]
-    _report(ctx, report, name, f" {int(rule.delay.total_seconds() // 60)}m ago")
+    _report(ctx, report, name, f" {int(deferred.rule.delay.total_seconds() // 60)}m ago")
