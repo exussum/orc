@@ -1,9 +1,13 @@
 import asyncio
+import logging
+import os
+import signal
 import socket
+import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, tzinfo
 
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
@@ -14,12 +18,67 @@ from scapy.layers.l2 import ARP, Ether
 from scapy.sendrecv import AsyncSniffer, sendp
 
 from orc import model as m
-from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_parse, fmdn_resolve
+from orc.collections import LockedDict
+from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_eids, fmdn_parse
 
 _WINDOW_SECONDS = 3
-# A tag can't be solicited like the LAN probes' targets - it advertises every ~2s
-# and orc can only listen, so the BLE window must span several cycles to hear one.
-_BLE_WINDOW_SECONDS = 10
+# A tag can't be solicited like the LAN probes' targets - it only broadcasts (every
+# ~6s, with multi-cycle dropouts measured up to 42s), so windowed scans miss it;
+# the listener hears every frame instead and a tag in range never goes this quiet.
+_BLE_FRESH_SECONDS = 180
+_BLE_INDEX_REFRESH_SECONDS = 300
+
+_log = logging.getLogger(__name__)
+
+
+class BleListener:
+    """Continuously hears FMDN advertisements and keeps a last-heard time per person.
+
+    Runs a BleakScanner in its own daemon thread; every frame is one dict lookup
+    against the EID index, rebuilt as the 1024s rotation windows advance. A scanner
+    failure brings the process down — supervisor restarts it.
+    """
+
+    def __init__(self, tags: Mapping[str, m.BleKey], tz: tzinfo) -> None:
+        self._tags = tags
+        self._tz = tz
+        self._index: dict[bytes, str] = {}
+        self._heard: LockedDict[str, datetime] = LockedDict()
+
+    def start(self) -> None:
+        threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
+
+    def present(self, now: datetime) -> set[str]:
+        return {person for person, heard in self._heard.copy().items() if (now - heard).total_seconds() <= _BLE_FRESH_SECONDS}
+
+    def delete_presence(self, names: Iterable[str]) -> None:
+        for name in names:
+            self._heard.pop(name)
+
+    def _listen(self) -> None:
+        try:
+            asyncio.run(self._run())
+        except Exception:
+            _log.exception("ble: listener died, restarting orc")
+            os.kill(os.getppid(), signal.SIGTERM)
+
+    async def _run(self) -> None:
+        async with BleakScanner(self._seen):
+            while True:
+                self._index = _eid_index(self._tags, self._now())
+                await asyncio.sleep(_BLE_INDEX_REFRESH_SECONDS)
+
+    def _seen(self, device: BLEDevice, data: AdvertisementData) -> None:
+        frame = data.service_data.get(FMDN_SERVICE_UUID)
+        eid = fmdn_parse(frame) if frame else None
+        if eid and (person := self._index.get(eid)):
+            self._heard[person] = self._now()
+
+    def _now(self) -> datetime:
+        return datetime.now(tz=self._tz)
+
+
+_ble_listener: BleListener | None = None
 
 
 def _resolve_targets(
@@ -90,55 +149,41 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
     return {name for ip, (name, _) in targets.items() if ip in responded}
 
 
-def scan_presence(
-    pairs: list[tuple[str, str, str]], tags: Mapping[str, m.BleKey], now: datetime
-) -> tuple[set[str], list[tuple[str, Exception]]]:
+def delete_ble_presence(names: Iterable[str]) -> None:
+    if _ble_listener:
+        _ble_listener.delete_presence(names)
+
+
+def start_ble_listener(tags: Mapping[str, m.BleKey], tz: tzinfo) -> None:
+    global _ble_listener
+    if not tags:
+        return
+    _ble_listener = BleListener(tags, tz)
+    _ble_listener.start()
+
+
+def scan_presence(pairs: list[tuple[str, str, str]], now: datetime) -> tuple[set[str], list[tuple[str, Exception]]]:
     """Return the person names heard on the LAN or over BLE, plus any scan failures.
 
     For each (name, host, mac), resolves host to an IP and probes it. A device counts as
     present if its IP appears as an ARP reply or an mDNS packet during the sniff window.
-    Each tag's rotating EID is matched against the BLE advertisements heard meanwhile.
+    BLE presence is anyone the listener heard recently enough.
     """
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        heard = pool.submit(scan_ble, tags, now)
-        lan = pool.submit(_scan_lan, pairs)
-    names, errors = lan.result()
-    try:
-        names |= heard.result()
-    except Exception as exc:
-        errors.append(("BLE", exc))
+    targets, errors = _resolve_targets(pairs)
+    names = _probe_lan(targets)
+    if _ble_listener:
+        names |= _ble_listener.present(now)
     return names, errors
 
 
-def scan_ble(tags: Mapping[str, m.BleKey], now: datetime) -> set[str]:
-    if not tags:
-        return set()
-    heard = asyncio.run(_scan_ble())
+def _eid_index(tags: Mapping[str, m.BleKey], now: datetime) -> dict[bytes, str]:
     ts = int(now.timestamp())
-    # The tag's clock zero is its pair date, so the current counter is now - anchor;
-    # the ±1 neighbour windows cover boundary timing and the tag's crystal drift.
-    return {
-        person
-        for person, key in tags.items()
-        for expected in (ts - key.anchor,)
-        if fmdn_resolve(heard, key.eik, (expected - FMDN_ROTATION_SECONDS, expected, expected + FMDN_ROTATION_SECONDS))
-    }
-
-
-def _scan_lan(pairs: list[tuple[str, str, str]]) -> tuple[set[str], list[tuple[str, Exception]]]:
-    targets, errors = _resolve_targets(pairs)
-    return _probe_lan(targets), errors
-
-
-async def _scan_ble() -> set[bytes]:
-    heard: set[bytes] = set()
-
-    def seen(device: BLEDevice, data: AdvertisementData) -> None:
-        frame = data.service_data.get(FMDN_SERVICE_UUID)
-        parsed = fmdn_parse(frame) if frame else None
-        if parsed:
-            heard.add(parsed)
-
-    async with BleakScanner(seen):
-        await asyncio.sleep(_BLE_WINDOW_SECONDS)
-    return heard
+    index: dict[bytes, str] = {}
+    for person, key in tags.items():
+        # The tag's clock zero is its pair date, so the current counter is now - anchor;
+        # the ±1 neighbour windows cover boundary timing and the tag's crystal drift.
+        expected = ts - key.anchor
+        for counter in (expected - FMDN_ROTATION_SECONDS, expected, expected + FMDN_ROTATION_SECONDS):
+            for eid in fmdn_eids(key.eik, counter):
+                index[eid] = person
+    return index

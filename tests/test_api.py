@@ -1,6 +1,6 @@
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
-from unittest.mock import ANY, call, patch
+from unittest.mock import ANY, call, create_autospec, patch
 
 import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -438,11 +438,16 @@ class TestPresence:
 
     TAGS = {"Alice": m.BleKey(bytes(32), 0)}
 
+    def _listener(self, names):
+        listener = create_autospec(net.BleListener, instance=True)
+        listener.present.return_value = set(names)
+        return listener
+
     def test_check_presence_hears_ble_tag(self):
         with (
             patch.object(config, "people", {}),
             patch.object(config, "ble_tags", self.TAGS),
-            patch.object(net, "scan_ble", return_value={"Alice"}),
+            patch.object(net, "_ble_listener", self._listener({"Alice"})),
         ):
             api.check_presence()
         assert api.present_names() == {"Alice"}
@@ -451,18 +456,10 @@ class TestPresence:
         with (
             patch.object(config, "people", {}),
             patch.object(config, "ble_tags", self.TAGS),
-            patch.object(net, "scan_ble", return_value=set()),
+            patch.object(net, "_ble_listener", self._listener(set())),
         ):
             api.check_presence()
         assert api.present_names() == set()
-
-    def test_check_presence_survives_ble_scan_failure(self):
-        with (
-            patch.object(config, "people", {}),
-            patch.object(config, "ble_tags", self.TAGS),
-            patch.object(net, "scan_ble", side_effect=RuntimeError("adapter down")),
-        ):
-            assert api.check_presence() == set()
 
 
 def test_context_executor_copies_closure_job():

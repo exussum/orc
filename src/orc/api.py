@@ -403,10 +403,12 @@ def present_names() -> set[str]:
 
 def expire_presence(names: list[str], force: bool = False) -> None:
     sqlite.delete_presence(names, local_now(), force)
+    net.delete_ble_presence(names)
 
 
 def delete_all_presence() -> None:
     sqlite.delete_all_presence(local_now())
+    net.delete_ble_presence(config.ble_tags)
 
 
 def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
@@ -431,7 +433,7 @@ def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.S
     if not pairs and not config.ble_tags:
         return present_names()
     before = present_names()
-    present, errors = net.scan_presence(pairs, config.ble_tags, local_now())
+    present, errors = net.scan_presence(pairs, local_now())
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
         entry = log(source, msg, should_notify=True)
