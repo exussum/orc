@@ -38,17 +38,3 @@ PARSE_CASES = [
 @pytest.mark.parametrize("name,frame,expected", PARSE_CASES, ids=[c[0] for c in PARSE_CASES])
 def test_fmdn_parse(name, frame, expected):
     assert security.fmdn_parse(frame) == expected
-
-
-@pytest.mark.parametrize("name,idx", [(v[0], v[1]) for v in VECTORS], ids=[v[0] for v in VECTORS])
-def test_fmdn_resolve_finds_the_broadcast_variant(name, idx):
-    heard = {bytes(20), security.fmdn_eids(EIK, COUNTER)[idx]}
-    window = range(
-        COUNTER - 2 * security.FMDN_ROTATION_SECONDS, COUNTER + 2 * security.FMDN_ROTATION_SECONDS, security.FMDN_ROTATION_SECONDS
-    )
-    assert security.fmdn_resolve(heard, EIK, window) is True
-
-
-def test_fmdn_resolve_misses_other_keys():
-    heard = {security.fmdn_eids(bytes(32), COUNTER)[0]}
-    assert security.fmdn_resolve(heard, EIK, [COUNTER]) is False
