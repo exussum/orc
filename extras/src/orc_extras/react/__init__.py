@@ -63,12 +63,13 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     for source in Cast.devices(args.devices, objects).all():
         formula = plugins.Formula(source, args.expr)
-        conditions: list[engine.Condition] = [plugins.Range(formula, args.low, args.high)]
+        conditions: list[engine.Condition] = []
         if args.people == Trigger.ANYONE:
             conditions.append(engine.Is(AnyoneChannel(), True))
         elif args.people:
             people = tuple(name.strip() for name in args.people.split(","))
             conditions.append(plugins.Present(people))
+        conditions.append(plugins.Range(formula, args.low, args.high))
         command = engine.Command(target, action)
         objects["react"].append(
             engine.Rule(plugins.DeviceChanged(source), (engine.Clause(tuple(conditions), command),), delay, cooldown=plugins.COOLDOWN)

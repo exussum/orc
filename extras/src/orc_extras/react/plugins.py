@@ -87,7 +87,7 @@ class Range:
             return False
         try:
             result = self.low <= float(value) <= self.high and (
-                self.last_measurement is None or self.low <= self.last_measurement <= self.high
+                self.last_measurement is None or not self.low <= self.last_measurement <= self.high
             )
             self.last_measurement = float(value)
             return result
@@ -136,11 +136,9 @@ def _trigger_label(rule: engine.Rule) -> Any:
     if isinstance(trigger, engine.Transition):
         return trigger.value
     assert isinstance(trigger, DeviceChanged)
-    condition = rule.items[0].conditions[0]
-    assert isinstance(condition, Range)
-    channel = condition.channel
-    assert isinstance(channel, Formula)
-    return channel.expr
+    condition = next(c for c in rule.items[0].conditions if isinstance(c, Range))
+    assert isinstance(condition.channel, Formula)
+    return condition.channel.expr
 
 
 def _reader(ctx: m.AppContext) -> engine.Read:
