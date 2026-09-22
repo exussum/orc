@@ -369,7 +369,7 @@ def _make_range(sensor, expr, low, high, target, action, people=None):
         conditions.append(plugins.Present(people))
     conditions.append(plugins.Range(formula, low, high))
     command = engine.Command(target, action)
-    return [engine.Rule(plugins.DeviceChanged(sensor), (engine.Clause(tuple(conditions), command),), cooldown=plugins.COOLDOWN)]
+    return [engine.Rule(plugins.DeviceChanged(sensor, expr), (engine.Clause(tuple(conditions), command),), cooldown=plugins.COOLDOWN)]
 
 
 def _range_event(ctx, sensor, attributes):
@@ -384,12 +384,12 @@ def test_range_rule_parses_expressions(ctx):
     rules = react.setup(ctx)
     temp = plugins.Formula(Sensor.living, "temperature")
     dewpoint = plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[0].trigger == plugins.DeviceChanged(Sensor.living)
+    assert rules[0].trigger == plugins.DeviceChanged(Sensor.living, "temperature")
     assert rules[0].items[0].conditions == (plugins.Range(temp, 68, 75),)
     assert rules[0].items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
-    assert rules[1].trigger == plugins.DeviceChanged(Sensor.living)
+    assert rules[1].trigger == plugins.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[1].items[0].conditions == (plugins.Present(("alice", "bob")), plugins.Range(dewpoint, 50, 60))
-    assert rules[2].trigger == plugins.DeviceChanged(Sensor.living)
+    assert rules[2].trigger == plugins.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[2].items[0].conditions == (engine.Is(m.AnyoneChannel(), True), plugins.Range(dewpoint, 59, 104))
 
 
@@ -441,7 +441,9 @@ def test_presence_anyone_gates_the_range_rule(ctx):
     formula = plugins.Formula(Sensor.living, "temperature")
     conditions = (engine.Is(m.AnyoneChannel(), True), plugins.Range(formula, 68, 75))
     command = engine.Command(m.Devices(Ac), ac)
-    rule = engine.Rule(plugins.DeviceChanged(Sensor.living), (engine.Clause(conditions, command),), cooldown=plugins.COOLDOWN)
+    rule = engine.Rule(
+        plugins.DeviceChanged(Sensor.living, "temperature"), (engine.Clause(conditions, command),), cooldown=plugins.COOLDOWN
+    )
     _install(ctx, [rule], {5: Sensor.living})
     ctx.api.present_names.return_value = set()
     _range_event(ctx, Sensor.living, {"temperature": 70})
