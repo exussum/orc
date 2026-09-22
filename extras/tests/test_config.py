@@ -1,14 +1,17 @@
-from datetime import time
+from datetime import time, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 from orc_extras import calendar, entrance_sensor
 from orc_extras.calendar import Feed
-from orc_extras.entrance_sensor import Rule, Settings, Timed
+from orc_extras.entrance_sensor import Settings, Timed
 
 import orc
 from orc import api
+from orc import model as m
+from orc.kernel import engine
 from orc.model import DeviceEnum, Devices
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -41,6 +44,22 @@ def test_entrance_config_loads():
     ctx.config.registry = orc.config.registry
     ctx.config.devices = orc.config.devices
     ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor.orc").read_text()}
+    ctx.config.people = {"Rex": []}
+    lights_off = engine.Command(Devices(Light), "off")
+    silence = engine.Command(Devices(Chromecast), "stop")
+    dog = engine.Command(Devices(Chromecast), "resume")
+    reset = engine.Command(Devices(Light), "on")
+    day = engine.Command(Devices(Light), 20)
+    night = engine.Command(Devices(Light), 1)
+    ctx.config.reset_config = SimpleNamespace(commands=(reset,))
+    ctx.config.routines = {"ROUTINE_RESET": SimpleNamespace(commands=(lights_off,))}
+    ctx.config.ad_hoc_routines = {
+        "Lights Off": m.AdhocAction(lights_off, reset=False),
+        "Silence": m.AdhocAction(silence, reset=False),
+        "Dog": m.AdhocAction(dog, delay=timedelta(minutes=6)),
+        "Day Scene": m.AdhocAction(day, reset=False),
+        "Night Scene": m.AdhocAction(night, reset=False),
+    }
     entrance_sensor.setup(ctx)
     sensor = ctx.api.add_listener.call_args.args[0].args[1]
     assert sensor.setting == Settings(
@@ -50,10 +69,12 @@ def test_entrance_config_loads():
         active_event="active",
         inactive_event="inactive",
         snapshot=45,
+        listener="Rex",
     )
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
-    assert sensor.rules.shutdown == [Rule(devices=Devices(Light), state="off")]
-    assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), devices=Devices(Light), state=1)]
+    assert sensor.rules.shutdown == (lights_off,)
+    assert sensor.rules.absent == (reset, dog)  # Dog's reset base is composed in; its delay is ignored
+    assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), commands=(night,))]
 
 
 def test_calendar_config_loads():

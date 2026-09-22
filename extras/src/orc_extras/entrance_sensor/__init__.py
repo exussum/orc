@@ -2,24 +2,19 @@ from datetime import time
 from functools import partial
 from typing import Any, NamedTuple
 
-from command_cfg import each, group, scalar
+from command_cfg import group, scalar
 
-from orc.kernel.loader import Cast, load_plugin_config, resolve_device
-from orc.model import AppContext, DeviceEnum
+from orc.kernel.loader import Cast, load_plugin_config
+from orc.model import AppContext, Commands, DeviceEnum
 from orc_extras.entrance_sensor import plugins
 
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
 setting <key> <value>
 message <log> <message>
-rules <trigger> <devices> <state>
-timed define <name> <start> <stop>
-timed append <name> <devices> <state>
+rules <trigger> <routine>
+timed <name> <start> <stop> <routine>
 """
-
-
-def _devices(ctx: AppContext) -> dict[str, type]:
-    return dict(ctx.config.devices.items())
 
 
 class Settings(NamedTuple):
@@ -29,6 +24,7 @@ class Settings(NamedTuple):
     active_event: str
     inactive_event: str
     snapshot: int
+    listener: str
 
 
 class Messages(NamedTuple):
@@ -38,48 +34,36 @@ class Messages(NamedTuple):
     log_shutdown: str
 
 
-class Rule(NamedTuple):
-    devices: Any
-    state: Any
-
-
-def _rule(ctx: AppContext, **values: Any) -> Rule:
-    return Rule(devices=resolve_device(values["devices"], _devices(ctx)), state=Cast.state(values["state"]))
-
-
 class Rules(NamedTuple):
-    inside: list[Rule]
-    present: list[Rule]
-    absent: list[Rule]
-    shutdown: list[Rule]
+    inside: Commands
+    present: Commands
+    absent: Commands
+    shutdown: Commands
 
 
 class Timed(NamedTuple):
     start: time
     stop: time
-    devices: Any
-    state: Any
+    commands: Commands
+
+
+def _routine_commands(ctx: AppContext, name: str) -> Commands:
+    # An ad_hoc's delay/snapshot are UI affordances - the plugin runs the
+    # commands immediately, composing the reset base exactly like api.run_action.
+    if (ad_hoc := ctx.config.ad_hoc_routines.get(name)) is not None:
+        base = ctx.config.reset_config.commands if ad_hoc.reset else ()
+        return (*base, *ad_hoc.commands)
+    if (routine := ctx.config.routines.get(name)) is not None:
+        return routine.commands
+    raise ValueError(f"unknown routine {name!r} — expected an ad_hoc name or routine id")
+
+
+def _rule(ctx: AppContext, **values: Any) -> Commands:
+    return _routine_commands(ctx, values["routine"])
 
 
 def _timed(ctx: AppContext, **values: Any) -> Timed:
-    return Timed(
-        start=Cast.clock(values["start"]),
-        stop=Cast.clock(values["stop"]),
-        devices=resolve_device(values["devices"], _devices(ctx)),
-        state=Cast.state(values["state"]),
-    )
-
-
-def _process_timed(ctx: AppContext, clocks: dict[str, tuple[str, str]], objects: dict[str, Any], row: Any) -> None:
-    groups: dict[str, list[Timed]] = objects["timed"]
-    if row.define:
-        clocks[row.name] = (row.start, row.stop)
-        groups[row.name] = []
-    elif row.append:
-        if row.name not in clocks:
-            raise ValueError(f"unknown timed group {row.name!r} — add 'timed define {row.name} ...' on an earlier line")
-        start, stop = clocks[row.name]
-        groups[row.name].append(_timed(ctx, start=start, stop=stop, devices=row.devices, state=row.state))
+    return Timed(start=Cast.clock(values["start"]), stop=Cast.clock(values["stop"]), commands=_routine_commands(ctx, values["routine"]))
 
 
 def declare(declarations: Any) -> None:
@@ -98,9 +82,11 @@ def setup(ctx: AppContext) -> None:
             ),
             "message": scalar(Messages),
             "rules": group(partial(_rule, ctx)),
-            "timed": each(partial(_process_timed, ctx, {}), default=dict),
+            "timed": group(partial(_timed, ctx)),
         },
     )
-    sensor.rules = Rules(**sensor.rules)
+    sensor.rules = Rules(**{trigger: tuple(c for commands in rows for c in commands) for trigger, rows in sensor.rules.items()})
+    if sensor.setting.listener not in ctx.config.people:
+        raise ValueError(f"unknown listener {sensor.setting.listener!r} — expected one of {tuple(ctx.config.people)}")
     ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor))
     ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, sensor))

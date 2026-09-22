@@ -114,18 +114,18 @@ describing the file's commands and a `command_cfg` serializer — `scalar()`,
 `group()`, or `array()` — wrapping a factory per declared command:
 
 ```python
+from functools import partial
 from typing import Any, NamedTuple
 
 from command_cfg import group, scalar
-from orc.kernel.loader import Cast, load_plugin_config, resolve_device
+from orc.kernel.loader import Cast, load_plugin_config
 
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
 setting <key> <value>
 message <log> <message>
-rules <trigger> <device> <state>
-timed define <name> <start> <stop>
-timed append <name> <device> <state>
+rules <trigger> <routine>
+timed <name> <start> <stop> <routine>
 """
 
 
@@ -134,13 +134,8 @@ class Settings(NamedTuple):
     snapshot: int
 
 
-class Rule(NamedTuple):
-    device: Any
-    state: Any
-
-
-def _rule(**values: Any) -> Rule:
-    return Rule(device=resolve_device(values["device"], _devices()), state=Cast.state(values["state"]))
+def _rule(ctx, **values: Any) -> Any:
+    return _routine_commands(ctx, values["routine"])
 
 
 def setup(ctx):
@@ -151,14 +146,14 @@ def setup(ctx):
         serializers={
             "setting": scalar(Settings, types={"entrance_id": int, "snapshot": int}),
             "message": scalar(Messages),
-            "rules": group(_rule),
-            "timed": group(_timed),
+            "rules": group(partial(_rule, ctx)),
+            "timed": group(partial(_timed, ctx)),
         },
     )
 ```
 
-(Abbreviated: `Messages`, `Timed`, `_timed`, and `_devices()` are omitted,
-and `Settings`/`Rule` are shown with fewer fields than the real ones — see
+(Abbreviated: `Messages`, `Timed`, `_timed`, and `_routine_commands` are
+omitted, and `Settings` is shown with fewer fields than the real one — see
 [`src/orc_extras/entrance_sensor/__init__.py`](src/orc_extras/entrance_sensor/__init__.py)
 for the full plugin.)
 
@@ -166,9 +161,9 @@ The grammar is one docopt pattern per line; the first word is the command.
 Values arrive as strings; a serializer's `types=` mapping (field name to
 callable) coerces the ones that need it — here `entrance_id`/`snapshot`
 become `int`. Anything not listed in `types=` stays a string, so a factory
-that needs a non-primitive value (`<device>` resolved against the device
-enums, `<state>` validated, `<start>`/`<stop>` parsed into times) does that
-conversion itself, as `_rule`/`_timed` do above:
+that needs a non-primitive value (`<routine>` resolved to commands against
+the main config's ad_hoc routines and routine ids, `<start>`/`<stop>` parsed
+into times) does that conversion itself, as `_rule`/`_timed` do above:
 
 - **`scalar(...)` commands** (`setting`, `message`) take exactly two
   placeholders. Their key/value pairs accumulate across the file (a repeated
@@ -177,21 +172,22 @@ conversion itself, as `_rule`/`_timed` do above:
   makes every field required, so a missing setting fails at load.
 - **`group(...)` commands** (`rules`, `timed`) call their factory once per
   line with the line's fields as keyword arguments; rows collect in dicts of
-  lists keyed by the first placeholder: `sensor.rules["present"]`. A grouped
-  command with `define`/`append` patterns hoists shared values: `define`
-  names a group and carries its parameters (here the time window), `append`
-  adds a row, and every row carries the group's parameters merged in. This
+  lists keyed by the first placeholder: `sensor.rules["present"]`. This
   plugin narrows the open-keyed dict right after loading —
   `Rules(**sensor.rules)` — so a missing or misspelled trigger also fails at
   load.
 
-This plugin's `timed` groups hold device rows, one group per time window;
-the groups are scanned in file order and the first one whose window contains
-the current time wins, so an overlapping group placed higher up overrides
-the ones below it. The winning group is dispatched when the sensor goes
-active; reactions to arrival itself (e.g. pausing media, turning on a light)
-belong in a `react` rule on the same sensor instead. The cleanup job
-dispatches only `rules` rows (`present`, `absent`, `shutdown`).
+Each `rules` and `timed` line names a routine from the main `config.orc` —
+an ad_hoc by its name or a routine by its id. The plugin resolves the name
+to the routine's commands at load and dispatches them directly: an ad_hoc's
+reset base is composed in exactly as running it from the UI would, but its
+`--delay` and `--snapshot` are ignored. The `timed` windows are scanned in
+file order and the first one containing the current time wins, so an
+overlapping window placed higher up overrides the ones below it. The winning
+window's routine is dispatched when the sensor goes active; reactions to
+arrival itself (e.g. pausing media, turning on a light) belong in a `react`
+rule on the same sensor instead. The cleanup job dispatches only `rules`
+routines (`present`, `absent`, `shutdown`).
 
 Because this package is outside the `orc` package, the config name is
 namespaced as `<package>/<name>`, so the file lives at:
@@ -209,21 +205,20 @@ setting patio_door_id         56
 setting active_event          active
 setting inactive_event        inactive
 setting snapshot              45
+setting listener              Rex
 
 message log_present   'Trigger sensor off: skip (people present)'
 message log_door_open 'Trigger sensor off: skip (patio door open)'
-message log_absent    'Trigger sensor off: skip (sounds playing)'
+message log_absent    'Trigger sensor off: skip (listener home)'
 message log_shutdown  'Trigger sensor off: applying OFF'
 
-rules inside   Light      off
-rules present  Chromecast stop
-rules absent   Chromecast resume
-rules shutdown Light      off
+rules inside   'All Lights Off'
+rules present  Silence
+rules absent   Dog
+rules shutdown 'All Lights Off'
 
-timed define Day   8:00  22:00
-timed append Day   Light 20
-timed define Night 22:00 8:00
-timed append Night Light 1
+timed Day   8:00  22:00 'All Lights On'
+timed Night 22:00 8:00  Silence
 ```
 
 The config loads once at startup in `setup()`; if the file is missing or
