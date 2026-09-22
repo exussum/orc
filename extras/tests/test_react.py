@@ -399,6 +399,14 @@ def test_value_in_range_sets_the_ac(ctx):
     assert _dispatched(ctx) == [(Ac.living, ac)]
 
 
+def test_value_in_range_sets_the_ac_once(ctx):
+    ac = m.AcCommand(m.AcMode.COOL, "low", 72)
+    _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})
+    _range_event(ctx, Sensor.living, {"temperature": 70})
+    _range_event(ctx, Sensor.living, {"temperature": 71})
+    assert _dispatched(ctx) == [(Ac.living, ac)]
+
+
 def test_value_out_of_range_does_nothing(ctx):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
     _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})

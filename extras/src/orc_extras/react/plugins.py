@@ -1,6 +1,6 @@
 import math
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, NamedTuple
 
@@ -71,22 +71,26 @@ class DeviceChanged:
     device: m.DeviceEnum
 
     def fired(self, event: engine.Event) -> bool:
-        channel = event.channel
-        return isinstance(channel, m.MqttDeviceChannel) and channel.device == self.device
+        return isinstance(event.channel, m.MqttDeviceChannel) and event.channel.device == self.device
 
 
-@dataclass(frozen=True)
+@dataclass(unsafe_hash=True)
 class Range:
     channel: engine.Channel
     low: float
     high: float
+    last_measurement: float | None = field(hash=False, default=None)
 
     def holds(self, read: engine.Read) -> bool:
         value = read(self.channel)
         if not isinstance(value, (int, float, str)):
             return False
         try:
-            return self.low <= float(value) <= self.high
+            result = self.low <= float(value) <= self.high and (
+                self.last_measurement is None or self.low <= self.last_measurement <= self.high
+            )
+            self.last_measurement = float(value)
+            return result
         except ValueError:
             return False
 
