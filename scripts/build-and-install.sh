@@ -8,5 +8,7 @@ CTRL="-o ControlMaster=auto -o ControlPath=/tmp/orc-ssh-%r@%h:%p -o ControlPersi
 sh scripts/upload.sh "$1" \
     && ssh $CTRL "$DEPLOY" true \
     && scp $CTRL pyproject.toml "$DEPLOY:/tmp/pyproject.toml" \
+    && scp $CTRL extras/pyproject.toml "$DEPLOY:/tmp/extras-pyproject.toml" \
+    && scp $CTRL data/pyproject.toml "$DEPLOY:/tmp/data-pyproject.toml" \
     && ssh $CTRL "$DEPLOY" "ORC_REGISTRY_URL='$ORC_REGISTRY_URL' ORC_TRUSTED_HOST='$ORC_TRUSTED_HOST' bash -s" < scripts/install.sh
 
