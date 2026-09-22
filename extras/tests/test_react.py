@@ -71,6 +71,7 @@ def ctx():
         (s for s in mock.api.device_states.return_value if str(s.id) == target or s.name == target), None
     )
     mock.api.world_reader.return_value = _world_read(mock)
+    mock.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
     mock.config.settings.tz = _UTC
     mock.config.registry = orc.config.registry
     mock.plugin_state = {}
@@ -367,6 +368,8 @@ def _make_range(sensor, expr, low, high, target, action, people=None):
     conditions = []
     if people:
         conditions.append(plugins.Present(people))
+    if isinstance(action, m.AcCommand):
+        conditions.extend(plugins.AcIs(m.AcChannel(ac), m.AcState.OFF) for ac in target.all())
     conditions.append(plugins.Range(formula, low, high))
     command = engine.Command(target, action)
     return [engine.Rule(plugins.DeviceChanged(sensor, expr), (engine.Clause(tuple(conditions), command),), cooldown=plugins.COOLDOWN)]
@@ -385,10 +388,14 @@ def test_range_rule_parses_expressions(ctx):
     temp = plugins.Formula(Sensor.living, "temperature")
     dewpoint = plugins.Formula(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[0].trigger == plugins.DeviceChanged(Sensor.living, "temperature")
-    assert rules[0].items[0].conditions == (plugins.Range(temp, 68, 75),)
+    assert rules[0].items[0].conditions == (plugins.AcIs(m.AcChannel(Ac.living), m.AcState.OFF), plugins.Range(temp, 68, 75))
     assert rules[0].items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == plugins.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[1].items[0].conditions == (plugins.Present(("alice", "bob")), plugins.Range(dewpoint, 50, 60))
+    assert rules[1].items[0].conditions == (
+        plugins.Present(("alice", "bob")),
+        plugins.AcIs(m.AcChannel(Ac.living), m.AcState.OFF),
+        plugins.Range(dewpoint, 50, 60),
+    )
     assert rules[2].trigger == plugins.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[2].items[0].conditions == (engine.Is(m.AnyoneChannel(), True), plugins.Range(dewpoint, 59, 104))
 
@@ -400,11 +407,37 @@ def test_value_in_range_sets_the_ac(ctx):
     assert _dispatched(ctx) == [(Ac.living, ac)]
 
 
-def test_value_in_range_sets_the_ac_once(ctx):
+def test_value_in_range_does_nothing_if_ac_already_on(ctx):
+    ac = m.AcCommand(m.AcMode.COOL, "low", 72)
+    _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
+    _range_event(ctx, Sensor.living, {"temperature": 70})
+    ctx.api.dispatch.assert_not_called()
+
+
+def _past_cooldown(steps):
+    return _NOW + timedelta(seconds=steps * (plugins.COOLDOWN.total_seconds() + 1))
+
+
+def test_ac_turned_off_manually_does_not_self_correct_until_range_reentered(ctx):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
     _install(ctx, _make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})
     _range_event(ctx, Sensor.living, {"temperature": 70})
+    assert _dispatched(ctx) == [(Ac.living, ac)]  # AC comes on
+
+    # someone (or something) turns the AC back off while the temperature is still in range
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
+    ctx.api.dispatch.reset_mock()
+    ctx.api.local_now.return_value = _past_cooldown(1)
     _range_event(ctx, Sensor.living, {"temperature": 71})
+    ctx.api.dispatch.assert_not_called()  # doesn't self-correct
+
+    ctx.api.local_now.return_value = _past_cooldown(2)
+    _range_event(ctx, Sensor.living, {"temperature": 80})  # genuinely leaves the range
+    ctx.api.dispatch.assert_not_called()
+
+    ctx.api.local_now.return_value = _past_cooldown(3)
+    _range_event(ctx, Sensor.living, {"temperature": 71})  # and re-enters
     assert _dispatched(ctx) == [(Ac.living, ac)]
 
 
@@ -439,7 +472,7 @@ def test_presence_gates_the_range_rule(ctx):
 def test_presence_anyone_gates_the_range_rule(ctx):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
     formula = plugins.Formula(Sensor.living, "temperature")
-    conditions = (engine.Is(m.AnyoneChannel(), True), plugins.Range(formula, 68, 75))
+    conditions = (engine.Is(m.AnyoneChannel(), True), plugins.AcIs(m.AcChannel(Ac.living), m.AcState.OFF), plugins.Range(formula, 68, 75))
     command = engine.Command(m.Devices(Ac), ac)
     rule = engine.Rule(
         plugins.DeviceChanged(Sensor.living, "temperature"), (engine.Clause(conditions, command),), cooldown=plugins.COOLDOWN
