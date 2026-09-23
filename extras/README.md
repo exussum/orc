@@ -189,6 +189,11 @@ arrival itself (e.g. pausing media, turning on a light) belong in a `react`
 rule on the same sensor instead. The cleanup job dispatches only `rules`
 routines (`present`, `absent`, `shutdown`).
 
+If the main config defines BLE `tag` lines, `cleanup_delay_minutes` must be
+at least 4. BLE presence stays fresh for three minutes after a tag's last
+advertisement, so a faster cleanup would read a just-departed tag as still
+present; `setup()` rejects the config at startup.
+
 Because this package is outside the `orc` package, the config name is
 namespaced as `<package>/<name>`, so the file lives at:
 
