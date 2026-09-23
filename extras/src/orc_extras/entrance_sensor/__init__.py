@@ -8,6 +8,9 @@ from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AppContext, Commands, DeviceEnum
 from orc_extras.entrance_sensor import plugins
 
+# BLE presence stays fresh for 180s after the last advertisement, so a shorter
+# cleanup reads a just-departed tag as still present.
+MIN_BLE_CLEANUP_MINUTES = 4
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
 setting <key> <value>
@@ -88,5 +91,7 @@ def setup(ctx: AppContext) -> None:
     sensor.rules = Rules(**{trigger: tuple(c for commands in rows for c in commands) for trigger, rows in sensor.rules.items()})
     if sensor.setting.listener not in ctx.config.people:
         raise ValueError(f"unknown listener {sensor.setting.listener!r} — expected one of {tuple(ctx.config.people)}")
+    if ctx.config.ble_tags and sensor.setting.cleanup_delay_minutes < MIN_BLE_CLEANUP_MINUTES:
+        raise ValueError(f"cleanup_delay_minutes {sensor.setting.cleanup_delay_minutes} — BLE tags need at least {MIN_BLE_CLEANUP_MINUTES}")
     ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor))
     ctx.api.add_state_provider("Entrance Sensors", partial(plugins.battery_state, ctx, sensor))

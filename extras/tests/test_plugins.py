@@ -337,6 +337,7 @@ def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx, sensor):
 def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
     sensor.rules = {trigger: [commands] for trigger, commands in sensor.rules._asdict().items()}
     plugin_ctx.config.people = {"rex": []}
+    plugin_ctx.config.ble_tags = {}
     with patch.object(entrance_sensor, "load_plugin_config", return_value=sensor):
         entrance_sensor.setup(plugin_ctx)
     plugin_ctx.api.add_listener.assert_called_once()
