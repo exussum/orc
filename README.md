@@ -239,6 +239,11 @@ the tag sends, so every hearing updates the person's presence directly
 instead of gambling on a scan window. After the one-time key export, nothing
 talks to Google.
 
+The presence page's rescan button additionally tries one direct connection
+to each absent tag at its last-advertised address. Success marks the person
+present; a timeout changes nothing — the address rotates with the EID, so a
+long-silent tag is simply unreachable, not proven away.
+
 The EID scheme is Google's public
 [Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).
 The variant semantics and golden test vectors follow **BSkando**'s

@@ -437,6 +437,7 @@ def schedule_presence_check() -> None:
 def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
     log(source, Log.PRESENCE_RESCAN)
     delete_all_presence()
+    net.presence.probe(set(config.ble_tags) - present_names())
     scheduler.invoke_job(_PRESENCE_CRON_JOB_ID, ctx=ctx, source=source)
 
 

@@ -484,6 +484,16 @@ class TestPresence:
         api.expire_presence(["Alice"], force=True)
         assert "Presence lost: `Alice`" in api.log_entries()[0].action
 
+    def test_rescan_probes_only_absent_tags(self):
+        api.mark_present(["Bob"], when=api.local_now())
+        with (
+            patch.object(config, "ble_tags", {"Alice": m.BleKey(bytes(32), 0), "Bob": m.BleKey(bytes(32), 0)}),
+            patch.object(net.presence, "probe") as probe,
+            patch.object(scheduler, "invoke_job"),
+        ):
+            api.rerun_presence_check(self.ctx)
+        probe.assert_called_once_with({"Alice"})
+
 
 def test_context_executor_copies_closure_job():
     """_do_submit_job must not raise for closure callables (Job uses __slots__, not __dict__)."""
