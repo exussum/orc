@@ -61,7 +61,7 @@ def speak(device: m.DeviceEnum, text: str) -> None:
     url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
     with _cast(device) as cast:
         mc = cast.media_controller
-        for attempt in range(2):
+        for _ in range(2):
             mc.play_media(url, "audio/mp3", title=text)
             mc.block_until_active(timeout=5)
             if mc.status.player_state != "IDLE" or mc.status.idle_reason != "ERROR":
