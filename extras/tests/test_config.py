@@ -85,6 +85,7 @@ def test_entrance_config_loads():
 
 def test_entrance_ble_needs_slower_cleanup():
     ctx, *_ = _entrance_ctx()
+    ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor_fast.orc").read_text()}
     ctx.config.ble_tags = {"Rex": object()}
     with pytest.raises(ValueError, match="cleanup_delay_minutes"):
         entrance_sensor.setup(ctx)

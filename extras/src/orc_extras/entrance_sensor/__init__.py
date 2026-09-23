@@ -8,9 +8,9 @@ from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AppContext, Commands, DeviceEnum
 from orc_extras.entrance_sensor import plugins
 
-# BLE presence stays fresh for 180s after the last advertisement, so a shorter
-# cleanup reads a just-departed tag as still present.
-MIN_BLE_CLEANUP_MINUTES = 4
+# Presence is paused at the door event, so cleanup only counts tags heard after
+# it — and a staying tag's advertisements can drop out for up to ~42s.
+MIN_BLE_CLEANUP_MINUTES = 1
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
 setting <key> <value>
