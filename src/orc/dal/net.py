@@ -9,7 +9,7 @@ from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, tzinfo
 
-from bleak import BleakScanner
+from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 from scapy.layers.dns import DNS, DNSQR
@@ -44,6 +44,7 @@ class Presence:
         self._tz: tzinfo | None = None
         self._index: dict[bytes, str] = {}
         self._heard: LockedDict[str, datetime] = LockedDict()
+        self._addresses: LockedDict[str, str] = LockedDict()
         self._paused: datetime | None = None
         self._on_change: Callable[[], object] = lambda: None
 
@@ -82,6 +83,25 @@ class Presence:
         self._paused = None
         self._changed()
 
+    def probe(self, names: Iterable[str]) -> None:
+        """One connection attempt at each tag's last-advertised address; only success marks.
+
+        The address rotates with the EID (~17 min), so a long-silent tag times out
+        and stays unmarked — no evidence, not absence.
+        """
+
+        async def connect(address: str) -> None:
+            async with BleakClient(address, timeout=_WINDOW_SECONDS):
+                pass
+
+        for person in names:
+            if address := self._addresses.get(person):
+                try:
+                    asyncio.run(connect(address))
+                except Exception:
+                    continue
+                self.mark([person], self._now())
+
     def _changed(self) -> None:
         if not self._paused:
             self._on_change()
@@ -103,6 +123,8 @@ class Presence:
         frame = data.service_data.get(FMDN_SERVICE_UUID)
         eid = fmdn_parse(frame) if frame else None
         if eid and (person := self._index.get(eid)):
+            if device:
+                self._addresses[person] = device.address
             self.mark([person], self._now())
 
     def _now(self) -> datetime:
