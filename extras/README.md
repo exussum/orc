@@ -190,9 +190,10 @@ rule on the same sensor instead. The cleanup job dispatches only `rules`
 routines (`present`, `absent`, `shutdown`).
 
 If the main config defines BLE `tag` lines, `cleanup_delay_minutes` must be
-at least 4. BLE presence stays fresh for three minutes after a tag's last
-advertisement, so a faster cleanup would read a just-departed tag as still
-present; `setup()` rejects the config at startup.
+at least 1. The cleanup pauses presence at the door event and only counts
+evidence heard afterwards, and a staying tag's advertisements can drop out
+for most of a minute, so a faster cleanup could read someone still home as
+absent; `setup()` rejects the config at startup.
 
 Because this package is outside the `orc` package, the config name is
 namespaced as `<package>/<name>`, so the file lives at:

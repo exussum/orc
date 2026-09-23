@@ -55,6 +55,7 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, att
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     if new == sensor.setting.active_event:
+        ctx.api.resume_presence()
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
@@ -63,6 +64,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         ctx.api.dispatch(m.squish((*restore, *timed_commands)), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
         ctx.api.dispatch(sensor.rules.inside, entry=log_entry)
+        ctx.api.pause_presence()
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
@@ -76,8 +78,8 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
 
 @requires_ctx
 def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
-    ctx.api.expire_presence(list(ctx.api.last_seen()))
-    present = ctx.api.check_presence(silent=True)
+    present = ctx.api.check_presence()
+    ctx.api.resume_presence()
     people = present - {sensor.setting.listener}
     door_open = not people and _door_open(ctx, sensor)
 

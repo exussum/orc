@@ -57,46 +57,57 @@ class TestMarketHoliday:
         assert self._market_holiday(date(2026, 11, 30)) is False
 
 
-class TestBleListener:
+class TestPresence:
     EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
     ANCHOR = int(NOW.timestamp()) - 5000
 
     def _hear(self, frames, tags):
-        with patch.object(net.BleListener, "_now", return_value=self.NOW):
-            listener = net.BleListener(tags, timezone.utc)
-            listener._index = net._eid_index(tags, self.NOW)
+        with patch.object(net.Presence, "_now", return_value=self.NOW):
+            presence = net.Presence()
+            presence._index = net._eid_index(tags, self.NOW)
             for frame in frames:
-                listener._seen(None, SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
-        return listener
+                presence._seen(None, SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
+        return presence
+
+    def _present(self, presence):
+        return presence.present(self.NOW - timedelta(hours=1))
 
     def test_heard_tag_names_person(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        assert listener.present(self.NOW) == {"Alice"}
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert self._present(presence) == {"Alice"}
 
     def test_neighbour_window_still_matches(self):
         # a slightly-off pair date lands the true window one rotation from expected
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[0]
-        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        assert listener.present(self.NOW) == {"Alice"}
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert self._present(presence) == {"Alice"}
 
     def test_silence_names_nobody(self):
-        listener = self._hear([], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        assert listener.present(self.NOW) == set()
+        presence = self._hear([], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert self._present(presence) == set()
 
     def test_wrong_key_names_nobody(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        listener = self._hear([frame], {"Alice": BleKey(bytes(32), self.ANCHOR)})
-        assert listener.present(self.NOW) == set()
+        presence = self._hear([frame], {"Alice": BleKey(bytes(32), self.ANCHOR)})
+        assert self._present(presence) == set()
 
-    def test_delete_presence_clears_the_hearing(self):
+    def test_forget_clears_the_hearing(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        listener.delete_presence(["Alice"])
-        assert listener.present(self.NOW) == set()
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence.forget(["Alice"])
+        assert self._present(presence) == set()
 
-    def test_old_hearing_expires(self):
+    def test_hearing_outside_the_window_expires(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        listener = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        assert listener.present(self.NOW + timedelta(seconds=net._BLE_FRESH_SECONDS + 1)) == set()
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        assert presence.present(self.NOW + timedelta(seconds=1)) == set()
+
+    def test_pause_hides_prior_hearing_until_resume(self):
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence.pause(self.NOW)
+        assert self._present(presence) == set()
+        presence.resume()
+        assert self._present(presence) == {"Alice"}

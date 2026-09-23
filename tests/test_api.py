@@ -1,6 +1,6 @@
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
-from unittest.mock import ANY, call, create_autospec, patch
+from unittest.mock import ANY, call, patch
 
 import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -436,30 +436,53 @@ class TestPresence:
                 api.check_presence()
         assert api.present_names() == {"Bob"}
 
-    TAGS = {"Alice": m.BleKey(bytes(32), 0)}
+    def test_check_presence_with_only_tags_reads_memory(self):
+        with patch.object(config, "people", {}), patch.object(config, "ble_tags", {"Alice": m.BleKey(bytes(32), 0)}):
+            api.mark_present(["Alice"], when=api.local_now())
+            assert api.check_presence() == {"Alice"}
 
-    def _listener(self, names):
-        listener = create_autospec(net.BleListener, instance=True)
-        listener.present.return_value = set(names)
-        return listener
-
-    def test_check_presence_hears_ble_tag(self):
-        with (
-            patch.object(config, "people", {}),
-            patch.object(config, "ble_tags", self.TAGS),
-            patch.object(net, "_ble_listener", self._listener({"Alice"})),
-        ):
-            api.check_presence()
+    def test_pause_hides_earlier_evidence_until_resume(self):
+        api.mark_present(["Alice"], when=api.local_now() - timedelta(minutes=1))
+        api.pause_presence()
+        assert api.present_names() == set()
+        api.resume_presence()
         assert api.present_names() == {"Alice"}
 
-    def test_check_presence_ble_silence_marks_nothing(self):
-        with (
-            patch.object(config, "people", {}),
-            patch.object(config, "ble_tags", self.TAGS),
-            patch.object(net, "_ble_listener", self._listener(set())),
-        ):
-            api.check_presence()
+    def test_marks_during_pause_count(self):
+        api.pause_presence()
+        api.mark_present(["Alice"], when=api.local_now() + timedelta(seconds=1))
+        assert api.present_names() == {"Alice"}
+
+    def test_future_checkin_survives_pause_and_expiry(self):
+        api.mark_present(["Alice"], when=api.local_now() + timedelta(hours=1))
+        api.pause_presence()
+        api.expire_presence(["Alice"])
+        assert api.present_names() == {"Alice"}
+
+    def test_force_expire_drops_future_checkin(self):
+        api.mark_present(["Alice"], when=api.local_now() + timedelta(hours=1))
+        api.expire_presence(["Alice"], force=True)
         assert api.present_names() == set()
+
+    def test_mark_reports_detected_once(self):
+        api.mark_present(["Alice"], when=api.local_now())
+        first = api.log_entries()[0]
+        assert "Presence detected: `Alice`" in first.action
+        api.mark_present(["Alice"], when=api.local_now())
+        assert api.log_entries()[0] is first
+
+    def test_report_waits_for_resume(self):
+        api.pause_presence()
+        entries = len(api.log_entries())
+        api.mark_present(["Alice"], when=api.local_now() + timedelta(seconds=1))
+        assert len(api.log_entries()) == entries
+        api.resume_presence()
+        assert "Presence detected: `Alice`" in api.log_entries()[0].action
+
+    def test_report_logs_lost_after_expiry(self):
+        api.mark_present(["Alice"], when=api.local_now())
+        api.expire_presence(["Alice"], force=True)
+        assert "Presence lost: `Alice`" in api.log_entries()[0].action
 
 
 def test_context_executor_copies_closure_job():

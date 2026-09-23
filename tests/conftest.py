@@ -51,6 +51,20 @@ def core_registry(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def reset_presence():
+    from unittest.mock import patch
+
+    from orc import api, config
+    from orc.dal import net
+
+    # api's aliases bind the singleton's methods, so reset it in place; re-wiring
+    # installs a fresh reporter closure (empty ble_tags keeps the scanner thread off).
+    net.presence.__init__()
+    with patch.object(config, "ble_tags", {}):
+        api.start_ble_listener()
+
+
+@pytest.fixture(autouse=True)
 def reset_stubs():
     from orc.dal.audio import stub as audio_stub
     from orc.dal.chromecast import stub as chromecast_stub

@@ -104,7 +104,6 @@ def plugin_ctx():
     mock = MagicMock()
     mock.model = m
     mock.api = create_autospec(api)
-    mock.api.last_seen.return_value = []
     mock.api.check_presence.return_value = set()
     mock.api.device_state.side_effect = _device_state_side_effect(mock)
     return mock
@@ -360,11 +359,23 @@ def test_motion_republish_does_not_fire(ctx, sensor):
     ctx.api.dispatch.assert_not_called()
 
 
-def test_presence_is_expired_before_checking(sensor, plugin_ctx):
+def test_cleanup_checks_presence_then_resumes(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugin_ctx.api.last_seen.return_value = iter(["alice", "bob"])
     _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.expire_presence.assert_called_once_with(["alice", "bob"])
+    plugin_ctx.api.check_presence.assert_called_once_with()
+    plugin_ctx.api.resume_presence.assert_called_once_with()
+
+
+def test_walk_out_pauses_presence(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    _trigger_sensor(ctx, sensor, "16", "inactive")
+    ctx.api.pause_presence.assert_called_once_with()
+
+
+def test_walk_in_resumes_presence(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    _trigger_sensor(ctx, sensor, "16", "active")
+    ctx.api.resume_presence.assert_called_once_with()
 
 
 # --- Guards ---

@@ -27,8 +27,6 @@ from orc.dal.sqlite import (
 )
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
 from orc.dal.sqlite import fetch_durations as _fetch_durations
-from orc.dal.sqlite import fetch_presence as last_seen  # noqa: F401
-from orc.dal.sqlite import insert_presence as mark_present
 from orc.decorators import requires_ctx
 from orc.kernel import engine
 from orc.kernel.declarations import Declarations
@@ -48,6 +46,10 @@ _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 _ctx: m.AppContext | None = None
 _ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
 _NOTIFICATIONS: deque[m.LogSubEntry] = deque(maxlen=10)
+
+last_seen = net.presence.seen
+mark_present = net.presence.mark
+resume_presence = net.presence.resume
 
 
 def set_ctx(ctx: m.AppContext) -> None:
@@ -397,18 +399,39 @@ def set_theme_override(name: str, start: date, end: date) -> None:
 
 
 def present_names() -> set[str]:
-    cutoff = local_now() - timedelta(hours=config.settings.presence_hours)
-    return {name for name, ts in sqlite.fetch_presence().items() if ts >= cutoff}
+    return net.presence.present(local_now() - timedelta(hours=config.settings.presence_hours))
 
 
 def expire_presence(names: list[str], force: bool = False) -> None:
-    sqlite.delete_presence(names, local_now(), force)
-    net.delete_ble_presence(names)
+    net.presence.forget(names, before=None if force else local_now())
 
 
 def delete_all_presence() -> None:
-    sqlite.delete_all_presence(local_now())
-    net.delete_ble_presence(config.ble_tags)
+    expire_presence(list(net.presence.seen()))
+
+
+def pause_presence() -> None:
+    net.presence.pause(local_now())
+
+
+def start_ble_listener() -> None:
+    reported: set[str] = set()
+
+    def report() -> None:
+        nonlocal reported
+        present = present_names()
+        if detected := sorted(present - reported):
+            log(m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
+        if lost := sorted(reported - present):
+            log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
+        reported = present
+
+    net.presence.start(config.ble_tags, config.settings.tz, report)
+
+
+def schedule_presence_check() -> None:
+    if config.people:
+        scheduler.schedule_once(_check_presence_job, local_now(), name="Presence Boot Check", jobstore=JOBSTORE_MEMORY)
 
 
 def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
@@ -428,25 +451,17 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
     rebuild_jobs(ctx)
 
 
-def check_presence(silent: bool = False, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
+def check_presence(source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
     pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
     if not pairs and not config.ble_tags:
         return present_names()
-    before = present_names()
-    present, errors = net.scan_presence(pairs, local_now())
+    present, errors = net.scan_presence(pairs)
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
         entry = log(source, msg, should_notify=True)
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
     mark_present(present, local_now())
-    after = present_names()
-
-    if not silent:
-        if detected := sorted(after - before):
-            log(source, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
-        if lost := sorted(before - after):
-            log(source, Log.PRESENCE_LOST.format(name=", ".join(lost)))
-    return after
+    return present_names()
 
 
 def get_schedule() -> list[tuple[datetime, m.Routine]]:
