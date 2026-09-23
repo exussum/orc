@@ -57,7 +57,7 @@ line-length = 140
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["B", "E", "F", "I"]
 
 [tool.ruff.lint.isort]
 known-third-party = ["apscheduler"]

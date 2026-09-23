@@ -115,9 +115,9 @@ def validate(config: SimpleNamespace) -> None:
     ):
         if missing := set(required) - present:
             raise ConfigError(f"Missing required {label}: {', '.join(sorted(missing))}")
-    if unset := [key for key, value in zip(interfaces.Provider._fields, config.provider) if value is None]:
+    if unset := [key for key, value in zip(interfaces.Provider._fields, config.provider, strict=True) if value is None]:
         raise ConfigError(f"Missing required providers: {', '.join(unset)}")
-    if unset := [key for key, value in zip(m.Settings._fields, config.setting) if value in (None, "")]:
+    if unset := [key for key, value in zip(m.Settings._fields, config.setting, strict=True) if value in (None, "")]:
         raise ConfigError(f"Missing required settings: {', '.join(unset)}")
     if config.setting.emergency_routine not in config.routine:
         raise ConfigError(f"Unknown routine {config.setting.emergency_routine!r}: expected one of {tuple(config.routine)}")
