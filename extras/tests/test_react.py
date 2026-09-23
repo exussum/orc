@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, create_autospec
+from unittest.mock import create_autospec
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -10,7 +10,6 @@ from orc_extras import react
 from orc_extras.react import plugins
 
 import orc
-from orc import api
 from orc import model as m
 from orc.kernel import engine
 from orc.model import DeviceEnum
@@ -60,29 +59,27 @@ def _world_read(mock):
 
 
 @pytest.fixture
-def ctx():
-    mock = MagicMock()
-    mock.api = create_autospec(api)
-    mock.engine = engine.Runtime([])
-    mock.scheduler = create_autospec(BaseScheduler, instance=True)
-    mock.api.JOBSTORE_MEMORY = "memory"
-    mock.api.local_now.return_value = _NOW
-    mock.api.device_state.side_effect = lambda target: next(
-        (s for s in mock.api.device_states.return_value if str(s.id) == target or s.name == target), None
+def ctx(ctx):
+    ctx.engine = engine.Runtime([])
+    ctx.scheduler = create_autospec(BaseScheduler, instance=True)
+    ctx.api.JOBSTORE_MEMORY = "memory"
+    ctx.api.local_now.return_value = _NOW
+    ctx.api.device_state.side_effect = lambda target: next(
+        (s for s in ctx.api.device_states.return_value if str(s.id) == target or s.name == target), None
     )
-    mock.api.world_reader.return_value = _world_read(mock)
-    mock.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
-    mock.config.settings.tz = _UTC
-    mock.config.registry = orc.config.registry
-    mock.plugin_state = {}
-    return mock
+    ctx.api.world_reader.return_value = _world_read(ctx)
+    ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
+    ctx.config.settings.tz = _UTC
+    ctx.config.registry = orc.config.registry
+    ctx.plugin_state = {}
+    return ctx
 
 
-def _setup(ctx):
+@pytest.fixture
+def configured(ctx):
     ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react.orc").read_text()}
     rules = react.setup(ctx)
-    listener = ctx.api.add_listener.call_args.args[0]
-    return rules, listener
+    return rules, ctx.api.add_listener.call_args.args[0]
 
 
 def _make(devices, attribute, state, action, target=None, delay=None, when=None):
@@ -117,8 +114,8 @@ def _fire_pending(ctx):
 
 # The fixture's first line (`react Light ...`) fans out to lamp + desk, so the
 # compiled rules are: 0 lamp/on, 1 desk/on, 2..7 the single-device lines 2..7.
-def test_config_registers_listener(ctx):
-    rules, _ = _setup(ctx)
+def test_config_registers_listener(ctx, configured):
+    rules, _ = configured
     assert len(rules) == 8  # line 1 fans out to lamp + desk; lines 2..7 are single-device
     assert rules[0].trigger == engine.Transition(m.MqttDeviceChannel(Light.lamp, "switch"), m.ON)
     assert rules[1].trigger == engine.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
@@ -127,8 +124,7 @@ def test_config_registers_listener(ctx):
     assert ctx.plugin_state[plugins].sources == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
 
 
-def test_switch_on_schedules_reaction(ctx):
-    _setup(ctx)
+def test_switch_on_schedules_reaction(ctx, configured):
     listener = ctx.api.add_listener.call_args.args[0]
     _switch(ctx, listener, 1, m.OFF, m.ON)
     call = ctx.scheduler.add_job.call_args
@@ -137,16 +133,16 @@ def test_switch_on_schedules_reaction(ctx):
     assert call.kwargs["args"][1] == "lamp"
 
 
-def test_switch_off_cancels_pending_jobs(ctx):
-    _, listener = _setup(ctx)
+def test_switch_off_cancels_pending_jobs(ctx, configured):
+    _, listener = configured
     _switch(ctx, listener, 1, m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
     ctx.scheduler.reset_mock()
     _switch(ctx, listener, 1, m.ON, m.OFF)  # reverse edge cancels the pending
     assert ctx.scheduler.remove_job.called
 
 
-def test_unwatched_device_is_ignored(ctx):
-    _, listener = _setup(ctx)
+def test_unwatched_device_is_ignored(ctx, configured):
+    _, listener = configured
     device = m.DeviceState(id=99, name="other", attributes={"switch": m.ON}, last_activity=None)
     listener.func(*listener.args, device, "switch", m.OFF, m.ON)
     ctx.scheduler.add_job.assert_not_called()
@@ -186,8 +182,8 @@ def test_different_rule_between_does_not_amend(ctx):
     assert [call.kwargs.get("amend", False) for call in ctx.api.log.call_args_list] == [False, False]
 
 
-def test_untargeted_ac_command_targets_the_ac_set(ctx):
-    rules, _ = _setup(ctx)
+def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
+    rules, _ = configured
     assert rules[4].items[0].command.channel == m.Devices(Ac)
 
 
@@ -214,14 +210,14 @@ def test_contact_open_triggers_immediate_rule(ctx):
     assert _dispatched(ctx) == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
 
 
-def test_if_clause_parses_device_and_condition(ctx):
-    rules, _ = _setup(ctx)
+def test_if_clause_parses_device_and_condition(ctx, configured):
+    rules, _ = configured
     assert rules[2].items[0].conditions[0] == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
     assert rules[3].items[0].conditions[0] == plugins.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
 
 
-def test_set_clause_parses_explicit_target(ctx):
-    rules, _ = _setup(ctx)
+def test_set_clause_parses_explicit_target(ctx, configured):
+    rules, _ = configured
     assert rules[0].items[0].command.channel == m.Devices(Light.lamp)
     assert rules[2].items[0].command.channel == m.Devices(Ac.living)
 
@@ -234,17 +230,17 @@ def test_target_must_match_action_kind():
         react._parse_target("AC", m.STOP, objects)
 
 
-def test_if_clause_covers_lights_and_chromecasts(ctx):
-    rules, _ = _setup(ctx)
+def test_if_clause_covers_lights_and_chromecasts(ctx, configured):
+    rules, _ = configured
     assert rules[5].items[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
     assert rules[6].items[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
 
 
-def test_motion_trigger_with_target_and_no_if_clause(ctx):
+def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
     # regression: docopt's optional-group matching lets the bracketed `if <device> is
     # <condition>` absorb a stray token even without the literal if/is present, which
     # made a bare `set <target> <action>` (no if clause) misparse as `set <action>`
-    rules, _ = _setup(ctx)
+    rules, _ = configured
     assert rules[7].trigger == engine.Transition(m.MqttDeviceChannel(Sensor.living, "motion"), "active")
     assert rules[7].items[0].conditions == ()
     assert rules[7].items[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
