@@ -179,6 +179,10 @@ Two config surfaces:
    | `port`              | HTTP listen port                               | `8000`                   |
    | `presence_hours`    | How long a presence detection persists         | `9`                      |
    | `checkin_hours`     | How long a manual check-in persists            | `1`                      |
+
+   Presence lives in memory: a restart clears it, then a startup scan (when
+   `person` lines exist) and the tags' own advertisements rebuild it within
+   seconds. Manual check-ins don't survive a restart.
    | `sunset_lead_hours` | Hours before sunset that sunset routines fire  | `1`                      |
 
 2. **Environment variables** — only the bootstrap pair that can't live in
@@ -231,7 +235,7 @@ practice.
 
 Matching is fully local: a background listener computes the tag's rotating
 ephemeral ID (EID) from the key and pair date and hears every advertisement
-the tag sends, so each presence check reads the last time the tag was heard
+the tag sends, so every hearing updates the person's presence directly
 instead of gambling on a scan window. After the one-time key export, nothing
 talks to Google.
 
