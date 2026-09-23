@@ -187,7 +187,7 @@ def _event_state_changes(fm: m.Fieldmap, device_id: str, old: dict[int, int], ne
     after = api.state_from_raw(fm, new)
     changes = [
         f"{field} {b} → {a}"
-        for field, b, a in zip(before._fields, before, after)
+        for field, b, a in zip(before._fields, before, after, strict=True)
         if field != "current_temperature" and b is not None and b != a
     ]
     if changes:

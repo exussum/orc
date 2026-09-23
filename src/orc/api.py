@@ -511,7 +511,7 @@ def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: i
     ts, twilight = _almanac(lat, long)
     start, end = ts.from_datetime(midnight), ts.from_datetime(midnight + timedelta(days=1))
     prev, sunrise, sunset = int(twilight(start).item()), None, None
-    for t, curr in zip(*almanac.find_discrete(start, end, twilight)):
+    for t, curr in zip(*almanac.find_discrete(start, end, twilight), strict=True):
         curr = int(curr)
         if (prev, curr) == (3, 4):
             sunrise = t.astimezone(midnight.tzinfo)
