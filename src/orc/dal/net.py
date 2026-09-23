@@ -5,7 +5,7 @@ import signal
 import socket
 import threading
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, tzinfo
 
@@ -22,38 +22,69 @@ from orc.collections import LockedDict
 from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_eids, fmdn_parse
 
 _WINDOW_SECONDS = 3
-# A tag can't be solicited like the LAN probes' targets - it only broadcasts (every
-# ~6s, with multi-cycle dropouts measured up to 42s), so windowed scans miss it;
-# the listener hears every frame instead and a tag in range never goes this quiet.
-_BLE_FRESH_SECONDS = 180
 _BLE_INDEX_REFRESH_SECONDS = 300
 
 _log = logging.getLogger(__name__)
 
 
-class BleListener:
-    """Continuously hears FMDN advertisements and keeps a last-heard time per person.
+class Presence:
+    """Last-heard time per person, fed by BLE hearings, LAN scan results, and
+    manual check-ins; a pause narrows presence to evidence heard after it.
 
-    Runs a BleakScanner in its own daemon thread; every frame is one dict lookup
-    against the EID index, rebuilt as the 1024s rotation windows advance. A scanner
+    start() runs an FMDN listener in a daemon thread: a tag can't be solicited
+    like the LAN probes' targets - it only broadcasts (every ~6s, with
+    multi-cycle dropouts measured up to 42s), so windowed scans miss it; the
+    listener hears every frame instead. Every frame is one dict lookup against
+    the EID index, rebuilt as the 1024s rotation windows advance. A scanner
     failure brings the process down — supervisor restarts it.
     """
 
-    def __init__(self, tags: Mapping[str, m.BleKey], tz: tzinfo) -> None:
-        self._tags = tags
-        self._tz = tz
+    def __init__(self) -> None:
+        self._tags: Mapping[str, m.BleKey] = {}
+        self._tz: tzinfo | None = None
         self._index: dict[bytes, str] = {}
         self._heard: LockedDict[str, datetime] = LockedDict()
+        self._paused: datetime | None = None
+        self._on_change: Callable[[], object] = lambda: None
 
-    def start(self) -> None:
+    def start(self, tags: Mapping[str, m.BleKey], tz: tzinfo, on_change: Callable[[], object] | None = None) -> None:
+        if on_change:
+            self._on_change = on_change
+        if not tags:
+            return
+        self._tags = tags
+        self._tz = tz
         threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
 
-    def present(self, now: datetime) -> set[str]:
-        return {person for person, heard in self._heard.copy().items() if (now - heard).total_seconds() <= _BLE_FRESH_SECONDS}
-
-    def delete_presence(self, names: Iterable[str]) -> None:
+    def mark(self, names: Iterable[str], when: datetime) -> None:
         for name in names:
-            self._heard.pop(name)
+            self._heard[name] = when
+        self._changed()
+
+    def seen(self) -> dict[str, datetime]:
+        return self._heard.copy()
+
+    def present(self, cutoff: datetime) -> set[str]:
+        paused = self._paused
+        return {name for name, heard in self._heard.copy().items() if heard >= cutoff and (not paused or heard > paused)}
+
+    def forget(self, names: Iterable[str], before: datetime | None = None) -> None:
+        # `before` keeps entries at or past it — manual check-ins stamped in the future.
+        for name in names:
+            if (heard := self._heard.get(name)) and (before is None or heard < before):
+                self._heard.pop(name)
+        self._changed()
+
+    def pause(self, until: datetime) -> None:
+        self._paused = until
+
+    def resume(self) -> None:
+        self._paused = None
+        self._changed()
+
+    def _changed(self) -> None:
+        if not self._paused:
+            self._on_change()
 
     def _listen(self) -> None:
         try:
@@ -72,13 +103,24 @@ class BleListener:
         frame = data.service_data.get(FMDN_SERVICE_UUID)
         eid = fmdn_parse(frame) if frame else None
         if eid and (person := self._index.get(eid)):
-            self._heard[person] = self._now()
+            self.mark([person], self._now())
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)
 
 
-_ble_listener: BleListener | None = None
+presence = Presence()
+
+
+def scan_presence(pairs: list[tuple[str, str, str]]) -> tuple[set[str], list[tuple[str, Exception]]]:
+    """Return the person names that answered on the LAN, plus any scan failures.
+
+    For each (name, host, mac), resolves host to an IP and probes it. A device
+    counts as present if its IP appears as an ARP reply or an mDNS packet during
+    the sniff window.
+    """
+    targets, errors = _resolve_targets(pairs)
+    return _probe_lan(targets), errors
 
 
 def _resolve_targets(
@@ -147,33 +189,6 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
         elif IP in p:
             responded.add(p[IP].src)
     return {name for ip, (name, _) in targets.items() if ip in responded}
-
-
-def delete_ble_presence(names: Iterable[str]) -> None:
-    if _ble_listener:
-        _ble_listener.delete_presence(names)
-
-
-def start_ble_listener(tags: Mapping[str, m.BleKey], tz: tzinfo) -> None:
-    global _ble_listener
-    if not tags:
-        return
-    _ble_listener = BleListener(tags, tz)
-    _ble_listener.start()
-
-
-def scan_presence(pairs: list[tuple[str, str, str]], now: datetime) -> tuple[set[str], list[tuple[str, Exception]]]:
-    """Return the person names heard on the LAN or over BLE, plus any scan failures.
-
-    For each (name, host, mac), resolves host to an IP and probes it. A device counts as
-    present if its IP appears as an ARP reply or an mDNS packet during the sniff window.
-    BLE presence is anyone the listener heard recently enough.
-    """
-    targets, errors = _resolve_targets(pairs)
-    names = _probe_lan(targets)
-    if _ble_listener:
-        names |= _ble_listener.present(now)
-    return names, errors
 
 
 def _eid_index(tags: Mapping[str, m.BleKey], now: datetime) -> dict[bytes, str]:
