@@ -30,6 +30,14 @@ class Sensor(DeviceEnum):
     patio = "balcony door"
 
 
+LIGHTS_OFF = engine.Command(Devices(Light), "off")
+SILENCE = engine.Command(Devices(Chromecast), "stop")
+DOG = engine.Command(Devices(Chromecast), "resume")
+RESET = engine.Command(Devices(Light), "on")
+DAY = engine.Command(Devices(Light), 20)
+NIGHT = engine.Command(Devices(Light), 1)
+
+
 @pytest.fixture(autouse=True)
 def _device_enums(monkeypatch):
     from orc.kernel import declarations
@@ -38,36 +46,28 @@ def _device_enums(monkeypatch):
     monkeypatch.setattr(orc.config, "registry", declarations.Declarations().build(enums))
 
 
-def _entrance_ctx():
-    ctx = MagicMock()
-    ctx.api = create_autospec(api)
+@pytest.fixture
+def entrance_ctx(ctx):
     ctx.config.registry = orc.config.registry
     ctx.config.devices = orc.config.devices
     ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor.orc").read_text()}
     ctx.config.people = {"Rex": []}
     ctx.config.ble_tags = {}
-    lights_off = engine.Command(Devices(Light), "off")
-    silence = engine.Command(Devices(Chromecast), "stop")
-    dog = engine.Command(Devices(Chromecast), "resume")
-    reset = engine.Command(Devices(Light), "on")
-    day = engine.Command(Devices(Light), 20)
-    night = engine.Command(Devices(Light), 1)
-    ctx.config.reset_config = SimpleNamespace(commands=(reset,))
-    ctx.config.routines = {"ROUTINE_RESET": SimpleNamespace(commands=(lights_off,))}
+    ctx.config.reset_config = SimpleNamespace(commands=(RESET,))
+    ctx.config.routines = {"ROUTINE_RESET": SimpleNamespace(commands=(LIGHTS_OFF,))}
     ctx.config.ad_hoc_routines = {
-        "Lights Off": m.AdhocAction(lights_off, reset=False),
-        "Silence": m.AdhocAction(silence, reset=False),
-        "Dog": m.AdhocAction(dog, delay=timedelta(minutes=6)),
-        "Day Scene": m.AdhocAction(day, reset=False),
-        "Night Scene": m.AdhocAction(night, reset=False),
+        "Lights Off": m.AdhocAction(LIGHTS_OFF, reset=False),
+        "Silence": m.AdhocAction(SILENCE, reset=False),
+        "Dog": m.AdhocAction(DOG, delay=timedelta(minutes=6)),
+        "Day Scene": m.AdhocAction(DAY, reset=False),
+        "Night Scene": m.AdhocAction(NIGHT, reset=False),
     }
-    return ctx, lights_off, reset, dog, night
+    return ctx
 
 
-def test_entrance_config_loads():
-    ctx, lights_off, reset, dog, night = _entrance_ctx()
-    entrance_sensor.setup(ctx)
-    sensor = ctx.api.add_listener.call_args.args[0].args[1]
+def test_entrance_config_loads(entrance_ctx):
+    entrance_sensor.setup(entrance_ctx)
+    sensor = entrance_ctx.api.add_listener.call_args.args[0].args[1]
     assert sensor.setting == Settings(
         cleanup_delay_minutes=2,
         entrance=Sensor.entrance,
@@ -78,17 +78,16 @@ def test_entrance_config_loads():
         listener="Rex",
     )
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
-    assert sensor.rules.shutdown == (lights_off,)
-    assert sensor.rules.absent == (reset, dog)  # Dog's reset base is composed in; its delay is ignored
-    assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), commands=(night,))]
+    assert sensor.rules.shutdown == (LIGHTS_OFF,)
+    assert sensor.rules.absent == (RESET, DOG)  # Dog's reset base is composed in; its delay is ignored
+    assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), commands=(NIGHT,))]
 
 
-def test_entrance_ble_needs_slower_cleanup():
-    ctx, *_ = _entrance_ctx()
-    ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor_fast.orc").read_text()}
-    ctx.config.ble_tags = {"Rex": object()}
+def test_entrance_ble_needs_slower_cleanup(entrance_ctx):
+    entrance_ctx.config.plugin_configs = {entrance_sensor.CONFIG: (FIXTURE / "entrance_sensor_fast.orc").read_text()}
+    entrance_ctx.config.ble_tags = {"Rex": object()}
     with pytest.raises(ValueError, match="cleanup_delay_minutes"):
-        entrance_sensor.setup(ctx)
+        entrance_sensor.setup(entrance_ctx)
 
 
 def test_calendar_config_loads():

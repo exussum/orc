@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
-from unittest.mock import ANY, MagicMock, create_autospec, patch
+from unittest.mock import ANY, create_autospec, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -8,7 +8,6 @@ from apscheduler.schedulers.base import BaseScheduler
 from orc_extras import entrance_sensor
 from orc_extras.entrance_sensor import plugins
 
-from orc import api
 from orc import model as m
 from orc.kernel import engine
 from orc.model import DeviceEnum
@@ -52,15 +51,12 @@ def _device_state_side_effect(mock):
 
 
 @pytest.fixture
-def ctx():
-    mock = MagicMock()
-    mock.model = m
-    mock.api = create_autospec(api)
-    mock.scheduler = create_autospec(BaseScheduler, instance=True)
-    mock.api.JOBSTORE_MEMORY = "memory"
-    mock.api.device_state.side_effect = _device_state_side_effect(mock)
-    mock.config.settings.tz = _UTC
-    return mock
+def ctx(ctx):
+    ctx.scheduler = create_autospec(BaseScheduler, instance=True)
+    ctx.api.JOBSTORE_MEMORY = "memory"
+    ctx.api.device_state.side_effect = _device_state_side_effect(ctx)
+    ctx.config.settings.tz = _UTC
+    return ctx
 
 
 # Mirrors the shape of the provisioned config: walking in lights the entrance
@@ -100,13 +96,9 @@ def sensor():
 
 
 @pytest.fixture
-def plugin_ctx():
-    mock = MagicMock()
-    mock.model = m
-    mock.api = create_autospec(api)
-    mock.api.check_presence.return_value = set()
-    mock.api.device_state.side_effect = _device_state_side_effect(mock)
-    return mock
+def plugin_ctx(ctx):
+    ctx.api.check_presence.return_value = set()
+    return ctx
 
 
 def _cleanup(sensor, plugin_ctx):
