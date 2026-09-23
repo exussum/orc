@@ -1,6 +1,7 @@
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from orc import security
 from orc.dal import net
@@ -62,12 +63,14 @@ class TestPresence:
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
     ANCHOR = int(NOW.timestamp()) - 5000
 
+    ADDRESS = "11:22:33:44:55:66"
+
     def _hear(self, frames, tags):
         with patch.object(net.Presence, "_now", return_value=self.NOW):
             presence = net.Presence()
             presence._index = net._eid_index(tags, self.NOW)
             for frame in frames:
-                presence._seen(None, SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
+                presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
         return presence
 
     def _present(self, presence):
@@ -111,3 +114,39 @@ class TestPresence:
         assert self._present(presence) == set()
         presence.resume()
         assert self._present(presence) == {"Alice"}
+
+    def _probe(self, presence, client):
+        with patch.object(net, "BleakClient", client), patch.object(net.Presence, "_now", return_value=self.NOW):
+            presence.probe(["Alice"])
+
+    def test_probe_marks_reachable_tag(self):
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence.forget(["Alice"])
+        connections = []
+
+        @asynccontextmanager
+        async def client(address, timeout):
+            connections.append(address)
+            yield
+
+        self._probe(presence, client)
+        assert connections == [self.ADDRESS]
+        assert self._present(presence) == {"Alice"}
+
+    def test_probe_failure_marks_nothing(self):
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence.forget(["Alice"])
+
+        def client(address, timeout):
+            raise TimeoutError
+
+        self._probe(presence, client)
+        assert self._present(presence) == set()
+
+    def test_probe_without_known_address_skips(self):
+        presence = net.Presence()
+        client = MagicMock()
+        self._probe(presence, client)
+        client.assert_not_called()
