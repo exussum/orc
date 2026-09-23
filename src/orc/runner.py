@@ -14,7 +14,6 @@ import orc as config
 from orc import _build, api
 from orc import model as m
 from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY
-from orc.dal import net
 from orc.dal.scheduler import ContextThreadPoolExecutor, set_scheduler
 from orc.locale import Log
 from orc.view import OrcFlask, VersionManager, bp
@@ -76,8 +75,9 @@ def _start_services(ctx: m.AppContext) -> None:
     api.wire_buttons(ctx)
     api.wire_external_log()
     config.config.providers.mqtt.start()
-    net.start_ble_listener(config.config.ble_tags, config.config.settings.tz)
+    api.start_ble_listener()
     ctx.scheduler.resume()
+    api.schedule_presence_check()
     api.log(m.LogSource.SYSTEM, Log.BOOT)
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
