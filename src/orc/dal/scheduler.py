@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from orc import config
 from orc import model as m
+from orc.decorators import mappable
 
 _instance: BaseScheduler | None = None
 
@@ -71,6 +72,7 @@ def invoke_job(id: str, **kwargs: Any) -> None:
     job.func(*job.args, **{**job.kwargs, **kwargs})
 
 
+@mappable
 def fetch_jobs_by_type(type: type) -> list[Job]:
     now = datetime.now(tz=config.settings.tz)
     return [e for e in _scheduler().get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
