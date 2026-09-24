@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon_svg %}
-{% block head_scripts %}<script src="/static/device.js" defer></script>{% endblock %}
+{% block head_scripts %}<script type="module" src="/static/device.js"></script>{% endblock %}
 {% block body %}
     {% for (title, devices) in devices_grouped.items() %}
         {% set other = devices | selectattr('type', 'ne', 'AC') | list %}
