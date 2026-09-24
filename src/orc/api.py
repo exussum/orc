@@ -27,7 +27,7 @@ from orc.dal.sqlite import (
 )
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
 from orc.dal.sqlite import fetch_durations as _fetch_durations
-from orc.decorators import requires_ctx
+from orc.decorators import mappable, requires_ctx
 from orc.kernel import engine
 from orc.kernel.declarations import Declarations
 from orc.kernel.loader import Cast
@@ -62,6 +62,7 @@ def duration_stats() -> dict[str, tuple[int, float]]:
     return {name: (samples, avg) for name, samples, avg in _fetch_durations()}
 
 
+@mappable
 def fetch_durations() -> list[tuple[str, int]]:
     return [(name, math.ceil(avg)) for name, (_, avg) in duration_stats().items()]
 
@@ -129,10 +130,12 @@ def device_state(target: str) -> m.DeviceState | None:
     return next((s for s in device_states() if str(s.id) == target or s.name == target), None)
 
 
+@mappable
 def capture_lights() -> m.Commands:
     return config.providers.mqtt.fetch_light_states(tuple(config.devices.Light))
 
 
+@mappable
 def capture_sounds() -> tuple[m.SoundState, ...]:
     devices: tuple[m.DeviceEnum, ...] = (*config.devices.Chromecast, *config.devices.USB)
     if not devices:
