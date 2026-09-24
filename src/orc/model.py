@@ -93,14 +93,16 @@ class Settings(NamedTuple):
         return cls(**values)
 
 
-class RetryStats(NamedTuple):
+@dataclass(frozen=True)
+class RetryStats:
     id: int
     failed: int
     clean: int
     retried: int
 
 
-class DeviceStatus(NamedTuple):
+@dataclass(frozen=True)
+class DeviceStatus:
     name: str
     details: dict[str, Any]
     label: str | None = None
@@ -198,12 +200,14 @@ class AcState(Flag):
     ON = COOL | FAN_ONLY | ECON | DRY
 
 
-class CA(NamedTuple):
+@dataclass(frozen=True)
+class CA:
     cert: x509.Certificate
     key: rsa.RSAPrivateKey
 
 
-class Certificate(NamedTuple):
+@dataclass(frozen=True)
+class Certificate:
     cert_pem: bytes
     key_pem: bytes
 
@@ -295,7 +299,8 @@ class AcMode(StrEnum):
     DRY = "dry"
 
 
-class AcCommand(NamedTuple):
+@dataclass(frozen=True)
+class AcCommand:
     mode: AcMode
     fan: str
     temp: int
