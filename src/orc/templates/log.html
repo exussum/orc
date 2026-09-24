@@ -3,13 +3,13 @@
 {% macro child_rows(entry, parent_id) %}
     {% for child in entry.children %}
         <tr class="hidden" data-log-parent="{{ parent_id }}">
-            <td class="px-2 py-1">
+            <td class="orc-td">
                 <span class="whitespace-nowrap">{{ child.timestamp.strftime("%I:%M:%S %p") }}</span>
             </td>
-            <td class="px-2 py-1">
+            <td class="orc-td">
                 <span class="orc-badge" style="background-color: {{ child.source.badge_color }}">{{ child.source }}</span>
             </td>
-            <td class="px-2 py-1 max-w-0 w-full">
+            <td class="orc-td max-w-0 w-full">
                 <div class="flex items-center gap-1.5" style="padding-left: 1.5rem">
                     <div class="orc-log-action truncate min-w-0">{{ child.action|codespan }}</div>
                 </div>
@@ -21,20 +21,20 @@
     {% for day, entries in entries_grouped %}
         {% call day_card(day, table_class="text-sm") %}
             <tr>
-                <th class="px-2 py-1 font-normal w-32">Time</th>
-                <th class="px-2 py-1 font-normal w-32">Source</th>
-                <th class="px-2 py-1 font-normal">Action</th>
+                <th class="orc-th w-32">Time</th>
+                <th class="orc-th w-32">Source</th>
+                <th class="orc-th">Action</th>
             </tr>
             {% for entry in entries %}
                 {% set eid = "log-" ~ day.isoformat() ~ "-" ~ loop.index %}
                 <tr{% if entry.children %} class="orc-log-parent cursor-pointer" data-log-id="{{ eid }}"{% endif %}>
-                    <td class="px-2 py-1">
+                    <td class="orc-td">
                         <span class="whitespace-nowrap">{{ entry.timestamp.strftime("%I:%M:%S %p") }}</span>
                     </td>
-                    <td class="px-2 py-1">
+                    <td class="orc-td">
                         <span class="orc-badge" style="background-color: {{ entry.source.badge_color }}">{{ entry.source }}</span>
                     </td>
-                    <td class="px-2 py-1 max-w-0 w-full">
+                    <td class="orc-td max-w-0 w-full">
                         <div class="flex items-center gap-1.5">
                             <div class="orc-log-action truncate min-w-0">{{ entry.action|codespan }}</div>
                             <span class="orc-log-caret text-gray-400 cursor-pointer{% if not entry.children %} invisible{% endif %}">▾</span>
@@ -49,7 +49,7 @@
             <div class="p-4 overflow-x-auto">
                 <table class="w-full text-left">
                     <tr>
-                        <td colspan="3" class="px-2 py-1 text-gray-400">No activity yet.</td>
+                        <td colspan="3" class="orc-td text-gray-400">No activity yet.</td>
                     </tr>
                 </table>
             </div>

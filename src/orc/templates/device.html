@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'macros.html' import icon_svg %}
 {% block head_scripts %}<script src="/static/device.js" defer></script>{% endblock %}
 {% block body %}
     {% for (title, devices) in devices_grouped.items() %}
@@ -55,7 +56,7 @@
                             <div class="text-sm">{{ device.name }}</div>
                             <div class="flex gap-4 items-center">
                                 <button class="orc-runner orc-btn" data-state="stop" data-type="device" data-id="{{ device.id }}">
-                                    <svg class="w-5 h-5"><use href="/static/icons.svg#stop"/></svg>
+                                    {{ icon_svg("stop") }}
                                 </button>
                                 <input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full orc-device-slider" data-id="{{ device.id }}"/>
                             </div>
