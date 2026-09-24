@@ -322,7 +322,7 @@ def _get_schedule(client, jobs, present_names=()):
         fetch_jobs_by_type=MagicMock(return_value=jobs),
         current_theme_override=MagicMock(return_value=None),
         present_names=MagicMock(return_value=set(present_names)),
-        fetch_durations=MagicMock(return_value=[]),
+        fetch_durations=MagicMock(side_effect=lambda mapper=None: mapper([]) if mapper else []),
     ):
         return client.get("/schedule/")
 
