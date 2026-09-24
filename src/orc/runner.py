@@ -1,7 +1,10 @@
 import os
 import subprocess
 import sys
+import time
 import traceback
+from collections.abc import Iterator
+from contextlib import contextmanager
 from urllib.parse import urlparse
 
 from apscheduler.events import EVENT_JOB_EXECUTED
@@ -64,31 +67,61 @@ def web() -> None:
     GunicornApp().run()
 
 
+_boot: m.LogEntry | None = None
+_boot_started: float | None = None
+
+
+@contextmanager
+def _step(name: str) -> Iterator[None]:
+    global _boot, _boot_started
+    start = time.perf_counter()
+    yield
+    if _boot is None:
+        _boot, _boot_started = api.log(m.LogSource.SYSTEM, Log.BOOT, trigger=m.System("boot")), start
+    _boot.add(m.LogSource.SYSTEM, Log.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
+
+
+def _boot_done() -> None:
+    assert _boot is not None and _boot_started is not None
+    _boot.add(m.LogSource.SYSTEM, Log.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - _boot_started:.1f}"))
+
+
 def _start_services(ctx: m.AppContext) -> None:
     # Start the scheduler and its services here, after gunicorn has forked the worker:
     # the scheduler's thread and the mqtt network loops don't survive the fork, so they
     # must start in the worker, not in _build_app (which runs pre-fork in web()).
-    ctx.scheduler.start(paused=True)
-    api.setup_scheduler(ctx)
+    with _step("scheduler start"):
+        ctx.scheduler.start(paused=True)
+        api.setup_scheduler(ctx)
     for hook in config.config.registry.setup_hooks:
-        hook(ctx)
-    api.wire_buttons(ctx)
-    api.wire_external_log()
-    config.config.providers.mqtt.start()
-    api.start_ble_listener()
-    ctx.scheduler.resume()
-    api.schedule_presence_check()
-    api.log(m.LogSource.SYSTEM, Log.BOOT, trigger=m.System("boot"))
+        with _step(hook.__module__):
+            hook(ctx)
+    with _step("listeners"):
+        api.wire_buttons(ctx)
+        api.wire_external_log()
+    with _step("mqtt"):
+        config.config.providers.mqtt.start()
+    with _step("ble"):
+        api.start_ble_listener()
+    with _step("scheduler resume"):
+        ctx.scheduler.resume()
+    with _step("presence check"):
+        api.schedule_presence_check()
+    _boot_done()
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
 def _build_app() -> OrcFlask:
     # bootstrap parse with empty inputs so the provider modules are known, then
     # reload with the real secrets and hub device map they fetch
-    config.config.load(m.Secrets(), {})
-    secrets = config.config.providers.secrets.fetch_secrets()
-    config.config.load(secrets, config.config.providers.mqtt.fetch_hubitat_config(secrets))
-    api.init_db()
+    with _step("config bootstrap"):
+        config.config.load(m.Secrets(), {})
+    with _step("secrets"):
+        secrets = config.config.providers.secrets.fetch_secrets()
+    with _step("config"):
+        config.config.load(secrets, config.config.providers.mqtt.fetch_hubitat_config(secrets))
+    with _step("database"):
+        api.init_db()
 
     scheduler = _build_scheduler()
     set_scheduler(scheduler)
