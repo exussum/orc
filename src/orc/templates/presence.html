@@ -4,24 +4,24 @@
         <div class="p-4 overflow-x-auto">
             <table class="w-full text-left">
                 <tr>
-                    <th class="px-2 py-1 font-normal">Name</th>
-                    <th class="px-2 py-1 font-normal">Hostname</th>
-                    <th class="px-2 py-1 font-normal">Status</th>
-                    <th class="px-2 py-1 font-normal">Last Seen</th>
-                    <th class="px-2 py-1 font-normal"></th>
+                    <th class="orc-th">Name</th>
+                    <th class="orc-th">Hostname</th>
+                    <th class="orc-th">Status</th>
+                    <th class="orc-th">Last Seen</th>
+                    <th class="orc-th"></th>
                 </tr>
                 {% for row in rows %}
                     <tr>
-                        <td class="px-2 py-1">{{ row.name }}</td>
-                        <td class="px-2 py-1">
+                        <td class="orc-td">{{ row.name }}</td>
+                        <td class="orc-td">
                             {% for hostname in row.hostnames %}
                                 {{ hostname[:-(strip_suffix|length)] if strip_suffix and hostname.endswith(strip_suffix) else hostname }}
                                 <br>
                             {% endfor %}
                         </td>
-                        <td class="px-2 py-1">{{ 'present' if row.present else 'absent' }}</td>
-                        <td class="px-2 py-1">{% if row.last_seen %}{{ row.last_seen.strftime("%m/%d") }} {{ row.last_seen.time().strftime("%I:%M %p") }}{% else %}—{% endif %}</td>
-                        <td class="px-2 py-1">
+                        <td class="orc-td">{{ 'present' if row.present else 'absent' }}</td>
+                        <td class="orc-td">{% if row.last_seen %}{{ row.last_seen.strftime("%m/%d") }} {{ row.last_seen.time().strftime("%I:%M %p") }}{% else %}—{% endif %}</td>
+                        <td class="orc-td">
                             {% if row.present %}
                                 <button class="orc-btn orc-expire w-24" data-id="{{ row.name }}">Expire</button>
                             {% else %}
