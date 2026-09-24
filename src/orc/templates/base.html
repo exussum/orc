@@ -1,3 +1,4 @@
+{%- from 'macros.html' import icon_svg -%}
 <!DOCTYPE html>
 <html>
     <head>
@@ -21,7 +22,7 @@
     </head>
     <body class="text-white bg-black">
         <div id="orc-version-spinner" class="hidden fixed top-2.5 right-2.5 z-[1080]">
-            <svg class="animate-spin h-6 w-6 text-orc-primary" aria-label="Loading"><use href="/static/icons.svg#spinner"/></svg>
+            {{ icon_svg("spinner", "animate-spin h-6 w-6 text-orc-primary") }}
         </div>
         <div id="orc-progress" class="orc-progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100">
             <div id="orc-progress-bar" class="h-full bg-orc-primary" style="width: 0%;"></div>
@@ -53,16 +54,21 @@
                 <nav class="orc-navbar" role="navigation">
                     <div class="text-xl font-semibold mr-4">{% if internal_host %}{% if request.host.split(":")[0] == internal_host %}🏠 {% else %}📡 {% endif %}{% endif %}ORChestration</div>
                     <button id="orc-navbar-toggle" class="lg:hidden ml-auto p-1.5 border border-white/20 rounded" type="button" aria-controls="admin-navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
-                        <svg class="h-6 w-6"><use href="/static/icons.svg#bars-3"/></svg>
+                        {{ icon_svg("bars-3", "h-6 w-6") }}
                     </button>
                     <div id="admin-navbar-collapse" class="hidden lg:flex w-full lg:w-auto items-end lg:flex-1 mt-2 lg:mt-0">
+                        {% set nav_links = [
+                            ("controls.index", "/", "Scene"),
+                            ("controls.device", "/device/", "Device"),
+                            ("controls.schedule", "/schedule/", "Schedule"),
+                            ("controls.presence", "/presence/", "Presence"),
+                            ("controls.cfg", "/system/", "System"),
+                            ("controls.log", "/log/", "Log"),
+                        ] %}
                         <ul class="flex flex-col lg:flex-row gap-1 lg:gap-4 mr-auto list-none p-0">
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.index" %}active{% endif %}" href="/">Scene</a></li>
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.device" %}active{% endif %}" href="/device/">Device</a></li>
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.schedule" %}active{% endif %}" href="/schedule/">Schedule</a></li>
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.presence" %}active{% endif %}" href="/presence/">Presence</a></li>
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.cfg" %}active{% endif %}" href="/system/">System</a></li>
-                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == "controls.log" %}active{% endif %}" href="/log/">Log</a></li>
+                            {% for endpoint, href, label in nav_links %}
+                                <li><a class="orc-nav-link {% if request.url_rule.endpoint == endpoint %}active{% endif %}" href="{{ href }}">{{ label }}</a></li>
+                            {% endfor %}
                         </ul>
                         {% block menu_links %}{% endblock %}
                     </div>

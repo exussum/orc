@@ -28,6 +28,14 @@
     @apply rounded border bg-orc-bg border-orc-border;
 }
 
+@utility orc-td {
+    @apply px-2 py-1;
+}
+
+@utility orc-th {
+    @apply px-2 py-1 font-normal;
+}
+
 @utility orc-selected {
     outline: 2px solid var(--color-orc-selected);
     outline-offset: 2px;

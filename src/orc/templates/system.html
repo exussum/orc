@@ -28,20 +28,20 @@
                     <div class="mb-3 overflow-x-auto">
                         <table class="text-left">
                             <tr>
-                                <th class="px-2 py-1 font-normal">Name</th>
-                                <th class="px-2 py-1 font-normal">State</th>
-                                <th class="px-2 py-1 font-normal">Failed</th>
-                                <th class="px-2 py-1 font-normal">OK</th>
-                                <th class="px-2 py-1 font-normal">Retried</th>
+                                <th class="orc-th">Name</th>
+                                <th class="orc-th">State</th>
+                                <th class="orc-th">Failed</th>
+                                <th class="orc-th">OK</th>
+                                <th class="orc-th">Retried</th>
                             </tr>
                             {% for c in lights %}
                                 {% set s = retry_stats.get(c.channel.one().value) %}
                                 <tr>
-                                    <td class="px-2 py-1">{{ c.channel.one().name }}</td>
-                                    <td class="px-2 py-1">{{ c.value }}</td>
-                                    <td class="px-2 py-1">{{ s.failed if s else '—' }}</td>
-                                    <td class="px-2 py-1">{{ s.clean if s else '—' }}</td>
-                                    <td class="px-2 py-1">{{ s.retried if s else '—' }}</td>
+                                    <td class="orc-td">{{ c.channel.one().name }}</td>
+                                    <td class="orc-td">{{ c.value }}</td>
+                                    <td class="orc-td">{{ s.failed if s else '—' }}</td>
+                                    <td class="orc-td">{{ s.clean if s else '—' }}</td>
+                                    <td class="orc-td">{{ s.retried if s else '—' }}</td>
                                 </tr>
                             {% endfor %}
                         </table>
@@ -50,17 +50,17 @@
                     <div class="mb-3 overflow-x-auto">
                         <table class="text-left">
                             <tr>
-                                <th class="px-2 py-1 font-normal">Name</th>
-                                <th class="px-2 py-1 font-normal">Status</th>
-                                <th class="px-2 py-1 font-normal">Content</th>
-                                <th class="px-2 py-1 font-normal">Volume</th>
+                                <th class="orc-th">Name</th>
+                                <th class="orc-th">Status</th>
+                                <th class="orc-th">Content</th>
+                                <th class="orc-th">Volume</th>
                             </tr>
                             {% for c in sounds %}
                                 <tr>
-                                    <td class="px-2 py-1">{{ c.what.name }}</td>
-                                    <td class="px-2 py-1">{{ c.playback.value }}</td>
-                                    <td class="px-2 py-1">{{ c.content or '—' }}</td>
-                                    <td class="px-2 py-1">{{ c.volume }}%</td>
+                                    <td class="orc-td">{{ c.what.name }}</td>
+                                    <td class="orc-td">{{ c.playback.value }}</td>
+                                    <td class="orc-td">{{ c.content or '—' }}</td>
+                                    <td class="orc-td">{{ c.volume }}%</td>
                                 </tr>
                             {% endfor %}
                         </table>
@@ -132,15 +132,15 @@
                 <div class="overflow-x-auto">
                     <table class="text-left">
                         <tr>
-                            <th class="px-2 py-1 font-normal">Name</th>
-                            <th class="px-2 py-1 font-normal">Next Run</th>
+                            <th class="orc-th">Name</th>
+                            <th class="orc-th">Next Run</th>
                         </tr>
                         {% for store, jobs in scheduled_jobs %}
-                            <tr><td class="px-2 py-1 font-semibold" colspan="2">{{ store }}</td></tr>
+                            <tr><td class="orc-td font-semibold" colspan="2">{{ store }}</td></tr>
                             {% for job in jobs %}
                                 <tr>
-                                    <td class="px-2 py-1">{{ job.name }}</td>
-                                    <td class="px-2 py-1">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else 'paused' }}</td>
+                                    <td class="orc-td">{{ job.name }}</td>
+                                    <td class="orc-td">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else 'paused' }}</td>
                                 </tr>
                             {% endfor %}
                         {% endfor %}
