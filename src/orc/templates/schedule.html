@@ -5,10 +5,10 @@
         {% call day_card(day) %}
             {% if loop.first %}
                 <tr>
-                    <th class="px-2 py-1 font-normal w-16">Run</th>
-                    <th class="px-2 py-1 font-normal w-16">Enabled</th>
-                    <th class="px-2 py-1 font-normal w-20 lg:w-40">Job</th>
-                    <th class="px-2 py-1 font-normal whitespace-nowrap">When</th>
+                    <th class="orc-th w-16">Run</th>
+                    <th class="orc-th w-16">Enabled</th>
+                    <th class="orc-th w-20 lg:w-40">Job</th>
+                    <th class="orc-th whitespace-nowrap">When</th>
                 </tr>
             {% endif %}
             {% for job in day_jobs %}
