@@ -19,7 +19,7 @@ dependencies = [
     "icalendar==7.3.0",
     "scapy==2.7.0",
     "orc_data==0.0.1",
-    "piper-tts==1.7.0",
+    "piper-tts==1.8.0",
     "pychromecast==14.0.10",
     "paho-mqtt==2.1.0",
     "Pillow==12.3.0",
@@ -44,7 +44,7 @@ test = [
 ]
 lint = [
     "mypy==2.3.1",
-    "ruff==0.16.5",
+    "ruff==0.16.8",
 ]
 
 [project.scripts]
