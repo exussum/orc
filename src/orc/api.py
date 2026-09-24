@@ -391,6 +391,11 @@ def calculate_theme(today: date) -> str:
     return base_theme(today)
 
 
+def is_working_day(today: date) -> bool:
+    """Whether the day's theme is the working one — asked by plugins so a theme name stays out of them."""
+    return calculate_theme(today) == m.THEME_WORK_DAY
+
+
 def base_theme(today: date) -> str:
     if today.weekday() in (5, 6):
         return m.THEME_DAY_OFF

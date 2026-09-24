@@ -65,7 +65,7 @@ def _add_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: lis
 @requires_ctx
 def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], *, ctx: m.AppContext) -> None:
     now: datetime = ctx.api.local_now()
-    if ctx.api.calculate_theme(now.date()) != m.THEME_WORK_DAY:
+    if not ctx.api.is_working_day(now.date()):
         return
 
     tz = ctx.config.settings.tz
