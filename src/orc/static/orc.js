@@ -1,14 +1,12 @@
-let version = window.orcVersion;
-
-function hardRefresh() {
-    window.location.href = window.location.pathname + "?_=" + Date.now();
-}
-
 function isInvalidResponse(response) {
     return !response || (response.status >= 400 && response.status < 500);
 }
 
-function startProgress(seconds) {
+export function hardRefresh() {
+    window.location.href = window.location.pathname + "?_=" + Date.now();
+}
+
+export function startProgress(seconds) {
     if (!seconds || seconds <= 2) return;
     const container = document.getElementById("orc-progress");
     const bar = document.getElementById("orc-progress-bar");
@@ -22,7 +20,7 @@ function startProgress(seconds) {
 }
 
 
-async function get(url, el, onFailure = () => {}, useVersion = true) {
+export async function get(url, el, onFailure = () => {}, useVersion = true) {
     if (!(await orcHooks.onCommand(el?.dataset.id, el, url))) {
         onFailure();
         return false;
@@ -38,12 +36,12 @@ async function get(url, el, onFailure = () => {}, useVersion = true) {
     let response = null;
 
     try {
-        response = await fetch(url, { headers: { "orc-version": version } });
+        response = await fetch(url, { headers: { "orc-version": window.orcVersion } });
         if (!response.ok) {
             throw Error(`Response status: ${response.status}`);
         }
         const data = await response.json();
-        if (useVersion) version = data.version;
+        if (useVersion) window.orcVersion = data.version;
         return data;
     } catch (error) {
         console.error(error.message);
@@ -71,7 +69,7 @@ async function checkVersion() {
             return;
         }
         const { version: serverVersion } = await response.json();
-        if (serverVersion !== version) location.reload();
+        if (serverVersion !== window.orcVersion) location.reload();
     } catch {
         // unreachable server: the per-action version check catches stale pages later
     } finally {
@@ -79,7 +77,7 @@ async function checkVersion() {
     }
 }
 
-async function runAction(el) {
+export async function runAction(el) {
     if (!(await orcHooks.onPress(el.dataset.id, el))) return;
     if ("noFunc" in el.dataset) {
         alert(
@@ -95,9 +93,12 @@ async function runAction(el) {
     await get(`/api/${el.dataset.type || "run"}/${el.dataset.id}${query}`, el);
 }
 
-document.querySelectorAll(".orc-config-runner").forEach((el) => {
-    el.addEventListener("click", (e) => runAction(e.currentTarget));
-});
+export function wire(selector, event, handler) {
+    document.querySelectorAll(selector).forEach((el) => el.addEventListener(event, (e) => handler(e.currentTarget, e)));
+}
+
+wire(".orc-config-runner", "click", runAction);
+wire(".orc-runner", "click", runAction);
 
 function revealOverflowCarets(root) {
     for (const action of root.querySelectorAll(".orc-log-action.truncate")) {

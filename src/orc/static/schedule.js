@@ -1,3 +1,5 @@
+import { get, hardRefresh, startProgress, wire } from "./orc.js";
+
 const startEl = document.querySelector("#orc-theme-select-start");
 const endEl = document.querySelector("#orc-theme-select-end");
 const selectEl = document.querySelector("#orc-theme-select");
@@ -28,7 +30,7 @@ async function set_theme() {
     try {
         const response = await fetch("/api/schedule/set_theme", {
             method: "POST",
-            headers: { "orc-version": version },
+            headers: { "orc-version": window.orcVersion },
             body: new URLSearchParams({ start: startEl.value, end: endEl.value, theme: selectEl.value }),
         });
         if (response.status === 412) hardRefresh();
@@ -49,13 +51,7 @@ function formUpdated() {
     document.querySelector("#orc-theme-submit").disabled = selectEl.value && !(startEl.value && endEl.value);
 }
 
-document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => runAction(e.currentTarget));
-});
-
-document.querySelectorAll(".orc-enable").forEach((el) => {
-    el.addEventListener("change", (e) => pause(e.currentTarget));
-});
+wire(".orc-enable", "change", pause);
 
 selectEl.addEventListener("change", (e) => {
     scheduleEl.forEach((el) => {

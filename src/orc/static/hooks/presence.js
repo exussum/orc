@@ -11,7 +11,7 @@ orcHooks.ensure({
         if (state.present) return true;
         try {
             const response = await fetch("/api/presence/run?ignore-version=1");
-            if (response.ok) version = (await response.json()).version;
+            if (response.ok) window.orcVersion = (await response.json()).version;
         } catch {
         }
         return true;
