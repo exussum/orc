@@ -1,3 +1,5 @@
+import { get, wire } from "./orc.js";
+
 const acSelections = {};
 
 function acQuery(group, id) {
@@ -81,13 +83,7 @@ document.querySelectorAll('.orc-ac-set').forEach(el => {
 
 document.querySelectorAll(".orc-ac-power[data-state='off']").forEach(el => setAcOff(el.dataset.id));
 
-document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => runAction(e.currentTarget));
-});
-
-document.querySelectorAll('.orc-device-slider').forEach(slider => {
-    slider.addEventListener('change', () => get(`/api/device/${slider.dataset.id}?state=${slider.value}`, slider));
-});
+wire('.orc-device-slider', 'change', (slider) => get(`/api/device/${slider.dataset.id}?state=${slider.value}`, slider));
 
 document.querySelectorAll('input.orc-ac-ctrl').forEach(slider => {
     const display = document.querySelector(`.orc-ac-temp[data-id="${slider.dataset.id}"]`);

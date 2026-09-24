@@ -73,5 +73,5 @@
 {% endblock %}
 {% block head_scripts %}
     <script>window.orcThemeName = {{ (theme.name if theme else "")|tojson }};</script>
-    <script src="/static/schedule.js" defer></script>
+    <script type="module" src="/static/schedule.js"></script>
 {% endblock %}

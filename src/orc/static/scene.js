@@ -1,9 +1,7 @@
-document.querySelectorAll(".orc-runner").forEach((el) => {
-    el.addEventListener("click", (e) => runAction(e.currentTarget));
-});
+import { get, wire } from "./orc.js";
 
-document.querySelector(".orc-pause")?.addEventListener("click", (e) => {
-    get(`/api/schedule/${e.currentTarget.getAttribute("data-id")}/pause`, e.currentTarget).then((ok) => { if (ok) location.reload(); });
+wire(".orc-pause", "click", async (el) => {
+    if (await get(`/api/schedule/${el.dataset.id}/pause`, el)) location.reload();
 });
 
 const highlight_configs = window.orcHighlightConfigs.map(([name, start, end]) => [
