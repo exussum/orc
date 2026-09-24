@@ -1,5 +1,7 @@
 class Log:
     BOOT: str = "Boot"
+    BOOT_STEP: str = "{name} — {seconds}s"
+    BOOT_TOTAL: str = "started in {seconds}s"
 
     SNAPSHOT_TAKEN: str = "Snapshot for `{name}` until {end:%I:%M}: {items}"
     SNAPSHOT_ALL_OFF: str = "all off"
