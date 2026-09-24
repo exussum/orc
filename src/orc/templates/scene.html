@@ -63,5 +63,5 @@
 {% endblock %}
 {% block head_scripts %}
     <script>window.orcHighlightConfigs = {{ highlight_configs|tojson }};</script>
-    <script src="/static/scene.js" defer></script>
+    <script type="module" src="/static/scene.js"></script>
 {% endblock %}
