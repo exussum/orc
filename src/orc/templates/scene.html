@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import btn_stripe %}
+{% from 'macros.html' import btn_stripe, icon_svg %}
 {% block body %}
     <div class="orc-card mb-2">
         <div class="orc-room-buttons p-4">
@@ -7,17 +7,17 @@
                 <div class="text-sm self-center">{{ id }}</div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                        <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb"/></svg>
+                        {{ icon_svg("light-bulb") }}
                     </button>
                 </div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                        <svg class="w-5 h-5"><use href="/static/icons.svg#light-bulb-outline"/></svg>
+                        {{ icon_svg("light-bulb-outline") }}
                     </button>
                 </div>
                 <div class="orc-button">
                     <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                        <svg class="w-5 h-5"><use href="/static/icons.svg#map-pin"/></svg>
+                        {{ icon_svg("map-pin") }}
                     </button>
                 </div>
             {% endfor %}
@@ -40,7 +40,7 @@
             <div>
                 <button class="orc-btn orc-dropup" popovertarget="orc-routines-menu">
                     Routines
-                    <svg class="w-4 h-4 ml-1"><use href="/static/icons.svg#chevron-down"/></svg>
+                    {{ icon_svg("chevron-down", "w-4 h-4 ml-1") }}
                 </button>
                 <div id="orc-routines-menu" popover class="orc-dropdown-menu">
                     {% for id in schedule_routines|sort %}
