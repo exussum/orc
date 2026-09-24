@@ -31,3 +31,28 @@
     </div>
 </div>
 {% endmacro %}
+
+{% macro headed_table(title, heading_class="font-semibold mb-1", wrapper_class="mb-3 overflow-x-auto") %}
+<div class="{{ heading_class }}">{{ title }}</div>
+<div class="{{ wrapper_class }}">
+    <table class="text-left">
+        {{ caller() }}
+    </table>
+</div>
+{% endmacro %}
+
+{% macro status_list(title, rows) %}
+<div class="font-semibold mb-1">{{ title }}</div>
+<ul class="list-disc list-inside mb-3">
+    {% for row in rows %}
+        <li>
+            {{ row.name }}
+            <ul class="list-disc list-inside ml-4">
+                {% for k, v in row.details.items() %}
+                    <li>{{ k }}: {{ v if v is not none else '—' }}</li>
+                {% endfor %}
+            </ul>
+        </li>
+    {% endfor %}
+</ul>
+{% endmacro %}

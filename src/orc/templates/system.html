@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import btn %}
+{% from 'macros.html' import btn, headed_table, status_list %}
 {% block body %}
     <div>
         <div class="orc-card mb-2">
@@ -24,9 +24,7 @@
                     Devices
                 </summary>
                 <div class="p-4">
-                    <div class="font-semibold mb-1">Lights</div>
-                    <div class="mb-3 overflow-x-auto">
-                        <table class="text-left">
+                    {% call headed_table("Lights") %}
                             <tr>
                                 <th class="orc-th">Name</th>
                                 <th class="orc-th">State</th>
@@ -44,11 +42,8 @@
                                     <td class="orc-td">{{ s.retried if s else '—' }}</td>
                                 </tr>
                             {% endfor %}
-                        </table>
-                    </div>
-                    <div class="font-semibold mb-1">Sounds</div>
-                    <div class="mb-3 overflow-x-auto">
-                        <table class="text-left">
+                    {% endcall %}
+                    {% call headed_table("Sounds") %}
                             <tr>
                                 <th class="orc-th">Name</th>
                                 <th class="orc-th">Status</th>
@@ -63,35 +58,10 @@
                                     <td class="orc-td">{{ c.volume }}%</td>
                                 </tr>
                             {% endfor %}
-                        </table>
-                    </div>
-                    <div class="font-semibold mb-1">Sensors</div>
-                    <ul class="list-disc list-inside mb-3">
-                        {% for row in sensors %}
-                            <li>
-                                {{ row.name }}
-                                <ul class="list-disc list-inside ml-4">
-                                    {% for k, v in row.details.items() %}
-                                        <li>{{ k }}: {{ v if v is not none else '—' }}</li>
-                                    {% endfor %}
-                                </ul>
-                            </li>
-                        {% endfor %}
-                    </ul>
+                    {% endcall %}
+                    {{ status_list("Sensors", sensors) }}
                     {% for title, rows in plugin_states %}
-                        <div class="font-semibold mb-1">{{ title }}</div>
-                        <ul class="list-disc list-inside mb-3">
-                            {% for row in rows %}
-                                <li>
-                                    {{ row.name }}
-                                    <ul class="list-disc list-inside ml-4">
-                                        {% for k, v in row.details.items() %}
-                                            <li>{{ k }}: {{ v if v is not none else '—' }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </li>
-                            {% endfor %}
-                        </ul>
+                        {{ status_list(title, rows) }}
                     {% endfor %}
                 </div>
             </details>
@@ -128,9 +98,7 @@
                     <li>Today's theme: {{ today_theme }}</li>
                     <li>Tomorrow's theme: {{ tomorrow_theme }}</li>
                 </ul>
-                <div class="font-semibold mt-3 mb-1">Scheduled Jobs</div>
-                <div class="overflow-x-auto">
-                    <table class="text-left">
+                {% call headed_table("Scheduled Jobs", heading_class="font-semibold mt-3 mb-1", wrapper_class="overflow-x-auto") %}
                         <tr>
                             <th class="orc-th">Name</th>
                             <th class="orc-th">Next Run</th>
@@ -144,8 +112,7 @@
                                 </tr>
                             {% endfor %}
                         {% endfor %}
-                    </table>
-                </div>
+                {% endcall %}
                 </div>
             </details>
         </div>
