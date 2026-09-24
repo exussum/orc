@@ -264,6 +264,25 @@ class TestActiveOverride:
         assert api.active_theme_override(date(2026, 1, 11)) is None
 
 
+@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
+class TestIsWorkingDay:
+    def test_a_weekday_that_the_market_trades_is_a_working_day(self):
+        with patch.object(config.providers.holiday, "market_holiday", return_value=False):
+            assert api.is_working_day(date(2026, 1, 5)) is True
+
+    def test_a_weekend_is_not(self):
+        assert api.is_working_day(date(2026, 1, 3)) is False
+
+    def test_a_market_holiday_is_not(self):
+        with patch.object(config.providers.holiday, "market_holiday", return_value=True):
+            assert api.is_working_day(date(2026, 1, 5)) is False
+
+    def test_an_override_decides_it(self):
+        api.set_theme_override("day off", date(2026, 1, 5), date(2026, 1, 5))
+        with patch.object(config.providers.holiday, "market_holiday", return_value=False):
+            assert api.is_working_day(date(2026, 1, 5)) is False
+
+
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
 @freeze_time(datetime(2026, 1, 3, 12, tzinfo=config.settings.tz))
 class TestGetSchedule:
