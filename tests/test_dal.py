@@ -7,7 +7,9 @@ from orc import security
 from orc.dal import net
 from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.holiday import polygon
-from orc.model import BleKey
+from orc.model import BleKey, Query
+
+TRIGGER = Query("test")
 
 
 class TestStripGoogleVideoParams:
@@ -99,7 +101,7 @@ class TestPresence:
     def test_forget_clears_the_hearing(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
         presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        presence.forget(["Alice"])
+        presence.forget(["Alice"], TRIGGER)
         assert self._present(presence) == set()
 
     def test_hearing_outside_the_window_expires(self):
@@ -112,17 +114,17 @@ class TestPresence:
         presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
         presence.pause(self.NOW)
         assert self._present(presence) == set()
-        presence.resume()
+        presence.resume(TRIGGER)
         assert self._present(presence) == {"Alice"}
 
     def _probe(self, presence, client):
         with patch.object(net, "BleakClient", client), patch.object(net.Presence, "_now", return_value=self.NOW):
-            presence.probe(["Alice"])
+            presence.probe(["Alice"], TRIGGER)
 
     def test_probe_marks_reachable_tag(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
         presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        presence.forget(["Alice"])
+        presence.forget(["Alice"], TRIGGER)
         connections = []
 
         @asynccontextmanager
@@ -137,7 +139,7 @@ class TestPresence:
     def test_probe_failure_marks_nothing(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
         presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        presence.forget(["Alice"])
+        presence.forget(["Alice"], TRIGGER)
 
         def client(address, timeout):
             raise TimeoutError

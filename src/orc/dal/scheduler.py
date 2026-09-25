@@ -67,11 +67,6 @@ def resume_job(id: str) -> None:
     _scheduler().get_job(id).resume()
 
 
-def invoke_job(id: str, **kwargs: Any) -> None:
-    job = _scheduler().get_job(id)
-    job.func(*job.args, **{**job.kwargs, **kwargs})
-
-
 @mappable
 def fetch_jobs_by_type(type: type) -> list[Job]:
     now = datetime.now(tz=config.settings.tz)

@@ -220,15 +220,17 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
 @bp.route("/api/presence/<name>/checkin")
 @VersionManager.versioned
 def checkin_presence(name: str) -> None:
-    api.mark_present([name], when=api.local_now() + timedelta(hours=config.settings.checkin_hours))
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger=m.Manual(name))
+    trigger = m.Manual(name)
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger=trigger)
+    api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger)
 
 
 @bp.route("/api/presence/<name>/expire")
 @VersionManager.versioned
 def expire_presence(name: str) -> None:
-    api.expire_presence([name], force=True)
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger=m.Manual(name))
+    trigger = m.Manual(name)
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger=trigger)
+    api.expire_presence([name], trigger, force=True)
 
 
 @bp.route("/")
@@ -300,7 +302,7 @@ def presence_state() -> dict[str, Any]:
 @bp.route("/api/presence/run")
 @VersionManager.versioned
 def run_presence_check() -> None:
-    api.rerun_presence_check(app.orc)
+    api.rerun_presence_check()
 
 
 @bp.route("/schedule/")
