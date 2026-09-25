@@ -161,9 +161,7 @@ def _is_fqdn(value: str) -> bool:
 
 # "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
 # they render no button and are not auto-invoked, unlike the other sections.
-# "none" renders no button anywhere: for entries referenced by name (remotes,
-# plugin configs) rather than run from the UI.
-_VALID_SECTIONS = frozenset({"scene", "system", "device", "none"})
+_VALID_SECTIONS = frozenset({"scene", "system", "device"})
 _ERR_FUNCTION = (
     "Cannot load function {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. "
     "Ensure the module exists and the function is defined within it."
@@ -345,7 +343,7 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
         ad_hoc_routines[args.name] = m.AdhocAction(
             snapshot=timedelta(minutes=args.snapshot) if args.snapshot is not None else None,
             delay=timedelta(minutes=args.delay) if args.delay is not None else timedelta(),
-            section=Cast.section(args.section) or "scene",
+            section=Cast.section(args.section),
             reset=not args.no_reset,
         )
         if args.devices is not None:

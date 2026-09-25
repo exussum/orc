@@ -65,10 +65,10 @@ room Bedroom       Light.BEDROOM_LAMP on
 person Alice alice.example aa:bb:cc:dd:ee:ff
 tag    Alice EIK_ALICE 2026-01-02T03:04:05+00:00
 
-ad_hoc define Silence           --no-reset Chromecast stop
-ad_hoc define Dog               --delay 7  Chromecast stop
-ad_hoc define 'All Lights On'   --no-reset Light      100
-ad_hoc define 'All Lights Off'  --no-reset Light      off
+ad_hoc define Silence          --section scene --no-reset Chromecast stop
+ad_hoc define Dog              --section scene --delay 7  Chromecast stop
+ad_hoc define 'All Lights On'  --section scene --no-reset Light      100
+ad_hoc define 'All Lights Off' --section scene --no-reset Light      off
 
 remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
 remote     .                         1 held   Silence
