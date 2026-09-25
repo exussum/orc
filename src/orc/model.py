@@ -327,6 +327,7 @@ class SoundState:
 class AcStatus:
     what: DeviceEnum
     state: AcState | None
+    temperature: int | None = None
 
 
 @dataclass
@@ -559,6 +560,9 @@ class Registry:
     # Set by a setup hook (``api.set_ac_state_handler``); ``api.ac_state`` reads a
     # device's live ``AcState`` (None if unknown) through it.
     ac_state_handler: Callable[["DeviceEnum"], AcState | None] | None = None
+    # Set by a setup hook (``api.set_ac_temperature_handler``); ``api.ac_temperature``
+    # reads a device's setpoint in °F (None if unknown or the unit is off) through it.
+    ac_temperature_handler: Callable[["DeviceEnum"], int | None] | None = None
 
 
 def resolve_time(value: str) -> time | str:

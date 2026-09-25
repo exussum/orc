@@ -36,8 +36,9 @@
                             </div>
                             <div class="text-sm">Temp</div>
                             <div class="flex gap-4 items-center">
-                                <div class="inline-flex items-center justify-center w-12 h-[var(--orc-control-height)] text-sm orc-ac-temp" data-id="{{ device.id }}">75</div>
-                                <input type="range" min="70" max="80" value="75" class="w-full orc-ac-ctrl" data-id="{{ device.id }}"/>
+                                {% set setpoint = device.temperature or 75 %}
+                                <div class="inline-flex items-center justify-center w-12 h-[var(--orc-control-height)] text-sm orc-ac-temp" data-id="{{ device.id }}">{{ setpoint }}</div>
+                                <input type="range" min="70" max="80" value="{{ setpoint }}" class="w-full orc-ac-ctrl" data-id="{{ device.id }}"/>
                             </div>
                             <div class="text-sm">Mode</div>
                             <div class="grid grid-cols-2 gap-2">

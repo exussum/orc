@@ -47,6 +47,7 @@ class DeviceRow(NamedTuple):
     level: int
     on: bool
     volume: int
+    temperature: int | None
 
 
 class JobMeta(NamedTuple):
@@ -180,6 +181,7 @@ def cfg() -> str:
 def device() -> str:
     light_states = api.capture_lights(mapper=_states_by_name)
     sound_states = api.capture_sounds(mapper=_volumes_by_name)
+    ac_temperatures = {s.what.name: s.temperature for s in api.capture_acs()}
     all_devices = list(chain.from_iterable(cls for name, cls in config.devices.items() if name in config.registry.controllable_devices))
 
     def make_device(d: Any) -> DeviceRow:
@@ -195,6 +197,7 @@ def device() -> str:
             level=level,
             on=level > 0,
             volume=sound_states.get(d.name, 0),
+            temperature=ac_temperatures.get(d.name),
         )
 
     def sort_key(d: Any) -> tuple[int, bool, str]:

@@ -150,7 +150,7 @@ def capture_sounds() -> tuple[m.SoundState, ...]:
 
 
 def capture_acs() -> tuple[m.AcStatus, ...]:
-    return tuple(m.AcStatus(w, ac_state(w)) for w in config.devices.AC)
+    return tuple(m.AcStatus(w, ac_state(w), ac_temperature(w)) for w in config.devices.AC)
 
 
 def capture_sensors() -> list[m.DeviceStatus]:
@@ -349,6 +349,15 @@ def set_ac_state_handler(handler: Callable[[m.DeviceEnum], m.AcState | None]) ->
 
 def ac_state(device: m.DeviceEnum) -> m.AcState | None:
     handler = config.registry.ac_state_handler
+    return handler(device) if handler else None
+
+
+def set_ac_temperature_handler(handler: Callable[[m.DeviceEnum], int | None]) -> None:
+    config.registry.ac_temperature_handler = handler
+
+
+def ac_temperature(device: m.DeviceEnum) -> int | None:
+    handler = config.registry.ac_temperature_handler
     return handler(device) if handler else None
 
 
