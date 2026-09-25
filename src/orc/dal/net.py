@@ -46,9 +46,9 @@ class Presence:
         self._heard: LockedDict[str, datetime] = LockedDict()
         self._addresses: LockedDict[str, str] = LockedDict()
         self._paused: datetime | None = None
-        self._on_change: Callable[[], object] = lambda: None
+        self._on_change: Callable[[m.Trigger], object] = lambda trigger: None
 
-    def start(self, tags: Mapping[str, m.BleKey], tz: tzinfo, on_change: Callable[[], object] | None = None) -> None:
+    def start(self, tags: Mapping[str, m.BleKey], tz: tzinfo, on_change: Callable[[m.Trigger], object] | None = None) -> None:
         if on_change:
             self._on_change = on_change
         if not tags:
@@ -57,10 +57,10 @@ class Presence:
         self._tz = tz
         threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
 
-    def mark(self, names: Iterable[str], when: datetime) -> None:
+    def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger) -> None:
         for name in names:
             self._heard[name] = when
-        self._changed()
+        self._changed(trigger)
 
     def seen(self) -> dict[str, datetime]:
         return self._heard.copy()
@@ -69,21 +69,21 @@ class Presence:
         paused = self._paused
         return {name for name, heard in self._heard.copy().items() if heard >= cutoff and (not paused or heard > paused)}
 
-    def forget(self, names: Iterable[str], before: datetime | None = None) -> None:
+    def forget(self, names: Iterable[str], trigger: m.Trigger, before: datetime | None = None) -> None:
         # `before` keeps entries at or past it — manual check-ins stamped in the future.
         for name in names:
             if (heard := self._heard.get(name)) and (before is None or heard < before):
                 self._heard.pop(name)
-        self._changed()
+        self._changed(trigger)
 
     def pause(self, until: datetime) -> None:
         self._paused = until
 
-    def resume(self) -> None:
+    def resume(self, trigger: m.Trigger) -> None:
         self._paused = None
-        self._changed()
+        self._changed(trigger)
 
-    def probe(self, names: Iterable[str]) -> None:
+    def probe(self, names: Iterable[str], trigger: m.Trigger) -> None:
         """One connection attempt at each tag's last-advertised address; only success marks.
 
         The address rotates with the EID (~17 min), so a long-silent tag times out
@@ -100,11 +100,11 @@ class Presence:
                     asyncio.run(connect(address))
                 except Exception:
                     continue
-                self.mark([person], self._now())
+                self.mark([person], self._now(), trigger)
 
-    def _changed(self) -> None:
+    def _changed(self, trigger: m.Trigger) -> None:
         if not self._paused:
-            self._on_change()
+            self._on_change(trigger)
 
     def _listen(self) -> None:
         try:
@@ -125,7 +125,7 @@ class Presence:
         if eid and (person := self._index.get(eid)):
             if device:
                 self._addresses[person] = device.address
-            self.mark([person], self._now())
+            self.mark([person], self._now(), m.Query.BLE)
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)

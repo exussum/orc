@@ -39,7 +39,6 @@ JOBSTORE_DEFAULT = "default"
 JOBSTORE_MEMORY = "memory"
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
-_PRESENCE_CRON_JOB_ID = "presence-cron"
 _ROLLUP_WINDOW = timedelta(seconds=5)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
@@ -425,12 +424,12 @@ def present_names() -> set[str]:
     return net.presence.present(local_now() - timedelta(hours=config.settings.presence_hours))
 
 
-def expire_presence(names: list[str], force: bool = False) -> None:
-    net.presence.forget(names, before=None if force else local_now())
+def expire_presence(names: list[str], trigger: m.Trigger, force: bool = False) -> None:
+    net.presence.forget(names, trigger, before=None if force else local_now())
 
 
-def delete_all_presence() -> None:
-    expire_presence(list(net.presence.seen()))
+def delete_all_presence(trigger: m.Trigger) -> None:
+    expire_presence(list(net.presence.seen()), trigger)
 
 
 def pause_presence() -> None:
@@ -440,13 +439,13 @@ def pause_presence() -> None:
 def start_ble_listener() -> None:
     reported: set[str] = set()
 
-    def report() -> None:
+    def report(trigger: m.Trigger) -> None:
         nonlocal reported
         present = present_names()
         if detected := sorted(present - reported):
-            log(m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger=m.Query("presence"))
+            log(m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger=trigger)
         if lost := sorted(reported - present):
-            log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)), trigger=m.Query("presence"))
+            log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)), trigger=trigger)
         reported = present
 
     net.presence.start(config.ble_tags, config.settings.tz, report)
@@ -454,14 +453,17 @@ def start_ble_listener() -> None:
 
 def schedule_presence_check() -> None:
     if config.people:
-        scheduler.schedule_once(_check_presence_job, local_now(), name="Presence Boot Check", jobstore=JOBSTORE_MEMORY)
+        scheduler.schedule_once(
+            _check_presence_job, local_now(), args=(m.System("boot"),), name="Presence Boot Check", jobstore=JOBSTORE_MEMORY
+        )
 
 
-def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
-    log(source, Log.PRESENCE_RESCAN, trigger=m.Manual("presence"))
-    delete_all_presence()
-    net.presence.probe(set(config.ble_tags) - present_names())
-    scheduler.invoke_job(_PRESENCE_CRON_JOB_ID, ctx=ctx, source=source)
+def rerun_presence_check(source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
+    trigger = m.Manual("presence")
+    log(source, Log.PRESENCE_RESCAN, trigger=trigger)
+    delete_all_presence(trigger)
+    net.presence.probe(set(config.ble_tags) - present_names(), trigger)
+    check_presence(trigger, source=source)
 
 
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None) -> None:
@@ -475,7 +477,7 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
     rebuild_jobs(ctx)
 
 
-def check_presence(source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
+def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
     pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
     if not pairs and not config.ble_tags:
         return present_names()
@@ -484,7 +486,7 @@ def check_presence(source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
         entry = log(source, msg, trigger=m.Query("lan"), should_notify=True)
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-    mark_present(present, local_now())
+    mark_present(present, local_now(), trigger)
     return present_names()
 
 
@@ -595,7 +597,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         rebuild_iot_schedule(ctx=ctx)
     for job_id, func, crontab, name in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
-        (_PRESENCE_CRON_JOB_ID, _check_presence_job, "5 * * * *", "Presence Cron"),
+        ("presence-cron", partial(_check_presence_job, m.Cron.PRESENCE), "5 * * * *", "Presence Cron"),
         ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
     ):
         scheduler.schedule_cron(func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
@@ -748,5 +750,5 @@ def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
 
 
 @requires_ctx
-def _check_presence_job(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
-    return check_presence(source=source)
+def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
+    return check_presence(trigger)
