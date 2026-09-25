@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from cryptography import x509
@@ -11,9 +12,9 @@ from orc_extras import lg_ac
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac import model as m
 from orc_extras.lg_ac.dal.capture import memory as capture
-from orc_extras.lg_ac.dal.mqtt import stub
+from orc_extras.lg_ac.dal.mqtt import stub, thinq
 
-from orc.model import AcState, DeviceStatus
+from orc.model import OFF, AcCommand, AcMode, AcState, Broker, DeviceStatus
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
@@ -226,6 +227,7 @@ def client():
     settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtt_port=1883, mqtts_advertise=8883)
     app.orc = SimpleNamespace(plugin_state={lg_ac: lg_ac.State(settings, stub)})  # type: ignore[attr-defined]
     app.register_blueprint(web.enroll)
+    thinq.set_event_listener(MagicMock())
     return app.test_client()
 
 
@@ -267,6 +269,23 @@ def test_command_endpoint_publishes_to_the_device(client):
 
 def test_command_endpoint_errors_with_no_device(client):
     assert client.post("/command", json={"mode": "cool"}).get_json() == {"error": "no device"}
+
+
+@pytest.mark.parametrize(
+    ("state", "value"),
+    [
+        (m.ACState(), None),
+        (m.ACState("OFF", "off", "low", 70, 77), OFF),
+        (m.ACState("ON", "cool", "low", 70, 77), AcCommand(AcMode.COOL, "low", 77)),
+        (m.ACState("ON", "heat", "low", 70, 77), None),
+        (m.ACState("ON", "cool", None, 70, 77), None),
+    ],
+)
+def test_event_logs_the_state_as_the_command_it_answers(ctx, state, value):
+    lg_ac._on_event(ctx, DEVICE_ID, "AC clip-123: changed", state)
+    ctx.api.log.assert_called_once_with(
+        lg_ac.LogSource.LG_AC, "AC clip-123: changed", trigger=Broker(id=DEVICE_ID, source="lg_ac", value=value)
+    )
 
 
 def test_handle_ac_commands_the_bound_device():
