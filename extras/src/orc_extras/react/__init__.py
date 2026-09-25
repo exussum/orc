@@ -14,8 +14,8 @@ CONFIG = "orc_extras/react"
 GRAMMAR = """
 react <devices> turns <state> set <action> [if <device> is <condition>] [--delay=<minutes>]
 react <devices> turns <state> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
-react <devices> <expr> between <low> and <high> set <target> <action> [--delay=<minutes>]
-react <devices> <expr> between <low> and <high> present <people> set <target> <action> [--delay=<minutes>]
+react <devices> <expr> between <low> and <high> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
+react <devices> <expr> between <low> and <high> present <people> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
 """
 
 
@@ -60,6 +60,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     action = Cast.state(args.action)
     target = _parse_target(args.target, action, objects)
     assert target is not None
+    when = _parse_when(Cast.device(args.device, objects), args.condition, objects) if args.device else None
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     for source in Cast.devices(args.devices, objects).all():
         formula = plugins.Formula(source, args.expr)
@@ -69,6 +70,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
         elif args.people:
             people = tuple(name.strip() for name in args.people.split(","))
             conditions.append(plugins.Present(people))
+        conditions.extend(plugins.condition(when))
         if isinstance(action, AcCommand):
             conditions.extend(plugins.AcIs(AcChannel(ac), AcState.OFF) for ac in target.all())
         conditions.append(plugins.Range(formula, args.low, args.high))
