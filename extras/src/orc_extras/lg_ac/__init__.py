@@ -74,6 +74,7 @@ def setup(ctx: AppContext) -> None:
     thinq.start("127.0.0.1", s.mqtt_port, clip_ids=[str(device.value) for device in ctx.config.devices.AC])
     ctx.api.set_ac_handler(partial(_handle_ac, thinq))
     ctx.api.set_ac_state_handler(partial(_ac_state, thinq))
+    ctx.api.set_ac_temperature_handler(partial(_ac_temperature, thinq))
     ctx.api.add_state_provider("AC", partial(_ac_status, thinq, ctx))
 
 
@@ -107,6 +108,11 @@ def _ac_state(transport: Transport, device: Any) -> AcState | None:
     elif state.power == "OFF":
         return AcState.OFF
     return AcState.__members__.get((state.mode or "").upper(), AcState.ON)
+
+
+def _ac_temperature(transport: Transport, device: Any) -> int | None:
+    state = transport.fetch_state(str(device.value))
+    return None if state.temperature is None or state.power == "OFF" else round(state.temperature)
 
 
 def _handle_ac(transport: Transport, device: Any, state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None:

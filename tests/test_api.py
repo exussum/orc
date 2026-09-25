@@ -192,6 +192,14 @@ def test_capture_acs_reads_each_device_through_the_handler():
     assert api.capture_acs() == (m.AcStatus(orc.AC.unit, None),)
 
 
+def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one():
+    with (
+        patch.object(config.registry, "ac_state_handler", lambda device: m.AcState.COOL),
+        patch.object(config.registry, "ac_temperature_handler", lambda device: 72),
+    ):
+        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
+
+
 def test_capture_sensors_reads_the_device_cache():
     device = m.DeviceState(id=orc.Sensor.living.value, name="living room sensor", attributes={"temperature": 70}, last_activity=None)
     with patch.object(mqtt_stub, "snapshot", return_value=[device]):
