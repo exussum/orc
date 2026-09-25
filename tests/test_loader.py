@@ -169,7 +169,7 @@ def test_ad_hoc_define_with_inline_first_item():
     silence = parsed.ad_hoc["Silence"]
     assert silence.commands == (engine.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),)
     assert silence.reset is False
-    assert silence.section == "scene"
+    assert silence.section is None
 
 
 def test_ad_hoc_delay():

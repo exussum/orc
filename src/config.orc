@@ -77,10 +77,10 @@ theme 'day off'  ROUTINE_QUIET      23:00
 room 'Living Room' Light.LIVING_ROOM  on
 room Bedroom       Light.BEDROOM_LAMP on
 
-ad_hoc define Silence           --no-reset Chromecast stop
-ad_hoc define Dog               --delay 7  Chromecast stop
-ad_hoc define 'All Lights On'   --no-reset Light      100
-ad_hoc define 'All Lights Off'  --no-reset Light      off
+ad_hoc define Silence          --section scene --no-reset Chromecast stop
+ad_hoc define Dog              --section scene --delay 7  Chromecast stop
+ad_hoc define 'All Lights On'  --section scene --no-reset Light      100
+ad_hoc define 'All Lights Off' --section scene --no-reset Light      off
 
 remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
 remote     .                         1 held   Silence

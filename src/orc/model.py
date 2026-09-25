@@ -390,7 +390,7 @@ class AdhocAction:
     commands: Commands
     snapshot: timedelta | None = None
     delay: timedelta = field(default_factory=timedelta)
-    section: str = "scene"
+    section: str | None = None
     reset: bool = True
 
     def __init__(
@@ -398,7 +398,7 @@ class AdhocAction:
         *commands: DeviceCommand,
         snapshot: timedelta | None = None,
         delay: timedelta = timedelta(),
-        section: str = "scene",
+        section: str | None = None,
         reset: bool = True,
     ) -> None:
         if snapshot and delay:
