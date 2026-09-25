@@ -134,8 +134,9 @@ class Settings(NamedTuple):
     snapshot: int
 
 
-def _rule(ctx, **values: Any) -> Any:
-    return _routine_commands(ctx, values["routine"])
+def _rule(ctx, **values: Any) -> str:
+    ctx.config.ad_hoc_routines[values["routine"]]
+    return values["routine"]
 
 
 def setup(ctx):
@@ -177,11 +178,11 @@ into times) does that conversion itself, as `_rule`/`_timed` do above:
   `Rules(**sensor.rules)` — so a missing or misspelled trigger also fails at
   load.
 
-Each `rules` and `timed` line names a routine from the main `config.orc` —
-an ad_hoc by its name or a routine by its id. The plugin resolves the name
-to the routine's commands at load and dispatches them directly: an ad_hoc's
-reset base is composed in exactly as running it from the UI would, but its
-`--delay` and `--snapshot` are ignored. The `timed` windows are scanned in
+Each `rules` line names an ad_hoc from the main `config.orc`, run exactly
+as tapping it in the UI would, `--delay` and reset included; `shutdown` is
+the exception, dispatched under the plugin's own snapshot. Each `timed` line
+names an ad_hoc or a routine id, resolved to commands at load and dispatched
+directly with the reset base composed in. The `timed` windows are scanned in
 file order and the first one containing the current time wins, so an
 overlapping window placed higher up overrides the ones below it. The winning
 window's routine is dispatched when the sensor goes active; reactions to

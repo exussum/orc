@@ -10,6 +10,7 @@ from orc.plugins import requires_ctx
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
+CLEARED_MSG = "Motion cleared, running {routine_name}, cleanup in {minutes} minutes"
 
 
 class Log(m.LogSourceEnum):
@@ -30,11 +31,7 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on
         # the scheduler's worker; None grace so a busy worker delays, never drops.
-
-        # Both motion events of one visit land under a single log entry: they carry
-        # the same sensor id, so api.log rolls the second under the first.
         log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger=m.Broker(id=str(device.id), source="hubitat"))
-
         ctx.scheduler.add_job(
             _run_motion,
             DateTrigger(ctx.api.local_now(), timezone=ctx.config.settings.tz),
@@ -65,7 +62,8 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
         ctx.api.dispatch(m.squish((*restore, *timed_commands)), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
-        ctx.api.dispatch(sensor.rules.inside, entry=log_entry)
+        log_entry.add(Log.ENTRANCE, CLEARED_MSG.format(routine_name=sensor.rules.inside, minutes=sensor.setting.cleanup_delay_minutes))
+        ctx.api.run_action(ctx, sensor.rules.inside)
         ctx.api.pause_presence()
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
@@ -86,16 +84,18 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     door_open = not people and _door_open(ctx, sensor)
 
     if people or door_open:
-        ctx.api.dispatch(sensor.rules.present, entry=log_entry)
+        ctx.api.run_action(ctx, sensor.rules.present)
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
     elif sensor.setting.listener in present:
         # Visitor left, the listener stayed: restore the pre-visit state
         ctx.engine.restore_scene(ctx, SNAPSHOT_NAME, (), log_entry)
-        ctx.api.dispatch(sensor.rules.absent, entry=log_entry)
+        ctx.api.run_action(ctx, sensor.rules.absent)
         msg = sensor.message.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
-        ctx.engine.override_scene(ctx, SNAPSHOT_NAME, sensor.rules.shutdown, end, SNAPSHOT_NAME, log_entry)
+        ctx.engine.override_scene(
+            ctx, SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry
+        )
         msg = sensor.message.log_shutdown
     log_entry.add(Log.ENTRANCE, msg)
 
@@ -149,5 +149,5 @@ def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot
     # lights is plugin-caused, not household state - don't replay it.
     if snapshot is None:
         return ()
-    inside = {d for c in sensor.rules.inside for d in c.channel.all()}
+    inside = {d for c in ctx.config.ad_hoc_routines[sensor.rules.inside].commands for d in c.channel.all()}
     return tuple(c for c in snapshot.routine if c.channel.one() not in inside)
