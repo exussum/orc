@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor as Pool
 from datetime import date, datetime, timedelta
 from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
+from itertools import takewhile
 from pathlib import Path
 from types import UnionType
 from typing import Any, NamedTuple
@@ -100,20 +101,22 @@ def notify(entry: m.LogSubEntry) -> m.LogSubEntry:
 
 
 def log(source: m.LogSourceEnum, action: str, *, trigger: m.Trigger, should_notify: bool = False) -> m.LogEntry:
+    now = local_now()
     top = next(iter(_ACTIVITY_LOG), None)
-    if (
-        source is not m.LogSource.MANUAL
-        and top is not None
-        and top.trigger == trigger
-        and local_now() - (top.children or [top])[-1].timestamp < _ROLLUP_WINDOW
-    ):
-        top.add(source, action)
-        return top
-    entry = m.LogEntry(local_now(), source, action, trigger)
-    _ACTIVITY_LOG.appendleft(entry)
-    if should_notify:
-        notify(entry)
-    return entry
+    parent: m.LogEntry | None
+    if top and top.trigger == trigger and now - (top.children or [top])[-1].timestamp < _ROLLUP_WINDOW:
+        parent = top
+    else:
+        recent = takewhile(lambda e: now - e.timestamp < _ROLLUP_WINDOW, _ACTIVITY_LOG)
+        parent = next((e for e in recent if e.answer(trigger)), None)
+    if parent is None:
+        parent = m.LogEntry(now, source, action, trigger)
+        _ACTIVITY_LOG.appendleft(parent)
+        if should_notify:
+            notify(parent)
+    else:
+        parent.add(source, action)
+    return parent
 
 
 def log_entries() -> list[m.LogEntry]:
@@ -283,6 +286,7 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
         else:
             todo.append((dispatch_handler, w, command))
 
+    entry.requests += tuple(m.Request(str(w.value), command.value) for _, w, command in todo)
     with Pool(max_workers=max(1, len(todo))) as ex:
         list(ex.map(partial(_dispatch_one, stream=stream, entry=entry), todo))
 
@@ -362,7 +366,7 @@ def ac_temperature(device: m.DeviceEnum) -> int | None:
     return handler(device) if handler else None
 
 
-def device_command(id: str, state: str | None) -> None:
+def device_command(id: str, state: str | None, entry: m.LogEntry) -> None:
     # Find the device across dispatch-handled types and run its registered handler
     # directly (no snapshot interception), so plugin device types work without core
     # knowing them. state is an int level (brightness/volume), an ON/OFF/STOP string,
@@ -377,6 +381,7 @@ def device_command(id: str, state: str | None) -> None:
         dispatch_handler = config.registry.dispatch_handlers.get(name)
         if dispatch_handler is not None and id in cls.__members__:
             member = cls[id]
+            entry.requests += (m.Request(str(member.value), parsed),)
             dispatch_handler(_ctx, member, engine.Command(m.Devices(member), parsed), {})
             return
     raise Exception(f"Unknown device: {id}")
@@ -453,7 +458,7 @@ def schedule_presence_check() -> None:
 
 
 def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
-    log(source, Log.PRESENCE_RESCAN, trigger=m.Cron(_PRESENCE_CRON_JOB_ID))
+    log(source, Log.PRESENCE_RESCAN, trigger=m.Manual("presence"))
     delete_all_presence()
     net.presence.probe(set(config.ble_tags) - present_names())
     scheduler.invoke_job(_PRESENCE_CRON_JOB_ID, ctx=ctx, source=source)

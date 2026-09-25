@@ -256,6 +256,7 @@ class Trigger:
 @dataclass(frozen=True)
 class Broker(Trigger):
     source: str = ""
+    value: Any = None
 
     def __str__(self) -> str:
         return f"{self.source}:{self.id}"
@@ -276,6 +277,18 @@ class Integration(Trigger): ...
 class Manual(Trigger): ...
 
 
+@dataclass(frozen=True)
+class Request(Trigger):
+    command: Any
+
+    def answered_by(self, response: Broker) -> bool:
+        if self.id != response.id:
+            return False
+        elif self.command == ON:
+            return response.value != OFF
+        return self.command == response.value
+
+
 class System(Trigger): ...
 
 
@@ -290,11 +303,20 @@ class LogSubEntry:
 class LogEntry(LogSubEntry):
     trigger: Trigger | None = None  # what set this off; children inherit it
     children: list[LogSubEntry] = field(default_factory=list)
+    requests: tuple[Request, ...] = ()
 
     def add(self, source: LogSourceEnum, action: str) -> LogSubEntry:
         entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action)
         self.children.append(entry)
         return entry
+
+    def answer(self, response: Trigger) -> bool:
+        if not isinstance(response, Broker) or response.value is None:
+            return False
+        pending = tuple(r for r in self.requests if not r.answered_by(response))
+        answered = pending != self.requests
+        self.requests = pending
+        return answered
 
 
 @dataclass

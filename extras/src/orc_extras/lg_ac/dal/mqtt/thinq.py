@@ -43,21 +43,20 @@ _client: mqtt.Client | None = None  # standing client, retained for publishing c
 _raw: LockedDict[str, dict[int, int]] = LockedDict()  # merged latest TLV values per device
 _models: LockedDict[str, str] = LockedDict()  # device id -> model kind from its preDeploy payload
 _raw_listeners: list[Callable[[str, bytes], None]] = []  # every inbound message, undecoded
-_event_listener: Callable[[str, str], None] | None = None  # major events (pairing, state changes, dropped commands)
+_event_listener: Callable[[str, str, m.ACState], None]
 
 
 def add_raw_listener(fn: Callable[[str, bytes], None]) -> None:
     _raw_listeners.append(fn)
 
 
-def set_event_listener(fn: Callable[[str, str], None]) -> None:
+def set_event_listener(fn: Callable[[str, str, m.ACState], None]) -> None:
     global _event_listener
     _event_listener = fn
 
 
-def event(device_id: str, msg: str) -> None:
-    if _event_listener is not None:
-        _event_listener(device_id, f"AC {device_id[:8]}: {msg}")
+def event(device_id: str, msg: str, state: m.ACState = m.ACState()) -> None:  # noqa: B008
+    _event_listener(device_id, f"AC {device_id[:8]}: {msg}", state)
 
 
 def _seen(device_id: str) -> None:
@@ -191,7 +190,7 @@ def _event_state_changes(fm: m.Fieldmap, device_id: str, old: dict[int, int], ne
         if field != "current_temperature" and b is not None and b != a
     ]
     if changes:
-        event(device_id, ", ".join(changes))
+        event(device_id, ", ".join(changes), after)
 
 
 def _send_timesync(device_id: str) -> None:
