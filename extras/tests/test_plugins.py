@@ -101,7 +101,7 @@ def plugin_ctx(ctx):
 
 
 def _cleanup(sensor, plugin_ctx):
-    entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, "Entrance sensor triggered")
+    entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test"))
     plugins._run_trigger_sensor_off.__wrapped__(sensor, entry, ctx=plugin_ctx)
     return entry
 
@@ -188,7 +188,7 @@ def test_walk_in_with_no_pending_cleanup_does_not_cancel(ctx, sensor):
 
 def test_motion_groups_under_the_trigger_entry(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
-    entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG)
+    entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
     ctx.api.log.return_value = entry
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, trigger=m.Broker(id="16", source="hubitat"))
@@ -351,9 +351,9 @@ def test_motion_republish_does_not_fire(ctx, sensor):
 
 def test_cleanup_checks_presence_then_resumes(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
-    _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.check_presence.assert_called_once_with()
-    plugin_ctx.api.resume_presence.assert_called_once_with()
+    entry = _cleanup(sensor, plugin_ctx)
+    plugin_ctx.api.check_presence.assert_called_once_with(entry.trigger)
+    plugin_ctx.api.resume_presence.assert_called_once_with(entry.trigger)
 
 
 def test_walk_out_pauses_presence(ctx, sensor):
@@ -365,7 +365,7 @@ def test_walk_out_pauses_presence(ctx, sensor):
 def test_walk_in_resumes_presence(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.resume_presence.assert_called_once_with()
+    ctx.api.resume_presence.assert_called_once_with(ctx.api.log.return_value.trigger)
 
 
 # --- Guards ---
