@@ -56,6 +56,10 @@ def ctx(ctx):
     ctx.api.JOBSTORE_MEMORY = "memory"
     ctx.api.device_state.side_effect = _device_state_side_effect(ctx)
     ctx.config.settings.tz = _UTC
+    ctx.config.ad_hoc_routines = {
+        "Lights Off": m.AdhocAction(_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF), reset=False),
+        "Lamp Off": m.AdhocAction(_cmd(Light.lamp, m.OFF), reset=False),
+    }
     return ctx
 
 
@@ -68,12 +72,7 @@ def sensor():
         "Day": [_window(time(8), time(22), _cmd(Light.day_bulb, 20))],
         "Night": [_window(time(22), time(8), _cmd(Light.night_bulb, 1), _cmd(Chromecast.cc, m.STOP))],
     }
-    rules = entrance_sensor.Rules(
-        inside=(_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF)),
-        present=(_cmd(Chromecast.cc, m.STOP),),
-        absent=(_cmd(Chromecast.cc, m.RESUME),),
-        shutdown=(_cmd(Light.lamp, m.OFF),),
-    )
+    rules = entrance_sensor.Rules(inside="Lights Off", present="Silence", absent="Resume", shutdown="Lamp Off")
     return SimpleNamespace(
         setting=entrance_sensor.Settings(
             cleanup_delay_minutes=2,
@@ -202,10 +201,7 @@ def test_motion_groups_under_the_trigger_entry(ctx, sensor):
 def test_entrance_lights_turn_off_behind_you(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
-    ctx.api.dispatch.assert_called_once_with(
-        (engine.Command(m.Devices(Light.day_bulb), m.OFF), engine.Command(m.Devices(Light.night_bulb), m.OFF)),
-        entry=ANY,
-    )
+    ctx.api.run_action.assert_called_once_with(ctx, "Lights Off")
 
 
 def test_cleanup_is_scheduled_for_later(ctx, sensor):
@@ -224,7 +220,7 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.dispatch.assert_called_once_with((engine.Command(m.Devices(Chromecast.cc), m.STOP),), entry=ANY)
+    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Silence")
     assert [c.action for c in entry.children] == [sensor.message.log_present]
 
 
@@ -232,7 +228,7 @@ def test_listener_home_alone_keeps_media_playing(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"rex"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.dispatch.assert_called_once_with((engine.Command(m.Devices(Chromecast.cc), m.RESUME),), entry=ANY)
+    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Resume")
     assert [c.action for c in entry.children] == [sensor.message.log_absent]
 
 
@@ -262,7 +258,7 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
         plugins.SNAPSHOT_NAME,
         entry,
     )
-    plugin_ctx.api.dispatch.assert_not_called()
+    plugin_ctx.api.run_action.assert_not_called()
     assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
 
 
@@ -328,7 +324,7 @@ def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx, sensor):
 
 
 def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
-    sensor.rules = {trigger: [commands] for trigger, commands in sensor.rules._asdict().items()}
+    sensor.rules = {trigger: [name] for trigger, name in sensor.rules._asdict().items()}
     plugin_ctx.config.people = {"rex": []}
     plugin_ctx.config.ble_tags = {}
     with patch.object(entrance_sensor, "load_plugin_config", return_value=sensor):

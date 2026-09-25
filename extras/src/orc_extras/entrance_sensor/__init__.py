@@ -38,10 +38,10 @@ class Messages(NamedTuple):
 
 
 class Rules(NamedTuple):
-    inside: Commands
-    present: Commands
-    absent: Commands
-    shutdown: Commands
+    inside: str
+    present: str
+    absent: str
+    shutdown: str
 
 
 class Timed(NamedTuple):
@@ -61,8 +61,9 @@ def _routine_commands(ctx: AppContext, name: str) -> Commands:
     raise ValueError(f"unknown routine {name!r} — expected an ad_hoc name or routine id")
 
 
-def _rule(ctx: AppContext, **values: Any) -> Commands:
-    return _routine_commands(ctx, values["routine"])
+def _rule(ctx: AppContext, **values: Any) -> str:
+    ctx.config.ad_hoc_routines[values["routine"]]
+    return values["routine"]
 
 
 def _timed(ctx: AppContext, **values: Any) -> Timed:
@@ -88,7 +89,7 @@ def setup(ctx: AppContext) -> None:
             "timed": group(partial(_timed, ctx)),
         },
     )
-    sensor.rules = Rules(**{trigger: tuple(c for commands in rows for c in commands) for trigger, rows in sensor.rules.items()})
+    sensor.rules = Rules(**{trigger: rows[0] for trigger, rows in sensor.rules.items()})
     if sensor.setting.listener not in ctx.config.people:
         raise ValueError(f"unknown listener {sensor.setting.listener!r} — expected one of {tuple(ctx.config.people)}")
     if ctx.config.ble_tags and sensor.setting.cleanup_delay_minutes < MIN_BLE_CLEANUP_MINUTES:

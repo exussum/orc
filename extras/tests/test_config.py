@@ -54,7 +54,6 @@ def entrance_ctx(ctx):
     ctx.config.people = {"Rex": []}
     ctx.config.ble_tags = {}
     ctx.config.reset_config = SimpleNamespace(commands=(RESET,))
-    ctx.config.routines = {"ROUTINE_RESET": SimpleNamespace(commands=(LIGHTS_OFF,))}
     ctx.config.ad_hoc_routines = {
         "Lights Off": m.AdhocAction(LIGHTS_OFF, reset=False),
         "Silence": m.AdhocAction(SILENCE, reset=False),
@@ -78,8 +77,8 @@ def test_entrance_config_loads(entrance_ctx):
         listener="Rex",
     )
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
-    assert sensor.rules.shutdown == (LIGHTS_OFF,)
-    assert sensor.rules.absent == (RESET, DOG)  # Dog's reset base is composed in; its delay is ignored
+    assert sensor.rules.shutdown == "Lights Off"
+    assert sensor.rules.absent == "Dog"
     assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), commands=(NIGHT,))]
 
 

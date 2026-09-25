@@ -14,7 +14,7 @@ message log_shutdown  'Trigger sensor off: applying OFF'
 rules inside   'Lights Off'
 rules present  Silence
 rules absent   Dog
-rules shutdown ROUTINE_RESET
+rules shutdown 'Lights Off'
 
 timed Day   8:00  22:00 'Day Scene'
 timed Night 22:00 8:00  'Night Scene'
