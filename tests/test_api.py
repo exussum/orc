@@ -71,7 +71,7 @@ class TestManagingConfig:
 @patch("orc.dal.mqtt.stub.publish_light")
 class TestIntercepts:
     def test_snapshot_update_overwrite_set(self, update_light, snapshot_config, entry):
-        command = engine.Command(m.Devices(orc.Light.b), m.ON, tag=m.Trigger.SYSTEM)
+        command = engine.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM)
 
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         api.dispatch((command,), entry=entry)
@@ -79,12 +79,12 @@ class TestIntercepts:
 
         assert api._ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine == (
             engine.Command(m.Devices(orc.Light.a), m.ON),
-            engine.Command(m.Devices(orc.Light.b), m.ON, tag=m.Trigger.SYSTEM),
+            engine.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM),
         )
         assert update_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
 
     def test_snapshot_update_add(self, update_light, snapshot_config, entry):
-        command = engine.Command(m.Devices(orc.Light.c), m.ON, tag=m.Trigger.SYSTEM)
+        command = engine.Command(m.Devices(orc.Light.c), m.ON, tag=m.Tag.SYSTEM)
 
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         api.dispatch((command,), entry=entry)
@@ -371,24 +371,24 @@ class TestPresence:
         dispatch.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self):
-        rule = self._routine("reset-r", m.Trigger.SYSTEM)
+        rule = self._routine("reset-r", m.Tag.SYSTEM)
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatch.assert_called_once_with(
-            m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Trigger.SYSTEM),)), force=False, entry=ANY
+            m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
         api.mark_present(["Bob"], when=api.local_now())
-        rule = self._routine("anyone-r", m.Trigger.ANYONE)
+        rule = self._routine("anyone-r", m.Tag.ANYONE)
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatch.assert_called_once_with(
-            m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Trigger.ANYONE),)), force=False, entry=ANY
+            m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.ANYONE),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self):
-        rule = self._routine("anyone-r", m.Trigger.ANYONE)
+        rule = self._routine("anyone-r", m.Tag.ANYONE)
         with patch.object(api, "dispatch") as dispatch:
             api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatch.assert_not_called()

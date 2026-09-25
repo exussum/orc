@@ -95,14 +95,14 @@ def test_console_plugin(client, ctx):
 
 
 def test_console_schedule_routine(client):
-    routine = _routine("r", "", engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Trigger.SYSTEM))
+    routine = _routine("r", "", engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM))
     with (
         patch.object(config, "schedule_routines", {"r": routine}),
         patch.object(config, "plugins", {}),
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Trigger.SYSTEM),)), force=True, entry=ANY)
+    ex.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY)
 
 
 def test_console_ad_hoc(client):
@@ -304,7 +304,7 @@ def test_pause_unknown_job_returns_404(client, scheduler, good_version):
 # --- /schedule/: button colour and badges ---
 
 
-def _fake_iot_job(name="job", trigger=m.Trigger.SYSTEM, run_date=None, skip_replay=False):
+def _fake_iot_job(name="job", trigger=m.Tag.SYSTEM, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
     rule = _routine(name, "", engine.Command(m.Devices(MagicMock()), "on", tag=trigger), skip_replay=skip_replay)
     job = create_autospec(Job, instance=True)
@@ -330,11 +330,11 @@ def _get_schedule(client, jobs, present_names=()):
 @pytest.mark.parametrize(
     "kwargs, present, present_badges, absent_badges",
     [
-        ({"trigger": m.Trigger.SYSTEM}, (), (), (b"orc-btn-absent", b"orc-presence-badge", b"orc-skip-replay-badge")),
+        ({"trigger": m.Tag.SYSTEM}, (), (), (b"orc-btn-absent", b"orc-presence-badge", b"orc-skip-replay-badge")),
         ({"trigger": "me"}, (), (b"orc-btn-absent", b"orc-presence-badge"), ()),
         ({"trigger": "me"}, ("me",), (), (b"orc-btn-absent",)),
-        ({"trigger": m.Trigger.ANYONE}, ("me",), (), (b"orc-btn-absent",)),
-        ({"trigger": m.Trigger.ANYONE}, (), (b"orc-btn-absent",), ()),
+        ({"trigger": m.Tag.ANYONE}, ("me",), (), (b"orc-btn-absent",)),
+        ({"trigger": m.Tag.ANYONE}, (), (b"orc-btn-absent",), ()),
         ({"trigger": m.WeatherCondition.SUNNY}, (), (b"orc-weather-badge",), ()),
         ({"skip_replay": True}, (), (b"orc-skip-replay-badge",), ()),
     ],
