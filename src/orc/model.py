@@ -262,10 +262,12 @@ class Broker(Trigger):
         return f"{self.source}:{self.id}"
 
 
-class Query(Trigger): ...
+class Query(Trigger):
+    BLE: ClassVar["Query"]
 
 
-class Cron(Trigger): ...
+class Cron(Trigger):
+    PRESENCE: ClassVar["Cron"]
 
 
 class Scheduled(Trigger): ...
@@ -274,7 +276,10 @@ class Scheduled(Trigger): ...
 class Integration(Trigger): ...
 
 
-class Manual(Trigger): ...
+class Manual(Trigger):
+    PRESENCE: ClassVar["Manual"]
+    THEME: ClassVar["Manual"]
+    ANNOUNCE: ClassVar["Manual"]
 
 
 @dataclass(frozen=True)
@@ -289,7 +294,16 @@ class Request(Trigger):
         return self.command == response.value
 
 
-class System(Trigger): ...
+class System(Trigger):
+    BOOT: ClassVar["System"]
+
+
+Query.BLE = Query("ble")
+Cron.PRESENCE = Cron("presence")
+Manual.PRESENCE = Manual("presence")
+Manual.THEME = Manual("theme")
+Manual.ANNOUNCE = Manual("announce")
+System.BOOT = System("boot")
 
 
 @dataclass
@@ -301,7 +315,7 @@ class LogSubEntry:
 
 @dataclass
 class LogEntry(LogSubEntry):
-    trigger: Trigger | None = None  # what set this off; children inherit it
+    trigger: Trigger
     children: list[LogSubEntry] = field(default_factory=list)
     requests: tuple[Request, ...] = ()
 

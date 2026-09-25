@@ -60,7 +60,7 @@ class TestDispatchLGTV:
         self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room
         self.bl = BroadLink.living_room
-        self.entry = m.LogEntry(datetime.now(UTC), m.LogSource.MANUAL, "test")
+        self.entry = m.LogEntry(datetime.now(UTC), m.LogSource.MANUAL, "test", m.Manual("test"))
 
     def test_off_powers_webos_off(self):
         with patch.object(plugins, "off") as webos_off:

@@ -54,7 +54,7 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, att
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     if new == sensor.setting.active_event:
-        ctx.api.resume_presence()
+        ctx.api.resume_presence(log_entry.trigger)
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
@@ -78,8 +78,8 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
 
 @requires_ctx
 def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
-    present = ctx.api.check_presence()
-    ctx.api.resume_presence()
+    present = ctx.api.check_presence(log_entry.trigger)
+    ctx.api.resume_presence(log_entry.trigger)
     people = present - {sensor.setting.listener}
     door_open = not people and _door_open(ctx, sensor)
 
