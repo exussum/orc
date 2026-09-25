@@ -245,6 +245,40 @@ class BatteryLevel(str, Enum):
             return cls.HIGH
 
 
+@dataclass(frozen=True)
+class Trigger:
+    id: str
+
+    def __str__(self) -> str:
+        return self.id
+
+
+@dataclass(frozen=True)
+class Broker(Trigger):
+    source: str = ""
+
+    def __str__(self) -> str:
+        return f"{self.source}:{self.id}"
+
+
+class Query(Trigger): ...
+
+
+class Cron(Trigger): ...
+
+
+class Scheduled(Trigger): ...
+
+
+class Integration(Trigger): ...
+
+
+class Manual(Trigger): ...
+
+
+class System(Trigger): ...
+
+
 @dataclass
 class LogSubEntry:
     timestamp: datetime
@@ -254,6 +288,7 @@ class LogSubEntry:
 
 @dataclass
 class LogEntry(LogSubEntry):
+    trigger: Trigger | None = None  # what set this off; children inherit it
     children: list[LogSubEntry] = field(default_factory=list)
 
     def add(self, source: LogSourceEnum, action: str) -> LogSubEntry:

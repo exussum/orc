@@ -30,7 +30,7 @@ def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> N
         )
         if wrong:
             template = Log.LIGHT_TEST_STILL_OFF if expect_on else Log.LIGHT_TEST_STILL_ON
-            ctx.api.log(m.LogSource.PLUGIN, template.format(names=", ".join(wrong)))
+            ctx.api.log(m.LogSource.PLUGIN, template.format(names=", ".join(wrong)), trigger=m.Manual("light_test"))
 
     end = ctx.api.local_now() + _LIGHT_TEST_WINDOW
     ctx.engine.override_scene(ctx, "light_test", (engine.Command(m.Devices(ctx.config.devices.Light), m.OFF),), end, "light_test", entry)
