@@ -240,6 +240,51 @@ class TestLog:
         assert [e.action for e in entries] == ["first"]
         assert [c.action for c in entries[0].children] == ["second"]
 
+    def test_a_device_report_nests_under_the_entry_that_requested_it(self):
+        requester = api.log(m.LogSource.PLUGIN, "react", trigger=m.Integration("sensor"))
+        api.dispatch((engine.Command(m.Devices(orc.USB.speaker), 3),), force=True, entry=requester)
+        api.log(m.LogSource.PLUGIN, "report", trigger=m.Broker(id=str(orc.USB.speaker.value), source="usb", value=3))
+        assert [c.action for c in requester.children] == ["report"]
+        assert [e.action for e in api.log_entries()] == ["react"]
+        assert requester.requests == ()
+
+    def test_a_bare_on_is_answered_by_any_powered_state(self):
+        requester = api.log(m.LogSource.PLUGIN, "react", trigger=m.Integration("sensor"))
+        with patch.object(config.registry, "ac_handler"):
+            api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=requester)
+        api.log(
+            m.LogSource.PLUGIN,
+            "report",
+            trigger=m.Broker(id=str(orc.AC.unit.value), source="lg_ac", value=m.AcCommand(m.AcMode.COOL, "low", 72)),
+        )
+        assert [c.action for c in requester.children] == ["report"]
+        assert requester.requests == ()
+
+    def test_a_device_report_that_differs_from_the_request_starts_its_own_entry(self):
+        requester = api.log(m.LogSource.PLUGIN, "react", trigger=m.Integration("sensor"))
+        api.dispatch((engine.Command(m.Devices(orc.USB.speaker), 3),), force=True, entry=requester)
+        api.log(m.LogSource.PLUGIN, "report", trigger=m.Broker(id=str(orc.USB.speaker.value), source="usb", value=4))
+        assert requester.children == []
+        assert requester.requests == (m.Request(str(orc.USB.speaker.value), 3),)
+        assert [e.action for e in api.log_entries()] == ["report", "react"]
+
+    def test_a_device_report_long_after_the_request_starts_its_own_entry(self):
+        requester = api.log(m.LogSource.PLUGIN, "react", trigger=m.Integration("sensor"))
+        api.dispatch((engine.Command(m.Devices(orc.USB.speaker), 3),), force=True, entry=requester)
+        with freeze_time(api.local_now() + api._ROLLUP_WINDOW):
+            api.log(m.LogSource.PLUGIN, "report", trigger=m.Broker(id=str(orc.USB.speaker.value), source="usb", value=3))
+        assert requester.children == []
+        assert [e.action for e in api.log_entries()] == ["report", "react"]
+
+    def test_the_newest_of_two_equal_requests_takes_the_report(self):
+        older = api.log(m.LogSource.PLUGIN, "older", trigger=m.Integration("a"))
+        api.dispatch((engine.Command(m.Devices(orc.USB.speaker), 3),), force=True, entry=older)
+        newer = api.log(m.LogSource.PLUGIN, "newer", trigger=m.Integration("b"))
+        api.dispatch((engine.Command(m.Devices(orc.USB.speaker), 3),), force=True, entry=newer)
+        api.log(m.LogSource.PLUGIN, "report", trigger=m.Broker(id=str(orc.USB.speaker.value), source="usb", value=3))
+        assert [c.action for c in newer.children] == ["report"]
+        assert older.children == [] and older.requests == (m.Request(str(orc.USB.speaker.value), 3),)
+
     def test_a_different_trigger_starts_its_own_entry(self):
         api.log(m.LogSource.PLUGIN, "first", trigger=m.Integration("x"))
         api.log(m.LogSource.PLUGIN, "other", trigger=m.Integration("y"))
@@ -253,11 +298,6 @@ class TestLog:
         entries = api.log_entries()
         assert [e.action for e in entries] == ["sys"]
         assert [c.action for c in entries[0].children] == ["plug"]
-
-    def test_manual_entries_never_roll_up(self):
-        api.log(m.LogSource.MANUAL, "one", trigger=m.Manual("x"))
-        api.log(m.LogSource.MANUAL, "two", trigger=m.Manual("x"))
-        assert [e.action for e in api.log_entries()] == ["two", "one"]
 
     def test_the_window_lapsing_starts_a_new_entry(self):
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:

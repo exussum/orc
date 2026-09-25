@@ -10,7 +10,7 @@ from orc.plugins import requires_ctx
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
-CLEARED_MSG = "Motion cleared, running {routine_name}, cleanup in {minutes} minutes"
+CLEARED_MSG = "Motion cleared, running `{routine_name}`, cleanup in {minutes} minutes"
 
 
 class Log(m.LogSourceEnum):

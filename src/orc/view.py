@@ -221,14 +221,14 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
 @VersionManager.versioned
 def checkin_presence(name: str) -> None:
     api.mark_present([name], when=api.local_now() + timedelta(hours=config.settings.checkin_hours))
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger=m.Manual("checkin"))
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger=m.Manual(name))
 
 
 @bp.route("/api/presence/<name>/expire")
 @VersionManager.versioned
 def expire_presence(name: str) -> None:
     api.expire_presence([name], force=True)
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger=m.Manual("expire"))
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger=m.Manual(name))
 
 
 @bp.route("/")
@@ -281,8 +281,7 @@ def presence() -> str:
 @VersionManager.versioned
 def device_api(id: str) -> None:
     state = request.args.get("state")
-    api.device_command(id, state)
-    api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), trigger=m.Manual("device"))
+    api.device_command(id, state, api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), trigger=m.Manual(id)))
 
 
 @bp.route("/api/room/<id>")
