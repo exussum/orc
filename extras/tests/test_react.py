@@ -398,6 +398,7 @@ def test_range_rule_parses_expressions(ctx):
     )
     assert rules[2].trigger == plugins.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[2].items[0].conditions == (engine.Is(m.AnyoneChannel(), True), plugins.Range(dewpoint, 59, 104))
+    assert rules[3].items[0].conditions == (plugins.AcIs(m.AcChannel(Ac.living), m.AcState.ON), plugins.Range(dewpoint, 0, 55))
 
 
 def test_value_in_range_sets_the_ac(ctx):
