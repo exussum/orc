@@ -13,7 +13,7 @@ _LIGHT_TEST_SETTLE_SECONDS = 10
 
 
 def back_on_schedule(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
-    ctx.api.check_presence(silent=True)
+    ctx.api.check_presence()
     ctx.api.replay_day(ctx.api.local_now(), entry)
 
 
