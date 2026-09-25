@@ -290,6 +290,16 @@ def test_ac_state_stale_id_is_none():
     assert lg_ac._ac_state(stub, SimpleNamespace(value="clip-stale")) is None  # unknown id → empty state
 
 
+def test_ac_temperature_reports_the_running_setpoint():
+    stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 72, 77.4)})
+    assert lg_ac._ac_temperature(stub, SimpleNamespace(value="clip-1")) == 77
+
+
+def test_ac_temperature_is_none_when_the_unit_is_off():
+    stub.reset(states={"clip-1": m.ACState("OFF", "cool", "low", 72, 77)})
+    assert lg_ac._ac_temperature(stub, SimpleNamespace(value="clip-1")) is None
+
+
 def test_ac_status_rows_decode_per_device():
     stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 77, 72)}, devices=["clip-1"])
     ctx = SimpleNamespace(
