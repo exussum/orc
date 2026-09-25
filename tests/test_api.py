@@ -1,6 +1,6 @@
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
-from unittest.mock import ANY, call, patch
+from unittest.mock import ANY, MagicMock, call, create_autospec, patch
 
 import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -8,7 +8,7 @@ from apscheduler.triggers.date import DateTrigger
 from freezegun import freeze_time
 
 import orc
-from orc import api, config
+from orc import api, config, plugins
 from orc import model as m
 from orc.dal import net, scheduler
 from orc.dal.mqtt import stub as mqtt_stub
@@ -171,6 +171,14 @@ def test_dispatch_usb_plays_alert_path(entry):
     api.dispatch((engine.Command(m.Devices(orc.USB.speaker), "/tmp/alert.wav"),), force=True, entry=entry)
 
     assert audio_stub._alerted == ["/tmp/alert.wav"]
+
+
+def test_back_on_schedule_checks_presence_then_replays(entry):
+    ctx = MagicMock()
+    ctx.api = create_autospec(api)
+    plugins.back_on_schedule(ctx, None, entry=entry)
+    ctx.api.check_presence.assert_called_once_with()
+    ctx.api.replay_day.assert_called_once_with(ctx.api.local_now.return_value, entry)
 
 
 def test_dispatch_routes_ac_commands(entry):
