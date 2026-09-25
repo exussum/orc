@@ -277,11 +277,11 @@ def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None
 
 
 def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
-    if trigger in (None, m.Trigger.SYSTEM):
+    if trigger in (None, m.Tag.SYSTEM):
         return ()
     elif trigger in _WEATHER_TRIGGERS:
         return (engine.In(m.WeatherChannel(), m.WeatherCondition(trigger)),)
-    elif trigger == m.Trigger.ANYONE:
+    elif trigger == m.Tag.ANYONE:
         return (engine.Is(m.AnyoneChannel(), True),)
     else:
         return (engine.Is(m.PersonChannel(trigger), True),)
@@ -387,7 +387,7 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:
-        known = (None, *(t.value for t in m.Trigger), *(w.value for w in m.WeatherCondition), *objects["person"])
+        known = (None, *(t.value for t in m.Tag), *(w.value for w in m.WeatherCondition), *objects["person"])
         if args.trigger not in known:
             raise ValueError(f"Unknown trigger {args.trigger!r}: expected one of {known[1:]}")
         routines[args.id] = replace(routine, items=(*routine.items, _clause(objects, args, args.trigger)))
