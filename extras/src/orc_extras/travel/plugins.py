@@ -5,6 +5,7 @@ from typing import Any, cast
 from apscheduler.triggers.date import DateTrigger
 
 import orc_extras.travel
+from orc import model as m
 from orc.model import Alarm, AppContext
 from orc.plugins import requires_ctx
 from orc_extras.travel.dal.sqlite import Connection
@@ -125,5 +126,5 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
         message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
     else:
         message = f"Time to leave for {target}."
-    entry = ctx.api.log(Log.TRAVEL, message)
+    entry = ctx.api.log(Log.TRAVEL, message, trigger=m.Integration(job.summary))
     ctx.api.alert(Alarm.WARNING, text=message, entry=entry)

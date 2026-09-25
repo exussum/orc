@@ -39,7 +39,7 @@ JOBSTORE_MEMORY = "memory"
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
 _PRESENCE_CRON_JOB_ID = "presence-cron"
-_EXTERNAL_GROUP_WINDOW = timedelta(seconds=5)
+_ROLLUP_WINDOW = timedelta(seconds=5)
 _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 
@@ -99,12 +99,17 @@ def notify(entry: m.LogSubEntry) -> m.LogSubEntry:
     return entry
 
 
-def log(source: m.LogSourceEnum, action: str, *, amend: bool = False, should_notify: bool = False) -> m.LogEntry:
-    if amend and _ACTIVITY_LOG and _ACTIVITY_LOG[0].source == source:
-        top = _ACTIVITY_LOG[0]
+def log(source: m.LogSourceEnum, action: str, *, trigger: m.Trigger, should_notify: bool = False) -> m.LogEntry:
+    top = next(iter(_ACTIVITY_LOG), None)
+    if (
+        source is not m.LogSource.MANUAL
+        and top is not None
+        and top.trigger == trigger
+        and local_now() - (top.children or [top])[-1].timestamp < _ROLLUP_WINDOW
+    ):
         top.add(source, action)
         return top
-    entry = m.LogEntry(local_now(), source, action)
+    entry = m.LogEntry(local_now(), source, action, trigger)
     _ACTIVITY_LOG.appendleft(entry)
     if should_notify:
         notify(entry)
@@ -208,11 +213,11 @@ def run_action(ctx: m.AppContext, id: str, *, device: str | None = None, hub_ori
     with record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
-            log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when))
-            run = requires_ctx(lambda ctx: action.effect(log(m.LogSource.MANUAL, display)))
+            log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when), trigger=m.Manual(id))
+            run = requires_ctx(lambda ctx: action.effect(log(m.LogSource.MANUAL, display, trigger=m.Manual(id))))
             scheduler.schedule_once(run, when, id=f"run-{id}", replace_existing=True, jobstore=JOBSTORE_MEMORY)
         else:
-            action.effect(log(m.LogSource.MANUAL, display))
+            action.effect(log(m.LogSource.MANUAL, display, trigger=m.Manual(id)))
     return True
 
 
@@ -227,7 +232,7 @@ def run_room(id: str, state: str | None) -> None:
         commands = (*m.squish(others, state_override=m.OFF), *room.commands)
     else:
         raise ValueError(f"Unknown room state: {state}")
-    entry = log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state))
+    entry = log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state), trigger=m.Manual(id))
     with record_duration(id):
         dispatch(commands, force=True, entry=entry)
 
@@ -239,7 +244,7 @@ def wire_buttons(ctx: m.AppContext) -> None:
         action = mapping.get((device_id, button, event_type))
         if action is not None and not run_action(ctx, action, hub_origin=True):
             msg = Log.BUTTON_ACTION_UNKNOWN.format(id=action)
-            entry = log(m.LogSource.SYSTEM, msg, should_notify=True)
+            entry = log(m.LogSource.SYSTEM, msg, trigger=m.Manual(action), should_notify=True)
             alert(m.Alarm.ATTENTION, text=msg, entry=entry)
 
     config.providers.mqtt.add_button_listener(on_button)
@@ -247,15 +252,11 @@ def wire_buttons(ctx: m.AppContext) -> None:
 
 def wire_external_log() -> None:
     def on_external(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
-        action = Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new)
-        last = next(iter(_ACTIVITY_LOG), None)
-        if not (
-            last is not None
-            and last.source is m.LogSource.EXTERNAL
-            and local_now() - (last.children or [last])[-1].timestamp < _EXTERNAL_GROUP_WINDOW
-        ):
-            last = log(m.LogSource.EXTERNAL, Log.EXTERNAL_DETECTED)
-        last.add(m.LogSource.EXTERNAL, action)
+        log(
+            m.LogSource.EXTERNAL,
+            Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new),
+            trigger=m.Broker(id=device.name, source="hubitat"),
+        )
 
     config.providers.mqtt.add_external_listener(on_external)
 
@@ -274,7 +275,7 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
     for command in commands:
         w = command.channel.one()
         if command not in survived:
-            log(m.LogSource.SYSTEM, Log.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"))
+            entry.add(entry.source, Log.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"))
         elif w in config.virtual_devices:
             entry.add(entry.source, Log.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
         elif (dispatch_handler := config.registry.dispatch_handlers.get(w.kind)) is None:
@@ -438,9 +439,9 @@ def start_ble_listener() -> None:
         nonlocal reported
         present = present_names()
         if detected := sorted(present - reported):
-            log(m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)))
+            log(m.LogSource.SYSTEM, Log.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger=m.Query("presence"))
         if lost := sorted(reported - present):
-            log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)))
+            log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)), trigger=m.Query("presence"))
         reported = present
 
     net.presence.start(config.ble_tags, config.settings.tz, report)
@@ -452,7 +453,7 @@ def schedule_presence_check() -> None:
 
 
 def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
-    log(source, Log.PRESENCE_RESCAN)
+    log(source, Log.PRESENCE_RESCAN, trigger=m.Cron(_PRESENCE_CRON_JOB_ID))
     delete_all_presence()
     net.presence.probe(set(config.ble_tags) - present_names())
     scheduler.invoke_job(_PRESENCE_CRON_JOB_ID, ctx=ctx, source=source)
@@ -460,12 +461,12 @@ def rerun_presence_check(ctx: m.AppContext, source: m.LogSourceEnum = m.LogSourc
 
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None) -> None:
     if not name:
-        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED)
+        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED, trigger=m.Manual("theme"))
         clear_theme_override()
     else:
         assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
-        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end))
+        log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_SET.format(name=name, start=start, end=end), trigger=m.Manual(name))
     rebuild_jobs(ctx)
 
 
@@ -476,7 +477,7 @@ def check_presence(source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
-        entry = log(source, msg, should_notify=True)
+        entry = log(source, msg, trigger=m.Query("lan"), should_notify=True)
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
     mark_present(present, local_now())
     return present_names()
@@ -554,7 +555,7 @@ def next_iot_job(present_names: set[str]) -> Job | None:
 
 @requires_ctx
 def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
-    run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`"), present_names())
+    run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`", trigger=m.Scheduled(job.rule.name)), present_names())
 
 
 def _squish_matched(matched: m.Commands, entry: m.LogEntry) -> m.Commands:
