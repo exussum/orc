@@ -130,6 +130,7 @@ class VersionManager:
                 api.log(
                     m.LogSource.SYSTEM,
                     Log.VERSION_MISMATCH.format(client=request.headers.get("orc-version"), server=VersionManager.version),
+                    trigger=m.Manual(request.url_rule.endpoint if request.url_rule else request.path),
                 )
                 return {"version": VersionManager.version}, 412
             result = func(*args, **kwargs)
@@ -220,14 +221,14 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
 @VersionManager.versioned
 def checkin_presence(name: str) -> None:
     api.mark_present([name], when=api.local_now() + timedelta(hours=config.settings.checkin_hours))
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name))
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger=m.Manual("checkin"))
 
 
 @bp.route("/api/presence/<name>/expire")
 @VersionManager.versioned
 def expire_presence(name: str) -> None:
     api.expire_presence([name], force=True)
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name))
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger=m.Manual("expire"))
 
 
 @bp.route("/")
@@ -281,7 +282,7 @@ def presence() -> str:
 def device_api(id: str) -> None:
     state = request.args.get("state")
     api.device_command(id, state)
-    api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state))
+    api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), trigger=m.Manual("device"))
 
 
 @bp.route("/api/room/<id>")
@@ -353,7 +354,7 @@ def set_theme() -> None:
 @VersionManager.versioned
 def announce() -> None:
     text = request.form["text"]
-    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text))
+    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text), trigger=m.Manual("announce"))
     api.alert(m.Alarm.WARNING, text=text, entry=entry)
 
 

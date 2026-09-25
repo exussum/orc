@@ -43,21 +43,21 @@ _client: mqtt.Client | None = None  # standing client, retained for publishing c
 _raw: LockedDict[str, dict[int, int]] = LockedDict()  # merged latest TLV values per device
 _models: LockedDict[str, str] = LockedDict()  # device id -> model kind from its preDeploy payload
 _raw_listeners: list[Callable[[str, bytes], None]] = []  # every inbound message, undecoded
-_event_listener: Callable[[str], None] | None = None  # major events (pairing, state changes, dropped commands)
+_event_listener: Callable[[str, str], None] | None = None  # major events (pairing, state changes, dropped commands)
 
 
 def add_raw_listener(fn: Callable[[str, bytes], None]) -> None:
     _raw_listeners.append(fn)
 
 
-def set_event_listener(fn: Callable[[str], None]) -> None:
+def set_event_listener(fn: Callable[[str, str], None]) -> None:
     global _event_listener
     _event_listener = fn
 
 
-def event(msg: str) -> None:
+def event(device_id: str, msg: str) -> None:
     if _event_listener is not None:
-        _event_listener(msg)
+        _event_listener(device_id, f"AC {device_id[:8]}: {msg}")
 
 
 def _seen(device_id: str) -> None:
@@ -123,7 +123,7 @@ def publish_command(device_id: str, values: dict[str, object]) -> None:
         raise RuntimeError("mqtt client not started; cannot command device")
     fm = _fieldmap(device_id)
     if fm is None:
-        event(f"AC {device_id[:8]}: command dropped, no field map")
+        event(device_id, "command dropped, no field map")
         return
     _send_packet(device_id, api.build_command(fm, values))
 
@@ -191,7 +191,7 @@ def _event_state_changes(fm: m.Fieldmap, device_id: str, old: dict[int, int], ne
         if field != "current_temperature" and b is not None and b != a
     ]
     if changes:
-        event(f"AC {device_id[:8]}: {', '.join(changes)}")
+        event(device_id, ", ".join(changes))
 
 
 def _send_timesync(device_id: str) -> None:
@@ -216,7 +216,7 @@ def _receive_provisioning(topic: str, payload: bytes) -> None:
         _models.update(device_id, lambda cur: model)
         if api.load_fieldmap(model) is None:
             _log.warning("no field map for model %s; capture-only until one exists", model)
-            event(f"AC {device_id[:8]}: no field map for model {model}; capture-only")
+            event(device_id, f"no field map for model {model}; capture-only")
     _seen(device_id)
     if _client is not None:
         response = api.deploy(device_id, int(time.time() * 1000), device_cmd)

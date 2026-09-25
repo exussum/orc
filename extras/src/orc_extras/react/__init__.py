@@ -108,6 +108,5 @@ def setup(ctx: AppContext) -> None:
     )
     ctx.engine.add_rules(cfg.react)
     sources = {plugins.source_of(er).value: plugins.source_of(er) for er in cfg.react}
-    ctx.plugin_state[plugins] = plugins.React(sources, plugins.LastFired())
-    ctx.api.add_listener(partial(plugins._on_event, ctx))
+    ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
     return cfg.react

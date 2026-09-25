@@ -1,5 +1,4 @@
 import math
-import sys
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, NamedTuple
@@ -25,16 +24,6 @@ def _dewpoint(temp_f: float, humidity: float) -> float:
 
 
 FUNCTIONS = {"dewpoint": _dewpoint}
-
-
-@dataclass
-class LastFired:
-    rule: engine.Rule | None = None
-
-
-class React(NamedTuple):
-    sources: dict[int, m.DeviceEnum]
-    last_fired: LastFired
 
 
 class Log(m.LogSourceEnum):
@@ -123,7 +112,7 @@ def condition(when: When | None) -> tuple[engine.Condition, ...]:
         return (engine.Is(m.MqttDeviceChannel(when.device, TRIGGERS[when.state]), when.state),)
 
 
-def source_of(rule: engine.Rule[m.Devices]) -> m.DeviceEnum:
+def source_of(rule: engine.Rule) -> m.DeviceEnum:
     trigger = rule.trigger
     if isinstance(trigger, engine.Transition):
         assert isinstance(trigger.channel, m.MqttDeviceChannel)
@@ -177,15 +166,8 @@ def _num(value: Any) -> Any:
         return value
 
 
-def _state(ctx: m.AppContext) -> React:
-    state = ctx.plugin_state[sys.modules[__name__]]
-    assert isinstance(state, React)
-    return state
-
-
-def _on_event(ctx: m.AppContext, device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
-    state = _state(ctx)
-    source = state.sources.get(device.id)
+def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
+    source = sources.get(device.id)
     if source is None:
         return
     event = engine.Event(m.MqttDeviceChannel(source, attribute), old, new)
@@ -219,12 +201,13 @@ def _targets(what: engine.Channel) -> str:
 def _dispatch(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
     if report.disposition is not engine.Disposition.FIRED:
         return
-    plugin_state = _state(ctx)
     trigger = _trigger_label(report.rule)
     command = report.rule.items[0].command
-    amend = plugin_state.last_fired.rule == report.rule
-    plugin_state.last_fired.rule = report.rule
-    entry = ctx.api.log(Log.REACT, f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}", amend=amend)
+    entry = ctx.api.log(
+        Log.REACT,
+        f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}",
+        trigger=m.Broker(id=str(source_of(report.rule).value), source="hubitat"),
+    )
     ctx.api.dispatch((engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM),), entry=entry)
 
 

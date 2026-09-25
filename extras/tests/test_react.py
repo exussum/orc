@@ -93,9 +93,13 @@ def _make(devices, attribute, state, action, target=None, delay=None, when=None)
     return rules
 
 
+def _hub(id):
+    return m.Broker(id=id, source="hubitat")
+
+
 def _install(ctx, engine_rules, sources):
     ctx.engine.add_rules(engine_rules)
-    ctx.plugin_state[plugins] = plugins.React(sources, plugins.LastFired())
+    ctx.sources = sources
 
 
 def _switch(ctx, listener, device_id, old, new):
@@ -121,7 +125,7 @@ def test_config_registers_listener(ctx, configured):
     assert rules[1].trigger == engine.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
     assert rules[0].items[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
     assert rules[0].delay == timedelta(minutes=10)
-    assert ctx.plugin_state[plugins].sources == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
+    assert ctx.api.add_listener.call_args.args[0].args[1] == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
 
 
 def test_switch_on_schedules_reaction(ctx, configured):
@@ -152,21 +156,21 @@ def test_unwatched_device_is_ignored(ctx, configured):
 def test_run_react_dispatches_the_action(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     assert _dispatched(ctx) == [(Light.lamp, m.OFF)]
 
 
-def test_second_consecutive_fire_amends_the_log_entry(ctx):
+def test_consecutive_fires_log_the_same_trigger_id(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     ctx.api.local_now.return_value = _NOW + timedelta(seconds=plugins.COOLDOWN.total_seconds() + 1)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
-    assert [call.kwargs.get("amend", False) for call in ctx.api.log.call_args_list] == [False, True]
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
+    assert [call.kwargs["trigger"] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("1")]
 
 
-def test_different_rule_between_does_not_amend(ctx):
+def test_a_different_device_logs_a_different_trigger_id(ctx):
     _install(
         ctx,
         [
@@ -177,9 +181,9 @@ def test_different_rule_between_does_not_amend(ctx):
     )
     lamp = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     desk = m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, lamp, "switch", m.OFF, m.ON)
-    plugins._on_event(ctx, desk, "switch", m.OFF, m.ON)
-    assert [call.kwargs.get("amend", False) for call in ctx.api.log.call_args_list] == [False, False]
+    plugins._on_event(ctx, ctx.sources, lamp, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, desk, "switch", m.OFF, m.ON)
+    assert [call.kwargs["trigger"] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("2")]
 
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
@@ -190,14 +194,14 @@ def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
 def test_targeted_action_goes_to_the_target(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, target=m.Devices(Light.desk)), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     assert _dispatched(ctx) == [(Light.desk, m.OFF)]
 
 
 def test_targeted_rule_schedules_with_the_target(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, target=m.Devices(Light.desk), delay=5), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     assert _dispatched(ctx) == [(Light.desk, m.OFF)]
 
@@ -206,7 +210,7 @@ def test_contact_open_triggers_immediate_rule(ctx):
     rule = _make(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), target=m.Devices(Ac))
     _install(ctx, rule, {56: Light.lamp})
     device = m.DeviceState(id=56, name="balcony door", attributes={"contact": "open"}, last_activity=None)
-    plugins._on_event(ctx, device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, device, "contact", "closed", "open")
     assert _dispatched(ctx) == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
 
 
@@ -262,11 +266,11 @@ def test_when_gates_immediate_rule_on_ac_state(ctx):
     _install(ctx, rule, {56: Light.lamp})
     device = m.DeviceState(id=56, name="balcony door", attributes={"contact": "open"}, last_activity=None)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
-    plugins._on_event(ctx, device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, device, "contact", "closed", "open")
     ctx.api.dispatch.assert_not_called()
     ctx.api.log.assert_not_called()
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
-    plugins._on_event(ctx, device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, device, "contact", "closed", "open")
     assert _dispatched(ctx) == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
 
 
@@ -275,12 +279,12 @@ def test_when_mode_predicate_requires_that_mode(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.FAN_ONLY),)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.log.assert_not_called()
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.COOL),)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_called_once()
 
@@ -290,7 +294,7 @@ def test_when_on_ignores_unknown_mode_for_a_specific_mode_query(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.ON),)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
 
@@ -300,11 +304,11 @@ def test_when_checks_chromecast_playback_at_fire_time(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, None, 30, m.Playback.STOPPED),)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, "stream", 30, m.Playback.PLAYING),)
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_called_once()
 
@@ -314,11 +318,11 @@ def test_when_checks_hubitat_state_at_fire_time(ctx):
     _install(ctx, _make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, when=when), {1: Light.lamp})
     device = m.DeviceState(id=1, name="lamp", attributes={"switch": m.ON}, last_activity=None)
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.OFF}, last_activity=None)]
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_not_called()
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)]
-    plugins._on_event(ctx, device, "switch", m.OFF, m.ON)
+    plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     _fire_pending(ctx)
     ctx.api.dispatch.assert_called_once()
 
@@ -375,7 +379,7 @@ def _range_event(ctx, sensor, attributes):
     device = m.DeviceState(id=sensor.value, name="sensor", attributes=attributes, last_activity=None)
     ctx.api.device_states.return_value = [device]
     changed = next(iter(attributes))
-    plugins._on_event(ctx, device, changed, None, attributes[changed])
+    plugins._on_event(ctx, ctx.sources, device, changed, None, attributes[changed])
 
 
 def test_range_rule_parses_expressions(ctx):

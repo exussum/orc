@@ -34,7 +34,7 @@ def route_certificate() -> Response:
 def device_certificate(device_id: str) -> Response:
     body = request.get_json(force=True)
     signed = api.sign_device_csr(body["csr"].encode(), device_id)
-    thinq.event(f"AC {device_id[:8]} paired")
+    thinq.event(device_id, "paired")
     return jsonify(api.cert_response(signed))
 
 
