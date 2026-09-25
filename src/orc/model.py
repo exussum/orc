@@ -167,7 +167,7 @@ class LogSource(LogSourceEnum):
     EXTERNAL = "external"
 
 
-class Trigger(str, Enum):
+class Tag(str, Enum):
     SYSTEM = "SYSTEM"
     ANYONE = "ANYONE"
 
@@ -413,7 +413,7 @@ class AppContext:
 
     scheduler: BaseScheduler
     version_manager: VersionManager
-    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([], bypass=Trigger.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT))
+    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([], bypass=Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT))
     plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))

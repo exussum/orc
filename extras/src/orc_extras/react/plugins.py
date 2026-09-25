@@ -225,7 +225,7 @@ def _dispatch(ctx: m.AppContext, report: engine.Report, name: str, note: str) ->
     amend = plugin_state.last_fired.rule == report.rule
     plugin_state.last_fired.rule = report.rule
     entry = ctx.api.log(Log.REACT, f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}", amend=amend)
-    ctx.api.dispatch((engine.Command(command.channel, command.value, tag=m.Trigger.SYSTEM),), entry=entry)
+    ctx.api.dispatch((engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM),), entry=entry)
 
 
 @requires_ctx

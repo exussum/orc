@@ -536,7 +536,7 @@ def next_iot_job(present_names: set[str]) -> Job | None:
             j
             for j in jobs
             if j.next_run_time
-            and not any(clause.command.tag == m.Trigger.SYSTEM for clause in j.args[0].rule.items)
+            and not any(clause.command.tag == m.Tag.SYSTEM for clause in j.args[0].rule.items)
             and matching_items(j.args[0].rule, j.next_run_time, present_names)
         ),
         None,
@@ -561,9 +561,7 @@ def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], f
         if not pnames:
             detail = "nobody home"
         else:
-            unmet = sorted(
-                {clause.command.tag for clause in rule.items if clause.command.tag not in (None, m.Trigger.SYSTEM, m.Trigger.ANYONE)}
-            )
+            unmet = sorted({clause.command.tag for clause in rule.items if clause.command.tag not in (None, m.Tag.SYSTEM, m.Tag.ANYONE)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
         entry.action += f" — {Log.RULE_SKIPPED.format(detail=detail)}"
         return

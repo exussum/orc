@@ -6,7 +6,7 @@ from command_cfg import each
 
 from orc.kernel import engine
 from orc.kernel.loader import Cast, load_plugin_config, validate_ac_state
-from orc.model import AcChannel, AcCommand, AcState, AnyoneChannel, AppContext, DeviceEnum, Devices, MqttDeviceChannel, Playback, Trigger
+from orc.model import AcChannel, AcCommand, AcState, AnyoneChannel, AppContext, DeviceEnum, Devices, MqttDeviceChannel, Playback, Tag
 from orc_extras.react import plugins
 from orc_extras.react.plugins import TRIGGERS, When
 
@@ -64,7 +64,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     for source in Cast.devices(args.devices, objects).all():
         formula = plugins.Formula(source, args.expr)
         conditions: list[engine.Condition] = []
-        if args.people == Trigger.ANYONE:
+        if args.people == Tag.ANYONE:
             conditions.append(engine.Is(AnyoneChannel(), True))
         elif args.people:
             people = tuple(name.strip() for name in args.people.split(","))
