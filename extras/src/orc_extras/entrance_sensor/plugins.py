@@ -22,16 +22,18 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
     if attribute == "battery":
         level = m.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
-            ctx.api.log(Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})")
+            ctx.api.log(
+                Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})", trigger=m.Broker(id=str(device.id), source="hubitat")
+            )
     elif _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on
         # the scheduler's worker; None grace so a busy worker delays, never drops.
 
-        # Both motion events of one visit land under a single log entry: amend
-        # groups consecutive entrance logs under the running one.
-        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, amend=True)
+        # Both motion events of one visit land under a single log entry: they carry
+        # the same sensor id, so api.log rolls the second under the first.
+        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger=m.Broker(id=str(device.id), source="hubitat"))
 
         ctx.scheduler.add_job(
             _run_motion,

@@ -225,23 +225,38 @@ class TestLog:
     def _clear(self):
         api._ACTIVITY_LOG.clear()
 
-    def test_amend_nests_under_the_same_source(self):
-        api.log(m.LogSource.PLUGIN, "first")
-        api.log(m.LogSource.PLUGIN, "second", amend=True)
+    def test_a_burst_from_one_trigger_nests_under_the_entry_it_opened(self):
+        api.log(m.LogSource.PLUGIN, "first", trigger=m.Integration("x"))
+        api.log(m.LogSource.PLUGIN, "second", trigger=m.Integration("x"))
         entries = api.log_entries()
         assert [e.action for e in entries] == ["first"]
         assert [c.action for c in entries[0].children] == ["second"]
 
-    def test_amend_starts_a_new_entry_for_a_different_source(self):
-        api.log(m.LogSource.SYSTEM, "sys")
-        api.log(m.LogSource.PLUGIN, "plug", amend=True)
+    def test_a_different_trigger_starts_its_own_entry(self):
+        api.log(m.LogSource.PLUGIN, "first", trigger=m.Integration("x"))
+        api.log(m.LogSource.PLUGIN, "other", trigger=m.Integration("y"))
         entries = api.log_entries()
-        assert [e.action for e in entries] == ["plug", "sys"]
+        assert [e.action for e in entries] == ["other", "first"]
         assert entries[0].children == []
 
-    def test_amend_on_an_empty_log_creates_a_top_level_entry(self):
-        api.log(m.LogSource.PLUGIN, "only", amend=True)
-        assert [e.action for e in api.log_entries()] == ["only"]
+    def test_sources_differ_but_the_trigger_is_one_so_they_nest(self):
+        api.log(m.LogSource.SYSTEM, "sys", trigger=m.Integration("x"))
+        api.log(m.LogSource.PLUGIN, "plug", trigger=m.Integration("x"))
+        entries = api.log_entries()
+        assert [e.action for e in entries] == ["sys"]
+        assert [c.action for c in entries[0].children] == ["plug"]
+
+    def test_manual_entries_never_roll_up(self):
+        api.log(m.LogSource.MANUAL, "one", trigger=m.Manual("x"))
+        api.log(m.LogSource.MANUAL, "two", trigger=m.Manual("x"))
+        assert [e.action for e in api.log_entries()] == ["two", "one"]
+
+    def test_the_window_lapsing_starts_a_new_entry(self):
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+            api.log(m.LogSource.PLUGIN, "first", trigger=m.Integration("x"))
+            frozen.tick(api._ROLLUP_WINDOW * 2)
+            api.log(m.LogSource.PLUGIN, "later", trigger=m.Integration("x"))
+        assert [e.action for e in api.log_entries()] == ["later", "first"]
 
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
@@ -491,12 +506,17 @@ class TestPresence:
         api.expire_presence(["Alice"], force=True)
         assert api.present_names() == set()
 
+    @staticmethod
+    def _reported(entry):
+        return [entry.action, *(c.action for c in entry.children)]
+
     def test_mark_reports_detected_once(self):
         api.mark_present(["Alice"], when=api.local_now())
         first = api.log_entries()[0]
-        assert "Presence detected: `Alice`" in first.action
+        assert any("Presence detected: `Alice`" in a for a in self._reported(first))
+        before = self._reported(first)
         api.mark_present(["Alice"], when=api.local_now())
-        assert api.log_entries()[0] is first
+        assert api.log_entries()[0] is first and self._reported(first) == before
 
     def test_report_waits_for_resume(self):
         api.pause_presence()
@@ -504,12 +524,12 @@ class TestPresence:
         api.mark_present(["Alice"], when=api.local_now() + timedelta(seconds=1))
         assert len(api.log_entries()) == entries
         api.resume_presence()
-        assert "Presence detected: `Alice`" in api.log_entries()[0].action
+        assert any("Presence detected: `Alice`" in a for a in self._reported(api.log_entries()[0]))
 
     def test_report_logs_lost_after_expiry(self):
         api.mark_present(["Alice"], when=api.local_now())
         api.expire_presence(["Alice"], force=True)
-        assert "Presence lost: `Alice`" in api.log_entries()[0].action
+        assert "Presence lost: `Alice`" in api.log_entries()[0].children[-1].action
 
     def test_rescan_probes_only_absent_tags(self):
         api.mark_present(["Bob"], when=api.local_now())

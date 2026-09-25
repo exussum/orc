@@ -12,6 +12,7 @@ from typing import Any, NamedTuple
 from command_cfg import scalar
 
 import orc_extras.lg_ac
+from orc import model as m
 from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AcState, AppContext, DeviceStatus, LogSourceEnum, Secrets
 from orc_extras.lg_ac import api, web
@@ -70,7 +71,7 @@ def setup(ctx: AppContext) -> None:
     broker.start(s.mqtts_advertise, secrets[_SECRET_SERVER_CERT].encode(), secrets[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     if s.capture:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
-    thinq.set_event_listener(lambda msg: ctx.api.log(LogSource.LG_AC, msg, amend=True))
+    thinq.set_event_listener(lambda device_id, msg: ctx.api.log(LogSource.LG_AC, msg, trigger=m.Broker(id=device_id, source="lg_ac")))
     thinq.start("127.0.0.1", s.mqtt_port, clip_ids=[str(device.value) for device in ctx.config.devices.AC])
     ctx.api.set_ac_handler(partial(_handle_ac, thinq))
     ctx.api.set_ac_state_handler(partial(_ac_state, thinq))

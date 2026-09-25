@@ -78,7 +78,7 @@ def _start_services(ctx: m.AppContext) -> None:
     api.start_ble_listener()
     ctx.scheduler.resume()
     api.schedule_presence_check()
-    api.log(m.LogSource.SYSTEM, Log.BOOT)
+    api.log(m.LogSource.SYSTEM, Log.BOOT, trigger=m.System("boot"))
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 

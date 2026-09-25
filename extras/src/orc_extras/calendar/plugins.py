@@ -101,5 +101,5 @@ def _run_event(job: CalendarJob, *, ctx: m.AppContext) -> None:
         entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, job.summary)
         ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
     else:
-        entry = ctx.api.log(Log.CALENDAR, job.summary)
+        entry = ctx.api.log(Log.CALENDAR, job.summary, trigger=m.Integration(job.summary))
         ctx.api.alert(m.Alarm.ATTENTION, text=job.summary, entry=entry)
