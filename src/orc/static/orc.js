@@ -1,3 +1,7 @@
+import { orcHooks } from "./hooks.js";
+
+export { orcHooks as hooks };
+
 function isInvalidResponse(response) {
     return !response || (response.status >= 400 && response.status < 500);
 }
@@ -82,7 +86,7 @@ export async function runAction(el) {
     if ("noFunc" in el.dataset) {
         alert(
             `"${el.dataset.id}" does nothing: its plugin has no server action, and no browser hook handled the press.\n\n` +
-                `Give it a --function on its plugin line in config.orc, or register a hook for it — orcHooks.register({ onPress(name) { ... } }).`,
+                `Give it a --function on its plugin line in config.orc, or register a hook for it — orc.hooks.register({ onPress(name) { ... } }).`,
         );
         return;
     }

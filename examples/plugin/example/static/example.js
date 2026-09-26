@@ -1,6 +1,6 @@
 const API = "/api/example/things/";
 
-orcHooks.register({
+orc.hooks.register({
     async onPress(buttonName) {
         if (buttonName !== "Example") return true;
         return false;

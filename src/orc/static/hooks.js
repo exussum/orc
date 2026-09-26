@@ -35,4 +35,4 @@ class Hooks {
     }
 }
 
-window.orcHooks = new Hooks();
+export const orcHooks = new Hooks();

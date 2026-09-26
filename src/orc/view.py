@@ -100,9 +100,9 @@ def cache_control(response: Response) -> Response:
 def _hooks_bundle(scripts: tuple[tuple[str, Path], ...]) -> str:
     static = Path(__file__).parent / "static"
     gate = static / "hooks" / "are-you-sure.js"
-    core = [static / "hooks.js", gate, *(p for p in (static / "hooks").glob("*.js") if p != gate)]
+    core = [gate, *(p for p in (static / "hooks").glob("*.js") if p != gate)]
     files = [(p.name, p) for p in core] + list(scripts)
-    return "\n".join(f"// --- {name}\n(() => {{\n{path.read_text()}}})();" for name, path in files)
+    return "\n".join(['import * as orc from "/static/orc.js";', *(f"// --- {name}\n{{\n{path.read_text()}}}" for name, path in files)])
 
 
 @bp.route("/hooks.js")

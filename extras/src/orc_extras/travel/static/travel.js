@@ -182,7 +182,7 @@ async function refresh() {
     rounded.setMinutes(Math.ceil(now.getMinutes() / 10) * 10);
     arrivePicker.setDate(rounded);
     const err = dialog.querySelector("#travel-error");
-    const data = await get(API, null, () => {
+    const data = await orc.get(API, null, () => {
         err.textContent = "Failed to load trips.";
         err.classList.remove("hidden");
     }, false);
@@ -211,7 +211,7 @@ async function submit(e) {
     refresh();
 }
 
-orcHooks.register({
+orc.hooks.register({
     async onPress(buttonName) {
         if (buttonName !== "Travel") return true;
         if (!dialog) build();
