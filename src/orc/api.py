@@ -261,7 +261,7 @@ def wire_external_log() -> None:
         log(
             m.LogSource.EXTERNAL,
             Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new),
-            m.Broker(id=device.name, source="hubitat"),
+            m.Broker(id="external", source="hubitat"),
         )
 
     config.providers.mqtt.add_external_listener(on_external)

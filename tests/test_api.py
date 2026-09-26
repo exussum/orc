@@ -314,6 +314,19 @@ class TestLog:
             api.log(m.LogSource.PLUGIN, "later", m.Integration("x"))
         assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("later", []), ("first", [])]
 
+    def test_a_swarm_of_external_changes_rolls_up(self):
+        with patch.object(mqtt_stub, "add_external_listener", side_effect=lambda fn: setattr(self, "on_external", fn)):
+            api.wire_external_log()
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+            self.on_external(m.DeviceState(1, "lamp a", {}, None), "switch", "off", "on")
+            self.on_external(m.DeviceState(2, "lamp b", {}, None), "switch", "off", "on")
+            frozen.tick(api._ROLLUP_WINDOW)
+            self.on_external(m.DeviceState(1, "lamp a", {}, None), "switch", "on", "off")
+        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
+            ("`lamp a` switch: on → off", []),
+            ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
+        ]
+
     def test_a_nested_line_still_notifies(self):
         api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
         api.log(m.LogSource.PLUGIN, "later", m.Integration("x"), should_notify=True)
