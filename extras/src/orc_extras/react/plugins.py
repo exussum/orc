@@ -206,7 +206,7 @@ def _dispatch(ctx: m.AppContext, report: engine.Report, name: str, note: str) ->
     entry = ctx.api.log(
         Log.REACT,
         f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}",
-        trigger=m.Broker(id=str(source_of(report.rule).value), source="hubitat"),
+        m.Broker(id=str(source_of(report.rule).value), source="hubitat"),
     )
     ctx.api.dispatch((engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM),), entry=entry)
 

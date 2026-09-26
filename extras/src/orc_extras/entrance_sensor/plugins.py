@@ -23,15 +23,13 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
     if attribute == "battery":
         level = m.BatteryLevel.from_fraction(new, 100)
         if level.is_critical:
-            ctx.api.log(
-                Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})", trigger=m.Broker(id=str(device.id), source="hubitat")
-            )
+            ctx.api.log(Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})", m.Broker(id=str(device.id), source="hubitat"))
     elif _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on
         # the scheduler's worker; None grace so a busy worker delays, never drops.
-        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger=m.Broker(id=str(device.id), source="hubitat"))
+        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, m.Broker(id=str(device.id), source="hubitat"))
         ctx.scheduler.add_job(
             _run_motion,
             DateTrigger(ctx.api.local_now(), timezone=ctx.config.settings.tz),
@@ -63,7 +61,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         ctx.api.dispatch(m.squish((*restore, *timed_commands)), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
         log_entry.add(Log.ENTRANCE, CLEARED_MSG.format(routine_name=sensor.rules.inside, minutes=sensor.setting.cleanup_delay_minutes))
-        ctx.api.run_action(ctx, sensor.rules.inside)
+        ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger)
         ctx.api.pause_presence()
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
@@ -84,12 +82,12 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     door_open = not people and _door_open(ctx, sensor)
 
     if people or door_open:
-        ctx.api.run_action(ctx, sensor.rules.present)
+        ctx.api.run_action(ctx, sensor.rules.present, log_entry.trigger)
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
     elif sensor.setting.listener in present:
         # Visitor left, the listener stayed: restore the pre-visit state
         ctx.engine.restore_scene(ctx, SNAPSHOT_NAME, (), log_entry)
-        ctx.api.run_action(ctx, sensor.rules.absent)
+        ctx.api.run_action(ctx, sensor.rules.absent, log_entry.trigger)
         msg = sensor.message.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
