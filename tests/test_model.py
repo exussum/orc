@@ -1,17 +1,20 @@
-from enum import Enum
-
 from orc import model as m
 from orc.kernel import engine
+from orc.model import DeviceEnum
 
 
-class Light(Enum):
+class Light(DeviceEnum):
     a = 1
     b = 2
     c = 3
 
 
-class Chromecast(Enum):
+class Chromecast(DeviceEnum):
     x = 1
+
+
+Light._sort = 0
+Chromecast._sort = 1
 
 
 def _cmd(what, value):
@@ -80,6 +83,6 @@ def test_op_cmp_sorts_dim_before_on_before_off():
     assert sorted(commands, key=m._op_cmp) == [_cmd(Light.c, 50), _cmd(Light.b, m.ON), _cmd(Light.a, m.OFF)]
 
 
-def test_op_cmp_sorts_by_class_name():
+def test_op_cmp_sorts_by_type_sort():
     commands = [_cmd(Chromecast.x, m.ON), _cmd(Light.a, m.ON)]
     assert sorted(commands, key=m._op_cmp) == [_cmd(Light.a, m.ON), _cmd(Chromecast.x, m.ON)]

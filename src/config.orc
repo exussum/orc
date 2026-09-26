@@ -19,7 +19,7 @@ provider blaster    orc.dal.blaster.stub
 provider hubitat    orc.dal.hubitat.stub
 provider audio      orc.dal.audio.stub
 
-device define Light
+device define Light --sort 0
 device add Light BEDROOM_LAMP 'bedroom lamp'     --room Bedroom
 device add Light LIVING_ROOM  'living room desk'
 device seal Light
@@ -28,14 +28,14 @@ device define USB
 device add USB Speakers Speakers --room Office
 device seal USB
 
-device define Chromecast
+device define Chromecast --sort 1
 device add Chromecast LIVING_ROOM 'Living room mini' --room Living
 device add Chromecast BEDROOM     'Bedroom mini'     --room Bedroom
 device seal Chromecast
 
 device only Button LIVING_ROOM_REMOTE scene --room Living
 device only BroadLink
-device only AC
+device only AC --sort 2
 device only LGTV
 device only WebOS
 device only Leak
