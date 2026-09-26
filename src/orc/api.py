@@ -102,6 +102,8 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_noti
     now = local_now()
     entries = _ACTIVITY_LOG.snapshot()
     recent = [e for e in entries if now - (e.children or [e])[-1].timestamp < _ROLLUP_WINDOW]
+    # is: a continuation of the event that started the entry, however late (the caller holds entry.trigger).
+    # ==: a separate event with an equal trigger, rolled up only within the window.
     matching = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
     parent = matching or next((e for e in recent if e.answer(trigger)), None)
     if parent:
@@ -598,7 +600,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         rebuild_iot_schedule(ctx=ctx)
     for job_id, func, crontab, name in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
-        ("presence-cron", partial(_check_presence_job, m.Cron.PRESENCE), "5 * * * *", "Presence Cron"),
+        ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron"),
         ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
     ):
         scheduler.schedule_cron(func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
@@ -753,3 +755,8 @@ def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
 @requires_ctx
 def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
     return check_presence(trigger)
+
+
+@requires_ctx
+def _presence_cron_job(ctx: m.AppContext) -> set[str]:
+    return check_presence(m.Cron("presence"))

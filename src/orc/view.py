@@ -303,7 +303,7 @@ def presence_state() -> dict[str, Any]:
 @bp.route("/api/presence/run")
 @VersionManager.versioned
 def run_presence_check() -> None:
-    api.rerun_presence_check(m.Manual.PRESENCE)
+    api.rerun_presence_check(m.Manual("presence"))
 
 
 @bp.route("/schedule/")
@@ -349,14 +349,14 @@ def set_theme() -> None:
         raise Exception(f"Unknown theme: {name}")
     start = date.fromisoformat(request.form["start"]) if name else None
     end = date.fromisoformat(request.form["end"]) if name else None
-    api.apply_theme_change(app.orc, name, start, end, m.Manual(name) if name else m.Manual.THEME)
+    api.apply_theme_change(app.orc, name, start, end, m.Manual(name or "theme"))
 
 
 @bp.route("/api/announce", methods=["POST"])
 @VersionManager.versioned
 def announce() -> None:
     text = request.form["text"]
-    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text), m.Manual.ANNOUNCE)
+    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text), m.Manual("announce"))
     api.alert(m.Alarm.WARNING, text=text, entry=entry)
 
 
