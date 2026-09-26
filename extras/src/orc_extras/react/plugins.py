@@ -171,10 +171,11 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     if source is None:
         return
     event = engine.Event(m.MqttDeviceChannel(source, attribute), old, new)
+    fired: list[engine.Report] = []
     for reaction in ctx.engine.on_event(event, ctx.api.local_now(), _reader(ctx)):
         match reaction:
-            case engine.Report():
-                _dispatch(ctx, reaction, device.name, "")
+            case engine.Report() if reaction.disposition is engine.Disposition.FIRED:
+                fired.append(reaction)
             case engine.Deferred():
                 ctx.scheduler.add_job(
                     _run_react,
@@ -189,6 +190,9 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
                 job_id = f"{JOB_ID}-{hash(reaction.rule)}"
                 if ctx.scheduler.get_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY):
                     ctx.scheduler.remove_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY)
+    if fired:
+        entries = [_log(ctx, report, device.name, "") for report in fired]
+        ctx.api.dispatch(ctx.api.squish(map(_command, fired), entries[0]), entry=entries[0])
 
 
 def _targets(what: engine.Channel) -> str:
@@ -201,14 +205,24 @@ def _targets(what: engine.Channel) -> str:
 def _dispatch(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
     if report.disposition is not engine.Disposition.FIRED:
         return
-    trigger = _trigger_label(report.rule)
+    ctx.api.dispatch((_command(report),), entry=_log(ctx, report, name, note))
+
+
+def _log(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> m.LogEntry:
     command = report.rule.items[0].command
-    entry = ctx.api.log(
+    return ctx.api.log(
         Log.REACT,
-        f"`{name}` {trigger}{note} → set {_targets(command.channel)} {command.value}",
+        f"`{name}` {_trigger_label(report.rule)}{note} → set {_targets(command.channel)} {command.value}",
         m.Broker(id=str(source_of(report.rule).value), source="hubitat"),
     )
-    ctx.api.dispatch((engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM),), entry=entry)
+
+
+def _command(report: engine.Report) -> m.DeviceCommand:
+    command = report.rule.items[0].command
+    if isinstance(command.channel, m.Devices):
+        return engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM)
+    else:
+        raise TypeError("Only accepts orc.models.Devices")
 
 
 @requires_ctx

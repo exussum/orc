@@ -68,6 +68,7 @@ def ctx(ctx):
         (s for s in ctx.api.device_states.return_value if str(s.id) == target or s.name == target), None
     )
     ctx.api.world_reader.return_value = _world_read(ctx)
+    ctx.api.squish.side_effect = lambda commands, entry: m.squish(commands)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
     ctx.config.settings.tz = _UTC
     ctx.config.registry = orc.config.registry
