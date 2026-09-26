@@ -106,7 +106,7 @@ def _start_services(ctx: m.AppContext) -> None:
     with _step("scheduler resume"):
         ctx.scheduler.resume()
     with _step("presence check"):
-        api.schedule_presence_check(m.System.BOOT)
+        api.schedule_presence_check(m.Cron.PRESENCE)
     _boot_done()
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 

@@ -5,6 +5,7 @@ import pytest
 from apscheduler.job import Job
 from apscheduler.schedulers.base import BaseScheduler
 from flask import Flask
+from freezegun import freeze_time
 
 import orc
 from orc import api, config
@@ -124,6 +125,22 @@ def test_console_ad_hoc_no_reset(client):
     ):
         client.get("/api/run/r")
     ex.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
+
+
+def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(ctx):
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), reset=False, delay=timedelta(minutes=7))
+    with (
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
+        patch.object(api.scheduler, "schedule_once") as once,
+        patch.object(api, "dispatch") as ex,
+        freeze_time(api.local_now()) as frozen,
+    ):
+        api.run_action(ctx, "r", m.Manual("r"), source=m.LogSource.MANUAL)
+        frozen.tick(timedelta(minutes=7))
+        once.call_args.args[0](ctx=ctx)
+    (queued,) = api.log_entries()
+    assert [c.action for c in queued.children] == ["`r`"]
+    ex.assert_called_once_with(routine.commands, force=True, entry=queued)
 
 
 def test_button_ad_hoc_snapshot(ctx):

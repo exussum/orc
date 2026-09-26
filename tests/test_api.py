@@ -307,6 +307,13 @@ class TestLog:
             api.log(m.LogSource.PLUGIN, "later", m.Integration("x"))
         assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("first", ["later"])]
 
+    def test_a_repeated_manual_trigger_after_the_window_starts_its_own_entry(self):
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+            api.log(m.LogSource.MANUAL, "first", m.Manual("x"))
+            frozen.tick(api._ROLLUP_WINDOW)
+            api.log(m.LogSource.MANUAL, "later", m.Manual("x"))
+        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("later", []), ("first", [])]
+
     def test_a_nested_line_still_notifies(self):
         api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
         api.log(m.LogSource.PLUGIN, "later", m.Integration("x"), should_notify=True)
