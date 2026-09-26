@@ -31,16 +31,17 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
         time.sleep(0.5)
         if cast.status is None:  # wait() timed out: device unreachable
             return m.SoundState(what=device, content=None, volume=0)
-        # A fresh connection doesn't reliably get an unsolicited media status broadcast
-        # in time; request one explicitly and give it a moment to arrive.
-        cast.media_controller.update_status()
-        time.sleep(0.5)
-        ms = cast.media_controller.status
         content = None
         playback = m.Playback.STOPPED
-        if ms and ms.player_state in _PLAYING_STATES:
-            content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
-            playback = m.Playback.PAUSED if ms.player_state == "PAUSED" else m.Playback.PLAYING
+        mc = cast.media_controller
+        # update_status on a device with no media app running launches one, which chimes
+        if mc.namespace in cast.socket_client.app_namespaces:
+            mc.update_status()
+            time.sleep(0.5)
+            ms = mc.status
+            if ms and ms.player_state in _PLAYING_STATES:
+                content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
+                playback = m.Playback.PAUSED if ms.player_state == "PAUSED" else m.Playback.PLAYING
         return m.SoundState(
             what=device,
             content=content,
