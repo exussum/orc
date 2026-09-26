@@ -124,7 +124,7 @@ def _on_event(ctx: AppContext, device_id: str, msg: str, state: ACState) -> None
         value = AcCommand(AcMode(state.mode), state.fan_mode, round(state.temperature))
     else:
         value = None
-    ctx.api.log(LogSource.LG_AC, msg, trigger=m.Broker(id=device_id, source="lg_ac", value=value))
+    ctx.api.log(LogSource.LG_AC, msg, m.Broker(id=device_id, source="lg_ac", value=value))
 
 
 def _handle_ac(transport: Transport, device: Any, state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None:

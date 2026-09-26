@@ -77,7 +77,7 @@ def _step(name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     if _boot is None:
-        _boot, _boot_started = api.log(m.LogSource.SYSTEM, Log.BOOT, trigger=m.System("boot")), start
+        _boot, _boot_started = api.log(m.LogSource.SYSTEM, Log.BOOT, m.System.BOOT), start
     _boot.add(m.LogSource.SYSTEM, Log.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
 
 
@@ -106,7 +106,7 @@ def _start_services(ctx: m.AppContext) -> None:
     with _step("scheduler resume"):
         ctx.scheduler.resume()
     with _step("presence check"):
-        api.schedule_presence_check()
+        api.schedule_presence_check(m.System.BOOT)
     _boot_done()
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 

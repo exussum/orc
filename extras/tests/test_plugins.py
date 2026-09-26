@@ -191,7 +191,7 @@ def test_motion_groups_under_the_trigger_entry(ctx, sensor):
     entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
     ctx.api.log.return_value = entry
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, trigger=m.Broker(id="16", source="hubitat"))
+    ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(id="16", source="hubitat"))
     assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
 
@@ -201,7 +201,7 @@ def test_motion_groups_under_the_trigger_entry(ctx, sensor):
 def test_entrance_lights_turn_off_behind_you(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with(ctx, "Lights Off")
+    ctx.api.run_action.assert_called_once_with(ctx, "Lights Off", ctx.api.log.return_value.trigger)
 
 
 def test_cleanup_is_scheduled_for_later(ctx, sensor):
@@ -220,7 +220,7 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Silence")
+    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Silence", entry.trigger)
     assert [c.action for c in entry.children] == [sensor.message.log_present]
 
 
@@ -228,7 +228,7 @@ def test_listener_home_alone_keeps_media_playing(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"rex"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Resume")
+    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Resume", entry.trigger)
     assert [c.action for c in entry.children] == [sensor.message.log_absent]
 
 
@@ -293,7 +293,7 @@ def test_critical_battery_report_logs(plugin_ctx, sensor):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugins._on_sensor_event(plugin_ctx, sensor, _device(battery="5"), "battery", "5", "5")
     plugin_ctx.api.log.assert_called_once_with(
-        plugins.Log.ENTRANCE, "Low battery on `front door motion sensor` (CRITICAL)", trigger=m.Broker(id="16", source="hubitat")
+        plugins.Log.ENTRANCE, "Low battery on `front door motion sensor` (CRITICAL)", m.Broker(id="16", source="hubitat")
     )
 
 
