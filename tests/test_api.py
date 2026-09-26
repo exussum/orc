@@ -300,18 +300,18 @@ class TestLog:
         assert [e.action for e in entries] == ["sys"]
         assert [c.action for c in entries[0].children] == ["plug"]
 
-    def test_the_same_trigger_nests_however_late(self):
+    def test_the_trigger_an_entry_started_with_nests_however_late(self):
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
+            entry = api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
             frozen.tick(timedelta(hours=1))
-            api.log(m.LogSource.PLUGIN, "later", m.Integration("x"))
+            api.log(m.LogSource.PLUGIN, "later", entry.trigger)
         assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("first", ["later"])]
 
-    def test_a_repeated_manual_trigger_after_the_window_starts_its_own_entry(self):
+    def test_an_equal_trigger_after_the_window_starts_its_own_entry(self):
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            api.log(m.LogSource.MANUAL, "first", m.Manual("x"))
+            api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
             frozen.tick(api._ROLLUP_WINDOW)
-            api.log(m.LogSource.MANUAL, "later", m.Manual("x"))
+            api.log(m.LogSource.PLUGIN, "later", m.Integration("x"))
         assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("later", []), ("first", [])]
 
     def test_a_nested_line_still_notifies(self):
