@@ -93,4 +93,5 @@ def _reset_ctx():
     from orc import api
     from orc import model as m
 
+    api._ACTIVITY_LOG.clear()
     api.set_ctx(m.AppContext(MagicMock(), MagicMock()))

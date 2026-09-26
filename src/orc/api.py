@@ -1,13 +1,11 @@
 import contextlib
 import math
 import time
-from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
 from datetime import date, datetime, timedelta
 from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
-from itertools import takewhile
 from pathlib import Path
 from types import UnionType
 from typing import Any, NamedTuple
@@ -19,6 +17,7 @@ from skyfield.api import load, load_file, wgs84
 
 from orc import config, plugins
 from orc import model as m
+from orc.collections import LockedDeque
 from orc.dal import net, scheduler, sqlite
 from orc.dal.scheduler import fetch_jobs_by_type
 from orc.dal.sqlite import (
@@ -44,8 +43,8 @@ _WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondit
 _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 
 _ctx: m.AppContext | None = None
-_ACTIVITY_LOG: deque[m.LogEntry] = deque(maxlen=200)
-_NOTIFICATIONS: deque[m.LogSubEntry] = deque(maxlen=10)
+_ACTIVITY_LOG: LockedDeque[m.LogEntry] = LockedDeque(maxlen=200)
+_NOTIFICATIONS: LockedDeque[m.LogSubEntry] = LockedDeque(maxlen=10)
 
 last_seen = net.presence.seen
 mark_present = net.presence.mark
@@ -101,25 +100,22 @@ def notify(entry: m.LogSubEntry) -> m.LogSubEntry:
 
 def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_notify: bool = False) -> m.LogEntry:
     now = local_now()
-    top = next(iter(_ACTIVITY_LOG), None)
-    parent: m.LogEntry | None
-    if top and top.trigger == trigger and now - (top.children or [top])[-1].timestamp < _ROLLUP_WINDOW:
-        parent = top
+    entries = _ACTIVITY_LOG.snapshot()
+    matching = next((e for e in entries if e.trigger == trigger), None)
+    recent = [e for e in entries if now - (e.children or [e])[-1].timestamp < _ROLLUP_WINDOW]
+    parent = matching or next((e for e in recent if e.answer(trigger)), None)
+    if parent:
+        line = parent.add(source, action)
     else:
-        recent = takewhile(lambda e: now - e.timestamp < _ROLLUP_WINDOW, _ACTIVITY_LOG)
-        parent = next((e for e in recent if e.answer(trigger)), None)
-    if parent is None:
-        parent = m.LogEntry(now, source, action, trigger)
+        parent = line = m.LogEntry(now, source, action, trigger)
         _ACTIVITY_LOG.appendleft(parent)
-        if should_notify:
-            notify(parent)
-    else:
-        parent.add(source, action)
+    if should_notify:
+        notify(line)
     return parent
 
 
 def log_entries() -> list[m.LogEntry]:
-    return list(_ACTIVITY_LOG)
+    return _ACTIVITY_LOG.snapshot()
 
 
 # --- Device control ---
