@@ -126,5 +126,5 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
         message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
     else:
         message = f"Time to leave for {target}."
-    entry = ctx.api.log(Log.TRAVEL, message, trigger=m.Integration(job.summary))
+    entry = ctx.api.log(Log.TRAVEL, message, m.Integration(job.summary))
     ctx.api.alert(Alarm.WARNING, text=message, entry=entry)

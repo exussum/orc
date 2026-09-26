@@ -134,7 +134,7 @@ def test_button_ad_hoc_snapshot(ctx):
         patch.object(api, "capture_lights", return_value=captured),
         patch.object(api, "dispatch") as ex,
     ):
-        api.run_action(ctx, "r", hub_origin=True)
+        api.run_action(ctx, "r", m.Manual("r"), hub_origin=True)
     snap = ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
@@ -152,7 +152,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx):
         patch.object(api, "capture_lights") as capture,
         patch.object(api, "dispatch") as ex,
     ):
-        api.run_action(ctx, "r", hub_origin=True)
+        api.run_action(ctx, "r", m.Manual("r"), hub_origin=True)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
@@ -238,7 +238,7 @@ def test_room_unknown_id_returns_404(client):
 def test_set_theme_clear_passes_none_dates(client, ctx, good_version):
     with patch.object(api, "apply_theme_change") as apply_change:
         client.post("/api/schedule/set_theme", data={"theme": ""}, headers=good_version)
-    apply_change.assert_called_once_with(ctx, "", None, None)
+    apply_change.assert_called_once_with(ctx, "", None, None, m.Manual.THEME)
 
 
 def test_set_theme_set_parses_dates(client, ctx, good_version):
@@ -249,7 +249,7 @@ def test_set_theme_set_parses_dates(client, ctx, good_version):
             data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"},
             headers=good_version,
         )
-    apply_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10))
+    apply_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
 
 
 def test_set_theme_rejects_unknown_theme(client, ctx, good_version):

@@ -130,7 +130,7 @@ class VersionManager:
                 api.log(
                     m.LogSource.SYSTEM,
                     Log.VERSION_MISMATCH.format(client=request.headers.get("orc-version"), server=VersionManager.version),
-                    trigger=m.Manual(request.url_rule.endpoint if request.url_rule else request.path),
+                    m.Manual(request.url_rule.endpoint if request.url_rule else request.path),
                 )
                 return {"version": VersionManager.version}, 412
             result = func(*args, **kwargs)
@@ -212,7 +212,7 @@ def device() -> str:
 
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> tuple[dict[str, Any], int]:
-    if not api.run_action(app.orc, id, device=request.args.get("device"), skip_delay=request.args.get("skip_delay") == "1"):
+    if not api.run_action(app.orc, id, m.Manual(id), device=request.args.get("device"), skip_delay=request.args.get("skip_delay") == "1"):
         abort(404, "Unknown routine")
     return {"version": VersionManager.version}, 200
 
@@ -221,7 +221,7 @@ def run_routine(id: str) -> tuple[dict[str, Any], int]:
 @VersionManager.versioned
 def checkin_presence(name: str) -> None:
     trigger = m.Manual(name)
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger=trigger)
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger)
     api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger)
 
 
@@ -229,7 +229,7 @@ def checkin_presence(name: str) -> None:
 @VersionManager.versioned
 def expire_presence(name: str) -> None:
     trigger = m.Manual(name)
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger=trigger)
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger)
     api.expire_presence([name], trigger, force=True)
 
 
@@ -283,14 +283,14 @@ def presence() -> str:
 @VersionManager.versioned
 def device_api(id: str) -> None:
     state = request.args.get("state")
-    api.device_command(id, state, api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), trigger=m.Manual(id)))
+    api.device_command(id, state, api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), m.Manual(id)))
 
 
 @bp.route("/api/room/<id>")
 def room(id: str) -> tuple[dict[str, Any], int]:
     if id not in config.rooms:
         abort(404, "Unknown room")
-    api.run_room(id, request.args.get("state"))
+    api.run_room(id, request.args.get("state"), m.Manual(id))
     return {"version": VersionManager.version}, 200
 
 
@@ -302,7 +302,7 @@ def presence_state() -> dict[str, Any]:
 @bp.route("/api/presence/run")
 @VersionManager.versioned
 def run_presence_check() -> None:
-    api.rerun_presence_check()
+    api.rerun_presence_check(m.Manual.PRESENCE)
 
 
 @bp.route("/schedule/")
@@ -348,14 +348,14 @@ def set_theme() -> None:
         raise Exception(f"Unknown theme: {name}")
     start = date.fromisoformat(request.form["start"]) if name else None
     end = date.fromisoformat(request.form["end"]) if name else None
-    api.apply_theme_change(app.orc, name, start, end)
+    api.apply_theme_change(app.orc, name, start, end, m.Manual(name) if name else m.Manual.THEME)
 
 
 @bp.route("/api/announce", methods=["POST"])
 @VersionManager.versioned
 def announce() -> None:
     text = request.form["text"]
-    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text), trigger=m.Manual("announce"))
+    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text), m.Manual.ANNOUNCE)
     api.alert(m.Alarm.WARNING, text=text, entry=entry)
 
 

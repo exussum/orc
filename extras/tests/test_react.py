@@ -167,7 +167,7 @@ def test_consecutive_fires_log_the_same_trigger_id(ctx):
     plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
     ctx.api.local_now.return_value = _NOW + timedelta(seconds=plugins.COOLDOWN.total_seconds() + 1)
     plugins._on_event(ctx, ctx.sources, device, "switch", m.OFF, m.ON)
-    assert [call.kwargs["trigger"] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("1")]
+    assert [call.args[2] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("1")]
 
 
 def test_a_different_device_logs_a_different_trigger_id(ctx):
@@ -183,7 +183,7 @@ def test_a_different_device_logs_a_different_trigger_id(ctx):
     desk = m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)
     plugins._on_event(ctx, ctx.sources, lamp, "switch", m.OFF, m.ON)
     plugins._on_event(ctx, ctx.sources, desk, "switch", m.OFF, m.ON)
-    assert [call.kwargs["trigger"] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("2")]
+    assert [call.args[2] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("2")]
 
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):

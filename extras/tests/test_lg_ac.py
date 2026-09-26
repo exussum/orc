@@ -283,9 +283,7 @@ def test_command_endpoint_errors_with_no_device(client):
 )
 def test_event_logs_the_state_as_the_command_it_answers(ctx, state, value):
     lg_ac._on_event(ctx, DEVICE_ID, "AC clip-123: changed", state)
-    ctx.api.log.assert_called_once_with(
-        lg_ac.LogSource.LG_AC, "AC clip-123: changed", trigger=Broker(id=DEVICE_ID, source="lg_ac", value=value)
-    )
+    ctx.api.log.assert_called_once_with(lg_ac.LogSource.LG_AC, "AC clip-123: changed", Broker(id=DEVICE_ID, source="lg_ac", value=value))
 
 
 def test_handle_ac_commands_the_bound_device():
