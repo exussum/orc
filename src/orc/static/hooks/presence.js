@@ -1,4 +1,4 @@
-orcHooks.ensure({
+orc.hooks.ensure({
     async onCommand(what, el, url) {
         if (window.location.pathname !== "/") return true;
         if (!url.startsWith("/api/run/")) return true;

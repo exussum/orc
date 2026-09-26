@@ -12,12 +12,12 @@ async function notifyPairing(durationSec) {
     return () => { clearTimeout(timer); notification.close(); };
 }
 
-orcHooks.register({
+orc.hooks.register({
     async onPress(buttonName, el) {
         if (buttonName !== "Pair LG TV") return true;
         const dismiss = await notifyPairing(parseFloat(el.dataset.duration));
         const q = el.dataset.device ? `?device=${encodeURIComponent(el.dataset.device)}` : "";
-        await get(`/api/run/Pair LG TV${q}`, el);
+        await orc.get(`/api/run/Pair LG TV${q}`, el);
         dismiss?.();
         return false;
     },
