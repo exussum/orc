@@ -7,7 +7,7 @@ from orc.kernel import engine
 
 
 @pytest.mark.plugins(react)
-def test_rapid_broker_events_roll_up(house):
+def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
     house.motion("active")
     house.tick(seconds=1)
     house.ac_reports("ON", mode="cool", fan="low", temperature=75)
@@ -28,10 +28,13 @@ def test_rapid_broker_events_roll_up(house):
                 "AC clip-1: ON cool low 75",
                 "`ENTRANCE_SENSOR` inactive → set `Living room AC` off",
                 "AC clip-1: OFF",
-                "`ENTRANCE_SENSOR` active → set `Living room AC` cool:low:75",
-                "`ENTRANCE_SENSOR` active → set `LIVING_ROOM` on",
             ],
-        )
+        ),
+        (
+            entrance,
+            "`ENTRANCE_SENSOR` active → set `Living room AC` cool:low:75",
+            ["`ENTRANCE_SENSOR` active → set `LIVING_ROOM` on"],
+        ),
     ]
 
 

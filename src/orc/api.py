@@ -102,11 +102,7 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_noti
     now = local_now()
     entries = _ACTIVITY_LOG.snapshot()
     recent = [e for e in entries if now - (e.children or [e])[-1].timestamp < _ROLLUP_WINDOW]
-    if isinstance(trigger, m.Manual):
-        candidates = [e for e in entries if e.trigger is trigger or e in recent]
-    else:
-        candidates = entries
-    matching = next((e for e in candidates if e.trigger == trigger), None)
+    matching = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
     parent = matching or next((e for e in recent if e.answer(trigger)), None)
     if parent:
         line = parent.add(source, action)
