@@ -300,12 +300,17 @@ class TestLog:
         assert [e.action for e in entries] == ["sys"]
         assert [c.action for c in entries[0].children] == ["plug"]
 
-    def test_the_window_lapsing_starts_a_new_entry(self):
+    def test_the_same_trigger_nests_however_late(self):
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
             api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-            frozen.tick(api._ROLLUP_WINDOW * 2)
+            frozen.tick(timedelta(hours=1))
             api.log(m.LogSource.PLUGIN, "later", m.Integration("x"))
-        assert [e.action for e in api.log_entries()] == ["later", "first"]
+        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("first", ["later"])]
+
+    def test_a_nested_line_still_notifies(self):
+        api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
+        api.log(m.LogSource.PLUGIN, "later", m.Integration("x"), should_notify=True)
+        assert api._NOTIFICATIONS.snapshot()[0].action == "later"
 
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
