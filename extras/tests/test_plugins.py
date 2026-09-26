@@ -201,7 +201,7 @@ def test_motion_groups_under_the_trigger_entry(ctx, sensor):
 def test_entrance_lights_turn_off_behind_you(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with(ctx, "Lights Off", ctx.api.log.return_value.trigger)
+    ctx.api.run_action.assert_called_once_with(ctx, "Lights Off", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
 
 
 def test_cleanup_is_scheduled_for_later(ctx, sensor):
@@ -220,7 +220,7 @@ def test_someone_home_stops_media(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Silence", entry.trigger)
+    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Silence", entry.trigger, source=plugins.Log.ENTRANCE)
     assert [c.action for c in entry.children] == [sensor.message.log_present]
 
 
@@ -228,7 +228,7 @@ def test_listener_home_alone_keeps_media_playing(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"rex"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Resume", entry.trigger)
+    plugin_ctx.api.run_action.assert_called_once_with(plugin_ctx, "Resume", entry.trigger, source=plugins.Log.ENTRANCE)
     assert [c.action for c in entry.children] == [sensor.message.log_absent]
 
 

@@ -61,7 +61,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         ctx.api.dispatch(m.squish((*restore, *timed_commands)), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
         log_entry.add(Log.ENTRANCE, CLEARED_MSG.format(routine_name=sensor.rules.inside, minutes=sensor.setting.cleanup_delay_minutes))
-        ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger)
+        ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
         ctx.api.pause_presence()
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
@@ -82,12 +82,12 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     door_open = not people and _door_open(ctx, sensor)
 
     if people or door_open:
-        ctx.api.run_action(ctx, sensor.rules.present, log_entry.trigger)
+        ctx.api.run_action(ctx, sensor.rules.present, log_entry.trigger, source=Log.ENTRANCE)
         msg = sensor.message.log_door_open if door_open else sensor.message.log_present
     elif sensor.setting.listener in present:
         # Visitor left, the listener stayed: restore the pre-visit state
         ctx.engine.restore_scene(ctx, SNAPSHOT_NAME, (), log_entry)
-        ctx.api.run_action(ctx, sensor.rules.absent, log_entry.trigger)
+        ctx.api.run_action(ctx, sensor.rules.absent, log_entry.trigger, source=Log.ENTRANCE)
         msg = sensor.message.log_absent
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)

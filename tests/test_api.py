@@ -640,11 +640,11 @@ class TestWireButtons:
             api.wire_buttons(ctx)
         return ctx, captured["fn"]
 
-    def test_mapped_event_runs_action_as_hub_origin(self):
+    def test_mapped_event_runs_action(self):
         ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action", return_value=True) as run:
             on_button(orc.Light.a.value, 1, "held")
-        run.assert_called_once_with(ctx, "TV Lights", m.Broker(id=str(orc.Light.a.value), source="hubitat"), hub_origin=True)
+        run.assert_called_once_with(ctx, "TV Lights", m.Broker(id=str(orc.Light.a.value), source="hubitat"), source=m.LogSource.EXTERNAL)
 
     def test_unmapped_event_is_ignored(self):
         ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))

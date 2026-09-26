@@ -212,7 +212,8 @@ def device() -> str:
 
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> tuple[dict[str, Any], int]:
-    if not api.run_action(app.orc, id, m.Manual(id), device=request.args.get("device"), skip_delay=request.args.get("skip_delay") == "1"):
+    skip_delay = request.args.get("skip_delay") == "1"
+    if not api.run_action(app.orc, id, m.Manual(id), source=m.LogSource.MANUAL, device=request.args.get("device"), skip_delay=skip_delay):
         abort(404, "Unknown routine")
     return {"version": VersionManager.version}, 200
 
