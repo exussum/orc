@@ -6,7 +6,6 @@ from flask.wrappers import Response
 
 import orc_extras.lg_ac as lg_ac
 from orc_extras.lg_ac import api
-from orc_extras.lg_ac.dal.capture import memory as capture
 from orc_extras.lg_ac.dal.mqtt import thinq
 
 if TYPE_CHECKING:
@@ -45,7 +44,7 @@ def devices() -> Response:
 
 @enroll.get("/capture")
 def capture_dump() -> Response:
-    return jsonify(capture.dump())
+    return jsonify(app.orc.plugin_state[lg_ac].capture.dump())
 
 
 @enroll.get("/state")

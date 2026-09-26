@@ -11,7 +11,7 @@ from flask import Flask
 from orc_extras import lg_ac
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac import model as m
-from orc_extras.lg_ac.dal.capture import memory as capture
+from orc_extras.lg_ac.dal.capture import Capture
 from orc_extras.lg_ac.dal.mqtt import stub, thinq
 
 from orc.model import OFF, AcCommand, AcMode, AcState, Broker, DeviceStatus
@@ -225,7 +225,7 @@ def reset_stub():
 def client():
     app = Flask(__name__)
     settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtt_port=1883, mqtts_advertise=8883)
-    app.orc = SimpleNamespace(plugin_state={lg_ac: lg_ac.State(settings, stub)})  # type: ignore[attr-defined]
+    app.orc = SimpleNamespace(plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())})  # type: ignore[attr-defined]
     app.register_blueprint(web.enroll)
     thinq.set_event_listener(MagicMock())
     return app.test_client()
@@ -347,7 +347,7 @@ def test_ac_status_disconnected_device_is_blank():
 
 
 def test_capture_endpoint_dumps_recorded_frames(client):
-    capture.record("clip/topic", b"\x01\x02")
+    client.application.orc.plugin_state[lg_ac].capture.record("clip/topic", b"\x01\x02")
     frames = client.get("/capture").get_json()
     assert frames[-1]["topic"] == "clip/topic"
     assert frames[-1]["payload"] == "0102"

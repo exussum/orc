@@ -17,7 +17,7 @@ from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AcCommand, AcMode, AcState, AppContext, DeviceStatus, LogSourceEnum, Secrets
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
-from orc_extras.lg_ac.dal.capture import memory as capture
+from orc_extras.lg_ac.dal.capture import Capture
 from orc_extras.lg_ac.dal.mqtt import thinq
 from orc_extras.lg_ac.dal.mqtt.interfaces import Transport
 from orc_extras.lg_ac.model import ACState, Settings
@@ -31,6 +31,7 @@ setting <key> <value>
 class State(NamedTuple):
     settings: Settings
     transport: Transport
+    capture: Capture
 
 
 class LogSource(LogSourceEnum):
@@ -65,7 +66,8 @@ def setup(ctx: AppContext) -> None:
     s = cfg.setting
     if s.fqdn.endswith(".example"):
         raise RuntimeError("lg_ac: set 'fqdn' in lg_ac.orc to this server's real FQDN (still the .example placeholder)")
-    ctx.plugin_state[orc_extras.lg_ac] = State(s, thinq)
+    capture = Capture()
+    ctx.plugin_state[orc_extras.lg_ac] = State(s, thinq, capture)
     secrets: Secrets = ctx.config.secrets
     api.configure(secrets[_SECRET_CA_CERT].encode(), secrets[_SECRET_CA_KEY].encode())
     broker.start(s.mqtts_advertise, secrets[_SECRET_SERVER_CERT].encode(), secrets[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
