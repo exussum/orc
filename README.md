@@ -155,6 +155,9 @@ Two config surfaces:
    theme 'work day' ROUTINE_RESET 1:00
    ```
 
+   `device define`/`device only` lines take `--sort=<n>` to order that type's
+   commands within a dispatch batch: lower first, types without one last.
+
    `setting` lines fill `orc.model.Settings` (exposed as `config.settings`).
    The required keys fail startup with a named `ConfigError` when a line is
    missing or its value is empty:
