@@ -188,7 +188,13 @@ class RunAction(NamedTuple):
 
 
 def run_action(
-    ctx: m.AppContext, id: str, trigger: m.Trigger, *, device: str | None = None, hub_origin: bool = False, skip_delay: bool = False
+    ctx: m.AppContext,
+    id: str,
+    trigger: m.Trigger,
+    *,
+    source: m.LogSourceEnum,
+    device: str | None = None,
+    skip_delay: bool = False,
 ) -> bool:
     if id == ORC_SYSTEM_SNAPSHOT:
         action = RunAction(lambda entry: ctx.engine.restore_scene(ctx, ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry))
@@ -198,8 +204,7 @@ def run_action(
         action = RunAction(lambda entry: run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True))
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
-        if hub_origin and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT, local_now()):
-            # Don't stack snapshots, hub_origin should go away in favour of something that's snapshot-able
+        if isinstance(trigger, m.Broker) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT, local_now()):
             end = local_now() + routine.snapshot
             action = RunAction(lambda entry: ctx.engine.override_scene(ctx, ORC_SYSTEM_SNAPSHOT, routine.commands, end, id, entry))
         else:
@@ -213,11 +218,11 @@ def run_action(
     with record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
-            log(m.LogSource.MANUAL, Log.TASK_QUEUED.format(id=id, when=when), trigger)
-            run = requires_ctx(lambda ctx: action.effect(log(m.LogSource.MANUAL, display, trigger)))
+            log(source, Log.TASK_QUEUED.format(id=id, when=when), trigger)
+            run = requires_ctx(lambda ctx: action.effect(log(source, display, trigger)))
             scheduler.schedule_once(run, when, id=f"run-{id}", replace_existing=True, jobstore=JOBSTORE_MEMORY)
         else:
-            action.effect(log(m.LogSource.MANUAL, display, trigger))
+            action.effect(log(source, display, trigger))
     return True
 
 
@@ -243,7 +248,7 @@ def wire_buttons(ctx: m.AppContext) -> None:
     def on_button(device_id: int, button: int, event_type: str) -> None:
         action = mapping.get((device_id, button, event_type))
         trigger = m.Broker(id=str(device_id), source="hubitat")
-        if action is not None and not run_action(ctx, action, trigger, hub_origin=True):
+        if action is not None and not run_action(ctx, action, trigger, source=m.LogSource.EXTERNAL):
             msg = Log.BUTTON_ACTION_UNKNOWN.format(id=action)
             entry = log(m.LogSource.SYSTEM, msg, trigger, should_notify=True)
             alert(m.Alarm.ATTENTION, text=msg, entry=entry)
