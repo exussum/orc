@@ -31,9 +31,9 @@ ad_hoc append <name> <devices> <state>
 
 remote <device> <button> <event> <action>
 
-device define <type>
+device define <type> [--sort=<n>]
 device add <type> <id> <target> [--room=<room>] [--name=<name>]
-device only <type> [<id> <target>] [--room=<room>] [--name=<name>]
+device only <type> [<id> <target>] [--room=<room>] [--name=<name>] [--sort=<n>]
 device seal <type>
 
 highlight <name> <start> <stop>
@@ -61,7 +61,9 @@ theme <name> <routine> <time>
 def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = None) -> SimpleNamespace:
     serializers = {
         "person": group(m.Person),
-        "device": each(partial(_device, zigbee_config or {}), default=lambda: SimpleNamespace(members={}, enums={})),
+        "device": each(
+            partial(_device, zigbee_config or {}), default=lambda: SimpleNamespace(members={}, enums={}, sorts={}), types={"sort": int}
+        ),
         "room": each(_room, default=dict),
         "ad_hoc": each(_ad_hoc, default=dict, types={"snapshot": int, "delay": int}),
         "remote": each(_remote, default=tuple, types={"button": int}),
@@ -310,7 +312,10 @@ def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any
     else:
         members = {name: (target, frozenset(), room, label) for name, target, room, label in rows}
     # functional Enum API: mypy checks against the member-level __new__ rather than EnumMeta.__call__
-    return m.DeviceEnum(type_name, members, module="orc")  # type: ignore[call-arg,arg-type,return-value]
+    enum: type[m.DeviceEnum] = m.DeviceEnum(type_name, members, module="orc")  # type: ignore[call-arg,arg-type,assignment]
+    if (sort := objects["device"].sorts.get(type_name)) is not None:
+        enum._sort = sort
+    return enum
 
 
 def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], args: SimpleNamespace) -> None:
@@ -320,8 +325,10 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
         raise ValueError(f"Device type {args.type!r} is already sealed")
     elif args.define:
         members[args.type] = []
+        objects["device"].sorts[args.type] = args.sort
     elif args.only:
         members[args.type] = [(args.id, args.target, args.room, args.name or args.id)] if args.id else []
+        objects["device"].sorts[args.type] = args.sort
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     elif args.type not in members:
         raise ValueError(f"Unknown device type {args.type!r}: expected one of {list(members)}")

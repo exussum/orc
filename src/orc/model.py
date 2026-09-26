@@ -1,4 +1,5 @@
 import importlib
+import math
 from collections import defaultdict
 from collections.abc import Callable, ItemsView, Iterable, ValuesView
 from dataclasses import dataclass, field
@@ -129,8 +130,6 @@ _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
-
-_CLASS_SORT = {"Light": 0, "Chromecast": 1, "AC": 2}
 
 
 class Capability(Enum):
@@ -493,6 +492,8 @@ class AppContext:
 
 
 class DeviceEnumMeta(EnumType):
+    _sort: float = math.inf
+
     def __sub__(cls, e: set[Any]) -> set[Any]:
         return set(cls) - e
 
@@ -672,10 +673,8 @@ def squish(
     return tuple(flattened)
 
 
-def _op_cmp(k: DeviceCommand) -> tuple[int, int]:
-    # types never declared controllable tie past everything registered
-    class_sort = _CLASS_SORT.get(type(k.channel.one()).__name__, len(_CLASS_SORT))
-
+def _op_cmp(k: DeviceCommand) -> tuple[float, int]:
+    class_sort = type(k.channel.one())._sort
     if k.value == STOP:
         sub_sort = _STATE_SORT_STOP
     elif isinstance(k.value, int):
