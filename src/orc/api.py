@@ -1,7 +1,7 @@
 import contextlib
 import math
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor as Pool
 from datetime import date, datetime, timedelta
 from functools import cache, lru_cache, partial
@@ -561,11 +561,11 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
     run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`", m.Scheduled(job.rule.name)), present_names())
 
 
-def _squish_matched(matched: m.Commands, entry: m.LogEntry) -> m.Commands:
+def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry) -> m.Commands:
     def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
         entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
 
-    return m.squish(matched, on_conflict=log_conflict)
+    return m.squish(commands, on_conflict=log_conflict)
 
 
 def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
@@ -580,7 +580,7 @@ def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], f
         return
     elif weather_triggers := {c.tag for c in matched if c.tag in _WEATHER_TRIGGERS}:
         entry.action += f" (weather: {', '.join(sorted(weather_triggers))})"
-    dispatch(_squish_matched(matched, entry), force=force, entry=entry)
+    dispatch(squish(matched, entry), force=force, entry=entry)
 
 
 def rebuild_jobs(ctx: m.AppContext) -> None:
