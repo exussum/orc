@@ -30,3 +30,4 @@ packages = ["src/orc_extras"]
 minversion = "9.0"
 pythonpath = [ "src", "../src", "../data/src" ]
 testpaths = [ "tests" ]
+markers = [ "plugins(*modules): plugin packages a scenario boots" ]
