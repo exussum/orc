@@ -1,4 +1,5 @@
 import threading
+from collections import deque
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -35,6 +36,28 @@ class LockedDict[K, V]:
     def copy(self) -> dict[K, V]:
         with self._lock:
             return dict(self._data)
+
+
+class LockedDeque[T]:
+    def __init__(self, maxlen: int) -> None:
+        self._lock = threading.Lock()
+        self._data: deque[T] = deque(maxlen=maxlen)
+
+    def append(self, item: T) -> None:
+        with self._lock:
+            self._data.append(item)
+
+    def appendleft(self, item: T) -> None:
+        with self._lock:
+            self._data.appendleft(item)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
+
+    def snapshot(self) -> list[T]:
+        with self._lock:
+            return list(self._data)
 
 
 def where[V](items: Mapping[str, V], **kwargs: Any) -> dict[str, V]:
