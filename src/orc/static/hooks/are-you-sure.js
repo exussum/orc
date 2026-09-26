@@ -20,7 +20,7 @@ function askConfirm(text) {
     });
 }
 
-orcHooks.ensure({
+orc.hooks.ensure({
     async onCommand(what, el, url) {
         const delay = el?.dataset.delay && el.dataset.delay !== "0:00:00";
         if (delay) {
