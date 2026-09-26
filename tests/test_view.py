@@ -269,7 +269,7 @@ def test_room_unknown_id_returns_404(client):
 def test_set_theme_clear_passes_none_dates(client, ctx, good_version):
     with patch.object(api, "apply_theme_change") as apply_change:
         client.post("/api/schedule/set_theme", data={"theme": ""}, headers=good_version)
-    apply_change.assert_called_once_with(ctx, "", None, None, m.Manual.THEME)
+    apply_change.assert_called_once_with(ctx, "", None, None, m.Manual("theme"))
 
 
 def test_set_theme_set_parses_dates(client, ctx, good_version):

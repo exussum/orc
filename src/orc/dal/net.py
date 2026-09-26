@@ -125,7 +125,7 @@ class Presence:
         if eid and (person := self._index.get(eid)):
             if device:
                 self._addresses[person] = device.address
-            self.mark([person], self._now(), m.Query.BLE)
+            self.mark([person], self._now(), m.Query("ble"))
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)
