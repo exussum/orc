@@ -4,6 +4,7 @@ from typing import Any, Sequence
 
 from apscheduler.triggers.date import DateTrigger
 
+import orc_extras.entrance_sensor
 from orc import model as m
 from orc.plugins import requires_ctx
 
@@ -11,6 +12,7 @@ SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
 CLEARED_MSG = "Motion cleared, running `{routine_name}`, cleanup in {minutes} minutes"
+CANCELLED_MSG = "Cleanup cancelled: motion triggered"
 
 
 class Log(m.LogSourceEnum):
@@ -29,7 +31,15 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on
         # the scheduler's worker; None grace so a busy worker delays, never drops.
-        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, m.Broker(id=str(device.id), source="hubitat"))
+        previous = ctx.plugin_state[orc_extras.entrance_sensor]
+        if new == sensor.setting.active_event or not previous:
+            trigger: m.Trigger = m.Broker(id=str(device.id), source="hubitat")
+        else:
+            trigger = previous.trigger
+        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger)
+        if new == sensor.setting.active_event and previous:
+            previous.add(Log.ENTRANCE, CANCELLED_MSG)
+        ctx.plugin_state[orc_extras.entrance_sensor] = log_entry
         ctx.scheduler.add_job(
             _run_motion,
             DateTrigger(ctx.api.local_now(), timezone=ctx.config.settings.tz),
@@ -96,6 +106,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         )
         msg = sensor.message.log_shutdown
     log_entry.add(Log.ENTRANCE, msg)
+    ctx.plugin_state[orc_extras.entrance_sensor] = None
 
 
 def battery_state(ctx: m.AppContext, sensor: SimpleNamespace) -> list[m.DeviceStatus]:
