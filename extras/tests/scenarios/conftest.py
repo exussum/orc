@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from flask import Flask
 from freezegun import freeze_time
 from orc_extras import lg_ac
 from orc_extras.lg_ac.model import ACState
@@ -14,6 +15,7 @@ from orc import api, config
 from orc import model as m
 from orc.dal import net, sqlite
 from orc.dal import scheduler as dal_scheduler
+from orc.view import bp
 
 MONDAY_AFTERNOON = datetime(2026, 1, 5, 15, tzinfo=config.settings.tz)
 AC_ID = "clip-1"
@@ -67,6 +69,14 @@ class House:
         for listener in self.listeners:
             listener(state, attribute, old, new)
         self.reported[(device, attribute)] = new
+        self.ctx.scheduler.run_due(api.local_now(), self.ctx)
+
+    def press(self, path):
+        app = Flask(__name__)
+        app.register_blueprint(bp)
+        app.orc = self.ctx
+        with app.test_client() as client:
+            assert client.get(path, query_string={"ignore-version": "1"}).status_code == 200
         self.ctx.scheduler.run_due(api.local_now(), self.ctx)
 
     def ac_reports(self, power, mode=None, fan=None, temperature=None):
