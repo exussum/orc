@@ -1,5 +1,10 @@
+from collections.abc import Callable
+from typing import Any
+
 from orc import model as m
 from orc.dal import warn_stub
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 warn_stub("audio")
 

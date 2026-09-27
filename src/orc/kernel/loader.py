@@ -1,6 +1,6 @@
 import os
-from collections.abc import Mapping
-from dataclasses import replace
+from collections.abc import Callable, Mapping
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta, tzinfo
 from functools import partial
 from types import ModuleType, SimpleNamespace
@@ -129,18 +129,37 @@ def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, 
         return {}
     keys = {}
     for tag in tags:
-        error = ConfigError(f"Secret {tag.secret!r}: expected a 32-byte hex EIK")
-        try:
-            eik = bytes.fromhex(secrets[tag.secret])
-        except ValueError as exc:
-            raise error from exc
-        if len(eik) != 32:
-            raise error
         pair_date = datetime.fromisoformat(tag.pair_date)
         if not pair_date.tzinfo:
             pair_date = pair_date.replace(tzinfo=tz)
-        keys[tag.person] = m.BleKey(eik, int(pair_date.timestamp()))
+        keys[tag.person] = m.BleKey(cast.hex32(secrets.other[tag.secret]), int(pair_date.timestamp()))
     return keys
+
+
+def secret_needs(registry: m.Registry, providers: interfaces.Provider, tags: list[m.BleTag]) -> dict[str, Callable[[str], Any]]:
+    needs: dict[str, Callable[[str], Any]] = {}
+    for backend in providers:
+        if backend:
+            needs |= backend.SECRETS
+    needs |= registry.secrets
+    needs |= {tag.secret: cast.hex32 for tag in tags}
+    return needs
+
+
+def check_secrets(secrets: m.Secrets, needs: Mapping[str, Callable[[str], Any]]) -> dict[str, str]:
+    values = asdict(secrets)
+    values |= values.pop("other")
+    problems = {}
+    for name, shape in needs.items():
+        value = values.get(name, "")
+        if not value:
+            problems[name] = "not set"
+        else:
+            try:
+                shape(value)
+            except ValueError:
+                problems[name] = f"expected {shape.__qualname__}"
+    return problems
 
 
 def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, type[m.DeviceEnum]], *, source: str) -> None:

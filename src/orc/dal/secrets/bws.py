@@ -3,6 +3,7 @@ import hashlib
 import hmac as _hmac
 import json
 import os
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -14,6 +15,8 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from cryptography.hazmat.primitives.padding import PKCS7
 
 from orc import model as m
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _IDENTITY_URL = "https://identity.bitwarden.com"
 _API_URL = "https://api.bitwarden.com"
@@ -56,8 +59,8 @@ def fetch_secrets() -> m.Secrets:
     secrets = {_decrypt_enc_string(s["key"], org_key): _decrypt_enc_string(s["value"], org_key) for s in secrets_resp["data"]}
 
     return m.Secrets(
-        hubitat_access_token=secrets.pop("HUBITAT_ACCESS_TOKEN"),
-        market_holidays_url=secrets.pop("MARKET_HOLIDAYS_URL"),
+        hubitat_access_token=secrets.pop("HUBITAT_ACCESS_TOKEN", ""),
+        market_holidays_url=secrets.pop("MARKET_HOLIDAYS_URL", ""),
         mqtt_user=secrets.pop("MQTT_USER", ""),
         mqtt_password=secrets.pop("MQTT_PASSWORD", ""),
         vapid_private_key=secrets.pop("VAPID_PRIVATE_KEY", ""),

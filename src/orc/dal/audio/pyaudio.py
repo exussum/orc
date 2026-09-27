@@ -1,5 +1,5 @@
 import wave
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import cache
 from importlib import resources  # nosemgrep
 from importlib.resources.abc import Traversable  # nosemgrep
@@ -11,6 +11,8 @@ import pyaudio
 from orc import model as m
 from orc.dal import system_volume
 from orc.decorators import audio_lock
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _MODEL_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx"
 _CONFIG_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"

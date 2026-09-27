@@ -4,13 +4,17 @@ the hub's MQTT export in orc.dal.mqtt."""
 
 import re
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
 
 import orc
 from orc import model as m
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _STATS_WINDOW = timedelta(days=2)
 _FAILED = "failed after 5 retries"

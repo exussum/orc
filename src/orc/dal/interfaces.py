@@ -1,6 +1,6 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date, datetime
-from typing import NamedTuple, Protocol
+from typing import Any, NamedTuple, Protocol
 
 from orc.dal.audio import pyaudio as _audio_default
 from orc.dal.chromecast import pychromecast as _chromecast_default
@@ -24,19 +24,23 @@ from orc.model import (
 )
 
 
-class SecretsService(Protocol):
+class Backend(Protocol):
+    SECRETS: dict[str, Callable[[str], Any]]
+
+
+class SecretsService(Backend, Protocol):
     def fetch_secrets(self) -> Secrets: ...
 
 
-class WeatherService(Protocol):
+class WeatherService(Backend, Protocol):
     def fetch_weather(self, now: datetime, lat: float, lon: float) -> frozenset[WeatherCondition]: ...
 
 
-class HolidayService(Protocol):
+class HolidayService(Backend, Protocol):
     def market_holiday(self, today: date) -> bool: ...
 
 
-class MqttService(Protocol):
+class MqttService(Backend, Protocol):
     def start(self) -> None: ...
     def fetch_hubitat_config(self, secrets: Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[Capability]]]: ...
     def fetch_light_states(self, lights: Sequence[DeviceEnum]) -> Commands: ...
@@ -47,14 +51,14 @@ class MqttService(Protocol):
     def add_external_listener(self, fn: Listener) -> None: ...
 
 
-class AudioService(Protocol):
+class AudioService(Backend, Protocol):
     def speak(self, device: DeviceEnum, text: str) -> None: ...
     def alert(self, device: DeviceEnum, path: str) -> None: ...
     def set_volume(self, device: DeviceEnum, lvl: int) -> None: ...
     def fetch_state(self, device: DeviceEnum) -> SoundState: ...
 
 
-class ChromecastService(Protocol):
+class ChromecastService(Backend, Protocol):
     def fetch_state(self, device: DeviceEnum) -> SoundState: ...
     def fetch_youtube_stream_metadata(self, id: str) -> tuple[str, str]: ...
     def speak(self, device: DeviceEnum, text: str) -> None: ...
@@ -65,16 +69,16 @@ class ChromecastService(Protocol):
     def set_volume(self, device: DeviceEnum, lvl: int) -> None: ...
 
 
-class BlasterService(Protocol):
+class BlasterService(Backend, Protocol):
     def tv_toggle(self, device: DeviceEnum, codes_file: str) -> None: ...
 
 
-class PushService(Protocol):
+class PushService(Backend, Protocol):
     def public_key(self) -> str: ...
     def send(self, subscription: PushSubscription, title: str, body: str) -> None: ...
 
 
-class HubitatService(Protocol):
+class HubitatService(Backend, Protocol):
     def reboot(self) -> None: ...
     def fetch_retry_stats(self) -> tuple[RetryStats, ...]: ...
 

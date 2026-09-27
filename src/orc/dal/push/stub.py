@@ -1,11 +1,15 @@
 import base64
+from collections.abc import Callable
 from functools import cache
+from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from orc import model as m
 from orc.dal import warn_stub
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 warn_stub("push")
 

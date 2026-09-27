@@ -1,9 +1,11 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from orc import model as m
 from orc.dal import warn_stub
 from orc.kernel import engine
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 warn_stub("mqtt")
 

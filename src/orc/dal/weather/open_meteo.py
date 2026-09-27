@@ -1,10 +1,14 @@
+from collections.abc import Callable
 from datetime import datetime
 from functools import lru_cache
+from typing import Any
 
 import requests
 
 from orc import config
 from orc.model import WeatherCondition
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _SUNNY_CODES: set[int] = {0, 1}  # WMO 0=clear sky, 1=mainly clear
 

@@ -1,12 +1,14 @@
 import re
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from orc import model as m
 from orc.dal import interfaces
-from orc.kernel import engine, loader
+from orc.dal.secrets import stub as secrets_stub
+from orc.kernel import cast, engine, loader
 from orc.kernel.loader import ConfigError, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -157,11 +159,62 @@ def test_ble_keys_naive_pair_date_reads_config_tz():
     assert loader.ble_keys(tags, secrets, timezone.utc)["Alice"].anchor == anchor
 
 
-def test_ble_keys_rejects_short_eik():
-    secrets = m.Secrets(other={"EIK_ALICE": "abcd"})
+@pytest.mark.parametrize(
+    ("other", "expected"),
+    [
+        ({"EIK_ALICE": "ab" * 32}, {}),
+        ({"EIK_ALICE": "abcd"}, {"EIK_ALICE": "expected hex32"}),
+        ({"EIK_ALICE": ""}, {"EIK_ALICE": "not set"}),
+        ({}, {"EIK_ALICE": "not set"}),
+    ],
+)
+def test_check_secrets(other, expected):
+    assert loader.check_secrets(m.Secrets(other=other), {"EIK_ALICE": cast.hex32}) == expected
+
+
+def test_check_secrets_reads_typed_fields():
+    assert loader.check_secrets(m.Secrets(vapid_private_key="short"), {"vapid_private_key": cast.key32}) == {
+        "vapid_private_key": "expected key32"
+    }
+
+
+def test_secret_needs_gathers_providers_plugins_and_tags():
+    registry = SimpleNamespace(secrets={"PLUGIN_KEY": cast.nonblank})
+    providers = (SimpleNamespace(SECRETS={"hubitat_access_token": cast.uuid}), SimpleNamespace(SECRETS={}), None)
     tags = [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05+00:00")]
-    with pytest.raises(ConfigError, match="expected a 32-byte hex EIK"):
-        loader.ble_keys(tags, secrets, timezone.utc)
+    assert loader.secret_needs(registry, providers, tags) == {
+        "hubitat_access_token": cast.uuid,
+        "PLUGIN_KEY": cast.nonblank,
+        "EIK_ALICE": cast.hex32,
+    }
+
+
+@pytest.mark.parametrize(
+    ("shape", "value", "ok"),
+    [
+        (cast.uuid, "6b6a9c2e-1c1c-4c2a-9c4a-1e1f1a1b1c1d", True),
+        (cast.uuid, "not-a-uuid", False),
+        (cast.url, "https://example.com/holidays.json", True),
+        (cast.url, "example.com/holidays.json", False),
+        (cast.key32, "A" * 43, True),
+        (cast.key32, "AAAA", False),
+        (cast.key32, "not base64!", False),
+        (cast.hex32, "ab" * 32, True),
+        (cast.hex32, "abcd", False),
+        (cast.pem_cert, secrets_stub.fetch_secrets().other["X_CERT"], True),
+        (cast.pem_cert, "junk", False),
+        (cast.pem_key, secrets_stub.fetch_secrets().other["X_KEY"], True),
+        (cast.pem_key, "junk", False),
+        (cast.nonblank, "anything", True),
+        (cast.nonblank, "", False),
+    ],
+)
+def test_secret_casts(shape, value, ok):
+    if ok:
+        shape(value)
+    else:
+        with pytest.raises(ValueError):
+            shape(value)
 
 
 def test_ad_hoc_define_with_inline_first_item():

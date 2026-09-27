@@ -1,5 +1,7 @@
 import base64
 import json
+from collections.abc import Callable
+from typing import Any
 
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from py_vapid import Vapid
@@ -8,6 +10,8 @@ from pywebpush import WebPushException, webpush
 import orc
 from orc import model as m
 from orc.dal.push import Gone
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _TTL_SECONDS = 24 * 60 * 60
 _GONE_STATUSES = frozenset({401, 403, 404, 410})

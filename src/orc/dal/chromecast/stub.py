@@ -1,6 +1,11 @@
+from collections.abc import Callable
+from typing import Any
+
 from orc import model as m
 from orc.dal import warn_stub
 from orc.dal.chromecast import MAX_CHARS
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 warn_stub("chromecast")
 

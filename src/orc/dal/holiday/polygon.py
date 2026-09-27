@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import date
 from functools import lru_cache
 from typing import Any
@@ -5,6 +6,8 @@ from typing import Any
 import requests
 
 from orc import config
+
+SECRETS: dict[str, Callable[[str], Any]] = {}
 
 
 def market_holiday(today: date) -> bool:
