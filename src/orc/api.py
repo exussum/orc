@@ -96,6 +96,10 @@ def notify(action: str, trigger: m.Trigger) -> None:
     _schedule_push(action.replace("`", ""), trigger)
 
 
+def push_public_key() -> str:
+    return config.providers.push.public_key()
+
+
 def subscribe_push(subscription: m.PushSubscription) -> None:
     sqlite.insert_push_subscription(subscription)
 
