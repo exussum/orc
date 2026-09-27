@@ -2,6 +2,8 @@ import base64
 import datetime
 import functools
 import hashlib
+from collections.abc import Callable
+from typing import Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -11,7 +13,7 @@ from cryptography.x509.oid import NameOID
 from orc import model as m
 from orc.dal import warn_stub
 
-warn_stub("secrets")
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _VAPID_PRIVATE_KEY = base64.urlsafe_b64encode(hashlib.sha256(b"orc stub vapid").digest()).rstrip(b"=").decode()
 
@@ -50,6 +52,7 @@ class _StubSecrets(dict[str, str]):
 
 
 def fetch_secrets() -> m.Secrets:
+    warn_stub("secrets")
     return m.Secrets(
         hubitat_access_token="secret_hubitat_access_token",
         market_holidays_url="secret_market_holidays_url",

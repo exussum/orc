@@ -245,12 +245,13 @@ VAPID key and posts it straight to the subscription's endpoint.
    print(base64.urlsafe_b64encode(k.to_bytes(32, 'big')).rstrip(b'=').decode())"
    ```
 
-2. Open the System page on the device and press **Notify this device**.
+2. Open the System page on the device and press **Enable notifications**.
    The browser asks for notification permission, registers orc's service
    worker, and hands orc its subscription, and orc answers with a
    confirmation notification; opening the System page again later re-sends
    the subscription silently, which is how a device recovers after
-   `jobs_db` is lost.
+   `jobs_db` is lost. **Disable notifications** drops the device from
+   orc's table and releases the browser's subscription.
 
 Notifications arrive with the app closed. On Android, Firefox and Chrome
 both receive them through FCM, so a fresh boot delivers without opening
@@ -329,7 +330,7 @@ bounces the `orc` supervisor job.
 ## Layout
 
 - `src/orc/__init__.py` — `Config` (`.orc` config loading and installation)
-- `src/orc/loader.py` — the config grammar, `parse_config`/`validate`, the `Cast` value coercions, and plugin config loading, all on `command-cfg`
+- `src/orc/kernel/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`; `src/orc/kernel/cast.py` — the `cast` value coercions
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
 - `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), time parsing (`resolve_time`), routine/theme/device types

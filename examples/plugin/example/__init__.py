@@ -8,7 +8,8 @@ from example import plugins
 from example.dal import sqlite
 from example.model import Runtime, Settings, Widget, Zone
 from example.web import example_bp
-from orc.kernel.loader import Cast, load_plugin_config
+from orc.kernel import cast
+from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
 
 CONFIG = "example"
@@ -38,20 +39,20 @@ def setup(ctx: AppContext) -> None:
         ctx.config,
         GRAMMAR,
         {
-            "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int}),
+            "setting": scalar(Settings, types={"window_hours": cast.int, "http_timeout": cast.int}),
             "widget": array(Widget, types={"value": int}),
             "zone": group(Zone),
         },
     )
     s = cfg.setting
     runtime = Runtime(
-        foo=Cast.module(s.foo_backend),
-        bar=Cast.module(s.bar_backend),
+        foo=cast.module(s.foo_backend),
+        bar=cast.module(s.bar_backend),
         settings=s,
         widgets=cfg.widget,
         zones=[z for zs in cfg.zone.values() for z in zs],
-        foo_key=ctx.config.secrets[s.foo_secret],
-        bar_key=ctx.config.secrets[s.bar_secret],
+        foo_key=ctx.config.secrets.other[s.foo_secret],
+        bar_key=ctx.config.secrets.other[s.bar_secret],
     )
     sqlite.init_db(ctx.api.connection)
     ctx.plugin_state[example] = runtime

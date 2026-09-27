@@ -23,8 +23,8 @@ def authenticate(secrets: m.Secrets, timeout: int) -> tuple[str, int]:
         _AUTH_URL,
         data={
             "grant_type": "client_credentials",
-            "client_id": secrets["YOLINK_ID"],
-            "client_secret": secrets["YOLINK_SECRET"],
+            "client_id": secrets.other["YOLINK_ID"],
+            "client_secret": secrets.other["YOLINK_SECRET"],
         },
         timeout=timeout,
     )

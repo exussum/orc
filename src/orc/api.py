@@ -28,9 +28,8 @@ from orc.dal.sqlite import (
 from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
 from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.decorators import mappable, requires_ctx
-from orc.kernel import engine
+from orc.kernel import cast, engine
 from orc.kernel.declarations import Declarations
-from orc.kernel.loader import Cast
 from orc.locale import Log
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
@@ -104,6 +103,10 @@ def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> 
     sqlite.insert_push_subscription(subscription)
     if greet:
         _schedule_push(Log.PUSH_GREETING, m.Manual("notify"), (subscription,))
+
+
+def unsubscribe_push(endpoint: str) -> None:
+    sqlite.delete_push_subscription(endpoint)
 
 
 def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_notify: bool = False) -> m.LogEntry:
@@ -388,7 +391,7 @@ def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
     if state and state.isdigit():
         parsed: Any = int(state)
     elif state and ":" in state:
-        parsed = Cast.state(state)
+        parsed = cast.state(state)
     else:
         parsed = state
     for name, cls in config.devices.items():
