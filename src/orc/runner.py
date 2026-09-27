@@ -1,3 +1,4 @@
+import argparse
 import os
 import subprocess
 import sys
@@ -5,6 +6,7 @@ import time
 import traceback
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -29,8 +31,16 @@ def flask() -> None:
 
 
 def secrets() -> None:
-    token = os.environ.get("BWS_ACCESS_TOKEN", "")
-    if token and not urlparse(token).scheme:
+    parser = argparse.ArgumentParser(
+        prog="orc-secrets",
+        description="Fetch the secrets a config names and report each one. "
+        "Fails the way startup would on a missing core secret or a bad tag EIK. "
+        "BWS_ACCESS_TOKEN is the Bitwarden machine token itself, not a URL.",
+    )
+    parser.add_argument("config", type=Path, help="config.orc, or the directory holding it")
+    path = parser.parse_args().config
+    os.environ["ORC_CONFIG_DIR"] = str(path.parent if path.is_file() else path)
+    if token := os.environ.get("BWS_ACCESS_TOKEN"):
         os.environ["BWS_ACCESS_TOKEN"] = "data:," + quote(token, safe="")
     config.config.load(zigbee_config={})
     fetched = config.config.secrets
