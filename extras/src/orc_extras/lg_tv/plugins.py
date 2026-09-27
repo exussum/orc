@@ -1,13 +1,14 @@
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import orc_extras.lg_tv
+from orc.kernel import cast
 from orc.kernel.loader import resolve_backend
 from orc.model import AppContext, DeviceEnum, LogEntry
 from orc_extras.lg_tv.dal.interfaces import WebOsBackend
 
 
 def backend(ctx: AppContext) -> WebOsBackend:
-    return cast(WebOsBackend, resolve_backend(ctx.config.plugin_for(orc_extras.lg_tv).backend))
+    return cast.instance(resolve_backend(ctx.config.plugin_for(orc_extras.lg_tv).backend), WebOsBackend)
 
 
 def pair(ctx: AppContext, hostname: str) -> str | None:

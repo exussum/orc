@@ -1,11 +1,12 @@
 import re
 from datetime import datetime, time, timedelta
-from typing import Any, cast
+from typing import Any
 
 from apscheduler.triggers.date import DateTrigger
 
 import orc_extras.travel
 from orc import model as m
+from orc.kernel import cast
 from orc.model import Alarm, AppContext
 from orc.plugins import requires_ctx
 from orc_extras.travel.dal.sqlite import Connection
@@ -17,7 +18,7 @@ _REFRESH_HORIZON = timedelta(hours=2)
 
 
 def runtime(ctx: AppContext) -> Runtime:
-    return cast(Runtime, ctx.plugin_state[orc_extras.travel])
+    return cast.instance(ctx.plugin_state[orc_extras.travel], Runtime)
 
 
 def is_flight(value: str) -> bool:

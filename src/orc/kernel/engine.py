@@ -12,11 +12,16 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from enum import Enum, auto
 from threading import RLock
-from typing import Any, NamedTuple, Protocol, cast
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 
 class Channel:
     pass
+
+
+@runtime_checkable
+class DeviceChannel(Protocol):
+    def one(self) -> Any: ...
 
 
 type Value = Hashable
@@ -105,7 +110,10 @@ class In:
     value: Value
 
     def holds(self, read: Read) -> bool:
-        return self.value in cast("Collection[Value]", read(self.channel))
+        values = read(self.channel)
+        if not isinstance(values, Collection):
+            raise TypeError(f"{self.channel} read {values!r}, not a collection")
+        return self.value in values
 
     @property
     def channels(self) -> tuple[Channel, ...]:
@@ -260,7 +268,7 @@ class Runtime:
         if not self.snapshot_active(name, now):
             self.save_snapshot(name, SnapShot(ctx.api.capture_lights(), end, label), end)
             captured = self.read_snapshot(name, now).routine
-            items = ", ".join(f"`{cast(Any, c.channel).one().name}`={c.value}" for c in captured if c.value != ctx.api.m.OFF)
+            items = ", ".join(f"`{_one_name(c.channel)}`={c.value}" for c in captured if c.value != ctx.api.m.OFF)
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or ctx.api.Log.SNAPSHOT_ALL_OFF))
         ctx.api.dispatch(commands, force=True, entry=entry)
 
@@ -270,3 +278,9 @@ class Runtime:
             commands = snapshot.routine
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
         ctx.api.dispatch(commands, force=True, entry=entry)
+
+
+def _one_name(channel: Channel) -> str:
+    if not isinstance(channel, DeviceChannel):
+        raise TypeError(f"{channel} is not a device channel")
+    return str(channel.one().name)
