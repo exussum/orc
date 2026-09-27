@@ -7,13 +7,24 @@ from typing import Any
 from sqlalchemy.engine.url import make_url
 
 import orc
+from orc import model as m
 
 _ALPHA: float = 0.3
+
+
+def delete_push_subscription(endpoint: str) -> None:
+    with connection() as conn:
+        conn.execute("DELETE FROM orc_push_subscriptions WHERE endpoint = ?", (endpoint,))
 
 
 def delete_theme_override() -> None:
     with connection() as conn:
         conn.execute("DELETE FROM orc_theme_override WHERE id = 0")
+
+
+def fetch_push_subscriptions() -> list[m.PushSubscription]:
+    with connection() as conn:
+        return [m.PushSubscription(*row) for row in conn.execute("SELECT endpoint, public_key, auth_secret FROM orc_push_subscriptions")]
 
 
 def fetch_theme_override() -> tuple[str, date, date] | None:
@@ -31,6 +42,19 @@ def init_db() -> None:
             "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
         )
         conn.execute("CREATE TABLE IF NOT EXISTS orc_durations (name TEXT PRIMARY KEY, samples INTEGER NOT NULL, avg REAL NOT NULL)")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS orc_push_subscriptions "
+            "(endpoint TEXT PRIMARY KEY, public_key TEXT NOT NULL, auth_secret TEXT NOT NULL)"
+        )
+
+
+def insert_push_subscription(subscription: m.PushSubscription) -> None:
+    with connection() as conn:
+        conn.execute(
+            "INSERT INTO orc_push_subscriptions (endpoint, public_key, auth_secret) VALUES (?, ?, ?) "
+            "ON CONFLICT(endpoint) DO UPDATE SET public_key=excluded.public_key, auth_secret=excluded.auth_secret",
+            subscription,
+        )
 
 
 def insert_theme_override(override: tuple[str, date, date]) -> None:
