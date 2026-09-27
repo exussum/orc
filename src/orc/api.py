@@ -753,7 +753,7 @@ def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
 
 @requires_ctx
 def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
-    return check_presence(trigger, probe=True)
+    return check_presence(trigger)
 
 
 @requires_ctx
