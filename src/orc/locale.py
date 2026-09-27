@@ -39,3 +39,4 @@ class Log:
 
     PUSH_TITLE: str = "ORC"
     PUSH_FAILED: str = "Push failed for `…{endpoint}`: {exc}"
+    PUSH_GREETING: str = "Notifications enabled on this device"

@@ -334,7 +334,8 @@ def push_key() -> dict[str, str]:
 @bp.route("/api/push/subscribe", methods=["POST"])
 def push_subscribe() -> dict[str, Any]:
     body = request.get_json()
-    api.subscribe_push(m.PushSubscription(body["endpoint"], body["keys"]["p256dh"], body["keys"]["auth"]))
+    subscription = m.PushSubscription(body["endpoint"], body["keys"]["p256dh"], body["keys"]["auth"])
+    api.subscribe_push(subscription, greet=bool(body.get("greet")))
     return {}
 
 

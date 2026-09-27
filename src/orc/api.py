@@ -100,8 +100,10 @@ def push_public_key() -> str:
     return config.providers.push.public_key()
 
 
-def subscribe_push(subscription: m.PushSubscription) -> None:
+def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> None:
     sqlite.insert_push_subscription(subscription)
+    if greet:
+        _schedule_push(Log.PUSH_GREETING, m.Manual("notify"), (subscription,))
 
 
 def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_notify: bool = False) -> m.LogEntry:
