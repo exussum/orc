@@ -344,6 +344,13 @@ class TestLog:
         assert once.call_args.kwargs["args"] == ("Notifications enabled on this device", m.Manual("notify"), (subscriptions[1],))
         assert set(sqlite.fetch_push_subscriptions()) == set(subscriptions)
 
+    def test_unsubscribing_drops_only_that_endpoint(self):
+        subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
+        for subscription in subscriptions:
+            api.subscribe_push(subscription)
+        api.unsubscribe_push(subscriptions[0].endpoint)
+        assert sqlite.fetch_push_subscriptions() == [subscriptions[1]]
+
     def test_a_push_reaches_every_subscription_and_drops_gone_ones(self):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "abc"]
         for subscription in subscriptions:

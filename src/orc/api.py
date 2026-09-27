@@ -105,6 +105,10 @@ def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> 
         _schedule_push(Log.PUSH_GREETING, m.Manual("notify"), (subscription,))
 
 
+def unsubscribe_push(endpoint: str) -> None:
+    sqlite.delete_push_subscription(endpoint)
+
+
 def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_notify: bool = False) -> m.LogEntry:
     now = local_now()
     entries = _ACTIVITY_LOG.snapshot()
