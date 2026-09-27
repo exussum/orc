@@ -70,8 +70,8 @@ def setup(ctx: AppContext) -> None:
     capture = Capture()
     ctx.plugin_state[orc_extras.lg_ac] = State(s, thinq, capture)
     secrets: Secrets = ctx.config.secrets
-    api.configure(secrets[_SECRET_CA_CERT].encode(), secrets[_SECRET_CA_KEY].encode())
-    broker.start(s.mqtts_advertise, secrets[_SECRET_SERVER_CERT].encode(), secrets[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
+    api.configure(secrets.other[_SECRET_CA_CERT].encode(), secrets.other[_SECRET_CA_KEY].encode())
+    broker.start(s.mqtts_advertise, secrets.other[_SECRET_SERVER_CERT].encode(), secrets.other[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     if s.capture:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
     thinq.set_event_listener(partial(_on_event, ctx))

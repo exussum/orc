@@ -51,8 +51,8 @@ def setup(ctx: AppContext) -> None:
         settings=s,
         widgets=cfg.widget,
         zones=[z for zs in cfg.zone.values() for z in zs],
-        foo_key=ctx.config.secrets[s.foo_secret],
-        bar_key=ctx.config.secrets[s.bar_secret],
+        foo_key=ctx.config.secrets.other[s.foo_secret],
+        bar_key=ctx.config.secrets.other[s.bar_secret],
     )
     sqlite.init_db(ctx.api.connection)
     ctx.plugin_state[example] = runtime
