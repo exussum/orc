@@ -218,6 +218,7 @@ message log_present   'Trigger sensor off: skip (people present)'
 message log_door_open 'Trigger sensor off: skip (patio door open)'
 message log_absent    'Trigger sensor off: skip (listener home)'
 message log_shutdown  'Trigger sensor off: applying OFF'
+message log_nobody    'Entrance motion with nobody tracked before or after'
 
 rules inside   'All Lights Off'
 rules present  Silence

@@ -54,6 +54,7 @@ def _device_state_side_effect(mock):
 def ctx(ctx):
     ctx.scheduler = create_autospec(BaseScheduler, instance=True)
     ctx.api.JOBSTORE_MEMORY = "memory"
+    ctx.api.present_names.return_value = set()
     ctx.api.device_state.side_effect = _device_state_side_effect(ctx)
     ctx.config.settings.tz = _UTC
     ctx.config.ad_hoc_routines = {
@@ -88,6 +89,7 @@ def sensor():
             log_door_open="skip (door open)",
             log_absent="skip (listener)",
             log_shutdown="applying OFF",
+            log_nobody="nobody checked in",
         ),
         rules=rules,
         timed=timed,
@@ -100,8 +102,9 @@ def plugin_ctx(ctx):
     return ctx
 
 
-def _cleanup(sensor, plugin_ctx):
+def _cleanup(sensor, plugin_ctx, present_before=()):
     entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test"))
+    plugin_ctx.plugin_state = {entrance_sensor: plugins.Visit(entry, set(present_before))}
     plugins._run_trigger_sensor_off.__wrapped__(sensor, entry, ctx=plugin_ctx)
     return entry
 
@@ -260,6 +263,14 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
     )
     plugin_ctx.api.run_action.assert_not_called()
     assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
+    plugin_ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, sensor.message.log_nobody, entry.trigger, should_notify=True)
+
+
+def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(sensor, plugin_ctx):
+    plugin_ctx.api.local_now.return_value = _DAYTIME
+    entry = _cleanup(sensor, plugin_ctx, present_before={"rex"})
+    assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
+    plugin_ctx.api.log.assert_not_called()
 
 
 def _seed_devices(plugin_ctx, *devices):
