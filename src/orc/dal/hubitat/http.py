@@ -13,8 +13,9 @@ import requests
 
 import orc
 from orc import model as m
+from orc.kernel import cast
 
-SECRETS: dict[str, Callable[[str], Any]] = {}
+SECRETS: dict[str, Callable[[str], Any]] = {"hubitat_access_token": cast.uuid}
 
 _STATS_WINDOW = timedelta(days=2)
 _FAILED = "failed after 5 retries"
