@@ -65,6 +65,7 @@ def test_a_tag_heard_after_the_door_keeps_the_listener_home(house):
             "Trigger sensor off: skip (listener home)",
         ],
     )
+    assert house.pushed == []
 
 
 @pytest.mark.plugins(entrance_sensor)
@@ -91,6 +92,19 @@ def test_a_listener_who_left_before_the_door_is_lost_at_cleanup(house):
             "Trigger sensor off: applying OFF",
         ],
     )
+    assert house.pushed == []
+
+
+@pytest.mark.plugins(entrance_sensor)
+def test_a_walk_in_with_nobody_tracked_before_or_after_is_pushed(house):
+    house.lan.clear()
+    house.entrance_sensor("active")
+    house.tick(seconds=30)
+    house.entrance_sensor("inactive")
+    house.tick(minutes=2)
+
+    assert house.log()[-1][2][-2:] == ["Trigger sensor off: applying OFF", "Entrance motion with nobody tracked before or after"]
+    assert house.pushed == ["Entrance motion with nobody tracked before or after"]
 
 
 @pytest.mark.plugins(entrance_sensor)
