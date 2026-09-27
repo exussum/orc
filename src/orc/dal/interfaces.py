@@ -6,6 +6,7 @@ from orc.dal.audio import pyaudio as _audio_default
 from orc.dal.chromecast import pychromecast as _chromecast_default
 from orc.dal.hubitat import http as _hubitat_default
 from orc.dal.mqtt import hubitat as _mqtt_default
+from orc.dal.push import webpush as _push_default
 from orc.dal.secrets import bws as _secrets_default
 from orc.model import (
     ButtonListener,
@@ -15,6 +16,7 @@ from orc.model import (
     DeviceState,
     Listener,
     MediaUrl,
+    PushSubscription,
     RetryStats,
     Secrets,
     SoundState,
@@ -67,6 +69,11 @@ class BlasterService(Protocol):
     def tv_toggle(self, device: DeviceEnum, codes_file: str) -> None: ...
 
 
+class PushService(Protocol):
+    def public_key(self) -> str: ...
+    def send(self, subscription: PushSubscription, title: str, body: str) -> None: ...
+
+
 class HubitatService(Protocol):
     def reboot(self) -> None: ...
     def fetch_retry_stats(self) -> tuple[RetryStats, ...]: ...
@@ -81,3 +88,4 @@ class Provider(NamedTuple):
     blaster: BlasterService | None = None
     hubitat: HubitatService | None = _hubitat_default
     audio: AudioService | None = _audio_default
+    push: PushService | None = _push_default

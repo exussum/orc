@@ -3,13 +3,21 @@ from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from orc import security
-from orc.dal import net
+import pytest
+from pywebpush import WebPushException
+
+from orc import config, security
+from orc import model as m
+from orc.dal import net, push
 from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.holiday import polygon
+from orc.dal.push import webpush
 from orc.model import BleKey, Query
 
 TRIGGER = Query("test")
+VAPID_PRIVATE_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE"
+VAPID_PUBLIC_KEY = "BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"
+SUBSCRIPTION = m.PushSubscription("https://push.example/a", "public-key", "auth-secret")
 
 
 class TestStripGoogleVideoParams:
@@ -31,6 +39,23 @@ class TestStripGoogleVideoParams:
 
     def test_no_hostname(self):
         assert _strip_googlevideo_params("not a url") == "not a url"
+
+
+class TestWebPush:
+    @pytest.fixture(autouse=True)
+    def vapid_secret(self):
+        with patch.object(config, "secrets", m.Secrets(vapid_private_key=VAPID_PRIVATE_KEY)):
+            yield
+
+    def test_the_public_key_is_the_secrets_vapid_point(self):
+        assert webpush.public_key() == VAPID_PUBLIC_KEY
+
+    @pytest.mark.parametrize("status", [401, 403, 404, 410])
+    def test_a_gone_response_drops_the_subscription(self, status):
+        response = SimpleNamespace(status_code=status)
+        with patch("orc.dal.push.webpush.webpush", side_effect=WebPushException("gone", response=response)):
+            with pytest.raises(push.Gone):
+                webpush.send(SUBSCRIPTION, "ORC", "hi")
 
 
 _HOLIDAYS = [
