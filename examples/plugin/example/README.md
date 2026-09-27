@@ -51,7 +51,7 @@ if the plugin persists nothing.
 
 ## Choosing a backend pattern
 
-Both resolve the dotted path via `Cast.module(...)` (`orc.kernel.loader.Cast`); they
+Both resolve the dotted path via `cast.module(...)` (`orc.kernel.cast`); they
 differ only in where the backend is declared.
 
 **A — `setting backend` in the plugin's own config** (`example`, `calendar`,
@@ -59,7 +59,7 @@ differ only in where the backend is declared.
 ```
 # example.orc
 setting foo_backend  example.dal.foo.acme
-# setup(): Cast.module(s.foo_backend) -> stored on Runtime, typed FooService
+# setup(): cast.module(s.foo_backend) -> stored on Runtime, typed FooService
 ```
 
 **B — `--backend` on the `plugin` line** (`lg_tv`): for a plugin with no config

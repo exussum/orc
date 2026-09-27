@@ -7,8 +7,9 @@ from typing import Any
 from command_cfg import ConfigError
 
 from orc import model as m
+from orc.dal.secrets import stub as secrets_stub
 from orc.kernel.declarations import collect_declarations
-from orc.kernel.loader import ble_keys, parse_config, validate
+from orc.kernel.loader import ble_keys, check_secrets, parse_config, secret_needs, validate
 
 Light: type[m.DeviceEnum] = m.DeviceEnum("Light", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 Chromecast: type[m.DeviceEnum] = m.DeviceEnum("Chromecast", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
@@ -35,6 +36,7 @@ class Config:
         if secrets is None:
             self._load(m.Secrets(), {})
             secrets = self.providers.secrets.fetch_secrets()
+            self._check_secrets(secrets)
         if zigbee_config is None:
             zigbee_config = self.providers.mqtt.fetch_hubitat_config(secrets)
         self._load(secrets, zigbee_config)
@@ -70,6 +72,12 @@ class Config:
             raise ConfigError(f"No plugin line configured for module {module.__name__!r}")
         return plugin
 
+    def _check_secrets(self, secrets: m.Secrets) -> None:
+        if self.providers.secrets is secrets_stub:
+            return
+        if problems := check_secrets(secrets, self.secret_needs):
+            raise ConfigError("Secrets: " + "; ".join(f"{name} {problem}" for name, problem in problems.items()))
+
     def _install(self, parsed: SimpleNamespace) -> None:
         self.settings = parsed.setting
         self.plugins = parsed.plugins
@@ -83,8 +91,9 @@ class Config:
         self.virtual_devices = {e for e in parsed.enums.get("Light", ()) if isinstance(e.value, int) and e.value < 0}
 
         self.people = parsed.person
-        self.ble_tags = ble_keys(parsed.tag, self.secrets, parsed.setting.tz)
         self.providers = parsed.provider
+        self.secret_needs = secret_needs(self.registry, parsed.provider, parsed.tag)
+        self.ble_tags = ble_keys(parsed.tag, self.secrets, parsed.setting.tz)
         self.routines = parsed.routine
         self.themes = parsed.theme
         self.ad_hoc_routines = parsed.ad_hoc

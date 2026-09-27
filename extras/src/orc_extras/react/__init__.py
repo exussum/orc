@@ -4,8 +4,8 @@ from typing import Any
 
 from command_cfg import each
 
-from orc.kernel import engine
-from orc.kernel.loader import Cast, load_plugin_config, validate_ac_state
+from orc.kernel import cast, engine
+from orc.kernel.loader import load_plugin_config, validate_ac_state
 from orc.model import AcChannel, AcCommand, AcState, AnyoneChannel, AppContext, DeviceEnum, Devices, MqttDeviceChannel, Playback, Tag
 from orc_extras.react import plugins
 from orc_extras.react.plugins import TRIGGERS, When
@@ -35,7 +35,7 @@ def _parse_target(target: str | None, action: Any, objects: dict[str, Any]) -> D
         elif (ac_cls := objects["device"].enums.get("AC")) is None:  # a defined-but-empty AC enum is falsy yet still a valid target
             raise ValueError(f"AC command {action} requires an AC device type")
         return Devices(ac_cls)
-    devices = Cast.devices(target, objects)
+    devices = cast.devices(target, objects)
     validate_ac_state(devices.all(), action, objects["device"].enums, source=target)
     return devices
 
@@ -57,12 +57,12 @@ def _parse_when(device: DeviceEnum, condition: str, objects: dict[str, Any]) -> 
 
 
 def _range_rule(objects: dict[str, Any], args: Any) -> None:
-    action = Cast.state(args.action)
+    action = cast.state(args.action)
     target = _parse_target(args.target, action, objects)
     assert target is not None
-    when = _parse_when(Cast.device(args.device, objects), args.condition, objects) if args.device else None
+    when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
-    for source in Cast.devices(args.devices, objects).all():
+    for source in cast.devices(args.devices, objects).all():
         formula = plugins.Formula(source, args.expr)
         conditions: list[engine.Condition] = []
         if args.people == Tag.ANYONE:
@@ -89,12 +89,12 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     attribute = TRIGGERS.get(args.state)
     if attribute is None:
         raise ValueError(f"Invalid trigger state {args.state!r}: expected one of {sorted(TRIGGERS)}")
-    action = Cast.state(args.action)
+    action = cast.state(args.action)
     target = _parse_target(args.target, action, objects)
-    when = _parse_when(Cast.device(args.device, objects), args.condition, objects) if args.device else None
+    when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
     cond = plugins.condition(when)
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
-    for source in Cast.devices(args.devices, objects).all():
+    for source in cast.devices(args.devices, objects).all():
         command = engine.Command(target or Devices(source), action)
         trigger = engine.Transition(MqttDeviceChannel(source, attribute), args.state)
         objects["react"].append(engine.Rule(trigger, (engine.Clause(cond, command),), delay, cooldown=plugins.COOLDOWN))
