@@ -21,6 +21,8 @@ from orc.collections import LockedDict
 from orc.dal import sqlite
 from orc.kernel import engine
 
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
+
 _log = logging.getLogger(__name__)
 
 _MQTT_PORT = 1883

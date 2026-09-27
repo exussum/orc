@@ -1,5 +1,10 @@
+from collections.abc import Callable
+from typing import Any
+
 from orc.dal import warn_stub
 from orc.model import DeviceEnum
+
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
 warn_stub("blaster")
 
