@@ -10,8 +10,9 @@ from freezegun import freeze_time
 import orc
 from orc import api, config, plugins
 from orc import model as m
-from orc.dal import net, scheduler
+from orc.dal import net, push, scheduler, sqlite
 from orc.dal.mqtt import stub as mqtt_stub
+from orc.dal.push import stub as push_stub
 from orc.kernel import engine, loader
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
@@ -326,6 +327,25 @@ class TestLog:
             ("`lamp a` switch: on → off", []),
             ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
         ]
+
+    def test_a_nested_line_still_notifies(self):
+        api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
+        with patch.object(scheduler, "schedule_once") as once:
+            api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), should_notify=True)
+        assert once.call_args.kwargs["args"] == ("later x", m.Integration("x"), None)
+
+    def test_a_push_reaches_every_subscription_and_drops_gone_ones(self):
+        subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "abc"]
+        for subscription in subscriptions:
+            api.subscribe_push(subscription)
+        provider = create_autospec(push_stub)
+        provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
+        entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), should_notify=True)
+        with patch.object(config, "providers", config.providers._replace(push=provider)):
+            api._push_job("Leak at kitchen", entry.trigger, None, ctx=api._ctx)
+        assert provider.send.call_args_list == [call(s, "ORC", "Leak at kitchen") for s in subscriptions]
+        assert set(sqlite.fetch_push_subscriptions()) == {subscriptions[0], subscriptions[2]}
+        assert [c.action for c in entry.children] == ["Push failed for `…xample/c`: boom"]
 
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))

@@ -36,3 +36,6 @@ class Log:
     CONFLICTING_ARMS: str = "`{device}` given conflicting states in one run: {states}"
 
     ANNOUNCE: str = "Announce: {text}"
+
+    PUSH_TITLE: str = "ORC"
+    PUSH_FAILED: str = "Push failed for `…{endpoint}`: {exc}"

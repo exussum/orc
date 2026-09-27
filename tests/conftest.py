@@ -92,6 +92,8 @@ def _reset_ctx():
 
     from orc import api
     from orc import model as m
+    from orc.dal import scheduler
 
     api._ACTIVITY_LOG.clear()
+    scheduler.set_scheduler(MagicMock())
     api.set_ctx(m.AppContext(MagicMock()))

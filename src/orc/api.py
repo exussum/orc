@@ -18,7 +18,7 @@ from skyfield.api import load, load_file, wgs84
 from orc import config, plugins
 from orc import model as m
 from orc.collections import LockedDeque
-from orc.dal import net, scheduler, sqlite
+from orc.dal import net, push, scheduler, sqlite
 from orc.dal.scheduler import fetch_jobs_by_type
 from orc.dal.sqlite import (
     connection,  # noqa: F401
@@ -92,8 +92,12 @@ def local_now() -> datetime:
     return datetime.now(tz=config.settings.tz)
 
 
-def notify(entry: m.LogSubEntry) -> m.LogSubEntry:
-    return entry
+def notify(action: str, trigger: m.Trigger) -> None:
+    _schedule_push(action.replace("`", ""), trigger)
+
+
+def subscribe_push(subscription: m.PushSubscription) -> None:
+    sqlite.insert_push_subscription(subscription)
 
 
 def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_notify: bool = False) -> m.LogEntry:
@@ -105,12 +109,12 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_noti
     matching = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
     parent = matching or next((e for e in recent if e.answer(trigger)), None)
     if parent:
-        line = parent.add(source, action)
+        parent.add(source, action)
     else:
-        parent = line = m.LogEntry(now, source, action, trigger)
+        parent = m.LogEntry(now, source, action, trigger)
         _ACTIVITY_LOG.appendleft(parent)
     if should_notify:
-        notify(line)
+        notify(action, parent.trigger)
     return parent
 
 
@@ -300,7 +304,8 @@ def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.Log
         handler(_ctx, w, command, stream)
     except Exception as exc:
         msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
-        notify(entry.add(entry.source, msg))
+        entry.add(entry.source, msg)
+        notify(msg, entry.trigger)
         try:
             config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
         except Exception:
@@ -730,6 +735,23 @@ def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any
         ac_command(w, command.value)
     else:
         raise ValueError(f"AC devices don't support state {command.value!r}")
+
+
+def _schedule_push(body: str, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None = None) -> None:
+    scheduler.schedule_once(
+        _push_job, local_now(), args=(body, trigger, subscriptions), name="Push", misfire_grace_time=None, jobstore=JOBSTORE_MEMORY
+    )
+
+
+@requires_ctx
+def _push_job(body: str, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None, *, ctx: m.AppContext) -> None:
+    for subscription in subscriptions or sqlite.fetch_push_subscriptions():
+        try:
+            config.providers.push.send(subscription, Log.PUSH_TITLE, body)
+        except push.Gone:
+            sqlite.delete_push_subscription(subscription.endpoint)
+        except Exception as exc:
+            log(m.LogSource.SYSTEM, Log.PUSH_FAILED.format(endpoint=subscription.endpoint[-8:], exc=exc), trigger)
 
 
 def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
