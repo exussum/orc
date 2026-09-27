@@ -31,7 +31,15 @@ class Config:
     def __getattr__(self, name: str) -> Any:
         raise ConfigNotLoadedError(f"orc config not loaded (reading {name!r}): the entry point must call config.load() first")
 
-    def load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
+    def load(self, secrets: m.Secrets | None = None, zigbee_config: dict[Any, tuple[Any, ...]] | None = None) -> None:
+        if secrets is None:
+            self._load(m.Secrets(), {})
+            secrets = self.providers.secrets.fetch_secrets()
+        if zigbee_config is None:
+            zigbee_config = self.providers.mqtt.fetch_hubitat_config(secrets)
+        self._load(secrets, zigbee_config)
+
+    def _load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
         self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
         self.secrets = secrets
         plugins_dir = Path(self.config_dir) / "plugins"
@@ -67,7 +75,7 @@ class Config:
         self.plugins = parsed.plugins
         declarations = collect_declarations(parsed.plugin_modules)
 
-        if "orc.api" in sys.modules:  # a load can run before api is imported (bootstrap, extras conftest) — and needs no dispatch
+        if "orc.api" in sys.modules:  # a load can run before api is imported (the blank pass, extras conftest) — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
 
         globals().update(parsed.enums)
