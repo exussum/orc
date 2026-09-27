@@ -13,7 +13,8 @@ from command_cfg import scalar
 
 import orc_extras.lg_ac
 from orc import model as m
-from orc.kernel.loader import Cast, load_plugin_config
+from orc.kernel import cast
+from orc.kernel.loader import load_plugin_config
 from orc.model import AcCommand, AcMode, AcState, AppContext, DeviceStatus, LogSourceEnum, Secrets
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
@@ -53,12 +54,12 @@ def setup(ctx: AppContext) -> None:
             "setting": scalar(
                 Settings,
                 types={
-                    "hostname": Cast.fqdn,
-                    "fqdn": Cast.fqdn,
-                    "https_advertise": Cast.int,
-                    "mqtt_port": Cast.int,
-                    "mqtts_advertise": Cast.int,
-                    "capture": Cast.bool,
+                    "hostname": cast.fqdn,
+                    "fqdn": cast.fqdn,
+                    "https_advertise": cast.int,
+                    "mqtt_port": cast.int,
+                    "mqtts_advertise": cast.int,
+                    "capture": cast.bool,
                 },
             ),
         },

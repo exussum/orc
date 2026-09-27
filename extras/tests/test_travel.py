@@ -15,7 +15,7 @@ from orc_extras.travel.dal.drive import tomtom
 from orc_extras.travel.dal.flight import stub as flight_stub
 
 from orc import api
-from orc.kernel.loader import Cast
+from orc.kernel import cast
 
 FIXTURE = Path(__file__).parent / "fixture"
 ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
@@ -76,7 +76,7 @@ def test_travel_config_loads():
     ],
 )
 def test_backends_resolve(path, func):
-    assert callable(getattr(Cast.module(path), func))
+    assert callable(getattr(cast.module(path), func))
 
 
 def test_drive_minutes_deletes_cached_geocode_on_http_error(monkeypatch):

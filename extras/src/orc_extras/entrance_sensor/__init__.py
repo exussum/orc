@@ -5,7 +5,8 @@ from typing import Any, NamedTuple
 from command_cfg import group, scalar
 
 import orc_extras.entrance_sensor
-from orc.kernel.loader import Cast, load_plugin_config
+from orc.kernel import cast
+from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext, Commands, DeviceEnum
 from orc_extras.entrance_sensor import plugins
 
@@ -69,7 +70,7 @@ def _rule(ctx: AppContext, **values: Any) -> str:
 
 
 def _timed(ctx: AppContext, **values: Any) -> Timed:
-    return Timed(start=Cast.clock(values["start"]), stop=Cast.clock(values["stop"]), commands=_routine_commands(ctx, values["routine"]))
+    return Timed(start=cast.clock(values["start"]), stop=cast.clock(values["stop"]), commands=_routine_commands(ctx, values["routine"]))
 
 
 def declare(declarations: Any) -> None:
@@ -84,7 +85,7 @@ def setup(ctx: AppContext) -> None:
         serializers={
             "setting": scalar(
                 Settings,
-                types={"cleanup_delay_minutes": Cast.int, "entrance": Cast.device, "patio_door": Cast.device, "snapshot": Cast.int},
+                types={"cleanup_delay_minutes": cast.int, "entrance": cast.device, "patio_door": cast.device, "snapshot": cast.int},
             ),
             "message": scalar(Messages),
             "rules": group(partial(_rule, ctx)),
