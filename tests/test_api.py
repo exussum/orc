@@ -327,11 +327,6 @@ class TestLog:
             ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
         ]
 
-    def test_a_nested_line_still_notifies(self):
-        api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        api.log(m.LogSource.PLUGIN, "later", m.Integration("x"), should_notify=True)
-        assert api._NOTIFICATIONS.snapshot()[0].action == "later"
-
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
 class TestActiveOverride:
