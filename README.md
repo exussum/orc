@@ -255,8 +255,9 @@ Notifications arrive with the app closed. On Android, Firefox and Chrome
 both receive them through FCM, so a fresh boot delivers without opening
 the browser first; Firefox on the desktop must be running. On iOS, web
 push only reaches a site added to the home screen from Safari. Pushes to
-an endpoint that has unsubscribed or expired are dropped from orc's table
-on the push service's say-so.
+an endpoint that has unsubscribed, expired, or was made for a different
+VAPID key are dropped from orc's table on the push service's say-so, and
+the System page re-subscribes a device whose key no longer matches.
 
 This is orc reporting on itself while it runs; a dead orc can't push, so
 liveness monitoring still needs something outside it.
