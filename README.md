@@ -329,7 +329,7 @@ bounces the `orc` supervisor job.
 ## Layout
 
 - `src/orc/__init__.py` — `Config` (`.orc` config loading and installation)
-- `src/orc/loader.py` — the config grammar, `parse_config`/`validate`, the `Cast` value coercions, and plugin config loading, all on `command-cfg`
+- `src/orc/kernel/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`; `src/orc/kernel/cast.py` — the `cast` value coercions
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
 - `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), time parsing (`resolve_time`), routine/theme/device types
