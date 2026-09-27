@@ -5,7 +5,7 @@ import time
 import traceback
 from collections.abc import Iterator
 from contextlib import contextmanager
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -26,6 +26,20 @@ def flask() -> None:
     app = _build_app()
     _start_services(app.orc)
     app.run(host="0.0.0.0", port=config.config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
+
+
+def secrets() -> None:
+    token = os.environ.get("BWS_ACCESS_TOKEN", "")
+    if token and not urlparse(token).scheme:
+        os.environ["BWS_ACCESS_TOKEN"] = "data:," + quote(token, safe="")
+    config.config.load(zigbee_config={})
+    fetched = config.config.secrets
+    for name in ("hubitat_access_token", "market_holidays_url", "mqtt_user", "mqtt_password", "vapid_private_key"):
+        print(f"{name.upper():<40} {'ok' if getattr(fetched, name) else 'not set'}")
+    for person in config.config.ble_tags:
+        print(f"{'EIK':<40} ok  tag {person}")
+    for name in sorted(fetched.other):
+        print(f"{name:<40} ok")
 
 
 def _split_stderr() -> None:
