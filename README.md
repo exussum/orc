@@ -245,12 +245,13 @@ VAPID key and posts it straight to the subscription's endpoint.
    print(base64.urlsafe_b64encode(k.to_bytes(32, 'big')).rstrip(b'=').decode())"
    ```
 
-2. Open the System page on the device and press **Notify this device**.
+2. Open the System page on the device and press **Enable notifications**.
    The browser asks for notification permission, registers orc's service
    worker, and hands orc its subscription, and orc answers with a
    confirmation notification; opening the System page again later re-sends
    the subscription silently, which is how a device recovers after
-   `jobs_db` is lost.
+   `jobs_db` is lost. **Disable notifications** drops the device from
+   orc's table and releases the browser's subscription.
 
 Notifications arrive with the app closed. On Android, Firefox and Chrome
 both receive them through FCM, so a fresh boot delivers without opening
