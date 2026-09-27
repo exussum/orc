@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from orc.dal.hubitat import stub as hubitat_stub
     from orc.dal.mqtt import hubitat
     from orc.dal.mqtt import stub as mqtt_stub
+    from orc.dal.push import stub as push_stub
+    from orc.dal.push import webpush
     from orc.dal.secrets import bws
     from orc.dal.secrets import stub as secrets_stub
     from orc.dal.weather import open_meteo
@@ -42,3 +44,5 @@ if TYPE_CHECKING:
     _hubitat_stub: interfaces.HubitatService = hubitat_stub
     _audio_real: interfaces.AudioService = pyaudio
     _audio_stub: interfaces.AudioService = audio_stub
+    _push_real: interfaces.PushService = webpush
+    _push_stub: interfaces.PushService = push_stub

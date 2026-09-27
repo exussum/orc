@@ -32,10 +32,10 @@ orc runs happily on a laptop with nothing attached: the sample config's
 every device and secret integration is faked in memory and the whole UI
 works. A real installation's config names the real backends instead
 (for example, `provider mqtt orc.dal.mqtt.hubitat`) — though `secrets`,
-`hubitat`, `mqtt`, `chromecast`, and `audio` default to their real backend
-when the `provider` line is omitted entirely, so a production config only
-needs to name `weather`, `holiday`, and `blaster` explicitly. An explicit
-`provider` line, stub or real, always overrides the default.
+`hubitat`, `mqtt`, `chromecast`, `audio`, and `push` default to their real
+backend when the `provider` line is omitted entirely, so a production config
+only needs to name `weather`, `holiday`, and `blaster` explicitly. An
+explicit `provider` line, stub or real, always overrides the default.
 
 You'll need:
 
@@ -215,6 +215,7 @@ secret, or a `tag` line's EIK):
 | `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates       |
 | `MQTT_USER`            | Hubitat MQTT broker username (optional)            |
 | `MQTT_PASSWORD`        | Hubitat MQTT broker password (optional)            |
+| `VAPID_PRIVATE_KEY`    | Web Push signing key (optional)                    |
 
 ## BLE tag presence (Find Hub)
 
@@ -291,7 +292,7 @@ bounces the `orc` supervisor job.
   real backend plus a `stub.py` for development: `mqtt/` (Hubitat MQTT
   device cache), `hubitat/` (Hubitat Maker API), `chromecast/`,
   `holiday/` (market holidays), `weather/` (open-meteo), `blaster/`
-  (BroadLink IR), `secrets/` (Bitwarden). Plus `audio.py` (pyaudio + piper
+  (BroadLink IR), `secrets/` (Bitwarden), `push/` (Web Push). Plus `audio.py` (pyaudio + piper
   TTS), `net.py` (presence scanning: LAN probe + BLE), `scheduler.py`,
   `sqlite.py`, `interfaces.py` (the `Provider` capability contracts)
 - `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `synchronized`, `audio_lock`, `silence_fd`
