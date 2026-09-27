@@ -92,7 +92,7 @@ members = ["extras", "data"]
 
 [tool.uv.sources]
 orc = { workspace = true }
-orc_data = { workspace = true }
+orc_data = { workspace = true, editable = false }
 orc_extras = { workspace = true }
 command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v1.0.1" }
 
