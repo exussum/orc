@@ -1,5 +1,5 @@
 import sys
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -22,6 +22,7 @@ class Declarations:
     scripts: dict[str, Path] = field(default_factory=dict)
     button_labels: dict[str, str] = field(default_factory=dict)
     blueprints: list[tuple[str, str, Blueprint]] = field(default_factory=list)
+    secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
     _current_plugin: str = ""
 
     def declare_dispatch(self, name: str, fn: Callable[..., None]) -> None:
@@ -38,8 +39,10 @@ class Declarations:
         scripts: Iterable[Path | str] = (),
         button_labels: dict[str, str] | None = None,
         blueprints: dict[str, Blueprint] | None = None,
+        secrets: Mapping[str, Callable[[str], Any]] | None = None,
     ) -> None:
         self.device_icons.update(icons or {})
+        self.secrets.update(secrets or {})
         self.dispatch_handlers.update(dispatch or {})
         self.state_providers.update(state_providers or {})
         self.scripts.update({Path(s).name: Path(s) for s in scripts})
@@ -64,6 +67,7 @@ class Declarations:
             state_providers=dict(self.state_providers),
             setup_hooks=list(self.setup_hooks),
             blueprints=list(self.blueprints),
+            secrets=dict(self.secrets),
         )
 
 

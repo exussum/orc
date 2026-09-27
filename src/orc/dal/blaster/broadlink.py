@@ -1,10 +1,13 @@
 import base64
 import json
+from collections.abc import Callable
 from typing import Any
 
 import broadlink as bl
 
 from orc.model import DeviceEnum
+
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
 
 def tv_toggle(device: DeviceEnum, codes_file: str) -> None:
