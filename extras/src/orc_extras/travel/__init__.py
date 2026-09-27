@@ -4,7 +4,8 @@ from typing import Any
 from command_cfg import array, scalar
 
 import orc_extras.travel
-from orc.kernel.loader import Cast, load_plugin_config
+from orc.kernel import cast
+from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
 from orc_extras.travel.dal import sqlite
 from orc_extras.travel.model import Extra, Place, Runtime, Settings
@@ -28,21 +29,21 @@ def setup(ctx: AppContext) -> None:
         ctx.config,
         GRAMMAR,
         {
-            "setting": scalar(Settings, types={"window_hours": Cast.int, "http_timeout": Cast.int, "buffer_minutes": Cast.int}),
+            "setting": scalar(Settings, types={"window_hours": cast.int, "http_timeout": cast.int, "buffer_minutes": cast.int}),
             "place": array(Place),
             "extra": array(Extra, types={"minutes": int}),
         },
     )
     s = cfg.setting
     runtime = Runtime(
-        drive=Cast.module(s.drive_backend),
-        flight=Cast.module(s.flight_backend),
+        drive=cast.module(s.drive_backend),
+        flight=cast.module(s.flight_backend),
         settings=s,
         extras=cfg.extra,
         places=cfg.place,
         origin=f"{ctx.config.settings.lat},{ctx.config.settings.long}",
-        tomtom_key=ctx.config.secrets[s.tomtom_secret],
-        aerodatabox_key=ctx.config.secrets[s.aerodatabox_secret],
+        tomtom_key=ctx.config.secrets.other[s.tomtom_secret],
+        aerodatabox_key=ctx.config.secrets.other[s.aerodatabox_secret],
     )
     sqlite.init_db(ctx.api.connection)
     ctx.plugin_state[orc_extras.travel] = runtime

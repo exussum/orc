@@ -6,7 +6,7 @@ import pytest
 from example import model as m
 
 from orc import api
-from orc.kernel.loader import Cast
+from orc.kernel import cast
 
 FIXTURE = Path(__file__).parent / "fixture"
 
@@ -37,8 +37,8 @@ def test_example_config_loads():
         m.Zone("Office", "500 Market St, Metropolis"),
         m.Zone("Villa", "9 Beach Rd, Seaside"),
     ]
-    assert rt.foo is Cast.module("example.dal.foo.stub")
-    assert rt.bar is Cast.module("example.dal.bar.stub")
+    assert rt.foo is cast.module("example.dal.foo.stub")
+    assert rt.bar is cast.module("example.dal.bar.stub")
 
 
 @pytest.mark.parametrize(
@@ -51,4 +51,4 @@ def test_example_config_loads():
     ],
 )
 def test_backends_resolve(path, func):
-    assert callable(getattr(Cast.module(path), func))
+    assert callable(getattr(cast.module(path), func))

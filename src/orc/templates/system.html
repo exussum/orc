@@ -17,9 +17,15 @@
                     {{ btn(registry.button_labels.get(row.action, "{device}").format(device=row.label), row.action, device_plugins[row.action].icon, durations.get(row.action, 0), device=row.name) }}
                 {% endfor %}
                 <div class="orc-button">
-                    <div class="orc-button-label" id="orc-push-label">Notify this device</div>
+                    <div class="orc-button-label">Enable notifications</div>
                     <button class="orc-btn" id="orc-push-subscribe">
                         {{ icon_svg("bell") }}
+                    </button>
+                </div>
+                <div class="orc-button">
+                    <div class="orc-button-label">Disable notifications</div>
+                    <button class="orc-btn" id="orc-push-unsubscribe">
+                        {{ icon_svg("bell-slash") }}
                     </button>
                 </div>
             </div>

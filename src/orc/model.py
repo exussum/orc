@@ -461,12 +461,6 @@ class Secrets:
     # belongs on a typed field instead.
     other: dict[str, str] = field(default_factory=dict)
 
-    def __getitem__(self, key: str) -> str:
-        try:
-            return self.other[key]
-        except KeyError:
-            raise KeyError(f"secret {key!r} is not set (add it to the secrets provider)") from None
-
 
 @dataclass
 class AppContext:
@@ -617,6 +611,7 @@ class Registry:
     state_providers: dict[str, Callable[[], Any]]
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
+    secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
     # Set by a setup hook (``api.set_ac_handler``); ``api.ac_command`` calls it with the
     # target AC device, so one backend routes every AC member by device.
     ac_handler: Callable[["DeviceEnum", str | None, str | None, str | None, int | None], None] | None = None

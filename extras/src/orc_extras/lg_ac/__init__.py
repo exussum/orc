@@ -13,7 +13,8 @@ from command_cfg import scalar
 
 import orc_extras.lg_ac
 from orc import model as m
-from orc.kernel.loader import Cast, load_plugin_config
+from orc.kernel import cast
+from orc.kernel.loader import load_plugin_config
 from orc.model import AcCommand, AcMode, AcState, AppContext, DeviceStatus, LogSourceEnum, Secrets
 from orc_extras.lg_ac import api, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
@@ -53,12 +54,12 @@ def setup(ctx: AppContext) -> None:
             "setting": scalar(
                 Settings,
                 types={
-                    "hostname": Cast.fqdn,
-                    "fqdn": Cast.fqdn,
-                    "https_advertise": Cast.int,
-                    "mqtt_port": Cast.int,
-                    "mqtts_advertise": Cast.int,
-                    "capture": Cast.bool,
+                    "hostname": cast.fqdn,
+                    "fqdn": cast.fqdn,
+                    "https_advertise": cast.int,
+                    "mqtt_port": cast.int,
+                    "mqtts_advertise": cast.int,
+                    "capture": cast.bool,
                 },
             ),
         },
@@ -69,8 +70,8 @@ def setup(ctx: AppContext) -> None:
     capture = Capture()
     ctx.plugin_state[orc_extras.lg_ac] = State(s, thinq, capture)
     secrets: Secrets = ctx.config.secrets
-    api.configure(secrets[_SECRET_CA_CERT].encode(), secrets[_SECRET_CA_KEY].encode())
-    broker.start(s.mqtts_advertise, secrets[_SECRET_SERVER_CERT].encode(), secrets[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
+    api.configure(secrets.other[_SECRET_CA_CERT].encode(), secrets.other[_SECRET_CA_KEY].encode())
+    broker.start(s.mqtts_advertise, secrets.other[_SECRET_SERVER_CERT].encode(), secrets.other[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     if s.capture:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
     thinq.set_event_listener(partial(_on_event, ctx))

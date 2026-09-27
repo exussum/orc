@@ -1,11 +1,9 @@
-import importlib
 import os
-import re
 from collections.abc import Callable, Mapping
-from dataclasses import replace
-from datetime import datetime, time, timedelta, tzinfo
+from dataclasses import asdict, replace
+from datetime import datetime, timedelta, tzinfo
 from functools import partial
-from types import MappingProxyType, ModuleType, SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import command_cfg
@@ -13,17 +11,10 @@ from command_cfg import ConfigError, array, each, group, raw, scalar
 
 from orc import model as m
 from orc.dal import interfaces
-from orc.kernel import engine
-from orc.security import safe_eval
+from orc.kernel import cast, engine
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 _WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
-_NO_OBJECTS: Mapping[str, Any] = MappingProxyType({})
-_YOUTUBE_ID_RE = r"^[0-9A-Za-z_-]{11}$"
-_ERR_STATE = (
-    "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, an 11-character YouTube ID, or mode:fan:temp"
-)
-_ERR_AC_COMMAND = "Invalid AC command {!r}: expected mode:fan:temp with mode one of 'cool', 'fan_only', 'econ', 'dry', e.g. cool:low:75"
 
 GRAMMAR = """
 ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<devices> <state>]
@@ -68,23 +59,23 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         "ad_hoc": each(_ad_hoc, default=dict, types={"snapshot": int, "delay": int}),
         "remote": each(_remote, default=tuple, types={"button": int}),
         "routine": each(_routine, default=dict),
-        "highlight": each(_highlight, default=tuple, types={"start": Cast.when, "stop": Cast.when}),
-        "theme": each(_theme, default=dict, types={"time": Cast.when}),
-        "plugin": each(_plugin, default=list, types={"module": Cast.module, "backend": Cast.module}),
-        "provider": scalar(interfaces.Provider, types={field: Cast.module for field in interfaces.Provider._fields}),
+        "highlight": each(_highlight, default=tuple, types={"start": cast.when, "stop": cast.when}),
+        "theme": each(_theme, default=dict, types={"time": cast.when}),
+        "plugin": each(_plugin, default=list, types={"module": cast.module, "backend": cast.module}),
+        "provider": scalar(interfaces.Provider, types={field: cast.module for field in interfaces.Provider._fields}),
         "setting": scalar(
             m.Settings.build,
             types={
-                "lat": Cast.float,
-                "long": Cast.float,
-                "http_timeout": Cast.int,
-                "port": Cast.int,
-                "presence_hours": Cast.int,
-                "checkin_hours": Cast.int,
-                "sunset_lead_hours": Cast.int,
-                "warning_device": Cast.device,
-                "attention_device": Cast.device,
-                "emergency_device": Cast.device,
+                "lat": cast.float,
+                "long": cast.float,
+                "http_timeout": cast.int,
+                "port": cast.int,
+                "presence_hours": cast.int,
+                "checkin_hours": cast.int,
+                "sunset_lead_hours": cast.int,
+                "warning_device": cast.device,
+                "attention_device": cast.device,
+                "emergency_device": cast.device,
             },
         ),
         "tag": array(m.BleTag),
@@ -138,126 +129,37 @@ def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, 
         return {}
     keys = {}
     for tag in tags:
-        error = ConfigError(f"Secret {tag.secret!r}: expected a 32-byte hex EIK")
-        try:
-            eik = bytes.fromhex(secrets[tag.secret])
-        except ValueError as exc:
-            raise error from exc
-        if len(eik) != 32:
-            raise error
         pair_date = datetime.fromisoformat(tag.pair_date)
         if not pair_date.tzinfo:
             pair_date = pair_date.replace(tzinfo=tz)
-        keys[tag.person] = m.BleKey(eik, int(pair_date.timestamp()))
+        keys[tag.person] = m.BleKey(cast.hex32(secrets.other[tag.secret]), int(pair_date.timestamp()))
     return keys
 
 
-_ERR_PARAMS = "Invalid parameter {}={!r}"
-_FQDN_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")  # 1-63 chars, no leading/trailing hyphen
+def secret_needs(registry: m.Registry, providers: interfaces.Provider, tags: list[m.BleTag]) -> dict[str, Callable[[str], Any]]:
+    needs: dict[str, Callable[[str], Any]] = {}
+    for backend in providers:
+        if backend:
+            needs |= backend.REQUIRED_SECRETS
+    needs |= registry.secrets
+    needs |= {tag.secret: cast.hex32 for tag in tags}
+    return needs
 
 
-def _is_fqdn(value: str) -> bool:
-    labels = value.split(".")
-    return len(value) <= 253 and len(labels) >= 2 and all(map(_FQDN_LABEL.fullmatch, labels))
-
-
-# "device" plugins are invoked per-device from the /device grid (via /api/run?device=…);
-# they render no button and are not auto-invoked, unlike the other sections.
-_VALID_SECTIONS = frozenset({"scene", "system", "device"})
-_ERR_FUNCTION = (
-    "Cannot load function {!r}: {}. Expected a fully qualified callable like 'orc.plugins.my_plugin'. "
-    "Ensure the module exists and the function is defined within it."
-)
-_ERR_MODULE = "Cannot load module {!r}: {}. Expected an importable module like 'orc.dal.mqtt.stub'."
-
-
-def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> m.Devices:
-    try:
-        return m.Devices(safe_eval(value, dict(devices)))
-    except NameError as exc:
-        raise ValueError(f"{exc} — device types must be defined and sealed first") from None
-    except AttributeError:
-        type_name, _, member = value.partition(".")
-        options = sorted(devices[type_name].__members__) if type_name in devices else []
-        raise ValueError(f"Unknown {type_name} device {member!r}: expected one of {options}") from None
-    except SyntaxError as exc:
-        raise ValueError(str(exc)) from None
-
-
-class Cast:
-    @staticmethod
-    def devices(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> m.Devices:
-        return resolve_device(value, objects["device"].enums)
-
-    @staticmethod
-    def device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> m.DeviceEnum:
-        return resolve_device(value, objects["device"].enums).one()
-
-    @staticmethod
-    def state(value: str) -> Any:
-        if value in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
-            return value
-        elif ":" in value:
+def check_secrets(secrets: m.Secrets, needs: Mapping[str, Callable[[str], Any]]) -> dict[str, str]:
+    values = asdict(secrets)
+    values |= values.pop("other")
+    problems = {}
+    for name, shape in needs.items():
+        value = values.get(name, "")
+        if not value:
+            problems[name] = "not set"
+        else:
             try:
-                mode, fan, temp = value.split(":")
-                return m.AcCommand(m.AcMode(mode), fan, int(temp))
+                shape(value)
             except ValueError:
-                raise ValueError(_ERR_AC_COMMAND.format(value)) from None
-        elif re.match(_YOUTUBE_ID_RE, value):
-            return m.YouTubeId(value)
-        elif value.isdigit():
-            return int(value)
-        raise ValueError(_ERR_STATE.format(value))
-
-    @staticmethod
-    def when(value: str) -> time | str:
-        return m.resolve_time(value)
-
-    @staticmethod
-    def clock(value: str) -> time:
-        parsed = m.resolve_time(value)
-        if isinstance(parsed, str):
-            raise ValueError(f"Invalid time {value!r}: expected HH:MM")
-        return parsed
-
-    # module/float/int/device take an optional trailing `objects` so the same
-    # caster works both for each()'s 1-arg coerce() and scalar()'s 2-arg (value, objects) call.
-    @staticmethod
-    def module(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> ModuleType:
-        try:
-            return importlib.import_module(value)  # nosemgrep: non-literal-import
-        except Exception as exc:
-            raise ValueError(_ERR_MODULE.format(value, exc)) from exc
-
-    @staticmethod
-    def float(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> float:
-        return float(value)
-
-    @staticmethod
-    def int(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> int:
-        return int(value)
-
-    @staticmethod
-    def bool(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> bool:
-        if value == "True":
-            return True
-        elif value == "False":
-            return False
-        raise ValueError(_ERR_PARAMS.format("bool", value))
-
-    @staticmethod
-    def fqdn(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> str:
-        if _is_fqdn(value):
-            return value
-        raise ValueError(_ERR_PARAMS.format("fqdn", value))
-
-    @staticmethod
-    def section(value: str | None) -> str | None:
-        if value is None:
-            return None
-        elif value in _VALID_SECTIONS:
-            return value
-        raise ValueError(_ERR_PARAMS.format("section", value))
+                problems[name] = f"expected {shape.__qualname__}"
+    return problems
 
 
 def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, type[m.DeviceEnum]], *, source: str) -> None:
@@ -270,8 +172,8 @@ def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapp
 
 
 def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> engine.Command[str]:
-    devices = Cast.devices(args.devices, objects)
-    state = Cast.state(args.state)
+    devices = cast.devices(args.devices, objects)
+    state = cast.state(args.state)
     validate_ac_state(devices.all(), state, objects["device"].enums, source=args.devices)
     return engine.Command[str](devices, state, tag=trigger)
 
@@ -289,14 +191,6 @@ def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
 
 def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Clause:
     return engine.Clause(_conditions(trigger), _command(objects, args, trigger))
-
-
-def _resolve_function(value: str) -> Callable[..., Any]:
-    try:
-        module_path, fn_name = value.rsplit(".", 1)
-        return getattr(importlib.import_module(module_path), fn_name)  # nosemgrep: non-literal-import
-    except Exception as exc:
-        raise ValueError(_ERR_FUNCTION.format(value, exc)) from exc
 
 
 def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any, tuple[Any, ...]]) -> type[m.DeviceEnum]:
@@ -350,7 +244,7 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
         ad_hoc_routines[args.name] = m.AdhocAction(
             snapshot=timedelta(minutes=args.snapshot) if args.snapshot is not None else None,
             delay=timedelta(minutes=args.delay) if args.delay is not None else timedelta(),
-            section=Cast.section(args.section),
+            section=cast.section(args.section),
             reset=not args.no_reset,
         )
         if args.devices is not None:
@@ -364,7 +258,7 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if args.event not in _BUTTON_EVENTS:
         raise ValueError(f"Invalid button event {args.event!r}: expected one of {sorted(_BUTTON_EVENTS)}")
-    objects["remote"] = (*objects["remote"], m.Remote(Cast.device(args.device, objects), args.button, args.event, args.action))
+    objects["remote"] = (*objects["remote"], m.Remote(cast.device(args.device, objects), args.button, args.event, args.action))
 
 
 def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
@@ -376,9 +270,9 @@ def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
     params = {key: value for key, value in (("section", args.section), ("icon", args.icon), ("backend", args.backend)) if value is not None}
     if "section" in params:
-        params["section"] = Cast.section(params["section"])
+        params["section"] = cast.section(params["section"])
     if args.function:
-        func = _resolve_function(f"{args.module.__name__}.{args.function}")
+        func = cast.resolve_function(f"{args.module.__name__}.{args.function}")
         objects["plugin"].append(m.CallablePlugin(name=args.name, module=args.module, func=func, **params))
     else:
         objects["plugin"].append(m.Plugin(name=args.name, module=args.module, **params))
@@ -412,7 +306,7 @@ def load_plugin_config(
     serializers: Mapping[str, scalar | group | array | raw | each],
 ) -> SimpleNamespace:
     text = config.plugin_configs[name]
-    # Seed the parse with the sealed device registry so Cast.devices/Cast.device
+    # Seed the parse with the sealed device registry so cast.devices/cast.device
     # resolve in plugin configs the same way they do in the main config.
     device = raw(lambda rows, objects: SimpleNamespace(enums=dict(config.registry.devices.items())))
     return SimpleNamespace(**command_cfg.load(text, grammar, {"device": device, **serializers}, variables=os.environ))

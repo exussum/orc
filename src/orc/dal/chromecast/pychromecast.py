@@ -1,7 +1,7 @@
 import logging
 import socket
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -11,6 +11,8 @@ import yt_dlp
 
 from orc import model as m
 from orc.dal.chromecast import MAX_CHARS
+
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
 logging.getLogger("pychromecast.controllers").addFilter(lambda record: "no session is active" not in record.getMessage())
 

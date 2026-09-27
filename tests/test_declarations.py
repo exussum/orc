@@ -103,3 +103,10 @@ def test_setup_hooks_run_and_dedupe():
     for h in builder.build({}).setup_hooks:
         h()
     assert calls == [1]
+
+
+def test_declared_secrets_merge_into_registry():
+    builder = declarations.Declarations()
+    builder.declare(secrets={"A_KEY": str})
+    builder.declare(secrets={"B_KEY": int})
+    assert builder.build({}).secrets == {"A_KEY": str, "B_KEY": int}

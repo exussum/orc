@@ -331,11 +331,14 @@ def push_key() -> dict[str, str]:
     return {"key": api.push_public_key()}
 
 
-@bp.route("/api/push/subscribe", methods=["POST"])
+@bp.route("/api/push/subscribe", methods=["POST", "DELETE"])
 def push_subscribe() -> dict[str, Any]:
     body = request.get_json()
-    subscription = m.PushSubscription(body["endpoint"], body["keys"]["p256dh"], body["keys"]["auth"])
-    api.subscribe_push(subscription, greet=bool(body.get("greet")))
+    if request.method == "DELETE":
+        api.unsubscribe_push(body["endpoint"])
+    else:
+        subscription = m.PushSubscription(body["endpoint"], body["keys"]["p256dh"], body["keys"]["auth"])
+        api.subscribe_push(subscription, greet=bool(body.get("greet")))
     return {}
 
 
