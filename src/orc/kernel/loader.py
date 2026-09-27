@@ -133,7 +133,7 @@ def validate(config: SimpleNamespace) -> None:
 
 
 def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, m.BleKey]:
-    """Per-person EID keys; empty when secrets aren't loaded (the bootstrap parse)."""
+    """Per-person EID keys; empty when secrets aren't loaded (the blank first pass)."""
     if not secrets.other:
         return {}
     keys = {}
