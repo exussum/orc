@@ -307,8 +307,10 @@ def load_plugin_config(
 ) -> SimpleNamespace:
     text = config.plugin_configs[name]
     # Seed the parse with the sealed device registry so cast.devices/cast.device
-    # resolve in plugin configs the same way they do in the main config.
-    device = raw(lambda rows, objects: SimpleNamespace(enums=dict(config.registry.devices.items())))
+    # resolve in plugin configs the same way they do in the main config; a parse
+    # from declare() runs before the registry exists and gets no devices.
+    registry = getattr(config, "registry", None)
+    device = raw(lambda rows, objects: SimpleNamespace(enums=dict(registry.devices.items()) if registry else {}))
     return SimpleNamespace(**command_cfg.load(text, grammar, {"device": device, **serializers}, variables=os.environ))
 
 

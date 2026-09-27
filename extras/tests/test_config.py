@@ -11,7 +11,8 @@ from orc_extras.entrance_sensor import Settings, Timed
 import orc
 from orc import api
 from orc import model as m
-from orc.kernel import engine
+from orc.kernel import cast, engine
+from orc.kernel.declarations import Declarations
 from orc.model import DeviceEnum, Devices
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -87,6 +88,12 @@ def test_entrance_ble_needs_slower_cleanup(entrance_ctx):
     entrance_ctx.config.ble_tags = {"Rex": object()}
     with pytest.raises(ValueError, match="cleanup_delay_minutes"):
         entrance_sensor.setup(entrance_ctx)
+
+
+def test_calendar_declares_each_feed_as_a_url():
+    builder = Declarations(plugin_configs={calendar.CONFIG: (FIXTURE / "calendar.orc").read_text()})
+    calendar.declare(builder)
+    assert builder.secrets == {"ICS_URL": cast.url, "ICS_URL_PERSONAL": cast.url}
 
 
 def test_calendar_config_loads():

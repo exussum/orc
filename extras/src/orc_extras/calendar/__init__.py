@@ -28,22 +28,20 @@ class Feed(NamedTuple):
     secret: str
 
 
+_SERIALIZERS = {
+    "setting": scalar(
+        Settings, types={"window_hours": cast.int, "max_events": cast.int, "warning_minutes": cast.int, "http_timeout": cast.int}
+    ),
+    "feed": array(Feed),
+}
+
+
 def declare(declarations: Any) -> None:
-    declarations.declare(setup=[setup])
+    feeds = load_plugin_config(CONFIG, declarations, GRAMMAR, _SERIALIZERS).feed
+    declarations.declare(setup=[setup], secrets={feed.secret: cast.url for feed in feeds})
 
 
 def setup(ctx: AppContext) -> None:
-    calendar = load_plugin_config(
-        CONFIG,
-        ctx.config,
-        GRAMMAR,
-        serializers={
-            "setting": scalar(
-                Settings,
-                types={"window_hours": cast.int, "max_events": cast.int, "warning_minutes": cast.int, "http_timeout": cast.int},
-            ),
-            "feed": array(Feed),
-        },
-    )
+    calendar = load_plugin_config(CONFIG, ctx.config, GRAMMAR, _SERIALIZERS)
     backend = cast.module(calendar.setting.backend)
     plugins.schedule_cron(ctx, backend, calendar.setting, calendar.feed)
