@@ -44,7 +44,6 @@ _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 
 _ctx: m.AppContext | None = None
 _ACTIVITY_LOG: LockedDeque[m.LogEntry] = LockedDeque(maxlen=200)
-_NOTIFICATIONS: LockedDeque[m.LogSubEntry] = LockedDeque(maxlen=10)
 
 last_seen = net.presence.seen
 mark_present = net.presence.mark
@@ -94,7 +93,6 @@ def local_now() -> datetime:
 
 
 def notify(entry: m.LogSubEntry) -> m.LogSubEntry:
-    _NOTIFICATIONS.appendleft(entry)
     return entry
 
 
