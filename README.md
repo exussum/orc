@@ -199,6 +199,15 @@ Two config surfaces:
    `BWS_ACCESS_TOKEN` is a URL (for example, `data:` or `file://`), not the value
    itself — the body of the URL is read at startup.
 
+   To check a vault from another machine, `orc-secrets` fetches through the
+   config's secrets provider, fails the way startup would on a missing core
+   secret or a bad tag EIK, and otherwise lists every name it found. For
+   this command alone, `BWS_ACCESS_TOKEN` may be the token itself:
+
+   ```sh
+   env ORC_CONFIG_DIR=/etc/orc BWS_ACCESS_TOKEN=0.abc... orc-secrets
+   ```
+
 ## Secrets (Bitwarden)
 
 With the default `secrets` provider (`orc.dal.secrets.bws`), secrets are
