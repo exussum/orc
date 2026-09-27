@@ -107,4 +107,5 @@ def declare(declarations: Any) -> None:
     declarations.declare(
         setup=[setup],
         button_labels={"Test Leak Sensor": "Test {device}"},
+        secrets={"YOLINK_ID": cast.nonblank, "YOLINK_SECRET": cast.nonblank},
     )
