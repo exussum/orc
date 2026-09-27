@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from flask import Flask
@@ -79,7 +79,7 @@ class House:
         app.register_blueprint(bp)
         app.orc = self.ctx
         with app.test_client() as client:
-            assert client.get(path, query_string={"ignore-version": "1"}).status_code == 200
+            assert client.get(path).status_code == 200
         self.ctx.scheduler.run_due(api.local_now(), self.ctx)
 
     def ac_reports(self, power, mode=None, fan=None, temperature=None):
@@ -115,7 +115,7 @@ def house(request, monkeypatch, tmp_path):
 
         scheduler = FakeScheduler()
         dal_scheduler.set_scheduler(scheduler)
-        ctx = m.AppContext(scheduler=scheduler, version_manager=MagicMock())
+        ctx = m.AppContext(scheduler=scheduler)
         api.set_ctx(ctx)
 
         listeners, dispatched = [], []

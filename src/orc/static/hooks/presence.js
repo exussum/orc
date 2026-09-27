@@ -10,8 +10,7 @@ orc.hooks.ensure({
         }
         if (state.present) return true;
         try {
-            const response = await fetch("/api/presence/run?ignore-version=1");
-            if (response.ok) window.orcVersion = (await response.json()).version;
+            await fetch("/api/presence/run");
         } catch {
         }
         return true;

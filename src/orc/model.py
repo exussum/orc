@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from flask import Blueprint
 
     from orc import Config as OrcConfig
-    from orc.view import VersionManager
 
 
 class Person(NamedTuple):
@@ -469,7 +468,6 @@ class AppContext:
     can't import orc.api at import time (api imports model)."""
 
     scheduler: BaseScheduler
-    version_manager: VersionManager
     engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([], bypass=Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT))
     plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)

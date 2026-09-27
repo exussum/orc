@@ -1,7 +1,7 @@
 import { get, wire } from "./orc.js";
 
 wire(".orc-pause", "click", async (el) => {
-    if (await get(`/api/schedule/${el.dataset.id}/pause`, el)) location.reload();
+    if (await get(`/api/schedule/${el.dataset.id}/pause?paused=1`, el)) location.reload();
 });
 
 const highlight_configs = window.orcHighlightConfigs.map(([name, start, end]) => [
