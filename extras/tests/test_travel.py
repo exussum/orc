@@ -16,6 +16,7 @@ from orc_extras.travel.dal.flight import stub as flight_stub
 
 from orc import api
 from orc.kernel import cast
+from orc.kernel.declarations import Declarations
 
 FIXTURE = Path(__file__).parent / "fixture"
 ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
@@ -28,6 +29,12 @@ def _setup_runtime():
     ctx.config.plugin_configs = {travel.CONFIG: (FIXTURE / "travel.orc").read_text()}
     travel.setup(ctx)
     return ctx.plugin_state[travel]
+
+
+def test_travel_declares_its_configured_keys():
+    builder = Declarations(plugin_configs={travel.CONFIG: (FIXTURE / "travel.orc").read_text()})
+    travel.declare(builder)
+    assert builder.secrets == {"TOMTOM_KEY": cast.nonblank, "AERODATABOX_KEY": cast.nonblank}
 
 
 def _ctx(rt):

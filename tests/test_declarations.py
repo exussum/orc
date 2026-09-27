@@ -13,7 +13,7 @@ def test_plugin_holding_runtime_globals_fails_config_load():
     mod.config = orc.config
     mod.declare = lambda d: None
     with pytest.raises(ConfigError, match="bad_plugin.*AppContext.*bad_plugin.config"):
-        declarations.collect_declarations([mod])
+        declarations.collect_declarations([mod], {})
 
 
 def test_plugin_holding_orc_package_fails_config_load():
@@ -21,7 +21,7 @@ def test_plugin_holding_orc_package_fails_config_load():
     mod.anything = orc
     mod.declare = lambda d: None
     with pytest.raises(ConfigError, match="bad_plugin_pkg.anything"):
-        declarations.collect_declarations([mod])
+        declarations.collect_declarations([mod], {})
 
 
 @pytest.fixture
@@ -39,19 +39,19 @@ def fake_plugin():
 
 
 def test_collect_declarations_invokes_declare_hook(fake_plugin):
-    builder = declarations.collect_declarations([fake_plugin])
+    builder = declarations.collect_declarations([fake_plugin], {})
     assert builder.build({}).button_labels["Fake"] == "Run {device}"
 
 
 def test_collect_declarations_dedupes_module(fake_plugin):
-    declarations.collect_declarations([fake_plugin, fake_plugin])
+    declarations.collect_declarations([fake_plugin, fake_plugin], {})
     assert fake_plugin.calls == [1]
 
 
 def test_collect_declarations_skips_core_modules():
     from orc import plugins as core_plugins
 
-    builder = declarations.collect_declarations([core_plugins])
+    builder = declarations.collect_declarations([core_plugins], {})
     assert builder.button_labels == {}
 
 

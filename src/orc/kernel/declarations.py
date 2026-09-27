@@ -23,6 +23,7 @@ class Declarations:
     button_labels: dict[str, str] = field(default_factory=dict)
     blueprints: list[tuple[str, str, Blueprint]] = field(default_factory=list)
     secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
+    plugin_configs: Mapping[str, str] = field(default_factory=dict)
     _current_plugin: str = ""
 
     def declare_dispatch(self, name: str, fn: Callable[..., None]) -> None:
@@ -83,8 +84,8 @@ def _check_contract(module: ModuleType) -> None:
         )
 
 
-def collect_declarations(modules: Iterable[ModuleType]) -> Declarations:
-    declarations = Declarations()
+def collect_declarations(modules: Iterable[ModuleType], plugin_configs: Mapping[str, str]) -> Declarations:
+    declarations = Declarations(plugin_configs=plugin_configs)
     seen: set[str] = set()
     for module in modules:
         if module is core_plugins or module.__name__ in seen:

@@ -20,7 +20,15 @@ zone <group> <name> <value>
 """
 
 
+_SERIALIZERS = {
+    "setting": scalar(Settings, types={"window_hours": cast.int, "http_timeout": cast.int}),
+    "widget": array(Widget, types={"value": int}),
+    "zone": group(Zone),
+}
+
+
 def declare(declarations: Any) -> None:
+    s = load_plugin_config(CONFIG, declarations, GRAMMAR, _SERIALIZERS).setting
     declarations.declare(
         controllable=["Example"],
         icons={"Example": "beaker"},
@@ -30,20 +38,12 @@ def declare(declarations: Any) -> None:
         scripts=[Path(__file__).parent / "static" / "example.js"],
         button_labels={"Example Action": "Run {device}"},
         blueprints={"things": example_bp},
+        secrets={s.foo_secret: cast.nonblank, s.bar_secret: cast.nonblank},
     )
 
 
 def setup(ctx: AppContext) -> None:
-    cfg = load_plugin_config(
-        CONFIG,
-        ctx.config,
-        GRAMMAR,
-        {
-            "setting": scalar(Settings, types={"window_hours": cast.int, "http_timeout": cast.int}),
-            "widget": array(Widget, types={"value": int}),
-            "zone": group(Zone),
-        },
-    )
+    cfg = load_plugin_config(CONFIG, ctx.config, GRAMMAR, _SERIALIZERS)
     s = cfg.setting
     runtime = Runtime(
         foo=cast.module(s.foo_backend),

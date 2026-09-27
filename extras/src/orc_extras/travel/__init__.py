@@ -19,21 +19,25 @@ extra <name> <minutes>
 """
 
 
+_SERIALIZERS = {
+    "setting": scalar(Settings, types={"window_hours": cast.int, "http_timeout": cast.int, "buffer_minutes": cast.int}),
+    "place": array(Place),
+    "extra": array(Extra, types={"minutes": int}),
+}
+
+
 def declare(declarations: Any) -> None:
-    declarations.declare(setup=[setup], blueprints={"jobs": travel_bp}, scripts=[Path(__file__).parent / "static" / "travel.js"])
+    s = load_plugin_config(CONFIG, declarations, GRAMMAR, _SERIALIZERS).setting
+    declarations.declare(
+        setup=[setup],
+        blueprints={"jobs": travel_bp},
+        scripts=[Path(__file__).parent / "static" / "travel.js"],
+        secrets={s.tomtom_secret: cast.nonblank, s.aerodatabox_secret: cast.nonblank},
+    )
 
 
 def setup(ctx: AppContext) -> None:
-    cfg = load_plugin_config(
-        CONFIG,
-        ctx.config,
-        GRAMMAR,
-        {
-            "setting": scalar(Settings, types={"window_hours": cast.int, "http_timeout": cast.int, "buffer_minutes": cast.int}),
-            "place": array(Place),
-            "extra": array(Extra, types={"minutes": int}),
-        },
-    )
+    cfg = load_plugin_config(CONFIG, ctx.config, GRAMMAR, _SERIALIZERS)
     s = cfg.setting
     runtime = Runtime(
         drive=cast.module(s.drive_backend),

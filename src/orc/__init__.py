@@ -81,7 +81,7 @@ class Config:
     def _install(self, parsed: SimpleNamespace) -> None:
         self.settings = parsed.setting
         self.plugins = parsed.plugins
-        declarations = collect_declarations(parsed.plugin_modules)
+        declarations = collect_declarations(parsed.plugin_modules, self.plugin_configs)
 
         if "orc.api" in sys.modules:  # a load can run before api is imported (the blank pass, extras conftest) — and needs no dispatch
             sys.modules["orc.api"].declare_core(declarations)
