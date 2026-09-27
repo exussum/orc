@@ -1,6 +1,6 @@
 from datetime import timedelta
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any, NamedTuple, Sequence
 
 from apscheduler.triggers.date import DateTrigger
 
@@ -13,6 +13,11 @@ JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
 CLEARED_MSG = "Motion cleared, running `{routine_name}`, cleanup in {minutes} minutes"
 CANCELLED_MSG = "Cleanup cancelled: motion triggered"
+
+
+class Visit(NamedTuple):
+    entry: m.LogEntry
+    present_before: set[str]
 
 
 class Log(m.LogSourceEnum):
@@ -35,11 +40,11 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
         if new == sensor.setting.active_event or not previous:
             trigger: m.Trigger = m.Broker(id=str(device.id), source="hubitat")
         else:
-            trigger = previous.trigger
+            trigger = previous.entry.trigger
         log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger)
         if new == sensor.setting.active_event and previous:
-            previous.add(Log.ENTRANCE, CANCELLED_MSG)
-        ctx.plugin_state[orc_extras.entrance_sensor] = log_entry
+            previous.entry.add(Log.ENTRANCE, CANCELLED_MSG)
+        ctx.plugin_state[orc_extras.entrance_sensor] = Visit(log_entry, previous.present_before if previous else set())
         ctx.scheduler.add_job(
             _run_motion,
             DateTrigger(ctx.api.local_now(), timezone=ctx.config.settings.tz),
@@ -62,6 +67,9 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, att
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     if new == sensor.setting.active_event:
+        present_before = ctx.plugin_state[orc_extras.entrance_sensor].present_before
+        present_before.clear()
+        present_before.update(ctx.api.present_names())
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(log_entry.trigger)
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
@@ -93,20 +101,22 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
 
     if people or door_open:
         ctx.api.run_action(ctx, sensor.rules.present, log_entry.trigger, source=Log.ENTRANCE)
-        msg = sensor.message.log_door_open if door_open else sensor.message.log_present
+        log_entry.add(Log.ENTRANCE, sensor.message.log_door_open if door_open else sensor.message.log_present)
     elif sensor.setting.listener in present:
         # Visitor left, the listener stayed: restore the pre-visit state
         ctx.engine.restore_scene(ctx, SNAPSHOT_NAME, (), log_entry)
         ctx.api.run_action(ctx, sensor.rules.absent, log_entry.trigger, source=Log.ENTRANCE)
-        msg = sensor.message.log_absent
+        log_entry.add(Log.ENTRANCE, sensor.message.log_absent)
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
         ctx.engine.override_scene(
             ctx, SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry
         )
-        msg = sensor.message.log_shutdown
-    log_entry.add(Log.ENTRANCE, msg)
-    ctx.plugin_state[orc_extras.entrance_sensor] = None
+        log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
+        if not ctx.plugin_state[orc_extras.entrance_sensor].present_before and not present:
+            ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, should_notify=True)
+    if ctx.plugin_state[orc_extras.entrance_sensor].entry is log_entry:
+        ctx.plugin_state[orc_extras.entrance_sensor] = None
 
 
 def battery_state(ctx: m.AppContext, sensor: SimpleNamespace) -> list[m.DeviceStatus]:

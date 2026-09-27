@@ -40,9 +40,10 @@ class FakeScheduler:
         del self.jobs[id]
 
     def run_due(self, now, ctx):
-        for job in [j for j in self.jobs.values() if j.trigger.run_date <= now]:
-            del self.jobs[job.id]
-            job.func(*job.args, ctx=ctx)
+        while due := [j for j in self.jobs.values() if j.trigger.run_date <= now]:
+            for job in due:
+                del self.jobs[job.id]
+                job.func(*job.args, ctx=ctx)
 
 
 class FakeBleakClient:
@@ -63,7 +64,7 @@ class FakeBleakClient:
 
 
 class House:
-    def __init__(self, ctx, client, frozen, listeners, dispatched, lan, probed):
+    def __init__(self, ctx, client, frozen, listeners, dispatched, lan, probed, pushed):
         self.ctx = ctx
         self.client = client
         self.frozen = frozen
@@ -71,6 +72,7 @@ class House:
         self.dispatched = dispatched
         self.lan = lan
         self.probed = probed
+        self.pushed = pushed
         self.reported = {}
 
     def tick(self, **delta):
@@ -139,9 +141,11 @@ def house(request, monkeypatch, tmp_path):
         app.register_blueprint(bp)
         app.orc = ctx
 
-        listeners, dispatched, lan = [], [], {"Alice"}
+        listeners, dispatched, lan, pushed = [], [], {"Alice"}, []
         FakeBleakClient.probed = []
         FakeBleakClient.reachable = set()
+        api.subscribe_push(m.PushSubscription("https://push.example/house", "public-key", "auth-secret"))
+        push = SimpleNamespace(public_key=lambda: "", send=lambda subscription, title, body: pushed.append(body))
         dispatch = api.dispatch
 
         def record(commands, *args, **kwargs):
@@ -153,10 +157,11 @@ def house(request, monkeypatch, tmp_path):
             patch.object(api, "dispatch", side_effect=record),
             patch.object(net, "scan_presence", side_effect=lambda pairs: (set(lan), [])),
             patch.object(net, "BleakClient", FakeBleakClient),
+            patch.object(config, "providers", config.providers._replace(push=push)),
             freeze_time(MONDAY_AFTERNOON) as frozen,
         ):
             for plugin in request.node.get_closest_marker("plugins").args:
                 plugin.setup(ctx)
-            yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed)
+            yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed)
     finally:
         _load(sample, {})

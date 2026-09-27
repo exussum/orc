@@ -36,6 +36,7 @@ class Messages(NamedTuple):
     log_door_open: str
     log_absent: str
     log_shutdown: str
+    log_nobody: str
 
 
 class Rules(NamedTuple):
