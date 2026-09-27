@@ -50,6 +50,12 @@ class ThemeOverride(NamedTuple):
     end: date
 
 
+class PushSubscription(NamedTuple):
+    endpoint: str
+    public_key: str
+    auth_secret: str
+
+
 class Remote(NamedTuple):
     device: "DeviceEnum"
     button: int
@@ -448,6 +454,7 @@ class Secrets:
     market_holidays_url: str = ""
     mqtt_user: str = ""
     mqtt_password: str = ""
+    vapid_private_key: str = ""
 
     # Dynamically named secrets: plugin-consumed keys and per-tag BLE EIKs
     # (named by `tag` config lines). A key with a fixed in-repo consumer

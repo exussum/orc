@@ -60,6 +60,7 @@ def fetch_secrets() -> m.Secrets:
         market_holidays_url=secrets.pop("MARKET_HOLIDAYS_URL"),
         mqtt_user=secrets.pop("MQTT_USER", ""),
         mqtt_password=secrets.pop("MQTT_PASSWORD", ""),
+        vapid_private_key=secrets.pop("VAPID_PRIVATE_KEY", ""),
         other=secrets,
     )
 

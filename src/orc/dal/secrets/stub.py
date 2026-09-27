@@ -1,5 +1,7 @@
+import base64
 import datetime
 import functools
+import hashlib
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -10,6 +12,8 @@ from orc import model as m
 from orc.dal import warn_stub
 
 warn_stub("secrets")
+
+_VAPID_PRIVATE_KEY = base64.urlsafe_b64encode(hashlib.sha256(b"orc stub vapid").digest()).rstrip(b"=").decode()
 
 
 @functools.cache
@@ -51,5 +55,6 @@ def fetch_secrets() -> m.Secrets:
         market_holidays_url="secret_market_holidays_url",
         mqtt_user="secret_mqtt_user",
         mqtt_password="secret_mqtt_password",
+        vapid_private_key=_VAPID_PRIVATE_KEY,
         other=_StubSecrets(),
     )
