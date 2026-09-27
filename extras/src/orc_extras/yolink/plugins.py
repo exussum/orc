@@ -7,11 +7,12 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import orc_extras.yolink
 from orc import model as m
 from orc.collections import LockedDict
+from orc.kernel import cast
 from orc_extras.yolink.dal.interfaces import CloudBackend
 
 # callback (name, kind, old, new); old/new are arbitrary field values
@@ -48,7 +49,7 @@ def states_for(leak_devices: Any) -> LockedDict[str, SensorState]:
 
 
 def _states(ctx: m.AppContext) -> LockedDict[str, SensorState]:
-    return cast(LockedDict[str, SensorState], ctx.plugin_state[orc_extras.yolink])
+    return cast.instance(ctx.plugin_state[orc_extras.yolink], LockedDict)
 
 
 def _leak_devices(ctx: m.AppContext) -> Any:

@@ -151,4 +151,10 @@ def declare(declarations: Any) -> None:
     declarations.declare(
         setup=[setup],
         blueprints={"enroll": web.enroll},
+        secrets={
+            _SECRET_CA_CERT: cast.pem_cert,
+            _SECRET_CA_KEY: cast.pem_key,
+            _SECRET_SERVER_CERT: cast.pem_cert,
+            _SECRET_SERVER_KEY: cast.pem_key,
+        },
     )
