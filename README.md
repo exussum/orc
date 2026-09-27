@@ -199,10 +199,12 @@ Two config surfaces:
    `BWS_ACCESS_TOKEN` is a URL (for example, `data:` or `file://`), not the value
    itself — the body of the URL is read at startup.
 
-   To check a vault from another machine, `orc-secrets` fetches through the
-   config's secrets provider, fails the way startup would on a missing core
-   secret or a bad tag EIK, and otherwise lists every name it found. For
-   this command alone, `BWS_ACCESS_TOKEN` is the token itself, not a URL:
+   To check a vault from another machine, `orc-secrets` loads the config to
+   learn which secrets it needs, fetches through the config's secrets
+   provider, and runs the same check startup does: one line per declared
+   secret, `ok` or `bad:` with the reason, then any vault entry nothing
+   declared. A bad row makes the command exit nonzero. For this command
+   alone, `BWS_ACCESS_TOKEN` is the token itself, not a URL:
 
    ```sh
    env BWS_ACCESS_TOKEN=0.abc... orc-secrets /etc/orc/config.orc
@@ -211,21 +213,24 @@ Two config surfaces:
 ## Secrets (Bitwarden)
 
 With the default `secrets` provider (`orc.dal.secrets.bws`), secrets are
-pulled from Bitwarden Secrets Manager by name. The first two are
-required — startup fails without them; the rest are optional: the MQTT
-pair credentials the Hubitat MQTT connection, and the VAPID key signs
-[phone notifications](#phone-notifications-web-push). Any other key is
-read on demand by whichever config line names it (for example,
-`YOLINK_ID`/`YOLINK_SECRET` for the yolink plugin, a calendar feed's
-secret, or a `tag` line's EIK):
+pulled from Bitwarden Secrets Manager by name. Each consumer declares the
+secrets it reads and the shape each must have: a real provider backend
+through a `REQUIRED_SECRETS` constant, a plugin through the `secrets=` argument of
+its `declare()` hook, and a `tag` line through its named EIK. Startup
+checks every declared secret before any plugin's `setup()` runs and fails
+with the full list of problems, so what is required follows the providers
+and plugins the config selects; a stub provider declares nothing. A blank
+value counts as missing wherever a secret is read.
 
-| Key                    | Used for                                           |
-| ---------------------- | -------------------------------------------------- |
-| `HUBITAT_ACCESS_TOKEN` | Hubitat Maker API access token (appended as query) |
-| `MARKET_HOLIDAYS_URL`  | JSON endpoint returning market holiday dates       |
-| `MQTT_USER`            | Hubitat MQTT broker username (optional)            |
-| `MQTT_PASSWORD`        | Hubitat MQTT broker password (optional)            |
-| `VAPID_PRIVATE_KEY`    | Web Push signing key (optional)                    |
+| Key                    | Declared by               | Shape                                 |
+| ---------------------- | ------------------------- | ------------------------------------- |
+| `HUBITAT_ACCESS_TOKEN` | `orc.dal.hubitat.http`    | UUID (Hubitat Maker API access token) |
+| `MARKET_HOLIDAYS_URL`  | `orc.dal.holiday.polygon` | http(s) URL returning market holidays |
+| `VAPID_PRIVATE_KEY`    | `orc.dal.push.webpush`    | base64url 32-byte EC key              |
+| `MQTT_USER`            | nobody (optional)         | Hubitat MQTT broker username          |
+| `MQTT_PASSWORD`        | nobody (optional)         | Hubitat MQTT broker password          |
+| a `tag` line's secret  | the `tag` line            | 32-byte hex EIK                       |
+| plugin secrets         | the plugin's `declare`    | see the plugin's README               |
 
 ## Phone notifications (Web Push)
 
@@ -330,7 +335,7 @@ bounces the `orc` supervisor job.
 ## Layout
 
 - `src/orc/__init__.py` — `Config` (`.orc` config loading and installation)
-- `src/orc/kernel/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`; `src/orc/kernel/cast.py` — the `cast` value coercions
+- `src/orc/kernel/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`; `src/orc/kernel/cast.py` — the `cast` value coercions and secret shapes
 - `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
 - `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
 - `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), time parsing (`resolve_time`), routine/theme/device types
