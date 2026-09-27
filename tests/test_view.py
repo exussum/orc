@@ -12,7 +12,7 @@ from orc import api, config
 from orc import model as m
 from orc.dal import scheduler as dal_scheduler
 from orc.kernel import engine, loader
-from orc.view import VersionManager, bp
+from orc.view import bp
 
 
 def _routine(name, when, *commands, skip_replay=False):
@@ -34,10 +34,7 @@ def scheduler():
 
 @pytest.fixture
 def ctx(scheduler):
-    context = m.AppContext(
-        scheduler=scheduler,
-        version_manager=VersionManager(),
-    )
+    context = m.AppContext(scheduler=scheduler)
     api.set_ctx(context)
     return context
 
@@ -51,34 +48,12 @@ def client(ctx):
         yield c
 
 
-@pytest.fixture
-def good_version(ctx):
-    return {"orc-version": ctx.version_manager.version}
-
-
 def _fake_job(name="job", next_run_time=True):
     job = create_autospec(Job, instance=True)
     job.id = name
     job.name = name
     job.next_run_time = next_run_time
     return job
-
-
-# --- VersionManager.versioned decorator ---
-
-
-def test_versioned_rejects_stale_version(client):
-    response = client.post("/api/schedule/set_theme", data={"theme": ""}, headers={"orc-version": "stale"})
-    assert response.status_code == 412
-    assert "version" in response.get_json()
-
-
-def test_versioned_bumps_after_success(client, ctx, good_version):
-    old = ctx.version_manager.version
-    with patch.object(api, "apply_theme_change"):
-        response = client.post("/api/schedule/set_theme", data={"theme": ""}, headers=good_version)
-    assert response.status_code == 200
-    assert ctx.version_manager.version != old
 
 
 # --- /api/run: 4-way branch ---
@@ -266,31 +241,29 @@ def test_room_unknown_id_returns_404(client):
 # --- /api/schedule/set_theme: form parsing + conditional date.fromisoformat ---
 
 
-def test_set_theme_clear_passes_none_dates(client, ctx, good_version):
+def test_set_theme_clear_passes_none_dates(client, ctx):
     with patch.object(api, "apply_theme_change") as apply_change:
-        client.post("/api/schedule/set_theme", data={"theme": ""}, headers=good_version)
+        client.post("/api/schedule/set_theme", data={"theme": ""})
     apply_change.assert_called_once_with(ctx, "", None, None, m.Manual("theme"))
 
 
-def test_set_theme_set_parses_dates(client, ctx, good_version):
+def test_set_theme_set_parses_dates(client, ctx):
     theme = next(iter(orc.config.themes))
     with patch.object(api, "apply_theme_change") as apply_change:
         client.post(
             "/api/schedule/set_theme",
             data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"},
-            headers=good_version,
         )
     apply_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
 
 
-def test_set_theme_rejects_unknown_theme(client, ctx, good_version):
+def test_set_theme_rejects_unknown_theme(client, ctx):
     with patch.object(api, "apply_theme_change") as apply_change:
         response = client.post(
             "/api/schedule/set_theme",
             data={"theme": "vacation", "start": "2100-01-01", "end": "2100-01-10"},
-            headers=good_version,
         )
-    assert response.status_code == 500
+    assert response.status_code == 404
     apply_change.assert_not_called()
 
 
@@ -307,28 +280,33 @@ def test_durations_returns_config(client):
     }
 
 
-# --- /api/schedule/<id>/pause: toggles pause/resume ---
+# --- /api/schedule/<id>/pause: absolute paused state ---
 
 
-def test_pause_when_running_pauses(client, scheduler, good_version):
-    job = _fake_job(next_run_time=datetime(2100, 1, 1))
+def test_pause_pauses_whatever_the_job_state_is(client, scheduler):
+    job = _fake_job(next_run_time=None)
     scheduler.get_job.return_value = job
-    client.get("/api/schedule/iot-x/pause", headers=good_version)
+    client.get("/api/schedule/iot-x/pause?paused=1")
     job.pause.assert_called_once()
     job.resume.assert_not_called()
 
 
-def test_pause_when_paused_resumes(client, scheduler, good_version):
-    job = _fake_job(next_run_time=None)
+def test_pause_off_resumes_whatever_the_job_state_is(client, scheduler):
+    job = _fake_job(next_run_time=datetime(2100, 1, 1))
     scheduler.get_job.return_value = job
-    client.get("/api/schedule/iot-x/pause", headers=good_version)
+    client.get("/api/schedule/iot-x/pause?paused=0")
     job.resume.assert_called_once()
     job.pause.assert_not_called()
 
 
-def test_pause_unknown_job_returns_404(client, scheduler, good_version):
+def test_pause_unknown_job_returns_404(client, scheduler):
     scheduler.get_job.return_value = None
-    response = client.get("/api/schedule/nope/pause", headers=good_version)
+    response = client.get("/api/schedule/nope/pause?paused=1")
+    assert response.status_code == 404
+
+
+def test_device_unknown_returns_404(client):
+    response = client.get("/api/device/nope?state=on")
     assert response.status_code == 404
 
 

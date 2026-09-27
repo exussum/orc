@@ -24,7 +24,7 @@ export function startProgress(seconds) {
 }
 
 
-export async function get(url, el, onFailure = () => {}, useVersion = true) {
+export async function get(url, el, onFailure = () => {}) {
     if (!(await orcHooks.onCommand(el?.dataset.id, el, url))) {
         onFailure();
         return false;
@@ -40,13 +40,11 @@ export async function get(url, el, onFailure = () => {}, useVersion = true) {
     let response = null;
 
     try {
-        response = await fetch(url, { headers: { "orc-version": window.orcVersion } });
+        response = await fetch(url);
         if (!response.ok) {
             throw Error(`Response status: ${response.status}`);
         }
-        const data = await response.json();
-        if (useVersion) window.orcVersion = data.version;
-        return data;
+        return await response.json();
     } catch (error) {
         console.error(error.message);
         if (isInvalidResponse(response)) {
@@ -60,26 +58,6 @@ export async function get(url, el, onFailure = () => {}, useVersion = true) {
     }
 }
 
-
-async function checkVersion() {
-    const spinner = document.getElementById("orc-version-spinner");
-    spinner.style.display = "block";
-    try {
-        const response = await fetch("/api/version", {
-            redirect: "manual",
-        });
-        if (isInvalidResponse(response) || response.type === "opaqueredirect") {
-            hardRefresh();
-            return;
-        }
-        const { version: serverVersion } = await response.json();
-        if (serverVersion !== window.orcVersion) location.reload();
-    } catch {
-        // unreachable server: the per-action version check catches stale pages later
-    } finally {
-        spinner.style.display = "none";
-    }
-}
 
 export async function runAction(el) {
     if (!(await orcHooks.onPress(el.dataset.id, el))) return;
@@ -139,7 +117,6 @@ document.getElementById("orc-navbar-toggle")?.addEventListener("click", (e) => {
 
 if (window.matchMedia("(display-mode: standalone)").matches) window.resizeTo(400, 670);
 
-if (!performance.getEntriesByType("navigation")[0]?.transferSize) window.addEventListener("load", checkVersion);
 window.addEventListener("pageshow", (e) => {
-    if (e.persisted) checkVersion();
+    if (e.persisted) location.reload();
 });

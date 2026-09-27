@@ -14,16 +14,12 @@
         <link rel="stylesheet" href="/static/tailwind.min.css">
         <link rel="stylesheet" href="/static/vendor/flatpickr.dark.css">
         <link rel="stylesheet" href="/static/vendor/flatpickr.orc.css">
-        <script>window.orcVersion = {{ version|tojson }};</script>
         <script src="/static/vendor/flatpickr.min.js" defer></script>
         <script type="module" src="/static/orc.js"></script>
         <script type="module" src="/hooks.js"></script>
         {% block head_scripts %}{% endblock %}
     </head>
     <body class="text-white bg-black">
-        <div id="orc-version-spinner" class="hidden fixed top-2.5 right-2.5 z-[1080]">
-            {{ icon_svg("spinner", "animate-spin h-6 w-6 text-orc-primary") }}
-        </div>
         <div id="orc-progress" class="orc-progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100">
             <div id="orc-progress-bar" class="h-full bg-orc-primary" style="width: 0%;"></div>
         </div>

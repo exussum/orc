@@ -30,11 +30,10 @@ async function set_theme() {
     try {
         const response = await fetch("/api/schedule/set_theme", {
             method: "POST",
-            headers: { "orc-version": window.orcVersion },
             body: new URLSearchParams({ start: startEl.value, end: endEl.value, theme: selectEl.value }),
         });
-        if (response.status === 412) hardRefresh();
-        else if (response.ok) location.reload();
+        if (response.ok) location.reload();
+        else if (response.status < 500) hardRefresh();
     } finally {
         if (container) container.style.display = "none";
         el.disabled = false;
@@ -42,7 +41,7 @@ async function set_theme() {
 }
 
 async function pause(el) {
-    await get(`/api/schedule/${el.dataset.id}/pause`, el, () => {
+    await get(`/api/schedule/${el.dataset.id}/pause?paused=${el.checked ? 0 : 1}`, el, () => {
         el.checked = !el.checked;
     });
 }

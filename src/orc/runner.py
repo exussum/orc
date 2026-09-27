@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from urllib.parse import urlparse
 
-from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -19,7 +18,7 @@ from orc import model as m
 from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY
 from orc.dal.scheduler import ContextThreadPoolExecutor, set_scheduler
 from orc.locale import Log
-from orc.view import OrcFlask, VersionManager, bp
+from orc.view import OrcFlask, bp
 
 
 def flask() -> None:
@@ -125,10 +124,9 @@ def _build_app() -> OrcFlask:
 
     scheduler = _build_scheduler()
     set_scheduler(scheduler)
-    ctx = m.AppContext(scheduler, VersionManager())
+    ctx = m.AppContext(scheduler)
     api.set_ctx(ctx)
     scheduler.add_executor(ContextThreadPoolExecutor(ctx), JOBSTORE_DEFAULT)
-    scheduler.add_listener(lambda e: ctx.version_manager.bump_version(), EVENT_JOB_EXECUTED)
     return _build_flask(ctx)
 
 
