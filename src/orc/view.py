@@ -1,8 +1,6 @@
-import random
 import re
-from collections.abc import Callable
 from datetime import date, datetime, timedelta
-from functools import cache, wraps
+from functools import cache
 from itertools import chain, groupby
 from pathlib import Path
 from typing import Any, NamedTuple, cast
@@ -62,18 +60,7 @@ app = cast(OrcFlask, _current_app)
 bp = Blueprint("controls", __name__)
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
-_CACHE_CONTROL = {
-    "controls.index": "max-age=3600",
-    "controls.schedule": "max-age=3600",
-    "controls.log": "no-store",
-    "controls.presence": "no-store",
-}
 _CODESPAN_RE = re.compile(r"`([^`]+)`")
-
-
-@bp.app_context_processor
-def _version() -> dict[str, str]:
-    return {"version": app.orc.version_manager.version}
 
 
 @bp.app_template_filter("codespan")
@@ -89,10 +76,7 @@ def not_found(exc: NotFound) -> tuple[dict[str, str], int]:
 
 @bp.after_request
 def cache_control(response: Response) -> Response:
-    if request.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
-    elif request.url_rule and (policy := _CACHE_CONTROL.get(request.url_rule.endpoint)):
-        response.headers["Cache-Control"] = policy
+    response.headers["Cache-Control"] = "no-store"
     return response
 
 
@@ -113,33 +97,6 @@ def hooks() -> Response:
 @cache
 def _config_text(config_dir: str) -> str:
     return (Path(config_dir) / "config.orc").read_text()
-
-
-class VersionManager:
-    version = str(random.random())
-
-    @classmethod
-    def bump_version(cls) -> None:
-        cls.version = str(random.random())
-
-    @staticmethod
-    def versioned(func: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            if not request.args.get("ignore-version") and not request.headers.get("orc-version") == VersionManager.version:
-                api.log(
-                    m.LogSource.SYSTEM,
-                    Log.VERSION_MISMATCH.format(client=request.headers.get("orc-version"), server=VersionManager.version),
-                    m.Manual(request.url_rule.endpoint if request.url_rule else request.path),
-                )
-                return {"version": VersionManager.version}, 412
-            result = func(*args, **kwargs)
-            if result is not None:
-                return result
-            VersionManager.version = str(random.random())
-            return {"version": VersionManager.version}, 200
-
-        return wrapper
 
 
 @bp.route("/system/")
@@ -211,27 +168,27 @@ def device() -> str:
 
 
 @bp.route("/api/run/<id>")
-def run_routine(id: str) -> tuple[dict[str, Any], int]:
+def run_routine(id: str) -> dict[str, Any]:
     skip_delay = request.args.get("skip_delay") == "1"
     if not api.run_action(app.orc, id, m.Manual(id), source=m.LogSource.MANUAL, device=request.args.get("device"), skip_delay=skip_delay):
         abort(404, "Unknown routine")
-    return {"version": VersionManager.version}, 200
+    return {}
 
 
 @bp.route("/api/presence/<name>/checkin")
-@VersionManager.versioned
-def checkin_presence(name: str) -> None:
+def checkin_presence(name: str) -> dict[str, Any]:
     trigger = m.Manual(name)
     api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger)
     api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger)
+    return {}
 
 
 @bp.route("/api/presence/<name>/expire")
-@VersionManager.versioned
-def expire_presence(name: str) -> None:
+def expire_presence(name: str) -> dict[str, Any]:
     trigger = m.Manual(name)
     api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger)
     api.expire_presence([name], trigger, force=True)
+    return {}
 
 
 @bp.route("/")
@@ -258,10 +215,10 @@ def log() -> str:
 
 
 @bp.route("/api/schedule/<id>/pause")
-@VersionManager.versioned
-def pause(id: str) -> None:
-    if not api.toggle_job(id):
+def pause(id: str) -> dict[str, Any]:
+    if not api.set_job_paused(id, request.args.get("paused") == "1"):
         abort(404, "Unknown job")
+    return {}
 
 
 @bp.route("/presence/")
@@ -281,18 +238,19 @@ def presence() -> str:
 
 
 @bp.route("/api/device/<id>")
-@VersionManager.versioned
-def device_api(id: str) -> None:
+def device_api(id: str) -> dict[str, Any]:
     state = request.args.get("state")
-    api.device_command(id, state, api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), m.Manual(id)))
+    if not api.device_command(id, state, api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), m.Manual(id))):
+        abort(404, "Unknown device")
+    return {}
 
 
 @bp.route("/api/room/<id>")
-def room(id: str) -> tuple[dict[str, Any], int]:
+def room(id: str) -> dict[str, Any]:
     if id not in config.rooms:
         abort(404, "Unknown room")
     api.run_room(id, request.args.get("state"), m.Manual(id))
-    return {"version": VersionManager.version}, 200
+    return {}
 
 
 @bp.route("/api/presence/state")
@@ -301,9 +259,9 @@ def presence_state() -> dict[str, Any]:
 
 
 @bp.route("/api/presence/run")
-@VersionManager.versioned
-def run_presence_check() -> None:
+def run_presence_check() -> dict[str, Any]:
     api.rerun_presence_check(m.Manual("presence"))
+    return {}
 
 
 @bp.route("/schedule/")
@@ -342,32 +300,27 @@ def schedule() -> str:
 
 
 @bp.route("/api/schedule/set_theme", methods=["POST"])
-@VersionManager.versioned
-def set_theme() -> None:
+def set_theme() -> dict[str, Any]:
     name = request.form["theme"]
     if name and name not in config.themes:
-        raise Exception(f"Unknown theme: {name}")
+        abort(404, "Unknown theme")
     start = date.fromisoformat(request.form["start"]) if name else None
     end = date.fromisoformat(request.form["end"]) if name else None
     api.apply_theme_change(app.orc, name, start, end, m.Manual(name or "theme"))
+    return {}
 
 
 @bp.route("/api/announce", methods=["POST"])
-@VersionManager.versioned
-def announce() -> None:
+def announce() -> dict[str, Any]:
     text = request.form["text"]
     entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text), m.Manual("announce"))
     api.alert(m.Alarm.WARNING, text=text, entry=entry)
+    return {}
 
 
 @bp.route("/api/alert.mp4")
 def alert_mp4() -> Response:
     return Response(alerts.render_alert_video(request.args.get("text", "").replace("`", "")), mimetype="video/mp4")
-
-
-@bp.route("/api/version")
-def version() -> tuple[dict[str, Any], int]:
-    return {"version": app.orc.version_manager.version}, 200
 
 
 @bp.route("/api/durations")

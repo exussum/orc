@@ -82,10 +82,10 @@ def record_duration(name: str) -> Iterator[None]:
 # --- Utilities ---
 
 
-def toggle_job(id: str) -> bool:
+def set_job_paused(id: str, paused: bool) -> bool:
     if not scheduler.job_exists(id):
         return False
-    scheduler.resume_job(id) if scheduler.is_paused(id) else scheduler.pause_job(id)
+    scheduler.pause_job(id) if paused else scheduler.resume_job(id)
     return True
 
 
@@ -371,7 +371,7 @@ def ac_temperature(device: m.DeviceEnum) -> int | None:
     return handler(device) if handler else None
 
 
-def device_command(id: str, state: str | None, entry: m.LogEntry) -> None:
+def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
     # Find the device across dispatch-handled types and run its registered handler
     # directly (no snapshot interception), so plugin device types work without core
     # knowing them. state is an int level (brightness/volume), an ON/OFF/STOP string,
@@ -388,8 +388,8 @@ def device_command(id: str, state: str | None, entry: m.LogEntry) -> None:
             member = cls[id]
             entry.requests += (m.Request(str(member.value), parsed),)
             dispatch_handler(_ctx, member, engine.Command(m.Devices(member), parsed), {})
-            return
-    raise Exception(f"Unknown device: {id}")
+            return True
+    return False
 
 
 def current_theme_override() -> m.ThemeOverride | None:

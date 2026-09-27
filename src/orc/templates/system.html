@@ -74,7 +74,6 @@
                 <div class="p-4">
                 <div class="font-semibold mb-1">Status</div>
                 <ul class="list-disc list-inside">
-                    <li>Internal Version: {{ version }}</li>
                     <li>Snapshot State:
                         {% if ctx.engine.snapshots(ctx.api.local_now()) %}
                             <ul class="list-disc list-inside ml-4">

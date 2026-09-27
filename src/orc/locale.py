@@ -26,8 +26,6 @@ class Log:
     PRESENCE_CHECKED_IN: str = "Presence checked in: `{name}`"
     PRESENCE_RESCAN: str = "Presence rescan"
 
-    VERSION_MISMATCH: str = "Version mismatch: client={client} server={server}"
-
     TASK_QUEUED: str = "Queued: `{id}` (until {when:%I:%M})"
     BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
     ROOM_SET: str = "Room: `{id}` {state}"
