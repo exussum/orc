@@ -530,8 +530,7 @@ def _scheduled_theme(today: date) -> m.Theme:
 
 
 def _entry_time(e: m.Routine, sunrise: datetime | None, sunset: datetime | None, now: datetime) -> datetime | None:
-    assert isinstance(e.trigger, engine.At)
-    when = e.trigger.when
+    when = cast.instance(e.trigger, engine.At).when
     if when == m.SUNRISE:
         return sunrise
     elif when == m.SUNSET:

@@ -6,7 +6,7 @@ from typing import Any, NamedTuple
 from apscheduler.triggers.date import DateTrigger
 
 from orc import model as m
-from orc.kernel import engine
+from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
 from orc.security import safe_eval
 
@@ -115,18 +115,15 @@ def condition(when: When | None) -> tuple[engine.Condition, ...]:
 def source_of(rule: engine.Rule) -> m.DeviceEnum:
     trigger = rule.trigger
     if isinstance(trigger, engine.Transition):
-        assert isinstance(trigger.channel, m.MqttDeviceChannel)
-        return trigger.channel.device
-    assert isinstance(trigger, DeviceChanged)
-    return trigger.device
+        return cast.instance(trigger.channel, m.MqttDeviceChannel).device
+    return cast.instance(trigger, DeviceChanged).device
 
 
 def _trigger_label(rule: engine.Rule) -> Any:
     trigger = rule.trigger
     if isinstance(trigger, engine.Transition):
         return trigger.value
-    assert isinstance(trigger, DeviceChanged)
-    return trigger.expr
+    return cast.instance(trigger, DeviceChanged).expr
 
 
 def _reader(ctx: m.AppContext) -> engine.Read:
@@ -196,10 +193,7 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
 
 
 def _targets(what: engine.Channel) -> str:
-    if isinstance(what, m.Devices):
-        return ", ".join(f"`{d.label or d.name}`" for d in what.all())
-    else:
-        raise TypeError("Only accepts orc.models.Devices")
+    return ", ".join(f"`{d.label or d.name}`" for d in cast.instance(what, m.Devices).all())
 
 
 def _dispatch(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
@@ -219,10 +213,7 @@ def _log(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> m.Lo
 
 def _command(report: engine.Report) -> m.DeviceCommand:
     command = report.rule.items[0].command
-    if isinstance(command.channel, m.Devices):
-        return engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM)
-    else:
-        raise TypeError("Only accepts orc.models.Devices")
+    return engine.Command(cast.instance(command.channel, m.Devices), command.value, tag=m.Tag.SYSTEM)
 
 
 @requires_ctx

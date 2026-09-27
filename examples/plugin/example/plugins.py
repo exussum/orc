@@ -1,10 +1,11 @@
-from typing import Any, cast
+from typing import Any
 
 from apscheduler.schedulers.base import BaseScheduler
 
 import example
 from example.dal.sqlite import Connection
 from example.model import ExampleJob, Plan, Runtime
+from orc.kernel import cast
 from orc.model import AppContext, DeviceStatus
 from orc.plugins import requires_ctx
 
@@ -12,7 +13,7 @@ from orc.plugins import requires_ctx
 def runtime(ctx: AppContext) -> Runtime:
     """Shared live state goes in ctx.plugin_state keyed by the plugin's module,
     stored once by setup(); constant wiring travels as arguments or partials."""
-    return cast(Runtime, ctx.plugin_state[example])
+    return cast.instance(ctx.plugin_state[example], Runtime)
 
 
 def widget_names() -> list[str]:

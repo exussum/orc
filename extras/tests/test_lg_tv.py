@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, create_autospec, patch
 import pytest
 from orc_extras import lg_tv
 from orc_extras.lg_tv import plugins
-from orc_extras.lg_tv.dal import sqlite
+from orc_extras.lg_tv.dal import sqlite, stub
 
 import orc
 from orc import api
@@ -91,6 +91,7 @@ def test_lg_tv_registers_with_core():
         ctx = MagicMock()
         ctx.api = create_autospec(api)
         ctx.config.plugin_configs = {}
+        ctx.config.plugin_for.return_value.backend = create_autospec(stub)
         lg_tv.setup(ctx)
     init_db.assert_called_once_with(ctx.api.connection)
     name, provider = ctx.api.add_state_provider.call_args.args
