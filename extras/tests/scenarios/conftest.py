@@ -63,6 +63,9 @@ class House:
     def motion(self, event):
         self.report(orc.Sensor.ENTRANCE_SENSOR, "motion", event)
 
+    def ble(self, name):
+        net.presence.mark([name], api.local_now(), m.Query("ble"))
+
     def report(self, device, attribute, new):
         old = self.reported.get((device, attribute))
         state = m.DeviceState(id=device.value, name=device.label, attributes={attribute: new}, last_activity=None)

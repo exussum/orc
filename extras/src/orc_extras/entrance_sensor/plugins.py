@@ -73,6 +73,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         log_entry.add(Log.ENTRANCE, CLEARED_MSG.format(routine_name=sensor.rules.inside, minutes=sensor.setting.cleanup_delay_minutes))
         ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
         ctx.api.pause_presence()
+        ctx.api.delete_all_presence(log_entry.trigger)
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
