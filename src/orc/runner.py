@@ -19,6 +19,7 @@ from orc import _build, api
 from orc import model as m
 from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY
 from orc.dal.scheduler import ContextThreadPoolExecutor, set_scheduler
+from orc.kernel.loader import check_secrets
 from orc.locale import Log
 from orc.view import OrcFlask, bp
 
@@ -33,8 +34,8 @@ def flask() -> None:
 def secrets() -> None:
     parser = argparse.ArgumentParser(
         prog="orc-secrets",
-        description="Fetch the secrets a config names and report each one. "
-        "Fails the way startup would on a missing core secret or a bad tag EIK. "
+        description="Fetch the secrets a config names and check each one the way startup does: "
+        "every secret a selected provider, plugin or tag line declares must be set and well-formed. "
         "BWS_ACCESS_TOKEN is the Bitwarden machine token itself, not a URL.",
     )
     parser.add_argument("config", type=Path, help="config.orc, or the directory holding it")
@@ -42,14 +43,16 @@ def secrets() -> None:
     os.environ["ORC_CONFIG_DIR"] = str(path.parent if path.is_file() else path)
     if token := os.environ.get("BWS_ACCESS_TOKEN"):
         os.environ["BWS_ACCESS_TOKEN"] = "data:," + quote(token, safe="")
-    config.config.load(zigbee_config={})
-    fetched = config.config.secrets
-    for name in ("hubitat_access_token", "market_holidays_url", "mqtt_user", "mqtt_password", "vapid_private_key"):
-        print(f"{name.upper():<40} {'ok' if getattr(fetched, name) else 'not set'}")
-    for person in config.config.ble_tags:
-        print(f"{'EIK':<40} ok  tag {person}")
-    for name in sorted(fetched.other):
-        print(f"{name:<40} ok")
+    config.config.load(m.Secrets(), {})
+    fetched = config.config.providers.secrets.fetch_secrets()
+    needs = config.config.secret_needs
+    problems = check_secrets(fetched, needs)
+    for name in sorted(needs):
+        print(f"{name:<40} {f'bad: {problems[name]}' if name in problems else 'ok'}")
+    for name in sorted(set(fetched.other) - set(needs)):
+        print(f"{name:<40} undeclared")
+    if problems:
+        sys.exit(1)
 
 
 def _split_stderr() -> None:
