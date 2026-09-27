@@ -260,7 +260,10 @@ def presence_state() -> dict[str, Any]:
 
 @bp.route("/api/presence/run")
 def run_presence_check() -> dict[str, Any]:
-    api.rerun_presence_check(m.Manual("presence"))
+    trigger = m.Manual("presence")
+    api.log(m.LogSource.MANUAL, Log.PRESENCE_RESCAN, trigger)
+    api.delete_all_presence(trigger)
+    api.check_presence(trigger, source=m.LogSource.MANUAL, probe=True)
     return {}
 
 

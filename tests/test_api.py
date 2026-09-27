@@ -605,37 +605,19 @@ class TestPresence:
         api.expire_presence(["Alice"], TRIGGER, force=True)
         assert "Presence lost: `Alice`" in api.log_entries()[0].children[-1].action
 
-    def test_rescan_probes_only_absent_tags(self):
+    def test_check_probes_stale_tags_by_default_and_every_absent_one_when_asked(self):
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now() - timedelta(hours=10), TRIGGER)
         with (
-            patch.object(config, "ble_tags", {"Alice": m.BleKey(bytes(32), 0), "Bob": m.BleKey(bytes(32), 0)}),
+            patch.object(config, "ble_tags", {name: m.BleKey(bytes(32), 0) for name in ("Alice", "Bob", "Carol")}),
             patch.object(net.presence, "probe") as probe,
-            patch.object(api, "check_presence"),
+            patch.object(net, "scan_presence", return_value=(set(), [])),
         ):
-            api.rerun_presence_check(m.Manual("presence"))
-        probe.assert_called_once_with({"Alice"}, m.Manual("presence"))
-
-    def test_two_rescans_an_hour_apart_are_two_rows(self):
-        with (
-            freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen,
-            patch.object(net.presence, "probe"),
-            patch.object(api, "check_presence"),
-        ):
-            api.rerun_presence_check(m.Manual("presence"))
-            frozen.tick(timedelta(hours=1))
-            api.rerun_presence_check(m.Manual("presence"))
-        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
-            ("Presence rescan", []),
-            ("Presence rescan", []),
-        ]
-
-    def test_rescan_rolls_presence_changes_under_itself(self):
-        api.mark_present(["Alice"], api.local_now() - timedelta(minutes=1), TRIGGER)
-        with patch.object(net.presence, "probe"), patch.object(api, "check_presence"):
-            api.rerun_presence_check(m.Manual("presence"))
-        entry = api.log_entries()[0]
-        assert entry.action == "Presence rescan"
-        assert "Presence lost: `Alice`" in self._reported(entry)[-1]
+            api.check_presence(TRIGGER)
+            probe.assert_called_once_with({"Alice"}, TRIGGER)
+            probe.reset_mock()
+            api.check_presence(TRIGGER, probe=True)
+        probe.assert_called_once_with({"Alice", "Carol"}, TRIGGER)
 
 
 def test_context_executor_copies_closure_job():
