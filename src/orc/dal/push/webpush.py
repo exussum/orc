@@ -10,11 +10,11 @@ from pywebpush import WebPushException, webpush
 import orc
 from orc import model as m
 from orc.dal.push import Gone
-
-REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
+from orc.kernel import cast
 
 _TTL_SECONDS = 24 * 60 * 60
 _GONE_STATUSES = frozenset({401, 403, 404, 410})
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {"vapid_private_key": cast.key32}
 
 
 def public_key() -> str:

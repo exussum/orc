@@ -151,6 +151,12 @@ def pem_key(value: str) -> PrivateKeyTypes:
         raise ValueError(_ERR_PARAMS.format("pem_key", value)) from None
 
 
+def instance[T](value: object, cls: type[T]) -> T:
+    if isinstance(value, cls):
+        return value
+    raise TypeError(f"expected {cls.__name__}, got {type(value).__name__}")
+
+
 def resolve_function(value: str) -> Callable[..., Any]:
     try:
         module_path, fn_name = value.rsplit(".", 1)

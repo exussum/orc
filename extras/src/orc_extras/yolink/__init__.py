@@ -6,10 +6,11 @@ at setup(); module tops import orc leaf modules for types and helpers.
 """
 
 from functools import partial
-from typing import Any, cast
+from typing import Any
 
 import orc_extras.yolink
 from orc import model as m
+from orc.kernel import cast
 from orc.kernel.loader import resolve_backend
 from orc.model import AppContext
 from orc_extras.yolink import plugins
@@ -67,7 +68,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
 
 
 def setup(ctx: AppContext) -> None:
-    backend = cast(CloudBackend, resolve_backend(ctx.config.plugin_for(orc_extras.yolink).backend))
+    backend = cast.instance(resolve_backend(ctx.config.plugin_for(orc_extras.yolink).backend), CloudBackend)
     ctx.plugin_state[orc_extras.yolink] = plugins.states_for(ctx.config.devices.Leak)
     ctx.api.add_state_provider("Leak Sensors", partial(leak_state, ctx))
     plugins.start(ctx, backend, partial(_on_transition, ctx))
@@ -106,4 +107,5 @@ def declare(declarations: Any) -> None:
     declarations.declare(
         setup=[setup],
         button_labels={"Test Leak Sensor": "Test {device}"},
+        secrets={"YOLINK_ID": cast.nonblank, "YOLINK_SECRET": cast.nonblank},
     )
