@@ -62,7 +62,8 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, att
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     if new == sensor.setting.active_event:
-        ctx.api.resume_presence(log_entry.trigger)
+        ctx.api.pause_presence()
+        ctx.api.delete_all_presence(log_entry.trigger)
         if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
             ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
@@ -72,8 +73,6 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
     elif new == sensor.setting.inactive_event:
         log_entry.add(Log.ENTRANCE, CLEARED_MSG.format(routine_name=sensor.rules.inside, minutes=sensor.setting.cleanup_delay_minutes))
         ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
-        ctx.api.pause_presence()
-        ctx.api.delete_all_presence(log_entry.trigger)
         ctx.scheduler.add_job(
             _run_trigger_sensor_off,
             DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
@@ -87,7 +86,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
 
 @requires_ctx
 def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
-    present = ctx.api.check_presence(log_entry.trigger)
+    present = ctx.api.check_presence(log_entry.trigger, probe=True)
     ctx.api.resume_presence(log_entry.trigger)
     people = present - {sensor.setting.listener}
     door_open = not people and _door_open(ctx, sensor)

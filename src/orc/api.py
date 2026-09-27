@@ -462,13 +462,6 @@ def schedule_presence_check(trigger: m.Trigger) -> None:
         scheduler.schedule_once(_check_presence_job, local_now(), args=(trigger,), name="Presence Boot Check", jobstore=JOBSTORE_MEMORY)
 
 
-def rerun_presence_check(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.MANUAL) -> None:
-    log(source, Log.PRESENCE_RESCAN, trigger)
-    delete_all_presence(trigger)
-    net.presence.probe(set(config.ble_tags) - present_names(), trigger)
-    check_presence(trigger, source=source)
-
-
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
     if not name:
         log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED, trigger)
@@ -480,10 +473,16 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
     rebuild_jobs(ctx)
 
 
-def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM) -> set[str]:
+def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM, *, probe: bool = False) -> set[str]:
     pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
     if not pairs and not config.ble_tags:
         return present_names()
+    present = present_names()
+    stale = set(net.presence.seen()) - present
+    tags = set(config.ble_tags)
+    net.presence.probe(tags - present if probe else stale & tags, trigger)
+    if lost := stale - present_names():
+        expire_presence(sorted(lost), trigger)
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
@@ -754,7 +753,7 @@ def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
 
 @requires_ctx
 def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
-    return check_presence(trigger)
+    return check_presence(trigger, probe=True)
 
 
 @requires_ctx
