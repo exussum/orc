@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from orc import model as m
 
@@ -13,6 +13,7 @@ class Session(Protocol):
     def close(self) -> None: ...
 
 
+@runtime_checkable
 class CloudBackend(Protocol):
     def authenticate(self, secrets: m.Secrets, timeout: int) -> tuple[str, int]: ...
     def fetch_leak_states(self, access_token: str, device_ids: Sequence[str], timeout: int) -> dict[str, Any]: ...

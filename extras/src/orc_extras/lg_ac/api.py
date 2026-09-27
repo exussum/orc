@@ -13,14 +13,14 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 from orc import security
+from orc.kernel import cast
 from orc.model import CA, Certificate
 from orc_extras.lg_ac import model as m
 
@@ -277,7 +277,7 @@ def sign_device_csr(csr_pem: bytes, device_id: str) -> bytes:
     # need to validate its self-signature (it's enrolling on our own network) —
     # extract the public key ahead of the offending field and sign a cert for it.
     spki = _csr_public_key_der(security.pem_to_der(csr_pem))
-    public_key = cast(CertificatePublicKeyTypes, serialization.load_der_public_key(spki))
+    public_key = cast.instance(serialization.load_der_public_key(spki), rsa.RSAPublicKey)
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, device_id)])
     cert = security.sign(
         _require_ca(),
