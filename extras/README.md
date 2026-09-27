@@ -61,6 +61,14 @@ receives the context and registers an MQTT device listener
 (`ctx.api.add_listener`) and a state-page section
 (`ctx.api.add_state_provider`).
 
+A plugin that reads secrets declares them in the same call, as
+`secrets={name: shape}` where the shape is a `cast` function (`cast.url`,
+`cast.nonblank`, `cast.pem_cert`, ...). Startup checks every declared
+secret before any `setup()` runs, and `orc-secrets` lists them. A plugin
+whose secret names come from its own config parses that config inside
+`declare()` — `load_plugin_config` accepts the declarations object there —
+as the travel and calendar plugins do.
+
 ### The context
 
 `AppContext` (defined in `orc/model.py`) is a small dataclass that hands a
