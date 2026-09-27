@@ -334,6 +334,16 @@ class TestLog:
             api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), should_notify=True)
         assert once.call_args.kwargs["args"] == ("later x", m.Integration("x"), None)
 
+    def test_a_greeted_subscription_is_pushed_alone(self):
+        subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
+        api.subscribe_push(subscriptions[0])
+        provider = create_autospec(push_stub)
+        with patch.object(config, "providers", config.providers._replace(push=provider)), patch.object(scheduler, "schedule_once") as once:
+            api.subscribe_push(subscriptions[1], greet=True)
+        assert once.call_args.args[0] is api._push_job
+        assert once.call_args.kwargs["args"] == ("Notifications enabled on this device", m.Manual("notify"), (subscriptions[1],))
+        assert set(sqlite.fetch_push_subscriptions()) == set(subscriptions)
+
     def test_a_push_reaches_every_subscription_and_drops_gone_ones(self):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "abc"]
         for subscription in subscriptions:

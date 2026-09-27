@@ -8,11 +8,11 @@ function toBytes(base64url) {
     return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
 
-async function register(subscription) {
+async function register(subscription, greet) {
     const response = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(subscription),
+        body: JSON.stringify({ ...subscription.toJSON(), greet }),
     });
     return response.ok;
 }
@@ -22,7 +22,7 @@ function sameKey(subscription, key) {
     return current.length === key.length && current.every((byte, i) => byte === key[i]);
 }
 
-async function enroll(registration) {
+async function enroll(registration, greet) {
     try {
         const key = toBytes((await get("/api/push/key")).key);
         let subscription = await registration.pushManager.getSubscription();
@@ -31,7 +31,7 @@ async function enroll(registration) {
             subscription = null;
         }
         subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-        if (await register(subscription)) label.textContent = "Notifying this device";
+        if (await register(subscription, greet)) label.textContent = "Notifying this device";
     } catch (error) {
         console.error(error.message);
     }
@@ -41,7 +41,7 @@ async function subscribe() {
     button.disabled = true;
     try {
         if ((await Notification.requestPermission()) !== "granted") return;
-        await enroll(await navigator.serviceWorker.register("/static/push-sw.js"));
+        await enroll(await navigator.serviceWorker.register("/static/push-sw.js"), true);
     } finally {
         button.disabled = false;
     }
@@ -49,7 +49,7 @@ async function subscribe() {
 
 async function resync() {
     const registration = await navigator.serviceWorker.getRegistration("/static/push-sw.js");
-    if (registration && (await registration.pushManager.getSubscription())) await enroll(registration);
+    if (registration && (await registration.pushManager.getSubscription())) await enroll(registration, false);
 }
 
 if ("serviceWorker" in navigator && "PushManager" in window) {
