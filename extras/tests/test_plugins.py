@@ -352,20 +352,22 @@ def test_motion_republish_does_not_fire(ctx, sensor):
 def test_cleanup_checks_presence_then_resumes(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.api.check_presence.assert_called_once_with(entry.trigger)
+    plugin_ctx.api.check_presence.assert_called_once_with(entry.trigger, probe=True)
     plugin_ctx.api.resume_presence.assert_called_once_with(entry.trigger)
 
 
-def test_walk_out_pauses_presence(ctx, sensor):
-    ctx.api.local_now.return_value = _DAYTIME
-    _trigger_sensor(ctx, sensor, "16", "inactive")
-    ctx.api.pause_presence.assert_called_once_with()
-
-
-def test_walk_in_resumes_presence(ctx, sensor):
+def test_walk_in_pauses_and_purges_presence(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.api.resume_presence.assert_called_once_with(ctx.api.log.return_value.trigger)
+    ctx.api.pause_presence.assert_called_once_with()
+    ctx.api.delete_all_presence.assert_called_once_with(ctx.api.log.return_value.trigger)
+
+
+def test_walk_out_leaves_presence_alone(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    _trigger_sensor(ctx, sensor, "16", "inactive")
+    ctx.api.pause_presence.assert_not_called()
+    ctx.api.delete_all_presence.assert_not_called()
 
 
 # --- Guards ---
