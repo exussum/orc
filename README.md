@@ -213,8 +213,9 @@ Two config surfaces:
 With the default `secrets` provider (`orc.dal.secrets.bws`), secrets are
 pulled from Bitwarden Secrets Manager by name. The first two are
 required — startup fails without them; the rest are optional: the MQTT
-pair credentials the Hubitat MQTT connection. Any other key is read on
-demand by whichever config line names it (for example,
+pair credentials the Hubitat MQTT connection, and the VAPID key signs
+[phone notifications](#phone-notifications-web-push). Any other key is
+read on demand by whichever config line names it (for example,
 `YOLINK_ID`/`YOLINK_SECRET` for the yolink plugin, a calendar feed's
 secret, or a `tag` line's EIK):
 
@@ -225,6 +226,40 @@ secret, or a `tag` line's EIK):
 | `MQTT_USER`            | Hubitat MQTT broker username (optional)            |
 | `MQTT_PASSWORD`        | Hubitat MQTT broker password (optional)            |
 | `VAPID_PRIVATE_KEY`    | Web Push signing key (optional)                    |
+
+## Phone notifications (Web Push)
+
+Log lines that orc flags as worth a notification — a failed dispatch, a
+presence scan error, an unknown button, a leak sensor firing — are also
+pushed to every phone or browser that has opted in, through the
+browser's own push service (Mozilla for Firefox, FCM for Chrome, Apple
+for Safari). There is no third-party account: orc signs each push with a
+VAPID key and posts it straight to the subscription's endpoint.
+
+1. Generate a key once and store it in the secrets provider as
+   `VAPID_PRIVATE_KEY`:
+
+   ```sh
+   uv run python -c "import base64; from cryptography.hazmat.primitives.asymmetric import ec; \
+   k = ec.generate_private_key(ec.SECP256R1()).private_numbers().private_value; \
+   print(base64.urlsafe_b64encode(k.to_bytes(32, 'big')).rstrip(b'=').decode())"
+   ```
+
+2. Open the System page on the device and press **Notify this device**.
+   The browser asks for notification permission, registers orc's service
+   worker, and hands orc its subscription; opening the System page again
+   later re-sends it, which is how a device recovers after `jobs_db` is
+   lost.
+
+Notifications arrive with the app closed. On Android, Firefox and Chrome
+both receive them through FCM, so a fresh boot delivers without opening
+the browser first; Firefox on the desktop must be running. On iOS, web
+push only reaches a site added to the home screen from Safari. Pushes to
+an endpoint that has unsubscribed or expired are dropped from orc's table
+on the push service's say-so.
+
+This is orc reporting on itself while it runs; a dead orc can't push, so
+liveness monitoring still needs something outside it.
 
 ## BLE tag presence (Find Hub)
 

@@ -326,6 +326,18 @@ def alert_mp4() -> Response:
     return Response(alerts.render_alert_video(request.args.get("text", "").replace("`", "")), mimetype="video/mp4")
 
 
+@bp.route("/api/push/key")
+def push_key() -> dict[str, str]:
+    return {"key": api.push_public_key()}
+
+
+@bp.route("/api/push/subscribe", methods=["POST"])
+def push_subscribe() -> dict[str, Any]:
+    body = request.get_json()
+    api.subscribe_push(m.PushSubscription(body["endpoint"], body["keys"]["p256dh"], body["keys"]["auth"]))
+    return {}
+
+
 @bp.route("/api/durations")
 def durations() -> tuple[dict[str, Any], int]:
     delays = api.action_delays()
