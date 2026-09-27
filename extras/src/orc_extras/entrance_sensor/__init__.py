@@ -9,8 +9,8 @@ from orc.kernel.loader import Cast, load_plugin_config
 from orc.model import AppContext, Commands, DeviceEnum
 from orc_extras.entrance_sensor import plugins
 
-# Presence is paused at the door event, so cleanup only counts tags heard after
-# it — and a staying tag's advertisements can drop out for up to ~42s.
+# Presence is paused and purged at the door event, so cleanup only counts tags
+# heard after it.
 MIN_BLE_CLEANUP_MINUTES = 1
 CONFIG = "orc_extras/entrance_sensor"
 GRAMMAR = """
