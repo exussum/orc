@@ -2,7 +2,8 @@ from typing import Any, NamedTuple
 
 from command_cfg import array, scalar
 
-from orc.kernel.loader import Cast, load_plugin_config
+from orc.kernel import cast
+from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
 from orc_extras.calendar import plugins
 
@@ -39,10 +40,10 @@ def setup(ctx: AppContext) -> None:
         serializers={
             "setting": scalar(
                 Settings,
-                types={"window_hours": Cast.int, "max_events": Cast.int, "warning_minutes": Cast.int, "http_timeout": Cast.int},
+                types={"window_hours": cast.int, "max_events": cast.int, "warning_minutes": cast.int, "http_timeout": cast.int},
             ),
             "feed": array(Feed),
         },
     )
-    backend = Cast.module(calendar.setting.backend)
+    backend = cast.module(calendar.setting.backend)
     plugins.schedule_cron(ctx, backend, calendar.setting, calendar.feed)
