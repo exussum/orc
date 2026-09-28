@@ -139,6 +139,14 @@ def add_listener(fn: m.Listener) -> None:
     config.providers.mqtt.add_listener(fn)
 
 
+def add_button_listener(fn: m.ButtonListener) -> None:
+    config.providers.mqtt.add_button_listener(fn)
+
+
+def add_external_listener(fn: m.Listener) -> None:
+    config.providers.mqtt.add_external_listener(fn)
+
+
 def device_states() -> list[m.DeviceState]:
     return config.providers.mqtt.snapshot()
 
@@ -254,49 +262,6 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
     entry = log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state), trigger)
     with record_duration(id):
         dispatch(commands, force=True, entry=entry)
-
-
-def wire_listeners(ctx: m.AppContext) -> None:
-    _wire_buttons(ctx)
-    _wire_battery()
-    _wire_external_log()
-
-
-def _wire_buttons(ctx: m.AppContext) -> None:
-    mapping = {(r.device.value, r.button, r.event): r.action for r in config.remotes}
-
-    def on_button(device_id: int, button: int, event_type: str) -> None:
-        action = mapping.get((device_id, button, event_type))
-        trigger = m.Broker(id=str(device_id), source="hubitat")
-        if action is not None and not run_action(ctx, action, trigger, source=m.LogSource.EXTERNAL):
-            msg = Log.BUTTON_ACTION_UNKNOWN.format(id=action)
-            entry = log(m.LogSource.SYSTEM, msg, trigger, should_notify=True)
-            alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-
-    config.providers.mqtt.add_button_listener(on_button)
-
-
-def _wire_battery() -> None:
-    def on_event(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
-        if attribute != "battery":
-            return
-        level = m.BatteryLevel.from_fraction(new, 100)
-        if level.is_critical and not m.BatteryLevel.from_fraction(old, 100).is_critical:
-            msg = Log.LOW_BATTERY.format(device=device.name, level=level.value)
-            log(m.LogSource.SYSTEM, msg, m.Broker(id=str(device.id), source="hubitat"), should_notify=True)
-
-    config.providers.mqtt.add_listener(on_event)
-
-
-def _wire_external_log() -> None:
-    def on_external(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
-        log(
-            m.LogSource.EXTERNAL,
-            Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new),
-            m.Broker(id="external", source="hubitat"),
-        )
-
-    config.providers.mqtt.add_external_listener(on_external)
 
 
 type _Job = tuple[Callable[..., None], m.DeviceEnum, engine.Command[Any]]
