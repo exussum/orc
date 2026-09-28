@@ -4,11 +4,10 @@ import tempfile
 import urllib.request
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlencode
 
 from PIL import Image, ImageDraw, ImageFont, ImageText
 
-from orc.dal.chromecast import MAX_CHARS
+from orc.dal.chromecast import check_length, tts_url
 
 ALERT_IMAGE_SIZE = (1280, 720)
 
@@ -22,8 +21,7 @@ _TTS_TIMEOUT = 10
 
 @lru_cache(maxsize=5)
 def render_alert_video(text: str) -> bytes:
-    if len(text) > MAX_CHARS:
-        raise ValueError(f"Alert text exceeds {MAX_CHARS} characters: {len(text)}")
+    check_length(text, "Alert")
     with tempfile.TemporaryDirectory() as d:
         png, mp3 = Path(d) / "a.png", Path(d) / "a.mp3"
         seg, mp4 = Path(d) / "seg.mp4", Path(d) / "a.mp4"
@@ -66,7 +64,6 @@ def _render_alert_image(text: str) -> bytes:
 
 
 def _tts_mp3(text: str) -> bytes:
-    url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    req = urllib.request.Request(tts_url(text), headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=_TTS_TIMEOUT) as resp:  # nosemgrep
         return resp.read()

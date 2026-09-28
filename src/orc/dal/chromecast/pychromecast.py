@@ -10,7 +10,7 @@ import pychromecast
 import yt_dlp
 
 from orc import model as m
-from orc.dal.chromecast import MAX_CHARS
+from orc.dal.chromecast import check_length, tts_url
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
@@ -59,13 +59,11 @@ def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
 
 
 def speak(device: m.DeviceEnum, text: str) -> None:
-    if len(text) > MAX_CHARS:
-        raise ValueError(f"Announcement text exceeds {MAX_CHARS} characters: {len(text)}")
-    url = "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
+    check_length(text, "Announcement")
     with _cast(device) as cast:
         mc = cast.media_controller
         for _ in range(2):
-            mc.play_media(url, "audio/mp3", title=text)
+            mc.play_media(tts_url(text), "audio/mp3", title=text)
             mc.block_until_active(timeout=5)
             if mc.status.player_state != "IDLE" or mc.status.idle_reason != "ERROR":
                 return
@@ -73,11 +71,7 @@ def speak(device: m.DeviceEnum, text: str) -> None:
 
 
 def pause(device: m.DeviceEnum) -> None:
-    with _cast(device) as cast:
-        cast.media_controller.update_status()
-        time.sleep(1)
-        if cast.media_controller.status.player_state in ("PLAYING", "BUFFERING"):
-            cast.media_controller.pause()
+    _settle(device, ("PLAYING", "BUFFERING"), lambda mc: mc.pause())
 
 
 def play(device: m.DeviceEnum, stream_url: m.MediaUrl, title: str) -> None:
@@ -101,11 +95,7 @@ def play(device: m.DeviceEnum, stream_url: m.MediaUrl, title: str) -> None:
 
 
 def resume(device: m.DeviceEnum) -> None:
-    with _cast(device) as cast:
-        cast.media_controller.update_status()
-        time.sleep(1)
-        if cast.media_controller.status.player_state == "PAUSED":
-            cast.media_controller.play()
+    _settle(device, ("PAUSED",), lambda mc: mc.play())
 
 
 def stop(device: m.DeviceEnum) -> None:
@@ -140,3 +130,12 @@ def _strip_googlevideo_params(url: str) -> str:
     vid_id = parse_qs(parsed.query).get("id", [None])[0]
     query = urlencode({"id": vid_id}) if vid_id is not None else ""
     return urlunparse(parsed._replace(query=query))
+
+
+def _settle(device: m.DeviceEnum, states: tuple[str, ...], act: Callable[[Any], None]) -> None:
+    with _cast(device) as cast:
+        mc = cast.media_controller
+        mc.update_status()
+        time.sleep(1)
+        if mc.status.player_state in states:
+            act(mc)
