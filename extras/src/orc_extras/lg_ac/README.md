@@ -152,7 +152,7 @@ falls back to the single connected device.)
 ## Control
 
 - The `/device/` AC card's mode/temp/fan controls drive this plugin: `setup()`
-  registers `api.set_ac_handler`, so `ac_command` publishes to the AC instead of
+  registers its `Ac` backend with `api.set_ac`, so `ac_command` publishes to the AC instead of
   the (removed) broadlink blaster. The card's °F is converted to °C.
 - Or set it directly: `POST /api/lg_ac/enroll/command` with e.g.
   `{"mode":"cool","temperature":25,"fan_mode":"high"}`. A setpoint frame must
