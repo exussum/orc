@@ -118,9 +118,10 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_noti
     matching = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
     parent = matching or next((e for e in recent if e.answer(trigger)), None)
     if parent:
-        parent.add(source, action)
+        parent.add(source, action, notified=should_notify)
+        parent.notified = parent.notified or should_notify
     else:
-        parent = m.LogEntry(now, source, action, trigger)
+        parent = m.LogEntry(now, source, action, trigger, notified=should_notify)
         _ACTIVITY_LOG.appendleft(parent)
     if should_notify:
         notify(action, parent.trigger)
@@ -255,7 +256,13 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
         dispatch(commands, force=True, entry=entry)
 
 
-def wire_buttons(ctx: m.AppContext) -> None:
+def wire_listeners(ctx: m.AppContext) -> None:
+    _wire_buttons(ctx)
+    _wire_battery()
+    _wire_external_log()
+
+
+def _wire_buttons(ctx: m.AppContext) -> None:
     mapping = {(r.device.value, r.button, r.event): r.action for r in config.remotes}
 
     def on_button(device_id: int, button: int, event_type: str) -> None:
@@ -269,7 +276,19 @@ def wire_buttons(ctx: m.AppContext) -> None:
     config.providers.mqtt.add_button_listener(on_button)
 
 
-def wire_external_log() -> None:
+def _wire_battery() -> None:
+    def on_event(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
+        if attribute != "battery":
+            return
+        level = m.BatteryLevel.from_fraction(new, 100)
+        if level.is_critical and not m.BatteryLevel.from_fraction(old, 100).is_critical:
+            msg = Log.LOW_BATTERY.format(device=device.name, level=level.value)
+            log(m.LogSource.SYSTEM, msg, m.Broker(id=str(device.id), source="hubitat"), should_notify=True)
+
+    config.providers.mqtt.add_listener(on_event)
+
+
+def _wire_external_log() -> None:
     def on_external(device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
         log(
             m.LogSource.EXTERNAL,
