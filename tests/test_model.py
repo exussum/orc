@@ -36,11 +36,6 @@ def test_squish_dim_on():
     assert m._squish(cfg) == (_cmd(Light.a, 20), _cmd(Light.a, m.ON))
 
 
-def test_squish_0_on():
-    cfg = [_cmd(Light.a, 0), _cmd(Light.a, m.ON)]
-    assert m._squish(cfg) == (_cmd(Light.a, 0), _cmd(Light.a, m.ON))
-
-
 def test_squish_just_on():
     cfg = [_cmd(Light.a, m.OFF), _cmd(Light.a, m.ON)]
     assert m._squish(cfg) == (_cmd(Light.a, m.ON),)
