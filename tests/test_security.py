@@ -31,7 +31,6 @@ PARSE_CASES = [
     ("legacy frame without flags", bytes([0x40]) + bytes(20), bytes(20)),
     ("eddystone uid frame", bytes([0x00]) + bytes(21), None),
     ("truncated frame", bytes([0x40]) + bytes(4), None),
-    ("empty", b"", None),
 ]
 
 

@@ -52,12 +52,6 @@ def test_empty_conditions_fire_without_reading():
     assert e.Runtime([rule]).on_event(DOOR_OPEN, T0, read) == (e.Report(rule, e.Disposition.FIRED),)
 
 
-def test_runtime_immediate_rule_reports_fired():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),))
-    reaction = e.Runtime([rule]).on_event(DOOR_OPEN, T0, read_from({}))
-    assert reaction == (e.Report(rule, e.Disposition.FIRED),)
-
-
 def test_runtime_cooldown_reports_cooled_with_elapsed():
     rt = e.Runtime([e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), cooldown=timedelta(seconds=10))])
     assert rt.on_event(DOOR_OPEN, T0, read_from({}))[0].disposition is e.Disposition.FIRED

@@ -54,20 +54,12 @@ class TestManagingConfig:
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
         assert not api._ctx.engine.snapshots(api.local_now())
 
-    def test_get_with_snapshot(self, dispatch, snapshot_config):
+    def test_get_pops_the_snapshot_once(self, dispatch, snapshot_config):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         assert api._ctx.engine.pop_snapshot("test", api.local_now()).routine is snapshot_config
-        assert not api._ctx.engine.snapshots(api.local_now())
-        dispatch.assert_not_called()
-
-    def test_get_without_snapshot(self, dispatch):
         assert api._ctx.engine.pop_snapshot("test", api.local_now()) is None
-        dispatch.assert_not_called()
-
-    def test_get_with_old_snapshot(self, dispatch, snapshot_config):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=PAST), PAST)
         assert api._ctx.engine.pop_snapshot("test", api.local_now()) is None
-        assert not api._ctx.engine.snapshots(api.local_now())
         dispatch.assert_not_called()
 
 

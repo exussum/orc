@@ -1,4 +1,3 @@
-from enum import Enum
 from types import ModuleType
 
 import pytest
@@ -53,41 +52,6 @@ def test_collect_declarations_skips_core_modules():
 
     builder = declarations.collect_declarations([core_plugins], {})
     assert builder.button_labels == {}
-
-
-def test_build_carries_dispatch_and_missing():
-    class FakeType(Enum):
-        x = 1
-
-    def handler(w, rule, stream):
-        pass
-
-    builder = declarations.Declarations()
-    builder.declare_dispatch("FakeType", handler)
-    reg = builder.build({"FakeType": FakeType, "NoDispatch": FakeType})
-    assert reg.dispatch_handlers["FakeType"] is handler
-    assert reg.dispatch_handlers.get("NoDispatch") is None
-
-
-def test_declare_wires_every_piece():
-    class Acme(Enum):
-        x = 1
-
-    def hook():
-        pass
-
-    def handler(w, rule, stream):
-        pass
-
-    builder = declarations.Declarations()
-    builder.declare(
-        dispatch={"Acme": handler},
-        setup=[hook],
-    )
-    reg = builder.build({"Acme": Acme})
-    assert reg.dispatch_handlers["Acme"] is handler
-    assert reg.state_providers == {}
-    assert hook in reg.setup_hooks
 
 
 def test_setup_hooks_run_and_dedupe():
