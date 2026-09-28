@@ -25,7 +25,7 @@ from orc.dal.sqlite import (
     init_db,  # noqa: F401
     update_avg,
 )
-from orc.dal.sqlite import delete_theme_override as clear_theme_override  # noqa: F401
+from orc.dal.sqlite import delete_theme_override as clear_theme_override
 from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.decorators import mappable, requires_ctx
 from orc.kernel import cast, engine

@@ -38,12 +38,3 @@ def requires_ctx[**P, R](f: Callable[P, R]) -> Callable[P, R]:
         return f(*args, **kwargs)
 
     return wrapper
-
-
-def synchronized[R](method: Callable[..., R]) -> Callable[..., R]:
-    @wraps(method)
-    def wrapper(self: Any, *args: Any, **kwargs: Any) -> R:
-        with self._lock:
-            return method(self, *args, **kwargs)
-
-    return wrapper
