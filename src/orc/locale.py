@@ -32,7 +32,6 @@ class Log:
     ROOM_SET: str = "Room: `{id}` {state}"
     DEVICE_SET: str = "Device: `{id}` {state}"
 
-    EXTERNAL_DETECTED: str = "External change detected"
     EXTERNAL_CHANGE: str = "`{device}` {attribute}: {old} → {new}"
     CONFLICTING_ARMS: str = "`{device}` given conflicting states in one run: {states}"
 
