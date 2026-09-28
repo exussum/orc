@@ -22,11 +22,11 @@ def public_key() -> str:
     return base64.urlsafe_b64encode(point).rstrip(b"=").decode()
 
 
-def send(subscription: m.PushSubscription, title: str, body: str) -> None:
+def send(subscription: m.PushSubscription, title: str, body: str, tag: str) -> None:
     try:
         webpush(
             {"endpoint": subscription.endpoint, "keys": {"p256dh": subscription.public_key, "auth": subscription.auth_secret}},
-            data=json.dumps({"title": title, "body": body}),
+            data=json.dumps({"title": title, "body": body, "tag": tag}),
             vapid_private_key=Vapid.from_string(orc.config.secrets.vapid_private_key),
             vapid_claims={"sub": orc.config.settings.base_url},
             timeout=orc.config.settings.http_timeout,

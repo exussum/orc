@@ -37,6 +37,6 @@ class Log:
 
     ANNOUNCE: str = "Announce: {text}"
 
-    PUSH_TITLE: str = "ORC"
+    PUSH_TITLE: str = "[{source} {date}]"
     PUSH_FAILED: str = "Push failed for `…{endpoint}`: {exc}"
     PUSH_GREETING: str = "Notifications enabled on this device"

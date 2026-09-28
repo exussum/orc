@@ -110,7 +110,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         )
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
         if not ctx.plugin_state[orc_extras.entrance_sensor].present_before and not present:
-            ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, should_notify=True)
+            ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification_tag=("entrance",))
     if ctx.plugin_state[orc_extras.entrance_sensor].entry is log_entry:
         ctx.plugin_state[orc_extras.entrance_sensor] = None
 

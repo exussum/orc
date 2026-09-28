@@ -263,7 +263,9 @@ def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
     )
     plugin_ctx.api.run_action.assert_not_called()
     assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
-    plugin_ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, sensor.message.log_nobody, entry.trigger, should_notify=True)
+    plugin_ctx.api.log.assert_called_once_with(
+        plugins.Log.ENTRANCE, sensor.message.log_nobody, entry.trigger, notification_tag=("entrance",)
+    )
 
 
 def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(sensor, plugin_ctx):

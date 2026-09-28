@@ -346,18 +346,28 @@ class TestLog:
 
     def test_a_nested_line_still_notifies(self):
         api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        with patch.object(scheduler, "schedule_once") as once:
-            api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), should_notify=True)
-        assert once.call_args.kwargs["args"] == ("later x", m.Integration("x"), None)
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)), patch.object(scheduler, "schedule_once") as once:
+            api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification_tag=("calendar", "dentist"))
+        assert once.call_args.kwargs["args"] == ("[Plugin 01/05]", "later x", "calendar:dentist", m.Integration("x"), None)
 
     def test_a_greeted_subscription_is_pushed_alone(self):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
         api.subscribe_push(subscriptions[0])
         provider = create_autospec(push_stub)
-        with patch.object(config, "providers", config.providers._replace(push=provider)), patch.object(scheduler, "schedule_once") as once:
+        with (
+            freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)),
+            patch.object(config, "providers", config.providers._replace(push=provider)),
+            patch.object(scheduler, "schedule_once") as once,
+        ):
             api.subscribe_push(subscriptions[1], greet=True)
         assert once.call_args.args[0] is api._push_job
-        assert once.call_args.kwargs["args"] == ("Notifications enabled on this device", m.Manual("notify"), (subscriptions[1],))
+        assert once.call_args.kwargs["args"] == (
+            "[System 01/05]",
+            "Notifications enabled on this device",
+            "greeting",
+            m.Manual("notify"),
+            (subscriptions[1],),
+        )
         assert set(sqlite.fetch_push_subscriptions()) == set(subscriptions)
 
     def test_unsubscribing_drops_only_that_endpoint(self):
@@ -373,10 +383,10 @@ class TestLog:
             api.subscribe_push(subscription)
         provider = create_autospec(push_stub)
         provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
-        entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), should_notify=True)
+        entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification_tag=("leak",))
         with patch.object(config, "providers", config.providers._replace(push=provider)):
-            api._push_job("Leak at kitchen", entry.trigger, None, ctx=api._ctx)
-        assert provider.send.call_args_list == [call(s, "ORC", "Leak at kitchen") for s in subscriptions]
+            api._push_job("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None, ctx=api._ctx)
+        assert provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in subscriptions]
         assert set(sqlite.fetch_push_subscriptions()) == {subscriptions[0], subscriptions[2]}
         assert [c.action for c in entry.children] == ["Push failed for `…xample/c`: boom"]
 

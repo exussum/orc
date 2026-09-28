@@ -147,7 +147,7 @@ def house(request, monkeypatch, tmp_path):
         FakeBleakClient.probed = []
         FakeBleakClient.reachable = set()
         api.subscribe_push(m.PushSubscription("https://push.example/house", "public-key", "auth-secret"))
-        push = SimpleNamespace(public_key=lambda: "", send=lambda subscription, title, body: pushed.append(body))
+        push = SimpleNamespace(public_key=lambda: "", send=lambda subscription, title, body, tag: pushed.append(body))
         dispatch = api.dispatch
 
         def record(commands, *args, **kwargs):
