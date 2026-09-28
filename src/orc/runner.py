@@ -122,8 +122,6 @@ def _start_services(ctx: m.AppContext) -> None:
     for hook in config.config.registry.setup_hooks:
         with _step(hook.__module__):
             hook(ctx)
-    with _step("listeners"):
-        api.wire_listeners(ctx)
     with _step("mqtt"):
         config.config.providers.mqtt.start()
     with _step("ble"):

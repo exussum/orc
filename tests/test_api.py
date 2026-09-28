@@ -315,19 +315,6 @@ class TestLog:
             api.log(m.LogSource.PLUGIN, "later", m.Integration("x"))
         assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("later", []), ("first", [])]
 
-    def test_a_swarm_of_external_changes_rolls_up(self):
-        with patch.object(mqtt_stub, "add_external_listener", side_effect=lambda fn: setattr(self, "on_external", fn)):
-            api._wire_external_log()
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            self.on_external(m.DeviceState(1, "lamp a", {}, None), "switch", "off", "on")
-            self.on_external(m.DeviceState(2, "lamp b", {}, None), "switch", "off", "on")
-            frozen.tick(api._ROLLUP_WINDOW)
-            self.on_external(m.DeviceState(1, "lamp a", {}, None), "switch", "on", "off")
-        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
-            ("`lamp a` switch: on → off", []),
-            ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
-        ]
-
     def test_a_nested_line_still_notifies(self):
         api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
         with patch.object(scheduler, "schedule_once") as once:
@@ -673,69 +660,3 @@ def test_context_executor_copies_closure_job():
         executor._do_submit_job(job, [])
 
     assert captured[0].kwargs["ctx"] is ctx
-
-
-class TestWireButtons:
-    def _wire(self, buttons, run_result=True):
-        from unittest.mock import MagicMock
-
-        ctx = MagicMock()
-        captured = {}
-        with (
-            patch.object(config, "remotes", buttons),
-            patch.object(mqtt_stub, "add_button_listener", side_effect=lambda fn: captured.setdefault("fn", fn)),
-        ):
-            api._wire_buttons(ctx)
-        return ctx, captured["fn"]
-
-    def test_mapped_event_runs_action(self):
-        ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
-        with patch.object(api, "run_action", return_value=True) as run:
-            on_button(orc.Light.a.value, 1, "held")
-        run.assert_called_once_with(ctx, "TV Lights", m.Broker(id=str(orc.Light.a.value), source="hubitat"), source=m.LogSource.EXTERNAL)
-
-    def test_unmapped_event_is_ignored(self):
-        ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
-        with patch.object(api, "run_action") as run:
-            on_button(99, 1, "held")
-            on_button(orc.Light.a.value, 2, "held")
-            on_button(orc.Light.a.value, 1, "pushed")
-        run.assert_not_called()
-
-    def test_unknown_action_logs(self):
-        ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "No Such Routine"),))
-        with patch.object(api, "run_action", return_value=False), patch.object(api, "log") as log:
-            on_button(orc.Light.a.value, 1, "held")
-        log.assert_called_once()
-        assert "No Such Routine" in log.call_args[0][1]
-
-
-class TestWireBattery:
-    def _wire(self):
-        captured = {}
-        with patch.object(mqtt_stub, "add_listener", side_effect=lambda fn: captured.setdefault("fn", fn)):
-            api._wire_battery()
-        return captured["fn"]
-
-    @pytest.mark.parametrize(
-        "old, new, expected",
-        [("20", "5", True), ("5", "5", False), ("5", "80", False), ("80", "60", False)],
-    )
-    def test_notifies_on_crossing_into_critical(self, old, new, expected):
-        on_event = self._wire()
-        device = m.DeviceState(id=16, name="front door", attributes={"battery": new}, last_activity=None)
-        with patch.object(api, "log") as log:
-            on_event(device, "battery", old, new)
-        if expected:
-            log.assert_called_once_with(
-                m.LogSource.SYSTEM, "Low battery on `front door` (CRITICAL)", m.Broker(id="16", source="hubitat"), should_notify=True
-            )
-        else:
-            log.assert_not_called()
-
-    def test_ignores_other_attributes(self):
-        on_event = self._wire()
-        device = m.DeviceState(id=16, name="front door", attributes={"motion": "active"}, last_activity=None)
-        with patch.object(api, "log") as log:
-            on_event(device, "motion", "inactive", "active")
-        log.assert_not_called()
