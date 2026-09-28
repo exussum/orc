@@ -300,19 +300,6 @@ def _device(id=16, name="front door motion sensor", battery="100", attributes=No
     return m.DeviceState(id=id, name=name, attributes=attributes or {"battery": battery}, last_activity=None)
 
 
-def test_critical_battery_report_logs(plugin_ctx, sensor):
-    plugin_ctx.api.local_now.return_value = _DAYTIME
-    plugins._on_sensor_event(plugin_ctx, sensor, _device(battery="5"), "battery", "5", "5")
-    plugin_ctx.api.log.assert_called_once_with(
-        plugins.Log.ENTRANCE, "Low battery on `front door motion sensor` (CRITICAL)", m.Broker(id="16", source="hubitat")
-    )
-
-
-def test_healthy_battery_report_does_not_log(plugin_ctx, sensor):
-    plugins._on_sensor_event(plugin_ctx, sensor, _device(battery="80"), "battery", None, "80")
-    plugin_ctx.api.log.assert_not_called()
-
-
 def test_unwatched_device_is_ignored(plugin_ctx, sensor):
     plugins._on_sensor_event(plugin_ctx, sensor, _device(id=99, name="other", battery="5"), "battery", None, "5")
     plugin_ctx.api.log.assert_not_called()

@@ -27,11 +27,7 @@ class Log(m.LogSourceEnum):
 def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
     if device.id not in (sensor.setting.entrance.value, sensor.setting.patio_door.value):
         return
-    if attribute == "battery":
-        level = m.BatteryLevel.from_fraction(new, 100)
-        if level.is_critical:
-            ctx.api.log(Log.ENTRANCE, f"Low battery on `{device.name}` ({level.value})", m.Broker(id=str(device.id), source="hubitat"))
-    elif _entrance_motion_changed(sensor, device, attribute, old, new):
+    if _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on

@@ -50,7 +50,7 @@ def secrets() -> None:
     for name in sorted(needs):
         print(f"{name:<40} {f'bad: {problems[name]}' if name in problems else 'ok'}")
     for name in sorted(set(fetched.other) - set(needs)):
-        print(f"{name:<40} undeclared")
+        print(f"{name:<40} unused")
     if problems:
         sys.exit(1)
 
@@ -123,8 +123,7 @@ def _start_services(ctx: m.AppContext) -> None:
         with _step(hook.__module__):
             hook(ctx)
     with _step("listeners"):
-        api.wire_buttons(ctx)
-        api.wire_external_log()
+        api.wire_listeners(ctx)
     with _step("mqtt"):
         config.config.providers.mqtt.start()
     with _step("ble"):

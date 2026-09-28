@@ -301,6 +301,7 @@ class LogSubEntry:
     timestamp: datetime
     source: LogSourceEnum
     action: str
+    notified: bool = field(default=False, kw_only=True)
 
 
 @dataclass
@@ -309,8 +310,8 @@ class LogEntry(LogSubEntry):
     children: list[LogSubEntry] = field(default_factory=list)
     requests: tuple[Request, ...] = ()
 
-    def add(self, source: LogSourceEnum, action: str) -> LogSubEntry:
-        entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action)
+    def add(self, source: LogSourceEnum, action: str, *, notified: bool = False) -> LogSubEntry:
+        entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action, notified=notified)
         self.children.append(entry)
         return entry
 
