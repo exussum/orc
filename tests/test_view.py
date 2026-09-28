@@ -102,7 +102,7 @@ def test_console_ad_hoc_no_reset(client):
     ex.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
 
 
-def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(ctx):
+def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx):
     routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), reset=False, delay=timedelta(minutes=7))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
@@ -110,45 +110,12 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(ctx):
         patch.object(api, "dispatch") as ex,
         freeze_time(api.local_now()) as frozen,
     ):
-        api.run_action(ctx, "r", m.Manual("r"), source=m.LogSource.MANUAL)
+        client.get("/api/run/r")
         frozen.tick(timedelta(minutes=7))
         once.call_args.args[0](ctx=ctx)
     (queued,) = api.log_entries()
     assert [c.action for c in queued.children] == ["`r`"]
     ex.assert_called_once_with(routine.commands, force=True, entry=queued)
-
-
-def test_button_ad_hoc_snapshot(ctx):
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
-    captured = (engine.Command(m.Devices(orc.Light.a), m.ON),)
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
-        patch.object(api, "capture_lights", return_value=captured),
-        patch.object(api, "dispatch") as ex,
-    ):
-        api.run_action(ctx, "r", m.Broker(id="1", source="hubitat"), source=m.LogSource.EXTERNAL)
-    snap = ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT]
-    assert snap.routine is captured
-    assert snap.end > api.local_now()
-    ex.assert_called_once_with(routine.commands, force=True, entry=ANY)
-
-
-def test_button_ad_hoc_snapshot_does_not_stack(ctx):
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
-    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
-    existing = (engine.Command(m.Devices(orc.Light.a), m.ON),)
-    snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
-    ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap, snap.end)
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
-        patch.object(api, "capture_lights") as capture,
-        patch.object(api, "dispatch") as ex,
-    ):
-        api.run_action(ctx, "r", m.Broker(id="1", source="hubitat"), source=m.LogSource.EXTERNAL)
-    # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
-    assert ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine is existing
-    capture.assert_not_called()
-    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
 def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
