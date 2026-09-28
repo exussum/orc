@@ -91,8 +91,15 @@ def local_now() -> datetime:
     return datetime.now(tz=config.settings.tz)
 
 
-def notify(action: str, trigger: m.Trigger) -> None:
-    _schedule_push(action.replace("`", ""), trigger)
+def _notify(
+    source: m.LogSourceEnum,
+    action: str,
+    trigger: m.Trigger,
+    tag: tuple[str, ...],
+    subscriptions: tuple[m.PushSubscription, ...] | None = None,
+) -> None:
+    title = Log.PUSH_TITLE.format(source=source.capitalize(), date=f"{local_now():%m/%d}")
+    _schedule_push(title, action.replace("`", ""), ":".join(tag), trigger, subscriptions)
 
 
 def push_public_key() -> str:
@@ -102,14 +109,14 @@ def push_public_key() -> str:
 def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> None:
     sqlite.insert_push_subscription(subscription)
     if greet:
-        _schedule_push(Log.PUSH_GREETING, m.Manual("notify"), (subscription,))
+        _notify(m.LogSource.SYSTEM, Log.PUSH_GREETING, m.Manual("notify"), ("greeting",), (subscription,))
 
 
 def unsubscribe_push(endpoint: str) -> None:
     sqlite.delete_push_subscription(endpoint)
 
 
-def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_notify: bool = False) -> m.LogEntry:
+def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, notification_tag: tuple[str, ...] = ()) -> m.LogEntry:
     now = local_now()
     entries = _ACTIVITY_LOG.snapshot()
     recent = [e for e in entries if now - (e.children or [e])[-1].timestamp < _ROLLUP_WINDOW]
@@ -118,13 +125,13 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, should_noti
     matching = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
     parent = matching or next((e for e in recent if e.answer(trigger)), None)
     if parent:
-        parent.add(source, action, notified=should_notify)
-        parent.notified = parent.notified or should_notify
+        parent.add(source, action, notified=bool(notification_tag))
+        parent.notified = parent.notified or bool(notification_tag)
     else:
-        parent = m.LogEntry(now, source, action, trigger, notified=should_notify)
+        parent = m.LogEntry(now, source, action, trigger, notified=bool(notification_tag))
         _ACTIVITY_LOG.appendleft(parent)
-    if should_notify:
-        notify(action, parent.trigger)
+    if notification_tag:
+        _notify(source, action, parent.trigger, notification_tag)
     return parent
 
 
@@ -298,7 +305,7 @@ def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.Log
     except Exception as exc:
         msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
         entry.add(entry.source, msg)
-        notify(msg, entry.trigger)
+        _notify(entry.source, msg, entry.trigger, ("dispatch",))
         try:
             config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
         except Exception:
@@ -471,7 +478,7 @@ def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYS
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
-        entry = log(source, msg, trigger, should_notify=True)
+        entry = log(source, msg, trigger, notification_tag=("presence",))
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
     mark_present(present, local_now(), trigger)
     return present_names()
@@ -718,17 +725,24 @@ def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any
         raise ValueError(f"AC devices don't support state {command.value!r}")
 
 
-def _schedule_push(body: str, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None = None) -> None:
+def _schedule_push(title: str, body: str, tag: str, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None) -> None:
     scheduler.schedule_once(
-        _push_job, local_now(), args=(body, trigger, subscriptions), name="Push", misfire_grace_time=None, jobstore=JOBSTORE_MEMORY
+        _push_job,
+        local_now(),
+        args=(title, body, tag, trigger, subscriptions),
+        name="Push",
+        misfire_grace_time=None,
+        jobstore=JOBSTORE_MEMORY,
     )
 
 
 @requires_ctx
-def _push_job(body: str, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None, *, ctx: m.AppContext) -> None:
+def _push_job(
+    title: str, body: str, tag: str, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None, *, ctx: m.AppContext
+) -> None:
     for subscription in subscriptions or sqlite.fetch_push_subscriptions():
         try:
-            config.providers.push.send(subscription, Log.PUSH_TITLE, body)
+            config.providers.push.send(subscription, title, body, tag)
         except push.Gone:
             sqlite.delete_push_subscription(subscription.endpoint)
         except Exception as exc:

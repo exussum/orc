@@ -62,7 +62,10 @@ class TestBattery:
             on_event(device, "battery", old, new)
         if expected:
             log.assert_called_once_with(
-                m.LogSource.SYSTEM, "Low battery on `front door` (CRITICAL)", m.Broker(id="16", source="hubitat"), should_notify=True
+                m.LogSource.SYSTEM,
+                "Low battery on `front door` (CRITICAL)",
+                m.Broker(id="16", source="hubitat"),
+                notification_tag=("battery", "front door"),
             )
         else:
             log.assert_not_called()

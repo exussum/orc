@@ -36,12 +36,14 @@ class Msg:
 def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
     api = ctx.api
     msg = None
+    tag = ("yolink", name)
     if kind == "connection" and old is not None:
         msg = (Msg.CONNECTED if new == "connected" else Msg.DISCONNECTED).format(name=name)
     elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
+        tag = ("leak", name)
         if new == plugins.STATE_WET:
-            entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), should_notify=True)
+            entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification_tag=tag)
             api.alert(m.Alarm.EMERGENCY, text=msg, entry=entry)
             return
     elif kind == "battery":
@@ -63,7 +65,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
         msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
 
     if msg:
-        entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), should_notify=True)
+        entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification_tag=tag)
         api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)
 
 
