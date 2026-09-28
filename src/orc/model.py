@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, Flag, StrEnum, auto
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.base import BaseScheduler
@@ -588,6 +588,12 @@ class DeviceNamespace(SimpleNamespace):
         return vars(self).values()
 
 
+class AcService(Protocol):
+    def command(self, device: "DeviceEnum", state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None: ...
+    def state(self, device: "DeviceEnum") -> AcState | None: ...
+    def temperature(self, device: "DeviceEnum") -> int | None: ...
+
+
 @dataclass
 class Registry:
     """What plugins registered, built per config load and exposed as
@@ -613,15 +619,7 @@ class Registry:
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
     secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
-    # Set by a setup hook (``api.set_ac_handler``); ``api.ac_command`` calls it with the
-    # target AC device, so one backend routes every AC member by device.
-    ac_handler: Callable[["DeviceEnum", str | None, str | None, str | None, int | None], None] | None = None
-    # Set by a setup hook (``api.set_ac_state_handler``); ``api.ac_state`` reads a
-    # device's live ``AcState`` (None if unknown) through it.
-    ac_state_handler: Callable[["DeviceEnum"], AcState | None] | None = None
-    # Set by a setup hook (``api.set_ac_temperature_handler``); ``api.ac_temperature``
-    # reads a device's setpoint in °F (None if unknown or the unit is off) through it.
-    ac_temperature_handler: Callable[["DeviceEnum"], int | None] | None = None
+    ac: AcService | None = None
 
 
 def resolve_time(value: str) -> time | str:

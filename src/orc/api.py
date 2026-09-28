@@ -338,33 +338,22 @@ def tv_toggle(bl_device: m.DeviceEnum) -> None:
     config.providers.blaster.tv_toggle(bl_device, config.settings.broadlink_codes)
 
 
-def set_ac_handler(handler: Callable[[m.DeviceEnum, str | None, str | None, str | None, int | None], None]) -> None:
-    config.registry.ac_handler = handler
+def set_ac(backend: m.AcService) -> None:
+    config.registry.ac = backend
 
 
 def ac_command(device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None) -> None:
-    handler = config.registry.ac_handler
-    if handler is None:
-        raise RuntimeError("no AC handler registered; enable an AC plugin (e.g. orc_extras.lg_ac)")
-    handler(device, state, mode, fan, temp)
-
-
-def set_ac_state_handler(handler: Callable[[m.DeviceEnum], m.AcState | None]) -> None:
-    config.registry.ac_state_handler = handler
+    if config.registry.ac is None:
+        raise RuntimeError("no AC backend registered; enable an AC plugin (e.g. orc_extras.lg_ac)")
+    config.registry.ac.command(device, state, mode, fan, temp)
 
 
 def ac_state(device: m.DeviceEnum) -> m.AcState | None:
-    handler = config.registry.ac_state_handler
-    return handler(device) if handler else None
-
-
-def set_ac_temperature_handler(handler: Callable[[m.DeviceEnum], int | None]) -> None:
-    config.registry.ac_temperature_handler = handler
+    return config.registry.ac.state(device) if config.registry.ac else None
 
 
 def ac_temperature(device: m.DeviceEnum) -> int | None:
-    handler = config.registry.ac_temperature_handler
-    return handler(device) if handler else None
+    return config.registry.ac.temperature(device) if config.registry.ac else None
 
 
 def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:

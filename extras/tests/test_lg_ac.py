@@ -288,33 +288,33 @@ def test_event_logs_the_state_as_the_command_it_answers(ctx, state, value):
 
 def test_handle_ac_commands_the_bound_device():
     stub.reset(devices=["clip-1", "clip-2"])
-    lg_ac._handle_ac(stub, SimpleNamespace(value="clip-2"), "off", None, None, None)
+    lg_ac.Ac(stub).command(SimpleNamespace(value="clip-2"), "off", None, None, None)
     assert stub.published == [("clip-2", {"mode": "off"})]
 
 
 def test_handle_ac_stale_id_commands_nothing():
     stub.reset(devices=["clip-1", "clip-2"])
-    lg_ac._handle_ac(stub, SimpleNamespace(value="clip-stale"), "off", None, None, None)
+    lg_ac.Ac(stub).command(SimpleNamespace(value="clip-stale"), "off", None, None, None)
     assert stub.published == []
 
 
 def test_ac_state_reads_the_bound_device():
     stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 25.0, 22.0)})
-    assert lg_ac._ac_state(stub, SimpleNamespace(value="clip-1")) == AcState.COOL
+    assert lg_ac.Ac(stub).state(SimpleNamespace(value="clip-1")) == AcState.COOL
 
 
 def test_ac_state_stale_id_is_none():
-    assert lg_ac._ac_state(stub, SimpleNamespace(value="clip-stale")) is None  # unknown id → empty state
+    assert lg_ac.Ac(stub).state(SimpleNamespace(value="clip-stale")) is None  # unknown id → empty state
 
 
 def test_ac_temperature_reports_the_running_setpoint():
     stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 72, 77.4)})
-    assert lg_ac._ac_temperature(stub, SimpleNamespace(value="clip-1")) == 77
+    assert lg_ac.Ac(stub).temperature(SimpleNamespace(value="clip-1")) == 77
 
 
 def test_ac_temperature_is_none_when_the_unit_is_off():
     stub.reset(states={"clip-1": m.ACState("OFF", "cool", "low", 72, 77)})
-    assert lg_ac._ac_temperature(stub, SimpleNamespace(value="clip-1")) is None
+    assert lg_ac.Ac(stub).temperature(SimpleNamespace(value="clip-1")) is None
 
 
 def test_ac_status_rows_decode_per_device():

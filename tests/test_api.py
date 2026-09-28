@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
+from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, create_autospec, patch
 
 import pytest
@@ -184,29 +185,30 @@ def test_back_on_schedule_checks_presence_then_replays(entry):
 
 
 def test_dispatch_routes_ac_commands(entry):
-    with patch.object(config.registry, "ac_handler") as handler:
+    with patch.object(config.registry, "ac") as backend:
         api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.AcCommand(m.AcMode.COOL, "low", 75)),), force=True, entry=entry)
         api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=entry)
         api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.OFF),), force=True, entry=entry)
 
-    assert handler.call_args_list == [
+    assert backend.command.call_args_list == [
         call(orc.AC.unit, m.ON, m.AcMode.COOL, "low", 75),
         call(orc.AC.unit, m.ON, None, None, None),
         call(orc.AC.unit, m.OFF, None, None, None),
     ]
 
 
+def _ac(state, temperature=None):
+    return SimpleNamespace(command=lambda *args: None, state=lambda device: state, temperature=lambda device: temperature)
+
+
 def test_capture_acs_reads_each_device_through_the_handler():
-    with patch.object(config.registry, "ac_state_handler", lambda device: m.AcState.COOL):
+    with patch.object(config.registry, "ac", _ac(m.AcState.COOL)):
         assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL),)
     assert api.capture_acs() == (m.AcStatus(orc.AC.unit, None),)
 
 
 def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one():
-    with (
-        patch.object(config.registry, "ac_state_handler", lambda device: m.AcState.COOL),
-        patch.object(config.registry, "ac_temperature_handler", lambda device: 72),
-    ):
+    with patch.object(config.registry, "ac", _ac(m.AcState.COOL, 72)):
         assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
 
 
@@ -252,7 +254,7 @@ class TestLog:
 
     def test_a_bare_on_is_answered_by_any_powered_state(self):
         requester = api.log(m.LogSource.PLUGIN, "react", m.Integration("sensor"))
-        with patch.object(config.registry, "ac_handler"):
+        with patch.object(config.registry, "ac"):
             api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=requester)
         api.log(
             m.LogSource.PLUGIN,
