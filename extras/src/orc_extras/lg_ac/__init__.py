@@ -6,6 +6,7 @@ enrollment routes live on the ``web`` blueprint (mounted at ``/api/lg_ac/enroll`
 nginx presents the LG cert on :443 and rewrites the device's root paths to it.
 """
 
+from dataclasses import dataclass
 from functools import partial
 from typing import Any, NamedTuple
 
@@ -76,10 +77,44 @@ def setup(ctx: AppContext) -> None:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
     thinq.set_event_listener(partial(_on_event, ctx))
     thinq.start("127.0.0.1", s.mqtt_port, clip_ids=[str(device.value) for device in ctx.config.devices.AC])
-    ctx.api.set_ac_handler(partial(_handle_ac, thinq))
-    ctx.api.set_ac_state_handler(partial(_ac_state, thinq))
-    ctx.api.set_ac_temperature_handler(partial(_ac_temperature, thinq))
+    ctx.api.set_ac(Ac(thinq))
     ctx.api.add_state_provider("AC", partial(_ac_status, thinq, ctx))
+
+
+@dataclass(frozen=True)
+class Ac:
+    transport: Transport
+
+    def command(self, device: Any, state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None:
+        """Drive the AC from orc's /device/ page AC card (mode/fan/temp in °F)."""
+        transport = self.transport
+        device_id = str(device.value)
+        if device_id not in transport.devices():
+            return  # unknown/stale clip id: command nothing rather than the wrong AC
+        if state == "off":
+            transport.publish_command(device_id, {"mode": "off"})
+            return
+        # a setpoint frame must carry mode, so an omitted mode keeps the device's current one
+        values: dict[str, object] = {"mode": mode or transport.fetch_state(device_id).mode or "cool"}
+        if fan:
+            values["fan_mode"] = fan
+        if temp is not None:
+            values["temperature"] = round((temp - 32) * 5 / 9, 1)  # UI is °F; the codec wants °C
+        transport.publish_command(device_id, values)
+
+    def state(self, device: Any) -> AcState | None:
+        transport = self.transport
+        state = transport.fetch_state(str(device.value))  # unknown/stale id yields an empty state
+        if state.power is None:
+            return None
+        elif state.power == "OFF":
+            return AcState.OFF
+        return AcState.__members__.get((state.mode or "").upper(), AcState.ON)
+
+    def temperature(self, device: Any) -> int | None:
+        transport = self.transport
+        state = transport.fetch_state(str(device.value))
+        return None if state.temperature is None or state.power == "OFF" else round(state.temperature)
 
 
 def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
@@ -105,20 +140,6 @@ def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
     return rows
 
 
-def _ac_state(transport: Transport, device: Any) -> AcState | None:
-    state = transport.fetch_state(str(device.value))  # unknown/stale id yields an empty state
-    if state.power is None:
-        return None
-    elif state.power == "OFF":
-        return AcState.OFF
-    return AcState.__members__.get((state.mode or "").upper(), AcState.ON)
-
-
-def _ac_temperature(transport: Transport, device: Any) -> int | None:
-    state = transport.fetch_state(str(device.value))
-    return None if state.temperature is None or state.power == "OFF" else round(state.temperature)
-
-
 def _on_event(ctx: AppContext, device_id: str, msg: str, state: ACState) -> None:
     value: str | AcCommand | None
     if state.power == "OFF":
@@ -128,23 +149,6 @@ def _on_event(ctx: AppContext, device_id: str, msg: str, state: ACState) -> None
     else:
         value = None
     ctx.api.log(LogSource.LG_AC, msg, m.Broker(id=device_id, source="lg_ac", value=value))
-
-
-def _handle_ac(transport: Transport, device: Any, state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None:
-    """Drive the AC from orc's /device/ page AC card (mode/fan/temp in °F)."""
-    device_id = str(device.value)
-    if device_id not in transport.devices():
-        return  # unknown/stale clip id: command nothing rather than the wrong AC
-    if state == "off":
-        transport.publish_command(device_id, {"mode": "off"})
-        return
-    # a setpoint frame must carry mode, so an omitted mode keeps the device's current one
-    values: dict[str, object] = {"mode": mode or transport.fetch_state(device_id).mode or "cool"}
-    if fan:
-        values["fan_mode"] = fan
-    if temp is not None:
-        values["temperature"] = round((temp - 32) * 5 / 9, 1)  # UI is °F; the codec wants °C
-    transport.publish_command(device_id, values)
 
 
 def declare(declarations: Any) -> None:

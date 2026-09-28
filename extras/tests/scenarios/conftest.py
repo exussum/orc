@@ -132,7 +132,7 @@ def house(request, monkeypatch, tmp_path):
         net.presence.__init__()
         net.presence._tz = config.settings.tz
         api.start_ble_listener()
-        api.set_ac_handler(lambda *args: None)
+        api.set_ac(SimpleNamespace(command=lambda *args: None, state=lambda device: None, temperature=lambda device: None))
 
         scheduler = FakeScheduler()
         dal_scheduler.set_scheduler(scheduler)
