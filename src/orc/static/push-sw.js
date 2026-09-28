@@ -1,6 +1,6 @@
 self.addEventListener("push", (event) => {
-    const { title, body } = event.data.json();
-    event.waitUntil(self.registration.showNotification(title, { body, icon: "/static/icons/android-launchericon-192-192.png" }));
+    const { title, body, tag } = event.data.json();
+    event.waitUntil(self.registration.showNotification(title, { body, tag, icon: "/static/icons/android-launchericon-192-192.png" }));
 });
 
 self.addEventListener("notificationclick", (event) => {
