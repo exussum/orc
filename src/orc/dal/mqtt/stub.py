@@ -3,6 +3,7 @@ from typing import Any
 
 from orc import model as m
 from orc.dal import warn_stub
+from orc.dal.mqtt import switch_command
 from orc.kernel import engine
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
@@ -31,13 +32,7 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
     if brightness is not None and m.Capability.change_level in light.capabilities:
         _states[light] = brightness or m.OFF
         return
-    if brightness == 0:
-        on = False
-    elif brightness == 100:
-        on = True
-    elif brightness is not None:
-        raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
-    _states[light] = m.ON if on else m.OFF
+    _states[light] = switch_command(light, on, brightness)
 
 
 def snapshot() -> list[m.DeviceState]:
