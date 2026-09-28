@@ -11,6 +11,7 @@
             </td>
             <td class="orc-td max-w-0 w-full">
                 <div class="flex items-center gap-1.5" style="padding-left: 1.5rem">
+                    {% if child.notified %}<span>🔔</span>{% endif %}
                     <div class="orc-log-action truncate min-w-0">{{ child.action|codespan }}</div>
                 </div>
             </td>
@@ -36,6 +37,7 @@
                     </td>
                     <td class="orc-td max-w-0 w-full">
                         <div class="flex items-center gap-1.5">
+                            {% if entry.notified %}<span>🔔</span>{% endif %}
                             <div class="orc-log-action truncate min-w-0">{{ entry.action|codespan }}</div>
                             <span class="orc-log-caret text-gray-400 cursor-pointer{% if not entry.children %} invisible{% endif %}">▾</span>
                         </div>

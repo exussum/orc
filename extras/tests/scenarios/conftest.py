@@ -13,6 +13,7 @@ from orc import api, config, security
 from orc import model as m
 from orc.dal import net, sqlite
 from orc.dal import scheduler as dal_scheduler
+from orc.dal.mqtt import stub as mqtt_stub
 from orc.view import bp
 
 MONDAY_AFTERNOON = datetime(2026, 1, 5, 15, tzinfo=config.settings.tz)
@@ -153,7 +154,7 @@ def house(request, monkeypatch, tmp_path):
             return dispatch(commands, *args, **kwargs)
 
         with (
-            patch.object(api, "add_listener", side_effect=listeners.append),
+            patch.object(mqtt_stub, "add_listener", side_effect=listeners.append),
             patch.object(api, "dispatch", side_effect=record),
             patch.object(net, "scan_presence", side_effect=lambda pairs: (set(lan), [])),
             patch.object(net, "BleakClient", FakeBleakClient),
@@ -162,6 +163,7 @@ def house(request, monkeypatch, tmp_path):
         ):
             for plugin in request.node.get_closest_marker("plugins").args:
                 plugin.setup(ctx)
+            api.wire_listeners(ctx)
             yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed)
     finally:
         _load(sample, {})

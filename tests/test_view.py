@@ -355,3 +355,11 @@ def test_schedule_badges(client, kwargs, present, present_badges, absent_badges)
         assert badge in response.data
     for badge in absent_badges:
         assert badge not in response.data
+
+
+def test_log_page_bells_a_notifying_line_and_its_parent(client):
+    trigger = m.Manual("bell")
+    api.log(m.LogSource.SYSTEM, "Walk in", trigger)
+    api.log(m.LogSource.SYSTEM, "Nobody home", trigger, should_notify=True)
+    html = client.get("/log/").get_data(as_text=True)
+    assert html.count("🔔") == 2
