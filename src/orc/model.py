@@ -1,7 +1,7 @@
 import importlib
 import math
 from collections import defaultdict
-from collections.abc import Callable, ItemsView, Iterable, ValuesView
+from collections.abc import Callable, ItemsView, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, Flag, StrEnum, auto
@@ -583,9 +583,6 @@ class DeviceNamespace(SimpleNamespace):
 
     def items(self) -> ItemsView[str, type[DeviceEnum]]:
         return vars(self).items()
-
-    def values(self) -> ValuesView[type[DeviceEnum]]:
-        return vars(self).values()
 
 
 class AcService(Protocol):

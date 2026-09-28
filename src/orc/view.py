@@ -40,7 +40,6 @@ class DeviceRow(NamedTuple):
     id: str
     type: str
     icon: str
-    capabilities: set[str]
     toggle: bool
     level: int
     on: bool
@@ -150,7 +149,6 @@ def device() -> str:
             id=d.name,
             type=d.kind,
             icon=config.registry.device_icons.get(d.kind, "light-bulb"),
-            capabilities=capabilities,
             toggle=d.kind not in ("AC", "Chromecast", "USB") and "change_level" not in capabilities,
             level=level,
             on=level > 0,

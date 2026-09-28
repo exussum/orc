@@ -55,10 +55,6 @@ def job_exists(id: str) -> bool:
     return _scheduler().get_job(id) is not None
 
 
-def is_paused(id: str) -> bool:
-    return not _scheduler().get_job(id).next_run_time
-
-
 def pause_job(id: str) -> None:
     _scheduler().get_job(id).pause()
 
