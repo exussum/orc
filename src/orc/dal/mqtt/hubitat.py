@@ -19,6 +19,7 @@ import orc
 from orc import model as m
 from orc.collections import LockedDict
 from orc.dal import sqlite
+from orc.dal.mqtt import switch_command
 from orc.kernel import engine
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
@@ -171,13 +172,7 @@ def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int |
         command, payload = "setLevel", str(brightness)
         expected.level, expected.switch = brightness or None, m.ON if brightness else m.OFF
     else:
-        if brightness == 0:
-            on = False
-        elif brightness == 100:
-            on = True
-        elif brightness is not None:
-            raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
-        command, payload = (m.ON if on else m.OFF), None
+        command, payload = switch_command(light, on, brightness), None
         expected.switch = command
     if _client is None or _hub_id is None:
         raise RuntimeError(f"mqtt client not started or hub not yet seen; cannot command {light.name}")
