@@ -176,6 +176,41 @@ def test_back_on_schedule_checks_presence_then_replays(entry):
     ctx.api.replay_day.assert_called_once_with(ctx.api.local_now.return_value, entry)
 
 
+def test_button_ad_hoc_snapshot():
+    ctx = api._ctx
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    captured = (engine.Command(m.Devices(orc.Light.a), m.ON),)
+    with (
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
+        patch.object(api, "capture_lights", return_value=captured),
+        patch.object(api, "dispatch") as ex,
+    ):
+        api.run_action(ctx, "r", m.Broker(id="1", source="hubitat"), source=m.LogSource.EXTERNAL)
+    snap = ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT]
+    assert snap.routine is captured
+    assert snap.end > api.local_now()
+    ex.assert_called_once_with(routine.commands, force=True, entry=ANY)
+
+
+def test_button_ad_hoc_snapshot_does_not_stack():
+    ctx = api._ctx
+    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
+    existing = (engine.Command(m.Devices(orc.Light.a), m.ON),)
+    snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
+    ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap, snap.end)
+    with (
+        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
+        patch.object(api, "capture_lights") as capture,
+        patch.object(api, "dispatch") as ex,
+    ):
+        api.run_action(ctx, "r", m.Broker(id="1", source="hubitat"), source=m.LogSource.EXTERNAL)
+    # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
+    assert ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine is existing
+    capture.assert_not_called()
+    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
+
+
 def test_dispatch_routes_ac_commands(entry):
     with patch.object(config.registry, "ac") as backend:
         api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.AcCommand(m.AcMode.COOL, "low", 75)),), force=True, entry=entry)
