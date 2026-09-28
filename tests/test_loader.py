@@ -6,7 +6,12 @@ from types import SimpleNamespace
 import pytest
 
 from orc import model as m
-from orc.dal import interfaces
+from orc.dal.audio import pyaudio
+from orc.dal.chromecast import pychromecast
+from orc.dal.hubitat import http as hubitat_http
+from orc.dal.mqtt import hubitat as mqtt_hubitat
+from orc.dal.push import webpush
+from orc.dal.secrets import bws
 from orc.dal.secrets import stub as secrets_stub
 from orc.kernel import cast, engine, loader
 from orc.kernel.loader import ConfigError, parse_config, validate
@@ -340,8 +345,17 @@ def test_provider_imports_backends():
     assert providers.audio is audio_stub
 
 
-def test_provider_defaults_to_none():
-    assert parse("core").provider == interfaces.Provider()
+def test_unnamed_providers_default_to_the_real_backend_or_nothing():
+    provider = parse("core").provider
+    assert (provider.secrets, provider.mqtt, provider.chromecast, provider.hubitat, provider.audio, provider.push) == (
+        bws,
+        mqtt_hubitat,
+        pychromecast,
+        hubitat_http,
+        pyaudio,
+        webpush,
+    )
+    assert (provider.weather, provider.holiday, provider.blaster) == (None, None, None)
 
 
 def test_validate_missing_providers():
