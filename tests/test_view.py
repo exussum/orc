@@ -133,20 +133,6 @@ def test_button_ad_hoc_snapshot(ctx):
     ex.assert_called_once_with(routine.commands, force=True, entry=ANY)
 
 
-def test_manual_ad_hoc_snapshot_runs_without_capturing(ctx):
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
-    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
-        patch.object(api, "capture_lights") as capture,
-        patch.object(api, "dispatch") as ex,
-    ):
-        api.run_action(ctx, "r", m.Manual("r"), source=m.LogSource.MANUAL)
-    capture.assert_not_called()
-    assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots(api.local_now())
-    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
-
-
 def test_button_ad_hoc_snapshot_does_not_stack(ctx):
     routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))

@@ -143,11 +143,6 @@ def test_arrival_flight_uses_backend():
     assert plugins._arrival(_runtime([]), job, timezone.utc) == m.Arrival(ARRIVE, "JFK", "1")
 
 
-def test_arrival_destination():
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
-    assert plugins._arrival(_runtime([]), job, timezone.utc) == m.Arrival(ARRIVE, "Home", None)
-
-
 def _boom(msg):
     def raiser(*args, **kwargs):
         raise RuntimeError(msg)

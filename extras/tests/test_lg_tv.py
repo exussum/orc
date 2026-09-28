@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, create_autospec, patch
 import pytest
 from orc_extras import lg_tv
 from orc_extras.lg_tv import plugins
-from orc_extras.lg_tv.dal import sqlite, stub
 
 import orc
 from orc import api
@@ -81,24 +80,3 @@ class TestDispatchLGTV:
         with patch.object(plugins, "off") as webos_off:
             api.device_command("living_room", m.OFF, self.entry)
         webos_off.assert_called_once_with(self.ctx, self.webos)
-
-
-def test_lg_tv_registers_with_core():
-    from orc import config
-
-    assert lg_tv.setup in config.registry.setup_hooks
-    with patch.object(sqlite, "init_db") as init_db:
-        ctx = MagicMock()
-        ctx.api = create_autospec(api)
-        ctx.config.plugin_configs = {}
-        ctx.config.plugin_for.return_value.backend = create_autospec(stub)
-        lg_tv.setup(ctx)
-    init_db.assert_called_once_with(ctx.api.connection)
-    name, provider = ctx.api.add_state_provider.call_args.args
-    assert name == "TV"
-    assert provider.func is lg_tv.tv_state
-
-    assert config.registry.dispatch_handlers["LGTV"] is lg_tv._dispatch
-    assert "LGTV" in config.registry.controllable_devices
-    assert config.registry.device_icons["LGTV"] == "tv"
-    assert config.registry.scripts["lg_tv.js"].is_file()

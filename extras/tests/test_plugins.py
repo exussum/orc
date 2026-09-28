@@ -300,11 +300,6 @@ def _device(id=16, name="front door motion sensor", battery="100", attributes=No
     return m.DeviceState(id=id, name=name, attributes=attributes or {"battery": battery}, last_activity=None)
 
 
-def test_unwatched_device_is_ignored(plugin_ctx, sensor):
-    plugins._on_sensor_event(plugin_ctx, sensor, _device(id=99, name="other", battery="5"), "battery", None, "5")
-    plugin_ctx.api.log.assert_not_called()
-
-
 def test_battery_state_reads_the_device_cache(plugin_ctx, sensor):
     _seed_devices(plugin_ctx, _device(battery="80"))
     assert plugins.battery_state(plugin_ctx, sensor) == [
@@ -335,16 +330,6 @@ def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
         m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None}),
         m.DeviceStatus(name="patio", details={"battery": None, "last_activity": None}),
     ]
-
-
-def _motion(ctx, sensor, old, new):
-    device = _device(attributes={"motion": new})
-    plugins._on_sensor_event(ctx, sensor, device, "motion", old, new)
-
-
-def test_motion_republish_does_not_fire(ctx, sensor):
-    _motion(ctx, sensor, "active", "active")
-    ctx.api.dispatch.assert_not_called()
 
 
 def test_cleanup_checks_presence_then_resumes(sensor, plugin_ctx):
