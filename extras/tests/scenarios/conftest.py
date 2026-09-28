@@ -14,6 +14,7 @@ from orc import model as m
 from orc.dal import net, sqlite
 from orc.dal import scheduler as dal_scheduler
 from orc.dal.mqtt import stub as mqtt_stub
+from orc.plugins import battery, buttons, external
 from orc.view import bp
 
 MONDAY_AFTERNOON = datetime(2026, 1, 5, 15, tzinfo=config.settings.tz)
@@ -163,7 +164,8 @@ def house(request, monkeypatch, tmp_path):
         ):
             for plugin in request.node.get_closest_marker("plugins").args:
                 plugin.setup(ctx)
-            api.wire_listeners(ctx)
+            for listener in (buttons, battery, external):
+                listener.setup(ctx)
             yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed)
     finally:
         _load(sample, {})

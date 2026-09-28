@@ -86,6 +86,9 @@ ad_hoc define 'All Lights Off' --section scene --no-reset Light      off
 remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
 remote     .                         1 held   Silence
 
+plugin Buttons            orc.plugins.buttons
+plugin Battery            orc.plugins.battery
+plugin External           orc.plugins.external
 plugin 'Pair LG TV'       orc_extras.lg_tv           pair_tv     --section device --backend orc_extras.lg_tv.dal.webos
 plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device --backend orc_extras.yolink.dal.yosmart
 
