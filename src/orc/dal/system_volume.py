@@ -13,26 +13,29 @@ class UsbAudioDevice(NamedTuple):
 
 
 def set_volume(serial: str, pct: int) -> None:
-    if sys.platform == "darwin":
+    if _platform() == "darwin":
         import orc
 
         if len(orc.config.devices.USB) > 1:
             print(f"warning: osascript ignores {serial!r} and adjusts the system default output device", file=sys.stderr)
         subprocess.run(["osascript", "-e", f"set volume output volume {pct}"], check=True)
-    elif sys.platform.startswith("linux"):
-        _alsa_mixer(serial).setvolume(pct)
     else:
-        raise RuntimeError(f"No volume control implemented for platform {sys.platform!r}")
+        _alsa_mixer(serial).setvolume(pct)
 
 
 def get_volume(serial: str) -> int:
-    if sys.platform == "darwin":
+    if _platform() == "darwin":
         out = subprocess.run(["osascript", "-e", "output volume of (get volume settings)"], check=True, capture_output=True, text=True)
         return int(out.stdout.strip())
+    return _alsa_mixer(serial).getvolume()[0]
+
+
+def _platform() -> str:
+    if sys.platform == "darwin":
+        return "darwin"
     elif sys.platform.startswith("linux"):
-        return _alsa_mixer(serial).getvolume()[0]
-    else:
-        raise RuntimeError(f"No volume control implemented for platform {sys.platform!r}")
+        return "linux"
+    raise RuntimeError(f"No volume control implemented for platform {sys.platform!r}")
 
 
 def _usb_serial(idx: int) -> str | None:
