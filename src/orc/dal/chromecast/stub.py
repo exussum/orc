@@ -3,7 +3,7 @@ from typing import Any
 
 from orc import model as m
 from orc.dal import warn_stub
-from orc.dal.chromecast import MAX_CHARS
+from orc.dal.chromecast import check_length
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
@@ -25,8 +25,7 @@ def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
 
 
 def speak(device: m.DeviceEnum, text: str) -> None:
-    if len(text) > MAX_CHARS:
-        raise ValueError(f"Announcement text exceeds {MAX_CHARS} characters: {len(text)}")
+    check_length(text, "Announcement")
     _announced.append(text)
     _content[device] = text
 
