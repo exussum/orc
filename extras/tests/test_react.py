@@ -6,8 +6,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from apscheduler.schedulers.base import BaseScheduler
+from flask import Flask
 from orc_extras import react
-from orc_extras.react import model, plugins
+from orc_extras.react import model, plugins, web
 
 import orc
 from orc import model as m
@@ -472,3 +473,47 @@ def test_enable_wakes_a_sleeping_rule(configured):
     state.enable(configured[0])
     assert not state.is_disabled(configured[0], _NOW)
     assert state.disabled_until(configured[0], _NOW) is None
+
+
+@pytest.fixture
+def client(ctx, configured):
+    app = Flask(__name__)
+    app.orc = ctx  # type: ignore[attr-defined]
+    app.register_blueprint(web.react_bp)
+    return app.test_client()
+
+
+def test_rules_endpoint_groups_rules_by_name(client, configured):
+    body = client.get("/").get_json()
+    assert [r["name"] for r in body["rules"]] == [
+        "Lights off",
+        "Desk cools",
+        "Desk stops AC",
+        "Lamp cools",
+        "Lamp off with desk",
+        "Lamp off while playing",
+        "Motion lamp",
+    ]
+    assert all(r["sleeping_until"] is None for r in body["rules"])
+
+
+def test_sleep_endpoint_disables_every_rule_of_the_name_and_logs(client, ctx, configured):
+    response = client.post("/0/sleep")
+    until = _NOW + timedelta(minutes=10)
+    assert (response.status_code, response.get_json()) == (201, {"sleeping_until": until.isoformat()})
+    state = ctx.plugin_state[react]
+    assert state.is_disabled(configured[0], _NOW) and state.is_disabled(configured[1], _NOW)
+    assert not state.is_disabled(configured[2], _NOW)
+    assert client.get("/").get_json()["rules"][0]["sleeping_until"] == until.isoformat()
+    assert ctx.api.log.call_args.args[1] == "`Lights off` sleeping until 15:10"
+
+
+def test_wake_endpoint_enables_the_rule_and_logs(client, ctx, configured):
+    ctx.plugin_state[react].disable(configured[3], _NOW)
+    assert client.delete("/2/sleep").status_code == 204
+    assert not ctx.plugin_state[react].is_disabled(configured[3], _NOW)
+    assert ctx.api.log.call_args.args[1] == "`Desk stops AC` awake"
+
+
+def test_unknown_rule_is_a_404(client):
+    assert client.post("/99/sleep").status_code == 404
