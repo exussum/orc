@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
+from orc.model import LogSourceEnum
+
+
+class LogSource(LogSourceEnum):
+    LG_AC = "lg ac"
+
 
 class Settings(NamedTuple):
     hostname: str  # advertised api host, e.g. common.lgthinq.com
