@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from apscheduler.triggers.date import DateTrigger
@@ -10,6 +11,21 @@ from orc.security import safe_eval
 from orc_extras.react.model import FUNCTIONS, DeviceChanged, Formula, Log, source_of
 
 JOB_ID = "react"
+
+
+def sleep(ctx: m.AppContext, name: str, rules: list[engine.Rule[m.Devices]]) -> datetime:
+    state = ctx.plugin_state[orc_extras.react]
+    now = ctx.api.local_now()
+    until = max(state.disable(rule, now) for rule in rules)
+    ctx.api.log(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
+    return until
+
+
+def wake(ctx: m.AppContext, name: str, rules: list[engine.Rule[m.Devices]]) -> None:
+    state = ctx.plugin_state[orc_extras.react]
+    for rule in rules:
+        state.enable(rule)
+    ctx.api.log(Log.REACT, f"`{name}` awake", m.Manual("react"))
 
 
 def _trigger_label(rule: engine.Rule) -> Any:
