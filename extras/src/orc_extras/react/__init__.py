@@ -4,6 +4,7 @@ from typing import Any
 
 from command_cfg import each
 
+import orc_extras.react
 from orc.kernel import cast, engine
 from orc.kernel.loader import load_plugin_config, validate_ac_state
 from orc.model import (
@@ -22,11 +23,12 @@ from orc_extras.react import model, plugins
 from orc_extras.react.model import TRIGGERS, When
 
 CONFIG = "orc_extras/react"
-GRAMMAR = """
-react <devices> turns <state> set <action> [if <device> is <condition>] [--delay=<minutes>]
-react <devices> turns <state> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
-react <devices> <expr> between <low> and <high> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
-react <devices> <expr> between <low> and <high> present <people> set <target> <action> [if <device> is <condition>] [--delay=<minutes>]
+_OPTIONS = "[if <device> is <condition>] [--delay=<minutes>] [--pause=<minutes>]"
+GRAMMAR = f"""
+react <devices> turns <state> set <action> {_OPTIONS}
+react <devices> turns <state> set <target> <action> {_OPTIONS}
+react <devices> <expr> between <low> and <high> set <target> <action> {_OPTIONS}
+react <devices> <expr> between <low> and <high> present <people> set <target> <action> {_OPTIONS}
 """
 
 
@@ -73,6 +75,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     assert target is not None
     when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
+    pause = timedelta(minutes=args.pause) if args.pause else model.DEFAULT_PAUSE
     for source in cast.devices(args.devices, objects).all():
         formula = model.Formula(source, args.expr)
         conditions: list[engine.Condition] = []
@@ -86,11 +89,10 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
             conditions.extend(model.AcIs(AcChannel(ac), AcState.OFF) for ac in target.all())
         conditions.append(model.Range(formula, args.low, args.high))
         command = engine.Command(target, action)
-        objects["react"].append(
-            engine.Rule(
-                model.DeviceChanged(source, args.expr), (engine.Clause(tuple(conditions), command),), delay, cooldown=model.COOLDOWN
-            )
+        rule = engine.Rule(
+            model.DeviceChanged(source, args.expr), (engine.Clause(tuple(conditions), command),), delay, cooldown=model.COOLDOWN
         )
+        objects["react"].append(model.Reaction(rule, pause))
 
 
 def _rule(objects: dict[str, Any], args: Any) -> None:
@@ -105,21 +107,28 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
     cond = model.condition(when)
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
+    pause = timedelta(minutes=args.pause) if args.pause else model.DEFAULT_PAUSE
     for source in cast.devices(args.devices, objects).all():
         command = engine.Command(target or Devices(source), action)
         trigger = engine.Transition(MqttDeviceChannel(source, attribute), args.state)
-        objects["react"].append(engine.Rule(trigger, (engine.Clause(cond, command),), delay, cooldown=model.COOLDOWN))
+        rule = engine.Rule(trigger, (engine.Clause(cond, command),), delay, cooldown=model.COOLDOWN)
+        objects["react"].append(model.Reaction(rule, pause))
 
 
 def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup])
 
 
-def setup(ctx: AppContext) -> None:
+def setup(ctx: AppContext) -> list[engine.Rule[Devices]]:
     cfg = load_plugin_config(
-        CONFIG, ctx.config, GRAMMAR, serializers={"react": each(_rule, default=list, types={"delay": int, "low": int, "high": int})}
+        CONFIG,
+        ctx.config,
+        GRAMMAR,
+        serializers={"react": each(_rule, default=list, types={"delay": int, "low": int, "high": int, "pause": int})},
     )
-    ctx.engine.add_rules(cfg.react)
-    sources = {model.source_of(er).value: model.source_of(er) for er in cfg.react}
+    rules = [reaction.rule for reaction in cfg.react]
+    ctx.engine.add_rules(rules)
+    ctx.plugin_state[orc_extras.react] = model.State({reaction.rule: reaction.pause for reaction in cfg.react})
+    sources = {model.source_of(rule).value: model.source_of(rule) for rule in rules}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
-    return cfg.react
+    return rules

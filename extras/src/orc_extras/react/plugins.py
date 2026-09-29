@@ -2,6 +2,7 @@ from typing import Any
 
 from apscheduler.triggers.date import DateTrigger
 
+import orc_extras.react
 from orc import model as m
 from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
@@ -60,8 +61,12 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     if source is None:
         return
     event = engine.Event(m.MqttDeviceChannel(source, attribute), old, new)
+    state = ctx.plugin_state[orc_extras.react]
+    now = ctx.api.local_now()
     fired: list[engine.Report] = []
-    for reaction in ctx.engine.on_event(event, ctx.api.local_now(), _reader(ctx)):
+    for reaction in ctx.engine.on_event(event, now, _reader(ctx)):
+        if state.is_disabled(reaction.rule, now):
+            continue
         match reaction:
             case engine.Report() if reaction.disposition is engine.Disposition.FIRED:
                 fired.append(reaction)
@@ -110,5 +115,8 @@ def _command(report: engine.Report) -> m.DeviceCommand:
 
 @requires_ctx
 def _run_react(deferred: engine.Deferred, name: str, *, ctx: m.AppContext) -> None:
-    report = ctx.engine.on_fire(deferred, ctx.api.local_now(), _reader(ctx))
+    now = ctx.api.local_now()
+    if ctx.plugin_state[orc_extras.react].is_disabled(deferred.rule, now):
+        return
+    report = ctx.engine.on_fire(deferred, now, _reader(ctx))
     _dispatch(ctx, report, name, f" {int(deferred.rule.delay.total_seconds() // 60)}m ago")
