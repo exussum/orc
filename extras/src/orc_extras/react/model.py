@@ -1,11 +1,12 @@
 import math
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import NamedTuple
 
 from orc import model as m
 from orc.kernel import cast, engine
 
+DEFAULT_PAUSE = timedelta(minutes=10)
 COOLDOWN = timedelta(seconds=10)  # a (rule, device) won't re-fire within this window — breaks flapping loops
 
 TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "contact", "active": "motion", "inactive": "motion"}
@@ -23,6 +24,27 @@ FUNCTIONS = {"dewpoint": _dewpoint}
 
 class Log(m.LogSourceEnum):
     REACT = "react"
+
+
+class Reaction(NamedTuple):
+    rule: engine.Rule[m.Devices]
+    pause: timedelta
+
+
+@dataclass
+class State:
+    pauses: dict[engine.Rule[m.Devices], timedelta]
+    disabled: dict[engine.Rule[m.Devices], datetime] = field(default_factory=dict)
+
+    def disable(self, rule: engine.Rule[m.Devices], now: datetime) -> None:
+        self.disabled[rule] = now + self.pauses[rule]
+
+    def is_disabled(self, rule: engine.Rule[m.Devices], now: datetime) -> bool:
+        until = self.disabled.get(rule)
+        if until and until > now:
+            return True
+        self.disabled.pop(rule, None)
+        return False
 
 
 class When(NamedTuple):
