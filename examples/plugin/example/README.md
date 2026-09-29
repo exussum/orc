@@ -32,10 +32,21 @@ No `plugin` line ⇒ the module is never imported (why `example` is inert).
 
 ## Where things go
 
-**Config/domain types** — inline in `__init__.py` if only `setup()` uses them
-(`calendar`, `entrance_sensor`); a leaf `model.py` once a second module needs
-them (`travel`, `example`). Never leave a shared type in `__init__.py` (importing
-it runs the package's `declare`/`setup`).
+**`__init__.py`** — the loader contract and nothing else: `GRAMMAR`, serializers,
+parse factories, `declare()`, `setup()`. Nothing defined here runs after boot. A
+function a `plugin` line names (`pair_tv`) is defined in `plugins.py`
+and imported here so the dotted path resolves.
+
+**`plugins.py`** — everything that runs after boot: listeners, dispatch handlers,
+state providers, scheduled jobs, plugin-line functions. Bound with
+`partial(fn, ctx, ...)` from `setup()`.
+
+**`model.py`** — types shared by two modules. Inline in `__init__.py` only when
+`setup()` alone uses them (`calendar`, `entrance_sensor`). Never a shared type in
+`__init__.py`: importing it runs the package's `declare`/`setup`.
+
+**`web.py`** — the Flask blueprint, mounted at `/api/<plugin>/<namespace>` by
+`blueprints=` in `declare()`.
 
 **Backends** — `dal/<capability>/<provider>.py` + `dal/<capability>/stub.py`.
 Real named after the provider (`acme`, `tomtom`, `ical`, `webos`); fake always
