@@ -6,9 +6,20 @@ from command_cfg import each
 
 from orc.kernel import cast, engine
 from orc.kernel.loader import load_plugin_config, validate_ac_state
-from orc.model import AcChannel, AcCommand, AcState, AnyoneChannel, AppContext, DeviceEnum, Devices, MqttDeviceChannel, Playback, Tag
-from orc_extras.react import plugins
-from orc_extras.react.plugins import TRIGGERS, When
+from orc.model import (
+    AcChannel,
+    AcCommand,
+    AcState,
+    AnyoneChannel,
+    AppContext,
+    DeviceEnum,
+    Devices,
+    MqttDeviceChannel,
+    Playback,
+    Tag,
+)
+from orc_extras.react import model, plugins
+from orc_extras.react.model import TRIGGERS, When
 
 CONFIG = "orc_extras/react"
 GRAMMAR = """
@@ -63,21 +74,21 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     for source in cast.devices(args.devices, objects).all():
-        formula = plugins.Formula(source, args.expr)
+        formula = model.Formula(source, args.expr)
         conditions: list[engine.Condition] = []
         if args.people == Tag.ANYONE:
             conditions.append(engine.Is(AnyoneChannel(), True))
         elif args.people:
             people = tuple(name.strip() for name in args.people.split(","))
-            conditions.append(plugins.Present(people))
-        conditions.extend(plugins.condition(when))
+            conditions.append(model.Present(people))
+        conditions.extend(model.condition(when))
         if isinstance(action, AcCommand):
-            conditions.extend(plugins.AcIs(AcChannel(ac), AcState.OFF) for ac in target.all())
-        conditions.append(plugins.Range(formula, args.low, args.high))
+            conditions.extend(model.AcIs(AcChannel(ac), AcState.OFF) for ac in target.all())
+        conditions.append(model.Range(formula, args.low, args.high))
         command = engine.Command(target, action)
         objects["react"].append(
             engine.Rule(
-                plugins.DeviceChanged(source, args.expr), (engine.Clause(tuple(conditions), command),), delay, cooldown=plugins.COOLDOWN
+                model.DeviceChanged(source, args.expr), (engine.Clause(tuple(conditions), command),), delay, cooldown=model.COOLDOWN
             )
         )
 
@@ -92,12 +103,12 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     action = cast.state(args.action)
     target = _parse_target(args.target, action, objects)
     when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
-    cond = plugins.condition(when)
+    cond = model.condition(when)
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     for source in cast.devices(args.devices, objects).all():
         command = engine.Command(target or Devices(source), action)
         trigger = engine.Transition(MqttDeviceChannel(source, attribute), args.state)
-        objects["react"].append(engine.Rule(trigger, (engine.Clause(cond, command),), delay, cooldown=plugins.COOLDOWN))
+        objects["react"].append(engine.Rule(trigger, (engine.Clause(cond, command),), delay, cooldown=model.COOLDOWN))
 
 
 def declare(declarations: Any) -> None:
@@ -109,6 +120,6 @@ def setup(ctx: AppContext) -> None:
         CONFIG, ctx.config, GRAMMAR, serializers={"react": each(_rule, default=list, types={"delay": int, "low": int, "high": int})}
     )
     ctx.engine.add_rules(cfg.react)
-    sources = {plugins.source_of(er).value: plugins.source_of(er) for er in cfg.react}
+    sources = {model.source_of(er).value: model.source_of(er) for er in cfg.react}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
     return cfg.react
