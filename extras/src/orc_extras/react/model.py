@@ -38,8 +38,12 @@ class State:
     names: dict[engine.Rule[m.Devices], str] = field(default_factory=dict)
     disabled: dict[engine.Rule[m.Devices], datetime] = field(default_factory=dict)
 
-    def disable(self, rule: engine.Rule[m.Devices], now: datetime) -> None:
+    def disable(self, rule: engine.Rule[m.Devices], now: datetime) -> datetime:
         self.disabled[rule] = now + self.pauses[rule]
+        return self.disabled[rule]
+
+    def enable(self, rule: engine.Rule[m.Devices]) -> None:
+        self.disabled.pop(rule, None)
 
     def named(self) -> dict[str, list[engine.Rule[m.Devices]]]:
         groups: dict[str, list[engine.Rule[m.Devices]]] = {}
@@ -48,11 +52,14 @@ class State:
         return groups
 
     def is_disabled(self, rule: engine.Rule[m.Devices], now: datetime) -> bool:
+        return self.disabled_until(rule, now) is not None
+
+    def disabled_until(self, rule: engine.Rule[m.Devices], now: datetime) -> datetime | None:
         until = self.disabled.get(rule)
         if until and until > now:
-            return True
+            return until
         self.disabled.pop(rule, None)
-        return False
+        return None
 
 
 class When(NamedTuple):
