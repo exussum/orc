@@ -38,6 +38,12 @@ class BleKey(NamedTuple):
     anchor: int  # unix seconds of the tag's clock zero (its pair date)
 
 
+class TagClock(NamedTuple):
+    offset: int  # tag clock minus the pair-date estimate, in seconds
+    heard: int
+    eid: bytes | None = None
+
+
 type Listener = Callable[[DeviceState, str, Any, Any], None]
 type ButtonListener = Callable[[int, int, str], None]
 type DeviceCommand = engine.Command[Any, Devices]

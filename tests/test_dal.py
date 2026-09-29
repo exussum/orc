@@ -8,7 +8,7 @@ from pywebpush import WebPushException
 
 from orc import config, security
 from orc import model as m
-from orc.dal import net, push
+from orc.dal import net, push, sqlite
 from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.holiday import polygon
 from orc.dal.push import webpush
@@ -85,6 +85,16 @@ class TestMarketHoliday:
         assert self._market_holiday(date(2026, 11, 30)) is False
 
 
+@pytest.mark.parametrize(
+    "offsets, expected",
+    [([100], 100), ([100, 400], 100), ([100, 700], 700), ([100, 700, 300], 700), ([100, 700, 100], 100)],
+)
+def test_tag_clock_row_moves_only_by_more_than_half_a_window(offsets, expected):
+    for offset in offsets:
+        sqlite.upsert_tag_clock("Alice", m.TagClock(offset, 0))
+    assert sqlite.fetch_tag_clocks() == {"Alice": m.TagClock(expected, 0)}
+
+
 class TestPresence:
     EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
@@ -95,7 +105,8 @@ class TestPresence:
     def _hear(self, frames, tags):
         with patch.object(net.Presence, "_now", return_value=self.NOW):
             presence = net.Presence()
-            presence._index = net._eid_index(tags, self.NOW)
+            presence._tags = tags
+            presence._index = net._eid_index(tags, {}, self.NOW)
             for frame in frames:
                 presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
         return presence
@@ -113,6 +124,35 @@ class TestPresence:
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[0]
         presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
         assert self._present(presence) == {"Alice"}
+
+    def test_far_window_matches_and_narrows_the_index(self):
+        far = 5000 + 6 * security.FMDN_ROTATION_SECONDS
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, far)[1]
+        tags = {"Alice": BleKey(self.EIK, self.ANCHOR)}
+        presence = self._hear([frame], tags)
+        assert self._present(presence) == {"Alice"}
+        narrowed = net._eid_index(tags, presence._clocks.copy(), self.NOW)
+        assert len(narrowed) == 9
+        assert set(security.fmdn_eids(self.EIK, far)) <= narrowed.keys()
+
+    def test_stale_clock_widens_the_index_again(self):
+        tags = {"Alice": BleKey(self.EIK, self.ANCHOR)}
+        clocks = {"Alice": m.TagClock(0, int(self.NOW.timestamp()) - net._BLE_CLOCK_TRUST_SECONDS)}
+        assert len(net._eid_index(tags, clocks, self.NOW)) == 3 * (2 * net._BLE_SEARCH_WINDOWS + 1)
+
+    def test_a_rotation_reports_the_exact_clock(self):
+        first = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        second = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[1]
+        presence = self._hear([first, first], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence._on_clock = MagicMock()
+        with patch.object(net.Presence, "_now", return_value=self.NOW):
+            presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
+        presence._on_clock.assert_called_once_with("Alice", m.TagClock(5120 - 5000, int(self.NOW.timestamp()), second[1:]))
+
+    def test_a_seeded_clock_starts_narrow(self):
+        tags = {"Alice": BleKey(self.EIK, self.ANCHOR)}
+        clocks = {"Alice": m.TagClock(0, int(self.NOW.timestamp()))}
+        assert len(net._eid_index(tags, clocks, self.NOW)) == 9
 
     def test_silence_names_nobody(self):
         presence = self._hear([], {"Alice": BleKey(self.EIK, self.ANCHOR)})
