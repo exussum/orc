@@ -25,10 +25,10 @@ from orc_extras.react.model import TRIGGERS, When
 CONFIG = "orc_extras/react"
 _OPTIONS = "[if <device> is <condition>] [--delay=<minutes>] [--pause=<minutes>]"
 GRAMMAR = f"""
-react <devices> turns <state> set <action> {_OPTIONS}
-react <devices> turns <state> set <target> <action> {_OPTIONS}
-react <devices> <expr> between <low> and <high> set <target> <action> {_OPTIONS}
-react <devices> <expr> between <low> and <high> present <people> set <target> <action> {_OPTIONS}
+react <name> <devices> turns <state> set <action> {_OPTIONS}
+react <name> <devices> turns <state> set <target> <action> {_OPTIONS}
+react <name> <devices> <expr> between <low> and <high> set <target> <action> {_OPTIONS}
+react <name> <devices> <expr> between <low> and <high> present <people> set <target> <action> {_OPTIONS}
 """
 
 
@@ -92,7 +92,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
         rule = engine.Rule(
             model.DeviceChanged(source, args.expr), (engine.Clause(tuple(conditions), command),), delay, cooldown=model.COOLDOWN
         )
-        objects["react"].append(model.Reaction(rule, pause))
+        objects["react"].append(model.Reaction(rule, pause, args.name))
 
 
 def _rule(objects: dict[str, Any], args: Any) -> None:
@@ -112,7 +112,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
         command = engine.Command(target or Devices(source), action)
         trigger = engine.Transition(MqttDeviceChannel(source, attribute), args.state)
         rule = engine.Rule(trigger, (engine.Clause(cond, command),), delay, cooldown=model.COOLDOWN)
-        objects["react"].append(model.Reaction(rule, pause))
+        objects["react"].append(model.Reaction(rule, pause, args.name))
 
 
 def declare(declarations: Any) -> None:
@@ -128,7 +128,9 @@ def setup(ctx: AppContext) -> list[engine.Rule[Devices]]:
     )
     rules = [reaction.rule for reaction in cfg.react]
     ctx.engine.add_rules(rules)
-    ctx.plugin_state[orc_extras.react] = model.State({reaction.rule: reaction.pause for reaction in cfg.react})
+    ctx.plugin_state[orc_extras.react] = model.State(
+        {reaction.rule: reaction.pause for reaction in cfg.react}, {reaction.rule: reaction.name for reaction in cfg.react}
+    )
     sources = {model.source_of(rule).value: model.source_of(rule) for rule in rules}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
     return rules
