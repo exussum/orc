@@ -38,19 +38,6 @@ function fail(message) {
     err.classList.remove("hidden");
 }
 
-async function send(url, method, el) {
-    el.disabled = true;
-    try {
-        const response = await fetch(url, { method });
-        if (!response.ok) fail(`Failed (${response.status})`);
-    } catch (error) {
-        console.error(error.message);
-        fail("Failed");
-    } finally {
-        el.disabled = false;
-    }
-}
-
 function build() {
     const holder = document.createElement("div");
     holder.innerHTML = TEMPLATES;
@@ -81,7 +68,7 @@ function renderRules(rules) {
         const toggle = li.querySelector("input");
         toggle.checked = !rule.sleeping_until;
         toggle.onchange = async () => {
-            await send(API + rule.id + "/sleep", toggle.checked ? "DELETE" : "POST", toggle);
+            await orc.get(API + encodeURIComponent(rule.name) + `/sleep?sleeping=${toggle.checked ? 0 : 1}`, toggle, () => fail("Failed"));
             refresh();
         };
         list.appendChild(li);

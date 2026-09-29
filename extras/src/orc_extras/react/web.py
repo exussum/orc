@@ -1,10 +1,8 @@
 from typing import TYPE_CHECKING, cast
 
-from flask import Blueprint, abort, current_app
+from flask import Blueprint, abort, current_app, request
 
 import orc_extras.react
-from orc.kernel import engine
-from orc.model import Devices
 from orc_extras.react import plugins
 
 if TYPE_CHECKING:
@@ -21,29 +19,21 @@ def rules() -> dict:
     now = ctx.api.local_now()
     return {
         "rules": [
-            {
-                "id": index,
-                "name": name,
-                "sleeping_until": max((u.isoformat() for rule in rules if (u := state.disabled_until(rule, now))), default=None),
-            }
-            for index, (name, rules) in enumerate(state.named().items())
+            {"name": name, "sleeping_until": until.isoformat() if (until := plugins.disabled_until(state, name, now)) else None}
+            for name in state.groups
         ]
     }
 
 
-@react_bp.route("/<int:index>/sleep", methods=["POST"])
-def sleep(index: int) -> tuple[dict, int]:
-    return {"sleeping_until": plugins.sleep(app.orc, *_named(index)).isoformat()}, 201
+@react_bp.route("/<path:name>/sleep")
+def sleep(name: str) -> dict:
+    if request.args.get("sleeping") == "1":
+        return {"sleeping_until": plugins.sleep(app.orc, _known(name)).isoformat()}
+    plugins.wake(app.orc, _known(name))
+    return {"sleeping_until": None}
 
 
-@react_bp.route("/<int:index>/sleep", methods=["DELETE"])
-def wake(index: int) -> tuple[str, int]:
-    plugins.wake(app.orc, *_named(index))
-    return "", 204
-
-
-def _named(index: int) -> tuple[str, list[engine.Rule[Devices]]]:
-    named = list(app.orc.plugin_state[orc_extras.react].named().items())
-    if not 0 <= index < len(named):
+def _known(name: str) -> str:
+    if name not in app.orc.plugin_state[orc_extras.react].groups:
         abort(404)
-    return named[index]
+    return name

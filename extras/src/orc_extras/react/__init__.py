@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
@@ -71,13 +72,34 @@ def _parse_when(device: DeviceEnum, condition: str, objects: dict[str, Any]) -> 
     return When(device, condition)
 
 
+def _group(reactions: Iterable[model.Reaction]) -> dict[str, model.Group]:
+    groups: dict[str, model.Group] = {}
+    for reaction in reactions:
+        found = groups.get(reaction.name)
+        if found is None:
+            groups[reaction.name] = model.Group((reaction.rule,), reaction.pause)
+        elif found.pause != reaction.pause:
+            raise ValueError(f"react {reaction.name!r}: every line sharing a name needs the same --pause")
+        else:
+            groups[reaction.name] = found._replace(rules=(*found.rules, reaction.rule))
+    return groups
+
+
+def _pause(minutes: int | None) -> timedelta:
+    if minutes is None:
+        return model.DEFAULT_PAUSE
+    elif minutes <= 0:
+        raise ValueError(f"Invalid --pause {minutes!r}: expected a positive number of minutes")
+    return timedelta(minutes=minutes)
+
+
 def _range_rule(objects: dict[str, Any], args: Any) -> None:
     action = cast.state(args.action)
     target = _parse_target(args.target, action, objects)
     assert target is not None
     when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
-    pause = timedelta(minutes=args.pause) if args.pause else model.DEFAULT_PAUSE
+    pause = _pause(args.pause)
     for source in cast.devices(args.devices, objects).all():
         formula = model.Formula(source, args.expr)
         conditions: list[engine.Condition] = []
@@ -109,7 +131,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     when = _parse_when(cast.device(args.device, objects), args.condition, objects) if args.device else None
     cond = model.condition(when)
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
-    pause = timedelta(minutes=args.pause) if args.pause else model.DEFAULT_PAUSE
+    pause = _pause(args.pause)
     for source in cast.devices(args.devices, objects).all():
         command = engine.Command(target or Devices(source), action)
         trigger = engine.Transition(MqttDeviceChannel(source, attribute), args.state)
@@ -130,9 +152,8 @@ def setup(ctx: AppContext) -> list[engine.Rule[Devices]]:
     )
     rules = [reaction.rule for reaction in cfg.react]
     ctx.engine.add_rules(rules)
-    ctx.plugin_state[orc_extras.react] = model.State(
-        {reaction.rule: reaction.pause for reaction in cfg.react}, {reaction.rule: reaction.name for reaction in cfg.react}
-    )
+    groups = _group(cfg.react)
+    ctx.plugin_state[orc_extras.react] = model.State(groups, {rule: name for name, group in groups.items() for rule in group.rules})
     sources = {model.source_of(rule).value: model.source_of(rule) for rule in rules}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
     return rules
