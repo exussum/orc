@@ -21,6 +21,7 @@ from orc.model import (
 )
 from orc_extras.react import model, plugins
 from orc_extras.react.model import TRIGGERS, When
+from orc_extras.react.web import react_bp
 
 CONFIG = "orc_extras/react"
 _OPTIONS = "[if <device> is <condition>] [--delay=<minutes>] [--pause=<minutes>]"
@@ -116,7 +117,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
 
 
 def declare(declarations: Any) -> None:
-    declarations.declare(setup=[setup])
+    declarations.declare(setup=[setup], blueprints={"rules": react_bp})
 
 
 def setup(ctx: AppContext) -> list[engine.Rule[Devices]]:
