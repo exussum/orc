@@ -1,5 +1,6 @@
 import pytest
-from orc_extras import lg_ac, react
+from orc_extras import react
+from orc_extras.lg_ac import plugins as lg_ac_plugins
 from orc_extras.lg_ac.model import ACState
 
 import orc
@@ -12,7 +13,7 @@ AC_ID = "clip-1"
 def _ac_reports(house, power, mode=None, fan=None, temperature=None):
     state = ACState(power=power, mode=mode, fan_mode=fan, temperature=temperature)
     report = " ".join(str(part) for part in (power, mode, fan, temperature) if part is not None)
-    lg_ac._on_event(house.ctx, AC_ID, f"AC {AC_ID}: {report}", state)
+    lg_ac_plugins._on_event(house.ctx, AC_ID, f"AC {AC_ID}: {report}", state)
 
 
 @pytest.mark.plugins(react)

@@ -6,23 +6,21 @@ enrollment routes live on the ``web`` blueprint (mounted at ``/api/lg_ac/enroll`
 nginx presents the LG cert on :443 and rewrites the device's root paths to it.
 """
 
-from dataclasses import dataclass
 from functools import partial
 from typing import Any, NamedTuple
 
 from command_cfg import scalar
 
 import orc_extras.lg_ac
-from orc import model as m
 from orc.kernel import cast
 from orc.kernel.loader import load_plugin_config
-from orc.model import AcCommand, AcMode, AcState, AppContext, DeviceStatus, LogSourceEnum, Secrets
-from orc_extras.lg_ac import api, web
+from orc.model import AppContext, Secrets
+from orc_extras.lg_ac import api, plugins, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
 from orc_extras.lg_ac.dal.capture import Capture
 from orc_extras.lg_ac.dal.mqtt import thinq
 from orc_extras.lg_ac.dal.mqtt.interfaces import Transport
-from orc_extras.lg_ac.model import ACState, Settings
+from orc_extras.lg_ac.model import Settings
 
 CONFIG = "orc_extras/lg_ac"
 GRAMMAR = """
@@ -34,10 +32,6 @@ class State(NamedTuple):
     settings: Settings
     transport: Transport
     capture: Capture
-
-
-class LogSource(LogSourceEnum):
-    LG_AC = "lg ac"
 
 
 _SECRET_CA_CERT = "LG_THINQ_CA_CERT"
@@ -75,80 +69,10 @@ def setup(ctx: AppContext) -> None:
     broker.start(s.mqtts_advertise, secrets.other[_SECRET_SERVER_CERT].encode(), secrets.other[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     if s.capture:
         thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
-    thinq.set_event_listener(partial(_on_event, ctx))
+    thinq.set_event_listener(partial(plugins._on_event, ctx))
     thinq.start("127.0.0.1", s.mqtt_port, clip_ids=[str(device.value) for device in ctx.config.devices.AC])
-    ctx.api.set_ac(Ac(thinq))
-    ctx.api.add_state_provider("AC", partial(_ac_status, thinq, ctx))
-
-
-@dataclass(frozen=True)
-class Ac:
-    transport: Transport
-
-    def command(self, device: Any, state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None:
-        """Drive the AC from orc's /device/ page AC card (mode/fan/temp in °F)."""
-        transport = self.transport
-        device_id = str(device.value)
-        if device_id not in transport.devices():
-            return  # unknown/stale clip id: command nothing rather than the wrong AC
-        if state == "off":
-            transport.publish_command(device_id, {"mode": "off"})
-            return
-        # a setpoint frame must carry mode, so an omitted mode keeps the device's current one
-        values: dict[str, object] = {"mode": mode or transport.fetch_state(device_id).mode or "cool"}
-        if fan:
-            values["fan_mode"] = fan
-        if temp is not None:
-            values["temperature"] = round((temp - 32) * 5 / 9, 1)  # UI is °F; the codec wants °C
-        transport.publish_command(device_id, values)
-
-    def state(self, device: Any) -> AcState | None:
-        transport = self.transport
-        state = transport.fetch_state(str(device.value))  # unknown/stale id yields an empty state
-        if state.power is None:
-            return None
-        elif state.power == "OFF":
-            return AcState.OFF
-        return AcState.__members__.get((state.mode or "").upper(), AcState.ON)
-
-    def temperature(self, device: Any) -> int | None:
-        transport = self.transport
-        state = transport.fetch_state(str(device.value))
-        return None if state.temperature is None or state.power == "OFF" else round(state.temperature)
-
-
-def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
-    rows = []
-    connected = transport.devices()
-    for device in ctx.config.devices.AC:
-        device_id = str(device.value)
-        state = transport.fetch_state(device_id)
-        rows.append(
-            DeviceStatus(
-                name=device.name,
-                label=device.label,
-                details={
-                    "connected": device_id in connected,
-                    "power": state.power,
-                    "mode": state.mode,
-                    "fan": state.fan_mode,
-                    "target": state.temperature,
-                    "current": state.current_temperature,
-                },
-            )
-        )
-    return rows
-
-
-def _on_event(ctx: AppContext, device_id: str, msg: str, state: ACState) -> None:
-    value: str | AcCommand | None
-    if state.power == "OFF":
-        value = m.OFF
-    elif state.mode and state.mode in AcMode and state.fan_mode and state.temperature is not None:
-        value = AcCommand(AcMode(state.mode), state.fan_mode, round(state.temperature))
-    else:
-        value = None
-    ctx.api.log(LogSource.LG_AC, msg, m.Broker(id=device_id, source="lg_ac", value=value))
+    ctx.api.set_ac(plugins.Ac(thinq))
+    ctx.api.add_state_provider("AC", partial(plugins._ac_status, thinq, ctx))
 
 
 def declare(declarations: Any) -> None:
