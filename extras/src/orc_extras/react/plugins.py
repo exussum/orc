@@ -8,24 +8,35 @@ from orc import model as m
 from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
 from orc.security import safe_eval
-from orc_extras.react.model import FUNCTIONS, DeviceChanged, Formula, Log, source_of
+from orc_extras.react.model import FUNCTIONS, DeviceChanged, Formula, Log, State, source_of
 
 JOB_ID = "react"
 
 
-def sleep(ctx: m.AppContext, name: str, rules: list[engine.Rule[m.Devices]]) -> datetime:
+def sleep(ctx: m.AppContext, name: str) -> datetime:
     state = ctx.plugin_state[orc_extras.react]
-    now = ctx.api.local_now()
-    until = max(state.disable(rule, now) for rule in rules)
+    until = ctx.api.local_now() + state.groups[name].pause
+    state.disabled[name] = until
     ctx.api.log(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
     return until
 
 
-def wake(ctx: m.AppContext, name: str, rules: list[engine.Rule[m.Devices]]) -> None:
-    state = ctx.plugin_state[orc_extras.react]
-    for rule in rules:
-        state.enable(rule)
+def wake(ctx: m.AppContext, name: str) -> None:
+    ctx.plugin_state[orc_extras.react].disabled.pop(name, None)
     ctx.api.log(Log.REACT, f"`{name}` awake", m.Manual("react"))
+
+
+def disabled_until(state: State, name: str, now: datetime) -> datetime | None:
+    until = state.disabled.get(name)
+    if until and until > now:
+        return until
+    state.disabled.pop(name, None)
+    return None
+
+
+def is_disabled(state: State, rule: engine.Rule[Any], now: datetime) -> bool:
+    name = state.name_of.get(rule)
+    return bool(name and disabled_until(state, name, now))
 
 
 def _trigger_label(rule: engine.Rule) -> Any:
@@ -81,7 +92,7 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     now = ctx.api.local_now()
     fired: list[engine.Report] = []
     for reaction in ctx.engine.on_event(event, now, _reader(ctx)):
-        if state.is_disabled(reaction.rule, now):
+        if is_disabled(state, reaction.rule, now):
             continue
         match reaction:
             case engine.Report() if reaction.disposition is engine.Disposition.FIRED:
@@ -132,7 +143,7 @@ def _command(report: engine.Report) -> m.DeviceCommand:
 @requires_ctx
 def _run_react(deferred: engine.Deferred, name: str, *, ctx: m.AppContext) -> None:
     now = ctx.api.local_now()
-    if ctx.plugin_state[orc_extras.react].is_disabled(deferred.rule, now):
+    if is_disabled(ctx.plugin_state[orc_extras.react], deferred.rule, now):
         return
     report = ctx.engine.on_fire(deferred, now, _reader(ctx))
     _dispatch(ctx, report, name, f" {int(deferred.rule.delay.total_seconds() // 60)}m ago")
