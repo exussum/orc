@@ -28,7 +28,7 @@ async function set_theme() {
     el.disabled = true;
     const container = startProgress(parseFloat(el.dataset.duration));
     try {
-        const response = await fetch("/api/schedule/set_theme", {
+        const response = await fetch("/api/schedule/theme", {
             method: "POST",
             body: new URLSearchParams({ start: startEl.value, end: endEl.value, theme: selectEl.value }),
         });
