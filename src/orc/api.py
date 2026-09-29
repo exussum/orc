@@ -446,7 +446,7 @@ def start_ble_listener() -> None:
             log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
         reported = present
 
-    net.presence.start(config.ble_tags, config.settings.tz, report)
+    net.presence.start(config.ble_tags, config.settings.tz, report, clocks=sqlite.fetch_tag_clocks(), on_clock=sqlite.upsert_tag_clock)
 
 
 def schedule_presence_check(trigger: m.Trigger) -> None:

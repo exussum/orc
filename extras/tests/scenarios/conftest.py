@@ -88,7 +88,8 @@ class House:
         now = api.local_now()
         key = config.ble_tags.setdefault(name, m.BleKey(name.encode().ljust(32, b"\0"), int(now.timestamp()) - 5000))
         frame = bytes([0x40]) + security.fmdn_eids(key.eik, int(now.timestamp()) - key.anchor)[1]
-        net.presence._index = net._eid_index(config.ble_tags, now)
+        net.presence._tags = config.ble_tags
+        net.presence._index = net._eid_index(config.ble_tags, net.presence._clocks.copy(), now)
         net.presence._seen(SimpleNamespace(address=f"{name}-tag"), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
         FakeBleakClient.reachable.add(f"{name}-tag")
 
