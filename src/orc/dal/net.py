@@ -23,6 +23,8 @@ from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_eids, fm
 
 _WINDOW_SECONDS = 3
 _BLE_INDEX_REFRESH_SECONDS = 300
+_BLE_SEARCH_WINDOWS = 200
+_BLE_CLOCK_TRUST_SECONDS = 24 * 3600
 
 _log = logging.getLogger(__name__)
 
@@ -42,19 +44,29 @@ class Presence:
     def __init__(self) -> None:
         self._tags: Mapping[str, m.BleKey] = {}
         self._tz: tzinfo | None = None
-        self._index: dict[bytes, str] = {}
+        self._index: dict[bytes, tuple[str, int]] = {}
+        self._clocks: LockedDict[str, m.TagClock] = LockedDict()
         self._heard: LockedDict[str, datetime] = LockedDict()
         self._addresses: LockedDict[str, str] = LockedDict()
         self._paused: datetime | None = None
         self._on_change: Callable[[m.Trigger], object] = lambda trigger: None
+        self._on_clock: Callable[[str, m.TagClock], object]
 
-    def start(self, tags: Mapping[str, m.BleKey], tz: tzinfo, on_change: Callable[[m.Trigger], object] | None = None) -> None:
-        if on_change:
-            self._on_change = on_change
+    def start(
+        self,
+        tags: Mapping[str, m.BleKey],
+        tz: tzinfo,
+        on_change: Callable[[m.Trigger], object],
+        clocks: Mapping[str, m.TagClock],
+        on_clock: Callable[[str, m.TagClock], object],
+    ) -> None:
+        self._on_change = on_change
+        self._on_clock = on_clock
         if not tags:
             return
         self._tags = tags
         self._tz = tz
+        self._clocks = LockedDict(clocks)
         threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
 
     def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger) -> None:
@@ -116,16 +128,24 @@ class Presence:
     async def _run(self) -> None:
         async with BleakScanner(self._seen):
             while True:
-                self._index = _eid_index(self._tags, self._now())
+                self._index = _eid_index(self._tags, self._clocks.copy(), self._now())
                 await asyncio.sleep(_BLE_INDEX_REFRESH_SECONDS)
 
     def _seen(self, device: BLEDevice, data: AdvertisementData) -> None:
         frame = data.service_data.get(FMDN_SERVICE_UUID)
         eid = fmdn_parse(frame) if frame else None
-        if eid and (person := self._index.get(eid)):
+        if eid and (hit := self._index.get(eid)):
+            person, window = hit
+            now = self._now()
+            known = self._clocks.get(person)
+            if not known or known.eid != eid:
+                clock = m.TagClock(window - (int(now.timestamp()) - self._tags[person].anchor), int(now.timestamp()), eid)
+                self._clocks[person] = clock
+                if known and known.eid:
+                    self._on_clock(person, clock)
             if device:
                 self._addresses[person] = device.address
-            self.mark([person], self._now(), m.Query("ble"))
+            self.mark([person], now, m.Query("ble"))
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)
@@ -213,14 +233,18 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
     return {name for ip, (name, _) in targets.items() if ip in responded}
 
 
-def _eid_index(tags: Mapping[str, m.BleKey], now: datetime) -> dict[bytes, str]:
+def _eid_index(tags: Mapping[str, m.BleKey], clocks: Mapping[str, m.TagClock], now: datetime) -> dict[bytes, tuple[str, int]]:
     ts = int(now.timestamp())
-    index: dict[bytes, str] = {}
+    index: dict[bytes, tuple[str, int]] = {}
     for person, key in tags.items():
-        # The tag's clock zero is its pair date, so the current counter is now - anchor;
-        # the ±1 neighbour windows cover boundary timing and the tag's crystal drift.
         expected = ts - key.anchor
-        for counter in (expected - FMDN_ROTATION_SECONDS, expected, expected + FMDN_ROTATION_SECONDS):
-            for eid in fmdn_eids(key.eik, counter):
-                index[eid] = person
+        if (clock := clocks.get(person)) and ts - clock.heard < _BLE_CLOCK_TRUST_SECONDS:
+            expected += clock.offset
+            span = 1
+        else:
+            span = _BLE_SEARCH_WINDOWS
+        for step in range(-span, span + 1):
+            window = (expected + step * FMDN_ROTATION_SECONDS) & ~(FMDN_ROTATION_SECONDS - 1)
+            for eid in fmdn_eids(key.eik, window):
+                index[eid] = (person, window)
     return index

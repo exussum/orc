@@ -10,6 +10,7 @@ import orc
 from orc import model as m
 
 _ALPHA: float = 0.3
+_CLOCK_MOVED_SECONDS = 512
 
 
 def delete_push_subscription(endpoint: str) -> None:
@@ -27,6 +28,12 @@ def fetch_push_subscriptions() -> list[m.PushSubscription]:
         return [m.PushSubscription(*row) for row in conn.execute("SELECT endpoint, public_key, auth_secret FROM orc_push_subscriptions")]
 
 
+def fetch_tag_clocks() -> dict[str, m.TagClock]:
+    with connection() as conn:
+        rows = conn.execute("SELECT person, offset, heard FROM orc_ble_clocks").fetchall()
+    return {person: m.TagClock(offset, heard) for person, offset, heard in rows}
+
+
 def fetch_theme_override() -> tuple[str, date, date] | None:
     with connection() as conn:
         row = conn.execute("SELECT name, start, end FROM orc_theme_override WHERE id = 0").fetchone()
@@ -42,6 +49,7 @@ def init_db() -> None:
             "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)"
         )
         conn.execute("CREATE TABLE IF NOT EXISTS orc_durations (name TEXT PRIMARY KEY, samples INTEGER NOT NULL, avg REAL NOT NULL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS orc_ble_clocks (person TEXT PRIMARY KEY, offset INTEGER NOT NULL, heard INTEGER NOT NULL)")
         conn.execute(
             "CREATE TABLE IF NOT EXISTS orc_push_subscriptions "
             "(endpoint TEXT PRIMARY KEY, public_key TEXT NOT NULL, auth_secret TEXT NOT NULL)"
@@ -64,6 +72,16 @@ def insert_theme_override(override: tuple[str, date, date]) -> None:
             "ON CONFLICT(id) DO UPDATE SET name=excluded.name, start=excluded.start, end=excluded.end",
             (override[0], override[1].isoformat(), override[2].isoformat()),
         )
+
+
+def upsert_tag_clock(person: str, clock: m.TagClock) -> None:
+    sql = """
+    INSERT INTO orc_ble_clocks (person, offset, heard) VALUES (?, ?, ?)
+    ON CONFLICT(person) DO UPDATE SET offset = excluded.offset, heard = excluded.heard
+    WHERE abs(excluded.offset - orc_ble_clocks.offset) > ?;
+    """
+    with connection() as conn:
+        conn.execute(sql, (person, clock.offset, clock.heard, _CLOCK_MOVED_SECONDS))
 
 
 def update_avg(name: str, duration: float) -> None:
