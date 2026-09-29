@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from apscheduler.schedulers.base import BaseScheduler
+from command_cfg import ConfigError
 from flask import Flask
 from orc_extras import react
 from orc_extras.react import model, plugins, web
@@ -73,7 +74,7 @@ def ctx(ctx):
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
     ctx.config.settings.tz = _UTC
     ctx.config.registry = orc.config.registry
-    ctx.plugin_state = {react: model.State({})}
+    ctx.plugin_state = {react: model.State({}, {})}
     return ctx
 
 
@@ -445,34 +446,34 @@ def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, range_
     assert ctx.api.dispatch.called is fires
 
 
-def test_each_rule_keeps_its_pause(ctx, configured):
-    pauses = ctx.plugin_state[react].pauses
-    assert pauses[configured[0]] == timedelta(minutes=10)
-    assert pauses[configured[2]] == timedelta(minutes=30)
+def test_each_line_keeps_its_pause(ctx, configured):
+    groups = ctx.plugin_state[react].groups
+    assert groups["Lights off"] == model.Group((configured[0], configured[1]), timedelta(minutes=10))
+    assert groups["Desk cools"].pause == timedelta(minutes=30)
 
 
 def test_disabled_rule_expires_after_its_pause(configured):
-    state = model.State({configured[0]: timedelta(minutes=10)})
-    state.disable(configured[0], _NOW)
-    assert state.is_disabled(configured[0], _NOW + timedelta(minutes=9))
-    assert not state.is_disabled(configured[0], _NOW + timedelta(minutes=10))
+    state = model.State({"Lights off": model.Group((configured[0],), timedelta(minutes=10))}, {configured[0]: "Lights off"})
+    state.disabled["Lights off"] = _NOW + timedelta(minutes=10)
+    assert plugins.is_disabled(state, configured[0], _NOW + timedelta(minutes=9))
+    assert not plugins.is_disabled(state, configured[0], _NOW + timedelta(minutes=10))
     assert not state.disabled
 
 
 def test_disabled_rule_does_not_fire(ctx, configured, switch_report):
-    ctx.plugin_state[react].disable(configured[0], _NOW)
+    plugins.sleep(ctx, "Lights off")
     switch_report(configured[0].trigger.channel.device.value, m.OFF, m.ON)
     ctx.api.dispatch.assert_not_called()
 
 
-def test_enable_wakes_a_sleeping_rule(configured):
-    state = model.State({configured[0]: timedelta(minutes=10)})
-    until = state.disable(configured[0], _NOW)
+def test_wake_clears_a_sleeping_rule(ctx, configured):
+    state = ctx.plugin_state[react]
+    until = plugins.sleep(ctx, "Lights off")
     assert until == _NOW + timedelta(minutes=10)
-    assert state.disabled_until(configured[0], _NOW) == until
-    state.enable(configured[0])
-    assert not state.is_disabled(configured[0], _NOW)
-    assert state.disabled_until(configured[0], _NOW) is None
+    assert plugins.disabled_until(state, "Lights off", _NOW) == until
+    plugins.wake(ctx, "Lights off")
+    assert not plugins.is_disabled(state, configured[0], _NOW)
+    assert plugins.disabled_until(state, "Lights off", _NOW) is None
 
 
 @pytest.fixture
@@ -498,22 +499,34 @@ def test_rules_endpoint_groups_rules_by_name(client, configured):
 
 
 def test_sleep_endpoint_disables_every_rule_of_the_name_and_logs(client, ctx, configured):
-    response = client.post("/0/sleep")
+    response = client.get("/Lights%20off/sleep?sleeping=1")
     until = _NOW + timedelta(minutes=10)
-    assert (response.status_code, response.get_json()) == (201, {"sleeping_until": until.isoformat()})
+    assert (response.status_code, response.get_json()) == (200, {"sleeping_until": until.isoformat()})
     state = ctx.plugin_state[react]
-    assert state.is_disabled(configured[0], _NOW) and state.is_disabled(configured[1], _NOW)
-    assert not state.is_disabled(configured[2], _NOW)
+    assert plugins.is_disabled(state, configured[0], _NOW) and plugins.is_disabled(state, configured[1], _NOW)
+    assert not plugins.is_disabled(state, configured[2], _NOW)
     assert client.get("/").get_json()["rules"][0]["sleeping_until"] == until.isoformat()
     assert ctx.api.log.call_args.args[1] == "`Lights off` sleeping until 15:10"
 
 
 def test_wake_endpoint_enables_the_rule_and_logs(client, ctx, configured):
-    ctx.plugin_state[react].disable(configured[3], _NOW)
-    assert client.delete("/2/sleep").status_code == 204
-    assert not ctx.plugin_state[react].is_disabled(configured[3], _NOW)
+    ctx.plugin_state[react].disabled["Desk stops AC"] = _NOW + timedelta(minutes=10)
+    assert client.get("/Desk%20stops%20AC/sleep?sleeping=0").get_json() == {"sleeping_until": None}
+    assert not plugins.is_disabled(ctx.plugin_state[react], configured[3], _NOW)
     assert ctx.api.log.call_args.args[1] == "`Desk stops AC` awake"
 
 
 def test_unknown_rule_is_a_404(client):
-    assert client.post("/99/sleep").status_code == 404
+    assert client.get("/Nope/sleep?sleeping=1").status_code == 404
+
+
+def test_zero_pause_is_rejected(ctx):
+    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_pause_zero.orc").read_text()}
+    with pytest.raises(ConfigError, match="Invalid --pause 0"):
+        react.setup(ctx)
+
+
+def test_a_name_shared_with_a_different_pause_is_rejected(ctx):
+    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_pause_mismatch.orc").read_text()}
+    with pytest.raises(ValueError, match="same --pause"):
+        react.setup(ctx)

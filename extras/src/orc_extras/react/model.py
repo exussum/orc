@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from orc import model as m
 from orc.kernel import cast, engine
@@ -32,34 +32,16 @@ class Reaction(NamedTuple):
     name: str
 
 
+class Group(NamedTuple):
+    rules: tuple[engine.Rule[m.Devices], ...]
+    pause: timedelta
+
+
 @dataclass
 class State:
-    pauses: dict[engine.Rule[m.Devices], timedelta]
-    names: dict[engine.Rule[m.Devices], str] = field(default_factory=dict)
-    disabled: dict[engine.Rule[m.Devices], datetime] = field(default_factory=dict)
-
-    def disable(self, rule: engine.Rule[m.Devices], now: datetime) -> datetime:
-        self.disabled[rule] = now + self.pauses[rule]
-        return self.disabled[rule]
-
-    def enable(self, rule: engine.Rule[m.Devices]) -> None:
-        self.disabled.pop(rule, None)
-
-    def named(self) -> dict[str, list[engine.Rule[m.Devices]]]:
-        groups: dict[str, list[engine.Rule[m.Devices]]] = {}
-        for rule in self.pauses:
-            groups.setdefault(self.names[rule], []).append(rule)
-        return groups
-
-    def is_disabled(self, rule: engine.Rule[m.Devices], now: datetime) -> bool:
-        return self.disabled_until(rule, now) is not None
-
-    def disabled_until(self, rule: engine.Rule[m.Devices], now: datetime) -> datetime | None:
-        until = self.disabled.get(rule)
-        if until and until > now:
-            return until
-        self.disabled.pop(rule, None)
-        return None
+    groups: dict[str, Group]
+    name_of: dict[engine.Rule[Any], str]
+    disabled: dict[str, datetime] = field(default_factory=dict)
 
 
 class When(NamedTuple):
