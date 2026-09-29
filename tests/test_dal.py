@@ -85,6 +85,15 @@ class TestMarketHoliday:
         assert self._market_holiday(date(2026, 11, 30)) is False
 
 
+def test_durations_reach_the_table_one_batch_at_a_time():
+    sqlite._durations.clear()
+    for _ in range(sqlite._DURATION_BATCH - 1):
+        sqlite.update_avg("x", 1.0)
+    assert sqlite.fetch_durations() == []
+    sqlite.update_avg("x", 1.0)
+    assert sqlite.fetch_durations() == [("x", sqlite._DURATION_BATCH, 1.0)]
+
+
 @pytest.mark.parametrize(
     "offsets, expected",
     [([100], 100), ([100, 400], 100), ([100, 700], 700), ([100, 700, 300], 700), ([100, 700, 100], 100)],
