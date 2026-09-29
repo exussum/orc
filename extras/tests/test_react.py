@@ -72,7 +72,7 @@ def ctx(ctx):
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
     ctx.config.settings.tz = _UTC
     ctx.config.registry = orc.config.registry
-    ctx.plugin_state = {}
+    ctx.plugin_state = {react: model.State({})}
     return ctx
 
 
@@ -442,3 +442,23 @@ def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, range_
     ctx.api.present_names.return_value = home
     range_event(Sensor.living, {"temperature": 70})
     assert ctx.api.dispatch.called is fires
+
+
+def test_each_rule_keeps_its_pause(ctx, configured):
+    pauses = ctx.plugin_state[react].pauses
+    assert pauses[configured[0]] == timedelta(minutes=10)
+    assert pauses[configured[2]] == timedelta(minutes=30)
+
+
+def test_disabled_rule_expires_after_its_pause(configured):
+    state = model.State({configured[0]: timedelta(minutes=10)})
+    state.disable(configured[0], _NOW)
+    assert state.is_disabled(configured[0], _NOW + timedelta(minutes=9))
+    assert not state.is_disabled(configured[0], _NOW + timedelta(minutes=10))
+    assert not state.disabled
+
+
+def test_disabled_rule_does_not_fire(ctx, configured, switch_report):
+    ctx.plugin_state[react].disable(configured[0], _NOW)
+    switch_report(configured[0].trigger.channel.device.value, m.OFF, m.ON)
+    ctx.api.dispatch.assert_not_called()
