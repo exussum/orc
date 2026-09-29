@@ -29,15 +29,23 @@ class Log(m.LogSourceEnum):
 class Reaction(NamedTuple):
     rule: engine.Rule[m.Devices]
     pause: timedelta
+    name: str
 
 
 @dataclass
 class State:
     pauses: dict[engine.Rule[m.Devices], timedelta]
+    names: dict[engine.Rule[m.Devices], str] = field(default_factory=dict)
     disabled: dict[engine.Rule[m.Devices], datetime] = field(default_factory=dict)
 
     def disable(self, rule: engine.Rule[m.Devices], now: datetime) -> None:
         self.disabled[rule] = now + self.pauses[rule]
+
+    def named(self) -> dict[str, list[engine.Rule[m.Devices]]]:
+        groups: dict[str, list[engine.Rule[m.Devices]]] = {}
+        for rule in self.pauses:
+            groups.setdefault(self.names[rule], []).append(rule)
+        return groups
 
     def is_disabled(self, rule: engine.Rule[m.Devices], now: datetime) -> bool:
         until = self.disabled.get(rule)
