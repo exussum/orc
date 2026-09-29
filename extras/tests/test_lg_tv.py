@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
-from orc_extras import lg_tv
 from orc_extras.lg_tv import plugins
 
 import orc
@@ -55,7 +54,7 @@ class TestDispatchLGTV:
         self.ctx = MagicMock()
         self.ctx.api = create_autospec(api)
         self.ctx.engine = engine.Runtime([])
-        mock_registry(ctx=self.ctx, LGTV=(LGTV, lg_tv._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
+        mock_registry(ctx=self.ctx, LGTV=(LGTV, plugins._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room
         self.bl = BroadLink.living_room
