@@ -1,5 +1,6 @@
 from datetime import timedelta
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 from command_cfg import each
@@ -117,7 +118,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
 
 
 def declare(declarations: Any) -> None:
-    declarations.declare(setup=[setup], blueprints={"rules": react_bp})
+    declarations.declare(setup=[setup], blueprints={"rules": react_bp}, scripts=[Path(__file__).parent / "static" / "react.js"])
 
 
 def setup(ctx: AppContext) -> list[engine.Rule[Devices]]:
