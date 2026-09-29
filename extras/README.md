@@ -16,8 +16,10 @@ extras/
 ├── src/
 │   └── orc_extras/
 │       └── entrance_sensor/
-│           ├── __init__.py
-│           └── plugins.py            # the plugin functions live here
+│           ├── __init__.py           # grammar, declare(), setup()
+│           ├── model.py              # types shared by two modules
+│           ├── plugins.py            # everything that runs after boot
+│           └── web.py                # Flask blueprint, if any
 └── tests/
 ```
 
