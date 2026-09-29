@@ -300,7 +300,7 @@ def schedule() -> str:
     )
 
 
-@bp.route("/api/schedule/set_theme", methods=["POST"])
+@bp.route("/api/schedule/theme", methods=["POST"])
 def set_theme() -> dict[str, Any]:
     name = request.form["theme"]
     if name and name not in config.themes:
