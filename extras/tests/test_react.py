@@ -168,6 +168,20 @@ def test_switch_off_cancels_pending_jobs(ctx, configured, switch_report):
     assert ctx.scheduler.remove_job.called
 
 
+def test_sleeping_rule_schedules_nothing(ctx, configured, switch_report):
+    plugins.sleep(ctx, "Lights off")
+    switch_report(1, m.OFF, m.ON)
+    ctx.scheduler.add_job.assert_not_called()
+
+
+def test_sleeping_rule_still_cancels_its_pending_job(ctx, configured, switch_report):
+    switch_report(1, m.OFF, m.ON)
+    plugins.sleep(ctx, "Lights off")
+    ctx.scheduler.reset_mock()
+    switch_report(1, m.ON, m.OFF)
+    assert ctx.scheduler.remove_job.called
+
+
 def test_unwatched_device_is_ignored(ctx, configured, switch_report):
     switch_report(99, m.OFF, m.ON)
     ctx.scheduler.add_job.assert_not_called()

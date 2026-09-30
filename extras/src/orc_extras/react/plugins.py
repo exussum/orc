@@ -92,9 +92,13 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     now = ctx.api.local_now()
     fired: list[engine.Report] = []
     for reaction in ctx.engine.on_event(event, now, _reader(ctx)):
-        if is_disabled(state, reaction.rule, now):
-            continue
         match reaction:
+            case engine.Cancel():
+                job_id = f"{JOB_ID}-{hash(reaction.rule)}"
+                if ctx.scheduler.get_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY):
+                    ctx.scheduler.remove_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY)
+            case _ if is_disabled(state, reaction.rule, now):
+                continue
             case engine.Report() if reaction.disposition is engine.Disposition.FIRED:
                 fired.append(reaction)
             case engine.Deferred():
@@ -107,10 +111,6 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
                     jobstore=ctx.api.JOBSTORE_MEMORY,
                     args=(reaction, device.name),
                 )
-            case engine.Cancel():
-                job_id = f"{JOB_ID}-{hash(reaction.rule)}"
-                if ctx.scheduler.get_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY):
-                    ctx.scheduler.remove_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY)
     if fired:
         entries = [_log(ctx, report, device.name, "") for report in fired]
         ctx.api.dispatch(ctx.api.squish(map(_command, fired), entries[0]), entry=entries[0])

@@ -94,7 +94,7 @@ def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> m.ACState:
         values["power"] = "ON" if raw[fm.power] else "OFF"
     if fm.mode in raw:
         mode_by_code = {code: name for name, code in fm.mode_to_code.items()}
-        values["mode"] = "off" if raw.get(fm.power) == 0 else mode_by_code.get(raw[fm.mode])
+        values["mode"] = mode_by_code.get(raw[fm.mode])
     if fm.fan in raw:
         fan_by_code = {code: name for name, code in fm.fan_to_code.items()}
         values["fan_mode"] = fan_by_code.get(raw[fm.fan])
@@ -108,6 +108,10 @@ def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> m.ACState:
 
 def _fahrenheit(celsius: float) -> int:
     return round(celsius * 9 / 5 + 32)
+
+
+def celsius(fahrenheit: float) -> float:
+    return round((fahrenheit - 32) * 5 / 9, 1)
 
 
 def _clamp_temp(fm: m.Fieldmap, celsius: object) -> int:

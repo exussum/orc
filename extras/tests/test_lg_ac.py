@@ -119,18 +119,17 @@ def test_load_fieldmap_handles_unknown_models():
     assert api.load_fieldmap(MODEL) is FM
 
 
-def test_state_from_raw_decodes_every_field():
-    raw = {FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44}
-    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", 77, 72)
-
-
-def test_state_from_raw_reports_mode_off_when_powered_down():
-    assert api.state_from_raw(FM, {FM.power: 0, FM.mode: 0}) == m.ACState("OFF", "off")
-
-
-def test_state_from_raw_leaves_unknown_codes_as_none():
-    assert api.state_from_raw(FM, {FM.power: 1, FM.mode: 99, FM.fan: 99}) == m.ACState("ON", None, None)
-    assert api.state_from_raw(FM, {}) == m.ACState()
+@pytest.mark.parametrize(
+    ("raw", "state"),
+    [
+        ({FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44}, m.ACState("ON", "cool", "low", 77, 72)),
+        ({FM.power: 0, FM.mode: 0}, m.ACState("OFF", "cool")),
+        ({FM.power: 1, FM.mode: 99, FM.fan: 99}, m.ACState("ON", None, None)),
+        ({}, m.ACState()),
+    ],
+)
+def test_state_from_raw(raw, state):
+    assert api.state_from_raw(FM, raw) == state
 
 
 # --- Command encoding ---
@@ -262,9 +261,9 @@ def test_state_endpoint_errors_with_no_device(client):
 
 
 def test_command_endpoint_publishes_to_the_device(client):
-    body = client.post("/command", json={"device": DEVICE_ID, "mode": "cool", "temperature": 22}).get_json()
-    assert stub.published == [(DEVICE_ID, {"mode": "cool", "temperature": 22})]
-    assert body == {"status": "sent", "device": DEVICE_ID, "command": {"mode": "cool", "temperature": 22}}
+    body = client.post("/command", json={"device": DEVICE_ID, "mode": "cool", "temperature": 72}).get_json()
+    assert stub.published == [(DEVICE_ID, {"mode": "cool", "temperature": 22.2})]
+    assert body == {"status": "sent", "device": DEVICE_ID, "command": {"mode": "cool", "temperature": 22.2}}
 
 
 def test_command_endpoint_errors_with_no_device(client):
@@ -275,7 +274,7 @@ def test_command_endpoint_errors_with_no_device(client):
     ("state", "value"),
     [
         (m.ACState(), None),
-        (m.ACState("OFF", "off", "low", 70, 77), OFF),
+        (m.ACState("OFF", "cool", "low", 70, 77), OFF),
         (m.ACState("ON", "cool", "low", 70, 77), AcCommand(AcMode.COOL, "low", 77)),
         (m.ACState("ON", "heat", "low", 70, 77), None),
         (m.ACState("ON", "cool", None, 70, 77), None),
@@ -290,6 +289,20 @@ def test_handle_ac_commands_the_bound_device():
     stub.reset(devices=["clip-1", "clip-2"])
     plugins.Ac(stub).command(SimpleNamespace(value="clip-2"), "off", None, None, None)
     assert stub.published == [("clip-2", {"mode": "off"})]
+
+
+@pytest.mark.parametrize(
+    ("state", "mode"),
+    [
+        (m.ACState("OFF", "dry", "low", 70, 77), "dry"),
+        (m.ACState("ON", "dry", "low", 70, 77), "dry"),
+        (m.ACState(), "cool"),
+    ],
+)
+def test_handle_ac_on_resumes_the_remembered_mode(state, mode):
+    stub.reset(states={"clip-1": state}, devices=["clip-1"])
+    plugins.Ac(stub).command(SimpleNamespace(value="clip-1"), "on", None, None, None)
+    assert stub.published == [("clip-1", {"mode": mode})]
 
 
 def test_handle_ac_stale_id_commands_nothing():
@@ -351,3 +364,10 @@ def test_capture_endpoint_dumps_recorded_frames(client):
     frames = client.get("/capture").get_json()
     assert frames[-1]["topic"] == "clip/topic"
     assert frames[-1]["payload"] == "0102"
+
+
+def test_thinq_handler_failure_is_logged_not_raised(monkeypatch, caplog):
+    monkeypatch.setattr(thinq, "_receive_message", lambda topic, payload: 1 / 0)
+    thinq._on_message(None, None, SimpleNamespace(topic=thinq._MESSAGE_PREFIX + DEVICE_ID, payload=b"{}"))
+    (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert record.exc_info[0] is ZeroDivisionError
