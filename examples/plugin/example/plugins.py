@@ -1,12 +1,10 @@
 from typing import Any
 
-from apscheduler.schedulers.base import BaseScheduler
-
 import example
 from example.dal.sqlite import Connection
 from example.model import ExampleJob, Plan, Runtime
 from orc.kernel import cast
-from orc.model import AppContext, DeviceStatus
+from orc.model import AppContext, DeviceStatus, Scheduler
 from orc.plugins import requires_ctx
 
 
@@ -32,7 +30,7 @@ def plan(rt: Runtime, job: ExampleJob, tz: Any, connection: Connection) -> Plan:
     raise NotImplementedError
 
 
-def schedule(scheduler: BaseScheduler, job: ExampleJob, tz: Any) -> None:
+def schedule(scheduler: Scheduler, job: ExampleJob, tz: Any) -> None:
     pass
 
 

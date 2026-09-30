@@ -4,7 +4,6 @@ from unittest.mock import ANY, create_autospec, patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from apscheduler.schedulers.base import BaseScheduler
 from orc_extras import entrance_sensor
 from orc_extras.entrance_sensor import plugins
 
@@ -52,8 +51,7 @@ def _device_state_side_effect(mock):
 
 @pytest.fixture
 def ctx(ctx):
-    ctx.scheduler = create_autospec(BaseScheduler, instance=True)
-    ctx.api.JOBSTORE_MEMORY = "memory"
+    ctx.scheduler = create_autospec(m.Scheduler, instance=True)
     ctx.api.present_names.return_value = set()
     ctx.api.device_state.side_effect = _device_state_side_effect(ctx)
     ctx.config.settings.tz = _UTC
@@ -114,10 +112,10 @@ def _trigger_sensor(ctx, sensor, device_id, event):
     name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
     device = m.DeviceState(id=int(device_id), name=name, attributes={"motion": event}, last_activity=None)
     plugins._on_sensor_event(ctx, sensor, device, "motion", old, event)
-    queued = [c for c in ctx.scheduler.add_job.call_args_list if c.args[0] is plugins._run_motion]
-    ctx.scheduler.add_job.reset_mock()
+    queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
+    ctx.scheduler.now.reset_mock()
     for call in queued:
-        plugins._run_motion.__wrapped__(*call.kwargs["args"], ctx=ctx)
+        plugins._run_motion.__wrapped__(*call.args[1:], ctx=ctx)
 
 
 # --- Walking in ---
@@ -178,15 +176,7 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
 def test_walk_in_cancels_pending_cleanup(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.scheduler.remove_job.assert_called_once_with("trigger-sensor", jobstore=ctx.api.JOBSTORE_MEMORY)
-
-
-def test_walk_in_with_no_pending_cleanup_does_not_cancel(ctx, sensor):
-    ctx.api.local_now.return_value = _DAYTIME
-    ctx.scheduler.get_job.return_value = None
-    _trigger_sensor(ctx, sensor, "16", "active")
-    ctx.scheduler.remove_job.assert_not_called()
-    ctx.api.dispatch.assert_called_once()
+    ctx.scheduler.cancel.assert_called_once_with("trigger-sensor")
 
 
 def test_motion_groups_under_the_trigger_entry(ctx, sensor):
@@ -210,10 +200,9 @@ def test_entrance_lights_turn_off_behind_you(ctx, sensor):
 def test_cleanup_is_scheduled_for_later(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "inactive")
-    ctx.scheduler.add_job.assert_called_once()
-    _, kwargs = ctx.scheduler.add_job.call_args
+    ctx.scheduler.once.assert_called_once()
+    _, kwargs = ctx.scheduler.once.call_args
     assert kwargs["id"] == "trigger-sensor"
-    assert kwargs["replace_existing"] is True
 
 
 # --- Cleanup, minutes later ---
@@ -369,5 +358,5 @@ def test_unknown_events_are_ignored(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     _trigger_sensor(ctx, sensor, "16", "other")
     ctx.api.dispatch.assert_not_called()
-    ctx.scheduler.add_job.assert_not_called()
+    ctx.scheduler.now.assert_not_called()
     ctx.engine.pop_snapshot.assert_not_called()

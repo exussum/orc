@@ -18,8 +18,7 @@ from skyfield.api import load, load_file, wgs84
 from orc import config, plugins
 from orc import model as m
 from orc.collections import LockedDeque
-from orc.dal import net, push, scheduler, sqlite
-from orc.dal.scheduler import fetch_jobs_by_type
+from orc.dal import net, push, sqlite
 from orc.dal.sqlite import (
     connection,  # noqa: F401
     init_db,  # noqa: F401
@@ -33,8 +32,6 @@ from orc.kernel.declarations import Declarations
 from orc.locale import Log
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
-JOBSTORE_DEFAULT = "default"
-JOBSTORE_MEMORY = "memory"
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
 _ROLLUP_WINDOW = timedelta(seconds=5)
@@ -81,10 +78,12 @@ def record_duration(name: str) -> Iterator[None]:
 
 
 def set_job_paused(id: str, paused: bool) -> bool:
-    if not scheduler.job_exists(id):
-        return False
-    scheduler.pause_job(id) if paused else scheduler.resume_job(id)
-    return True
+    return _scheduler().set_paused(id, paused)
+
+
+@mappable
+def fetch_jobs_by_type(type: type) -> list[Job]:
+    return _scheduler().matching(type)
 
 
 def local_now() -> datetime:
@@ -249,7 +248,7 @@ def run_action(
             when = local_now() + action.delay
             log(source, Log.TASK_QUEUED.format(id=id, when=when), trigger)
             run = requires_ctx(lambda ctx: action.effect(log(source, display, trigger)))
-            scheduler.schedule_once(run, when, id=f"run-{id}", replace_existing=True, jobstore=JOBSTORE_MEMORY)
+            _scheduler().once(run, when, id=f"run-{id}")
         else:
             action.effect(log(source, display, trigger))
     return True
@@ -451,7 +450,7 @@ def start_ble_listener() -> None:
 
 def schedule_presence_check(trigger: m.Trigger) -> None:
     if config.people:
-        scheduler.schedule_once(_check_presence_job, local_now(), args=(trigger,), name="Presence Boot Check", jobstore=JOBSTORE_MEMORY)
+        _scheduler().now(_check_presence_job, trigger, name="Presence Boot Check", skip_if_late=True)
 
 
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
@@ -581,7 +580,7 @@ def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], f
 
 
 def rebuild_jobs(ctx: m.AppContext) -> None:
-    scheduler.remove_all_jobs()
+    ctx.scheduler.rebuild()
     setup_scheduler(ctx)
 
 
@@ -593,7 +592,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron"),
         ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
     ):
-        scheduler.schedule_cron(func, crontab, replace_existing=True, id=job_id, name=name, jobstore=JOBSTORE_MEMORY)
+        ctx.scheduler.cron(func, crontab, id=job_id, name=name)
 
 
 def _holds(clauses: Sequence[engine.Clause[m.Devices]], read: engine.Read, now: datetime) -> m.Commands:
@@ -656,13 +655,8 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
     for run_at, rule in get_schedule():
         if now <= run_at:
-            scheduler.schedule_once(
-                run_iot_job,
-                run_at,
-                args=[m.IotJob(rule)],
-                name=rule.name,
-                id=f"iot-{rule.name}-{run_at.date().isoformat()}",
-                replace_existing=True,
+            ctx.scheduler.once(
+                run_iot_job, run_at, m.IotJob(rule), name=rule.name, id=f"iot-{rule.name}-{run_at.date().isoformat()}", persist=True
             )
 
 
@@ -674,6 +668,11 @@ def replay_day(now: datetime, entry: m.LogEntry) -> None:
 
 
 # --- Private helpers ---
+
+
+def _scheduler() -> m.Scheduler:
+    assert _ctx is not None
+    return _ctx.scheduler
 
 
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
@@ -726,14 +725,7 @@ def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any
 
 
 def _schedule_push(title: str, body: str, tag: str, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None) -> None:
-    scheduler.schedule_once(
-        _push_job,
-        local_now(),
-        args=(title, body, tag, trigger, subscriptions),
-        name="Push",
-        misfire_grace_time=None,
-        jobstore=JOBSTORE_MEMORY,
-    )
+    _scheduler().now(_push_job, title, body, tag, trigger, subscriptions, name="Push")
 
 
 @requires_ctx
@@ -763,7 +755,7 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
 
 @requires_ctx
 def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
-    scheduler.delete_stale_jobs(JOBSTORE_DEFAULT)
+    ctx.scheduler.delete_stale()
 
 
 @requires_ctx

@@ -12,7 +12,6 @@ import orc
 from orc import api, config, security
 from orc import model as m
 from orc.dal import net, sqlite
-from orc.dal import scheduler as dal_scheduler
 from orc.dal.mqtt import stub as mqtt_stub
 from orc.plugins import battery, buttons, external
 from orc.view import bp
@@ -30,22 +29,19 @@ class FakeScheduler:
     def __init__(self):
         self.jobs = {}
 
-    def add_job(self, func, trigger, *, args=(), id=None, name=None, **kwargs):
-        job = SimpleNamespace(func=func, args=args, id=id or name, name=name, trigger=trigger)
+    def once(self, func, when, *args, id=None, name=None, persist=False):
+        job = SimpleNamespace(func=func, args=args, id=id or name, name=name, run_date=when)
         self.jobs[job.id] = job
         return job
 
-    def get_job(self, id, jobstore=None):
-        return self.jobs.get(id)
+    def now(self, func, *args, name=None, skip_if_late=False):
+        return self.once(func, api.local_now(), *args, name=name)
 
-    def remove_job(self, id, jobstore=None):
-        del self.jobs[id]
-
-    def add_listener(self, fn, mask):
-        pass
+    def cancel(self, id):
+        return self.jobs.pop(id, None) is not None
 
     def run_due(self, now, ctx):
-        while due := [j for j in self.jobs.values() if j.trigger.run_date <= now]:
+        while due := [j for j in self.jobs.values() if j.run_date <= now]:
             for job in due:
                 del self.jobs[job.id]
                 job.func(*job.args, ctx=ctx)
@@ -139,7 +135,6 @@ def house(request, monkeypatch, tmp_path):
         api.set_ac(SimpleNamespace(command=lambda *args: None, state=lambda device: None, temperature=lambda device: None))
 
         scheduler = FakeScheduler()
-        dal_scheduler.set_scheduler(scheduler)
         ctx = m.AppContext(scheduler=scheduler)
         api.set_ctx(ctx)
 

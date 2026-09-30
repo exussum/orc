@@ -3,14 +3,12 @@ from unittest.mock import ANY, MagicMock, create_autospec, patch
 
 import pytest
 from apscheduler.job import Job
-from apscheduler.schedulers.base import BaseScheduler
 from flask import Flask
 from freezegun import freeze_time
 
 import orc
 from orc import api, config
 from orc import model as m
-from orc.dal import scheduler as dal_scheduler
 from orc.kernel import engine, loader
 from orc.view import bp
 
@@ -27,9 +25,7 @@ def _room(*commands):
 
 @pytest.fixture
 def scheduler():
-    sched = create_autospec(BaseScheduler, instance=True)
-    dal_scheduler.set_scheduler(sched)
-    return sched
+    return create_autospec(m.Scheduler, instance=True)
 
 
 @pytest.fixture
@@ -102,17 +98,16 @@ def test_console_ad_hoc_no_reset(client):
     ex.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
 
 
-def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx):
+def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, scheduler):
     routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), reset=False, delay=timedelta(minutes=7))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
-        patch.object(api.scheduler, "schedule_once") as once,
         patch.object(api, "dispatch") as ex,
         freeze_time(api.local_now()) as frozen,
     ):
         client.get("/api/run/r")
         frozen.tick(timedelta(minutes=7))
-        once.call_args.args[0](ctx=ctx)
+        scheduler.once.call_args.args[0](ctx=ctx)
     (queued,) = api.log_entries()
     assert [c.action for c in queued.children] == ["`r`"]
     ex.assert_called_once_with(routine.commands, force=True, entry=queued)
@@ -236,24 +231,15 @@ def test_durations_returns_config(client):
 # --- /api/schedule/<id>/pause: absolute paused state ---
 
 
-def test_pause_pauses_whatever_the_job_state_is(client, scheduler):
-    job = _fake_job(next_run_time=None)
-    scheduler.get_job.return_value = job
-    client.get("/api/schedule/iot-x/pause?paused=1")
-    job.pause.assert_called_once()
-    job.resume.assert_not_called()
-
-
-def test_pause_off_resumes_whatever_the_job_state_is(client, scheduler):
-    job = _fake_job(next_run_time=datetime(2100, 1, 1))
-    scheduler.get_job.return_value = job
-    client.get("/api/schedule/iot-x/pause?paused=0")
-    job.resume.assert_called_once()
-    job.pause.assert_not_called()
+@pytest.mark.parametrize("paused", [True, False])
+def test_pause_sets_the_absolute_state(client, scheduler, paused):
+    scheduler.set_paused.return_value = True
+    client.get(f"/api/schedule/iot-x/pause?paused={int(paused)}")
+    scheduler.set_paused.assert_called_once_with("iot-x", paused)
 
 
 def test_pause_unknown_job_returns_404(client, scheduler):
-    scheduler.get_job.return_value = None
+    scheduler.set_paused.return_value = False
     response = client.get("/api/schedule/nope/pause?paused=1")
     assert response.status_code == 404
 

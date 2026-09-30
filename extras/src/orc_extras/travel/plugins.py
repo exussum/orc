@@ -2,8 +2,6 @@ import re
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from apscheduler.triggers.date import DateTrigger
-
 import orc_extras.travel
 from orc import model as m
 from orc.kernel import cast
@@ -50,14 +48,7 @@ def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
 
 
 def _reschedule(ctx: AppContext, job: TravelJob, when: datetime) -> None:
-    ctx.scheduler.add_job(
-        run_job,
-        DateTrigger(when, timezone=ctx.config.settings.tz),
-        args=(job,),
-        id=f"{job.summary}@{job.arrive.isoformat()}",
-        replace_existing=True,
-        jobstore=ctx.api.JOBSTORE_DEFAULT,
-    )
+    ctx.scheduler.once(run_job, when, job, id=f"{job.summary}@{job.arrive.isoformat()}", persist=True)
 
 
 def schedule(ctx: AppContext, job: TravelJob) -> None:
