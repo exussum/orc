@@ -149,10 +149,13 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
             listener(msg.topic, msg.payload)
         except Exception:
             _log.exception("raw listener failed for %s", msg.topic)
-    if msg.topic.startswith(_MESSAGE_PREFIX):
-        _receive_message(msg.topic, msg.payload)
-    elif msg.topic.startswith(_PROVISIONING_PREFIX):
-        _receive_provisioning(msg.topic, msg.payload)
+    try:
+        if msg.topic.startswith(_MESSAGE_PREFIX):
+            _receive_message(msg.topic, msg.payload)
+        elif msg.topic.startswith(_PROVISIONING_PREFIX):
+            _receive_provisioning(msg.topic, msg.payload)
+    except Exception:
+        _log.exception("message handling failed for %s", msg.topic)
 
 
 def _receive_message(topic: str, payload: bytes) -> None:
