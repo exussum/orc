@@ -71,7 +71,10 @@ def connect(access_token: str, on_connection: ConnectionCallback, on_report: Rep
         except Exception:
             _log.exception("yolink: bad payload on %s", msg.topic)
             return
-        on_report(parts[2], payload.get("data") or {})
+        try:
+            on_report(parts[2], payload.get("data") or {})
+        except Exception:
+            _log.exception("yolink: report handling failed on %s", msg.topic)
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=str(uuid.uuid4()))
     client.username_pw_set(access_token, "")
