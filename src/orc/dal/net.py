@@ -145,7 +145,8 @@ class Presence:
                     self._on_clock(person, clock)
             if device:
                 self._addresses[person] = device.address
-            self.mark([person], now, m.Query("ble"))
+            if not self._paused:
+                self.mark([person], now, m.Query("ble"))
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)
