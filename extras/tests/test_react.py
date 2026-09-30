@@ -161,6 +161,11 @@ def test_switch_on_schedules_reaction(ctx, configured, switch_report):
     assert call.kwargs["args"][1] == "lamp"
 
 
+def test_switch_already_on_schedules_nothing(ctx, configured, switch_report):
+    switch_report(1, m.ON, m.ON)
+    ctx.scheduler.add_job.assert_not_called()
+
+
 def test_switch_off_cancels_pending_jobs(ctx, configured, switch_report):
     switch_report(1, m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
     ctx.scheduler.reset_mock()
