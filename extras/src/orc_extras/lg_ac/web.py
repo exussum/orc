@@ -63,5 +63,7 @@ def command() -> Response:
     device_id = body.pop("device", None) or transport.default_device()
     if device_id is None:
         return jsonify({"error": "no device"})
+    if "temperature" in body:
+        body["temperature"] = api.celsius(body["temperature"])
     transport.publish_command(device_id, body)
     return jsonify({"status": "sent", "device": device_id, "command": body})

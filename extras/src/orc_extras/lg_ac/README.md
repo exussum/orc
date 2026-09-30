@@ -155,9 +155,10 @@ falls back to the single connected device.)
   registers its `Ac` backend with `api.set_ac`, so `ac_command` publishes to the AC instead of
   the (removed) broadlink blaster. The card's °F is converted to °C.
 - Or set it directly: `POST /api/lg_ac/enroll/command` with e.g.
-  `{"mode":"cool","temperature":25,"fan_mode":"high"}`. A setpoint frame must
+  `{"mode":"cool","temperature":77,"fan_mode":"high"}`. A setpoint frame must
   include `mode`, so send all three fields together.
-- Temperatures are Celsius (the device stores °C×2; it displays °F itself).
+- Temperatures are Fahrenheit on both `/state` and `/command`; the route converts
+  to the Celsius the device stores (°C×2).
 
 ## A new / different AC model
 

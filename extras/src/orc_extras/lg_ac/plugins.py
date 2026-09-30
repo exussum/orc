@@ -3,6 +3,7 @@ from typing import Any
 
 from orc import model as m
 from orc.model import AcCommand, AcMode, AcState, AppContext, DeviceStatus
+from orc_extras.lg_ac import api
 from orc_extras.lg_ac.dal.mqtt.interfaces import Transport
 from orc_extras.lg_ac.model import ACState, LogSource
 
@@ -25,7 +26,7 @@ class Ac:
         if fan:
             values["fan_mode"] = fan
         if temp is not None:
-            values["temperature"] = round((temp - 32) * 5 / 9, 1)  # UI is °F; the codec wants °C
+            values["temperature"] = api.celsius(temp)
         transport.publish_command(device_id, values)
 
     def state(self, device: Any) -> AcState | None:
