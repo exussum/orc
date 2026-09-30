@@ -5,7 +5,6 @@ from unittest.mock import create_autospec
 from zoneinfo import ZoneInfo
 
 import pytest
-from apscheduler.schedulers.base import BaseScheduler
 from command_cfg import ConfigError
 from flask import Flask
 from orc_extras import react
@@ -63,8 +62,7 @@ def _world_read(mock):
 @pytest.fixture
 def ctx(ctx):
     ctx.engine = engine.Runtime([])
-    ctx.scheduler = create_autospec(BaseScheduler, instance=True)
-    ctx.api.JOBSTORE_MEMORY = "memory"
+    ctx.scheduler = create_autospec(m.Scheduler, instance=True)
     ctx.api.local_now.return_value = _NOW
     ctx.api.device_state.side_effect = lambda target: next(
         (s for s in ctx.api.device_states.return_value if str(s.id) == target or s.name == target), None
@@ -132,10 +130,15 @@ def dispatches(ctx):
     return lambda: [(c.channel.one(), c.value) for c in ctx.api.dispatch.call_args.args[0]]
 
 
+def _payload(call):
+    """call.args is (func, when, *payload) — skip the scheduling positionals."""
+    return call.args[2:]
+
+
 @pytest.fixture
 def deferred_run(ctx):
     def deferred_run():
-        deferred, name = ctx.scheduler.add_job.call_args.kwargs["args"]
+        deferred, name = _payload(ctx.scheduler.once.call_args)
         plugins._run_react.__wrapped__(deferred, name, ctx=ctx)
 
     return deferred_run
@@ -155,28 +158,28 @@ def test_config_registers_listener(ctx, configured):
 
 def test_switch_on_schedules_reaction(ctx, configured, switch_report):
     switch_report(1, m.OFF, m.ON)
-    call = ctx.scheduler.add_job.call_args
+    call = ctx.scheduler.once.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"].startswith("react-")
-    assert call.kwargs["args"][1] == "lamp"
+    assert _payload(call)[1] == "lamp"
 
 
 def test_switch_already_on_schedules_nothing(ctx, configured, switch_report):
     switch_report(1, m.ON, m.ON)
-    ctx.scheduler.add_job.assert_not_called()
+    ctx.scheduler.once.assert_not_called()
 
 
 def test_switch_off_cancels_pending_jobs(ctx, configured, switch_report):
     switch_report(1, m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
     ctx.scheduler.reset_mock()
     switch_report(1, m.ON, m.OFF)  # reverse edge cancels the pending
-    assert ctx.scheduler.remove_job.called
+    assert ctx.scheduler.cancel.called
 
 
 def test_sleeping_rule_schedules_nothing(ctx, configured, switch_report):
     plugins.sleep(ctx, "Lights off")
     switch_report(1, m.OFF, m.ON)
-    ctx.scheduler.add_job.assert_not_called()
+    ctx.scheduler.once.assert_not_called()
 
 
 def test_sleeping_rule_still_cancels_its_pending_job(ctx, configured, switch_report):
@@ -184,12 +187,12 @@ def test_sleeping_rule_still_cancels_its_pending_job(ctx, configured, switch_rep
     plugins.sleep(ctx, "Lights off")
     ctx.scheduler.reset_mock()
     switch_report(1, m.ON, m.OFF)
-    assert ctx.scheduler.remove_job.called
+    assert ctx.scheduler.cancel.called
 
 
 def test_unwatched_device_is_ignored(ctx, configured, switch_report):
     switch_report(99, m.OFF, m.ON)
-    ctx.scheduler.add_job.assert_not_called()
+    ctx.scheduler.once.assert_not_called()
     ctx.api.dispatch.assert_not_called()
 
 

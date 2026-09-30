@@ -1,8 +1,6 @@
 from datetime import datetime
 from typing import Any
 
-from apscheduler.triggers.date import DateTrigger
-
 import orc_extras.react
 from orc import model as m
 from orc.kernel import cast, engine
@@ -94,22 +92,19 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     for reaction in ctx.engine.on_event(event, now, _reader(ctx)):
         match reaction:
             case engine.Cancel():
-                job_id = f"{JOB_ID}-{hash(reaction.rule)}"
-                if ctx.scheduler.get_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY):
-                    ctx.scheduler.remove_job(job_id, jobstore=ctx.api.JOBSTORE_MEMORY)
+                ctx.scheduler.cancel(f"{JOB_ID}-{hash(reaction.rule)}")
             case _ if is_disabled(state, reaction.rule, now):
                 continue
             case engine.Report() if reaction.disposition is engine.Disposition.FIRED:
                 fired.append(reaction)
             case engine.Deferred():
-                ctx.scheduler.add_job(
+                ctx.scheduler.once(
                     _run_react,
-                    DateTrigger(reaction.when, timezone=ctx.config.settings.tz),
+                    reaction.when,
+                    reaction,
+                    device.name,
                     name=f"React {device.name}",
                     id=f"{JOB_ID}-{hash(reaction.rule)}",
-                    replace_existing=True,
-                    jobstore=ctx.api.JOBSTORE_MEMORY,
-                    args=(reaction, device.name),
                 )
     if fired:
         entries = [_log(ctx, report, device.name, "") for report in fired]

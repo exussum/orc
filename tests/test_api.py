@@ -346,9 +346,9 @@ class TestLog:
 
     def test_a_nested_line_still_notifies(self):
         api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)), patch.object(scheduler, "schedule_once") as once:
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
             api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification_tag=("calendar", "dentist"))
-        assert once.call_args.kwargs["args"] == ("[Plugin 01/05]", "later x", "calendar:dentist", m.Integration("x"), None)
+        assert api._ctx.scheduler.now.call_args.args[1:] == ("[Plugin 01/05]", "later x", "calendar:dentist", m.Integration("x"), None)
 
     def test_a_greeted_subscription_is_pushed_alone(self):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
@@ -357,11 +357,11 @@ class TestLog:
         with (
             freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)),
             patch.object(config, "providers", config.providers._replace(push=provider)),
-            patch.object(scheduler, "schedule_once") as once,
         ):
             api.subscribe_push(subscriptions[1], greet=True)
-        assert once.call_args.args[0] is api._push_job
-        assert once.call_args.kwargs["args"] == (
+        now = api._ctx.scheduler.now
+        assert now.call_args.args[0] is api._push_job
+        assert now.call_args.args[1:] == (
             "[System 01/05]",
             "Notifications enabled on this device",
             "greeting",

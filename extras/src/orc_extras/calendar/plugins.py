@@ -3,10 +3,6 @@ from datetime import datetime, timedelta
 from itertools import chain, islice
 from typing import Any
 
-from apscheduler.events import EVENT_ALL_JOBS_REMOVED
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
-
 from orc import model as m
 from orc.plugins import requires_ctx
 from orc_extras.calendar.dal.interfaces import FeedService
@@ -46,20 +42,12 @@ class CalendarJob:
 def schedule_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:
     # api.rebuild_jobs wipes every jobstore and re-adds only core crons; the
     # listener puts this one back whenever that happens.
-    ctx.scheduler.add_listener(lambda event: _add_cron(ctx, backend, settings, feeds), EVENT_ALL_JOBS_REMOVED)
+    ctx.scheduler.on_rebuild(lambda: _add_cron(ctx, backend, settings, feeds))
     _add_cron(ctx, backend, settings, feeds)
 
 
 def _add_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:
-    ctx.scheduler.add_job(
-        _rebuild,
-        CronTrigger.from_crontab(settings.cron, timezone=ctx.config.settings.tz),
-        args=(backend, settings, feeds),
-        replace_existing=True,
-        id=CRON_ID,
-        name="Calendar Cron",
-        jobstore=ctx.api.JOBSTORE_MEMORY,
-    )
+    ctx.scheduler.cron(_rebuild, settings.cron, backend, settings, feeds, id=CRON_ID, name="Calendar Cron")
 
 
 @requires_ctx
@@ -81,17 +69,15 @@ def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], 
 
     for job in ctx.api.fetch_jobs_by_type(CalendarJob):
         if job.id not in events_by_id:
-            ctx.scheduler.remove_job(job.id)
+            ctx.scheduler.cancel(job.id)
 
     for id, event in events_by_id.items():
-        ctx.scheduler.add_job(
+        ctx.scheduler.once(
             _run_event,
-            DateTrigger(event.datetime, timezone=tz),
-            args=(CalendarJob(event.type, event.summary),),
-            replace_existing=True,
+            event.datetime,
+            CalendarJob(event.type, event.summary),
             id=id,
             name=event.summary if event.type == ALARM else f"{event.summary} ({event.type})",
-            jobstore=ctx.api.JOBSTORE_MEMORY,
         )
 
 

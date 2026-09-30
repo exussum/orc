@@ -2,8 +2,6 @@ from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, NamedTuple, Sequence
 
-from apscheduler.triggers.date import DateTrigger
-
 import orc_extras.entrance_sensor
 from orc import model as m
 from orc.plugins import requires_ctx
@@ -41,14 +39,7 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
         if new == sensor.setting.active_event and previous:
             previous.entry.add(Log.ENTRANCE, CANCELLED_MSG)
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(log_entry, previous.present_before if previous else set())
-        ctx.scheduler.add_job(
-            _run_motion,
-            DateTrigger(ctx.api.local_now(), timezone=ctx.config.settings.tz),
-            name="Entrance Motion",
-            misfire_grace_time=None,
-            jobstore=ctx.api.JOBSTORE_MEMORY,
-            args=(sensor, new, log_entry),
-        )
+        ctx.scheduler.now(_run_motion, sensor, new, log_entry, name="Entrance Motion")
 
 
 def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, attribute: str, old: Any, new: Any) -> bool:
@@ -68,8 +59,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         present_before.update(ctx.api.present_names())
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(log_entry.trigger)
-        if ctx.scheduler.get_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY):
-            ctx.scheduler.remove_job(JOB_ID, jobstore=ctx.api.JOBSTORE_MEMORY)
+        ctx.scheduler.cancel(JOB_ID)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
         timed_name, timed_commands = _timed_commands(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
@@ -77,14 +67,13 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
     elif new == sensor.setting.inactive_event:
         log_entry.add(Log.ENTRANCE, CLEARED_MSG.format(routine_name=sensor.rules.inside, minutes=sensor.setting.cleanup_delay_minutes))
         ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
-        ctx.scheduler.add_job(
+        ctx.scheduler.once(
             _run_trigger_sensor_off,
-            DateTrigger(ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes), timezone=ctx.config.settings.tz),
+            ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
+            sensor,
+            log_entry,
             name="Trigger Sensor",
             id=JOB_ID,
-            replace_existing=True,
-            jobstore=ctx.api.JOBSTORE_MEMORY,
-            args=(sensor, log_entry),
         )
 
 
