@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, Flag, StrEnum, auto
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self
 from zoneinfo import ZoneInfo
 
@@ -134,6 +134,7 @@ PAUSE = "pause"
 FOLLOW = "follow"
 THEME_WORK_DAY = "work day"
 THEME_DAY_OFF = "day off"
+UNASSIGNED_ROOM = "Unassigned"
 
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
 
@@ -492,7 +493,7 @@ class DeviceEnumMeta(EnumType):
 
 class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
     capabilities: frozenset[Capability]
-    room: str | None
+    room: str
     label: str | None
 
     def __new__(
@@ -501,7 +502,7 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
         obj = object.__new__(cls)
         obj._value_ = value
         obj.capabilities = capabilities
-        obj.room = room
+        obj.room = room or UNASSIGNED_ROOM
         obj.label = label
         return obj
 
@@ -570,7 +571,7 @@ class CastChannel(engine.Channel):
     device: DeviceEnum
 
 
-class DeviceNamespace(SimpleNamespace):
+class DeviceNamespace:
     """Device type name -> enum class, built fresh per config load, reached as
     ``registry.devices.Light`` (dot access, no per-device wrapper). A name in
     _KNOWN_DEVICE_TYPES that this particular config never declared resolves to an
@@ -578,6 +579,9 @@ class DeviceNamespace(SimpleNamespace):
     unconditionally regardless of whether a given config declares that type."""
 
     _KNOWN_DEVICE_TYPES: ClassVar[frozenset[str]] = frozenset({"Light", "Chromecast", "BroadLink", "AC", "USB", "Sensor"})
+
+    def __init__(self, **enums: type[DeviceEnum]) -> None:
+        vars(self).update(enums)
 
     def __getattr__(self, name: str) -> type[DeviceEnum]:
         if name not in self._KNOWN_DEVICE_TYPES:
