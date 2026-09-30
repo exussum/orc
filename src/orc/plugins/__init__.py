@@ -36,7 +36,7 @@ def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> N
     ctx.engine.override_scene(ctx, "light_test", (engine.Command(m.Devices(ctx.config.devices.Light), m.OFF),), end, "light_test", entry)
     time.sleep(_LIGHT_TEST_SETTLE_SECONDS)
     report(expect_on=False)
-    ctx.api.dispatch((engine.Command(ctx.config.devices.Light, m.ON),), force=True, entry=entry)
+    ctx.api.dispatch((engine.Command(m.Devices(ctx.config.devices.Light), m.ON),), force=True, entry=entry)
     time.sleep(_LIGHT_TEST_SETTLE_SECONDS)
     report(expect_on=True)
     ctx.engine.restore_scene(ctx, "light_test", ctx.config.default_config.commands, entry)

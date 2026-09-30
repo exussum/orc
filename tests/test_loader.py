@@ -51,7 +51,7 @@ def test_devices_build_enums_with_rooms():
     light = parse("core").enums["Light"]
     assert [e.name for e in light] == ["LAMP", "DESK"]
     assert light["LAMP"].room == "Bedroom"
-    assert light["DESK"].room is None
+    assert light["DESK"].room == m.UNASSIGNED_ROOM
 
 
 def test_devices_without_zigbee_config_get_virtual_ids():

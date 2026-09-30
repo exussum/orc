@@ -75,7 +75,7 @@ document.querySelectorAll('.orc-ac-set').forEach(el => {
     el.addEventListener('click', () => {
         const id = el.dataset.id;
         const temp = document.querySelector(`input.orc-ac-ctrl[data-id="${id}"]`)?.value;
-        const { fan, mode } = acSelections[id] || {};
+        const { fan = "", mode } = acSelections[id] || {};
         get(`/api/device/${id}?state=${mode}:${fan}:${temp}`, el);
         ['power', 'fan', 'mode'].forEach(g => acQuery(g, id).forEach(btn => btn.classList.remove('orc-selected')));
     });

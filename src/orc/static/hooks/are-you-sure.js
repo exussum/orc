@@ -31,7 +31,7 @@ orc.hooks.ensure({
             const disruptive =
                 url.startsWith("/api/run/")
                 || url.startsWith("/api/room/")
-                || (url.startsWith("/api/device/") && !url.startsWith("/api/device/ac/"));
+                || (url.startsWith("/api/device/") && !el?.className.includes("orc-ac-"));
             if (disruptive && !(await askConfirm(`It's after hours.  Go ahead with: ${what}?`))) return false;
         }
         return true;
