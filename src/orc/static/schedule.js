@@ -51,6 +51,7 @@ function formUpdated() {
 }
 
 wire(".orc-enable", "change", pause);
+wire("#orc-theme-submit", "click", set_theme);
 
 selectEl.addEventListener("change", (e) => {
     scheduleEl.forEach((el) => {
@@ -60,6 +61,7 @@ selectEl.addEventListener("change", (e) => {
         startPicker.clear();
         endPicker.clear();
     }
+    formUpdated();
 });
 
 selectEl.value = window.orcThemeName;

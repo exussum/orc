@@ -160,7 +160,7 @@ def device() -> str:
         has_level = "change_level" in {c.name for c in d.capabilities}
         return (_DEVICE_TYPE_ORDER.get(d.kind, 99), has_level, d.name)
 
-    rooms = sorted({d.room for d in all_devices}, key=lambda r: r or "")
+    rooms = sorted({d.room for d in all_devices})
     devices_grouped = {room: [make_device(d) for d in sorted((d for d in all_devices if d.room == room), key=sort_key)] for room in rooms}
     return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped)
 
