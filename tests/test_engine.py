@@ -22,6 +22,7 @@ def test_transition_ignores_other_channel_and_other_value():
     trigger = e.Transition("door", "open")
     assert not trigger.fired(e.Event("window", "closed", "open"))
     assert not trigger.fired(e.Event("door", "open", "closed"))
+    assert not trigger.fired(e.Event("door", "open", "open"))
 
 
 def test_changed_fires_on_any_listed_channel_regardless_of_value():

@@ -63,7 +63,7 @@ class Transition:
     value: Value
 
     def fired(self, event: Event) -> bool:
-        return event.channel == self.channel and event.now == self.value
+        return event.channel == self.channel and event.now == self.value and event.prev != event.now
 
 
 @dataclass(frozen=True)
