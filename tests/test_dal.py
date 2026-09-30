@@ -226,3 +226,15 @@ class TestPresence:
         client = MagicMock()
         self._probe(presence, client)
         client.assert_not_called()
+
+
+def test_missed_job_is_logged(caplog):
+    from datetime import datetime
+
+    from apscheduler.events import EVENT_JOB_MISSED, JobExecutionEvent
+
+    from orc.dal import scheduler
+
+    scheduler._log_missed(JobExecutionEvent(EVENT_JOB_MISSED, "iot-Sunrise", "memory", datetime(2026, 1, 1, tzinfo=config.settings.tz)))
+    (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert "iot-Sunrise" in record.getMessage()

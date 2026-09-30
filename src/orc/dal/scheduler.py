@@ -1,6 +1,8 @@
+import logging
 from datetime import datetime
 from typing import Any
 
+from apscheduler.events import EVENT_JOB_MISSED, JobExecutionEvent
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.job import Job
 from apscheduler.schedulers.base import BaseScheduler
@@ -12,12 +14,15 @@ from orc import config
 from orc import model as m
 from orc.decorators import mappable
 
+_log = logging.getLogger(__name__)
+
 _instance: BaseScheduler | None = None
 
 
 def set_scheduler(scheduler: BaseScheduler) -> None:
     global _instance
     _instance = scheduler
+    scheduler.add_listener(_log_missed, EVENT_JOB_MISSED)
 
 
 def _scheduler() -> BaseScheduler:
@@ -85,3 +90,7 @@ def delete_stale_jobs(jobstore: str) -> None:
             ),
             {"today": today},
         )
+
+
+def _log_missed(event: JobExecutionEvent) -> None:
+    _log.error("scheduler: missed job %s due at %s", event.job_id, event.scheduled_run_time)
