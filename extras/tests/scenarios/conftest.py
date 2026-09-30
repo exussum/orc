@@ -41,6 +41,9 @@ class FakeScheduler:
     def remove_job(self, id, jobstore=None):
         del self.jobs[id]
 
+    def add_listener(self, fn, mask):
+        pass
+
     def run_due(self, now, ctx):
         while due := [j for j in self.jobs.values() if j.trigger.run_date <= now]:
             for job in due:

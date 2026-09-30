@@ -154,7 +154,7 @@ def _build_scheduler() -> BackgroundScheduler:
             JOBSTORE_DEFAULT: SQLAlchemyJobStore(url=config.config.settings.jobs_db),
             JOBSTORE_MEMORY: MemoryJobStore(),
         },
-        job_defaults={"misfire_grace_time": 30},
+        job_defaults={"misfire_grace_time": 300},
         timezone=config.config.settings.tz,
     )
 
