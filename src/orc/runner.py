@@ -9,16 +9,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
-from apscheduler.jobstores.memory import MemoryJobStore
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.schedulers.background import BackgroundScheduler
 from gunicorn.app.base import BaseApplication
 
 import orc as config
 from orc import _build, api
 from orc import model as m
-from orc.api import JOBSTORE_DEFAULT, JOBSTORE_MEMORY
-from orc.dal.scheduler import ContextThreadPoolExecutor, set_scheduler
+from orc.dal.scheduler import Scheduler
 from orc.kernel.loader import check_secrets
 from orc.locale import Log
 from orc.view import OrcFlask, bp
@@ -117,7 +113,7 @@ def _start_services(ctx: m.AppContext) -> None:
     # the scheduler's thread and the mqtt network loops don't survive the fork, so they
     # must start in the worker, not in _build_app (which runs pre-fork in web()).
     with _step("scheduler start"):
-        ctx.scheduler.start(paused=True)
+        ctx.scheduler.start(ctx)
         api.setup_scheduler(ctx)
     for hook in config.config.registry.setup_hooks:
         with _step(hook.__module__):
@@ -140,23 +136,9 @@ def _build_app() -> OrcFlask:
     with _step("database"):
         api.init_db()
 
-    scheduler = _build_scheduler()
-    set_scheduler(scheduler)
-    ctx = m.AppContext(scheduler)
+    ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz))
     api.set_ctx(ctx)
-    scheduler.add_executor(ContextThreadPoolExecutor(ctx), JOBSTORE_DEFAULT)
     return _build_flask(ctx)
-
-
-def _build_scheduler() -> BackgroundScheduler:
-    return BackgroundScheduler(
-        jobstores={
-            JOBSTORE_DEFAULT: SQLAlchemyJobStore(url=config.config.settings.jobs_db),
-            JOBSTORE_MEMORY: MemoryJobStore(),
-        },
-        job_defaults={"misfire_grace_time": 300},
-        timezone=config.config.settings.tz,
-    )
 
 
 def _build_flask(ctx: m.AppContext) -> OrcFlask:

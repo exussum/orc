@@ -130,7 +130,7 @@ def cfg() -> str:
         device_buttons=device_buttons,
         device_plugins=device_plugins,
         registry=config.registry,
-        scheduled_jobs=[(store, app.orc.scheduler.get_jobs(jobstore=store)) for store in (api.JOBSTORE_DEFAULT, api.JOBSTORE_MEMORY)],
+        scheduled_jobs=app.orc.scheduler.stores(),
     )
 
 

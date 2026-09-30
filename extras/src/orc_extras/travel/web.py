@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
-from apscheduler.jobstores.base import JobLookupError
 from flask import Blueprint, current_app, request
 
 from orc_extras.travel import plugins
@@ -16,8 +15,7 @@ app = cast("OrcFlask", current_app)
 
 @travel_bp.route("/", methods=["GET"])
 def upcoming() -> dict:
-    jobs = [j for j in app.orc.scheduler.get_jobs() if j.args and isinstance(j.args[0], TravelJob)]
-    jobs.sort(key=lambda j: j.args[0].arrive)
+    jobs = sorted(app.orc.scheduler.matching(TravelJob), key=lambda j: j.args[0].arrive)
     return {
         "jobs": [
             {
@@ -71,8 +69,6 @@ def create() -> tuple[dict, int]:
 
 @travel_bp.route("/<jid>", methods=["DELETE"])
 def delete(jid: str) -> tuple[dict | str, int]:
-    try:
-        app.orc.scheduler.remove_job(jid)
-    except JobLookupError:
+    if not app.orc.scheduler.cancel(jid):
         return {"error": "not found"}, 404
     return "", 204
