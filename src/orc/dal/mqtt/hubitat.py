@@ -227,12 +227,15 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
         return  # location/variables topics
     _hub_id = parts[1]
     kind = parts[4] if len(parts) > 4 else None
-    if kind is None:
-        _receive_document(msg)
-    elif kind == "button" and msg.payload:  # the empty clearing publish follows each event
-        _receive_button_event(msg)
-    elif kind == "commands":
-        _receive_command_echo(msg)
+    try:
+        if kind is None:
+            _receive_document(msg)
+        elif kind == "button" and msg.payload:  # the empty clearing publish follows each event
+            _receive_button_event(msg)
+        elif kind == "commands":
+            _receive_command_echo(msg)
+    except Exception:
+        _log.exception("mqtt: message handling failed for %s", msg.topic)
 
 
 def _receive_document(msg: mqtt.MQTTMessage) -> None:

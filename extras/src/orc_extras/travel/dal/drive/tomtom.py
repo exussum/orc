@@ -38,6 +38,7 @@ def drive_minutes(connection: Connection, key: str, origin: str, dest: str, time
     try:
         response.raise_for_status()
     except requests.HTTPError:
-        sqlite.delete_geocode(connection, dest)
+        if response.status_code == 400:
+            sqlite.delete_geocode(connection, dest)
         raise
     return round(response.json()["routes"][0]["summary"]["travelTimeInSeconds"] / 60)

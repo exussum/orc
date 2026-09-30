@@ -86,22 +86,33 @@ def test_backends_resolve(path, func):
     assert callable(getattr(cast.module(path), func))
 
 
-def test_drive_minutes_deletes_cached_geocode_on_http_error(monkeypatch):
+@pytest.mark.parametrize(("status", "kept"), [(400, False), (429, True), (503, True)])
+def test_drive_minutes_evicts_the_geocode_only_on_a_bad_request(monkeypatch, status, kept):
     conn = sqlite3.connect(":memory:")
     connection = lambda: conn  # noqa: E731
     travel_sqlite.init_db(connection)
-    travel_sqlite.insert_geocode(connection, "Bad Dest", 1.0, 2.0)
-
-    class FailingResponse:
-        def raise_for_status(self):
-            raise requests.HTTPError("400 Client Error")
-
-    monkeypatch.setattr(tomtom.requests, "get", lambda *a, **k: FailingResponse())
+    travel_sqlite.insert_geocode(connection, "Dest", 1.0, 2.0)
+    response = requests.Response()
+    response.status_code = status
+    monkeypatch.setattr(tomtom.requests, "get", lambda *a, **k: response)
 
     with pytest.raises(requests.HTTPError):
-        tomtom.drive_minutes(connection, "key", "origin", "Bad Dest", 5)
+        tomtom.drive_minutes(connection, "key", "origin", "Dest", 5)
 
-    assert travel_sqlite.fetch_geocode(connection, "Bad Dest") is None
+    assert (travel_sqlite.fetch_geocode(connection, "Dest") is not None) == kept
+
+
+def test_lookup_geocodes_again_after_an_eviction(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    connection = lambda: conn  # noqa: E731
+    travel_sqlite.init_db(connection)
+    travel_sqlite.insert_geocode(connection, "Dest", 0.0, 0.0)
+    travel_sqlite.delete_geocode(connection, "Dest")
+    get = MagicMock(return_value=MagicMock(**{"json.return_value": {"results": [{"position": {"lat": 40.7, "lon": -74.0}}]}}))
+    monkeypatch.setattr(tomtom.requests, "get", get)
+
+    assert tomtom._lookup(connection, "key", "Dest", 5) == (40.7, -74.0)
+    get.assert_called_once()
 
 
 @pytest.mark.parametrize(

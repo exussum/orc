@@ -162,15 +162,15 @@ Two config surfaces:
    The required keys fail startup with a named `ConfigError` when a line is
    missing or its value is empty:
 
-   | Setting                                                    | Purpose                                                                                           |
-   | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-   | `base_url`                                                 | LAN-reachable base URL Chromecasts fetch alert media from; its host marks UI requests as internal |
-   | `lan_domain`                                               | Suffix stripped from presence-page hostnames                                                      |
-   | `jobs_db`                                                  | SQLAlchemy URL for the APScheduler / orc state DB                                                 |
-   | `lat` / `long`                                             | Coordinates for sunrise/sunset                                                                    |
-   | `warning_device` / `attention_device` / `emergency_device` | `USB.*`/`Chromecast.*` device for each Alarm severity's TTS/alerts                                |
-   | `broadlink_codes`                                          | Path to BroadLink IR codes JSON                                                                   |
-   | `mqtt_host`                                                | Broker host for the Hubitat MQTT export                                                           |
+   | Setting                                                    | Purpose                                                                                                                                                                               |
+   | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `base_url`                                                 | LAN-reachable base URL Chromecasts fetch alert media from; its host marks UI requests as internal, and it is the VAPID contact claim, so Web Push needs `https://<host>` with no port |
+   | `lan_domain`                                               | Suffix stripped from presence-page hostnames                                                                                                                                          |
+   | `jobs_db`                                                  | SQLAlchemy URL for the APScheduler / orc state DB                                                                                                                                     |
+   | `lat` / `long`                                             | Coordinates for sunrise/sunset                                                                                                                                                        |
+   | `warning_device` / `attention_device` / `emergency_device` | `USB.*`/`Chromecast.*` device for each Alarm severity's TTS/alerts                                                                                                                    |
+   | `broadlink_codes`                                          | Path to BroadLink IR codes JSON                                                                                                                                                       |
+   | `mqtt_host`                                                | Broker host for the Hubitat MQTT export                                                                                                                                               |
 
    The optional keys default when omitted:
 
@@ -240,6 +240,13 @@ pushed to every phone or browser that has opted in, through the
 browser's own push service (Mozilla for Firefox, FCM for Chrome, Apple
 for Safari). There is no third-party account: orc signs each push with a
 VAPID key and posts it straight to the subscription's endpoint.
+
+The push service checks the VAPID contact claim, which orc fills from
+`base_url`, and py_vapid only accepts `https://<host>` with no port there.
+An `http://` value or a port, like the sample config's
+`http://orc.internal.example`, makes every push fail with a
+`VapidException` before it is sent. Either set `base_url` to a plain
+`https://` host or leave notifications off.
 
 1. Generate a key once and store it in the secrets provider as
    `VAPID_PRIVATE_KEY`:

@@ -136,7 +136,8 @@ def _on_connection(ctx: m.AppContext, on_transition: TransitionCallback, disconn
 
 
 def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: str, data: dict[str, Any]) -> None:
-    data["battery"] = m.BatteryLevel.from_fraction(data["battery"], 4)
+    if "battery" in data:
+        data["battery"] = m.BatteryLevel.from_fraction(data["battery"], 4)
 
     # collect transitions inside the atomic update, fire after releasing the lock
     captured: dict[str, Any] = {"name": None, "transitions": []}

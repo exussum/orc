@@ -67,6 +67,12 @@ class TestOnMessage:
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", {"unexpected": "shape"}))
         assert mqtt.snapshot() == []
 
+    def test_handler_failure_is_logged_not_raised(self, monkeypatch, caplog):
+        monkeypatch.setattr(mqtt, "_receive_document", lambda msg: 1 / 0)
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
+        (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert record.exc_info[0] is ZeroDivisionError
+
     def test_update_replaces_device(self):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc(attributes={"switch": "on", "level": "80"})))
