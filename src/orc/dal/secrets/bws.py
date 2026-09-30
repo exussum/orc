@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from cryptography.hazmat.primitives.padding import PKCS7
 
+import orc
 from orc import model as m
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
@@ -42,7 +43,7 @@ def fetch_secrets() -> m.Secrets:
         data=body,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    with urlopen(req) as r:  # nosemgrep: dynamic-urllib-use-detected
+    with urlopen(req, timeout=orc.config.settings.http_timeout) as r:  # nosemgrep: dynamic-urllib-use-detected
         auth = json.loads(r.read())
 
     jwt = auth["access_token"]
@@ -102,7 +103,8 @@ def _decrypt_enc_string(enc_string: str, key_64: bytes) -> str:
 
 
 def _api_get(url: str, token: str) -> Any:
-    with urlopen(Request(url, headers={"Authorization": f"Bearer {token}"})) as r:  # nosemgrep: dynamic-urllib-use-detected
+    req = Request(url, headers={"Authorization": f"Bearer {token}"})
+    with urlopen(req, timeout=orc.config.settings.http_timeout) as r:  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read())
 
 
@@ -116,10 +118,10 @@ def _api_post(url: str, token: str, body: dict[str, Any]) -> Any:
             "Content-Type": "application/json",
         },
     )
-    with urlopen(req) as r:  # nosemgrep: dynamic-urllib-use-detected
+    with urlopen(req, timeout=orc.config.settings.http_timeout) as r:  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read())
 
 
 def _get_url_value(url: str) -> str:
-    with urlopen(url) as response:  # nosemgrep: dynamic-urllib-use-detected
+    with urlopen(url, timeout=orc.config.settings.http_timeout) as response:  # nosemgrep: dynamic-urllib-use-detected
         return response.readline().decode("utf-8").strip()
