@@ -6,6 +6,8 @@ import time
 import traceback
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
@@ -20,10 +22,35 @@ from orc.locale import Log
 from orc.view import OrcFlask, bp
 
 
+@dataclass
+class Boot:
+    entry: m.LogEntry | None = None
+    started: float | None = None
+
+
+class GunicornApp(BaseApplication):
+    def __init__(self, app: OrcFlask, boot: Boot) -> None:
+        self._app = app
+        self._boot = boot
+        super().__init__()
+
+    def load_config(self) -> None:
+        self.cfg.set("workers", 1)
+        self.cfg.set("threads", 1)
+        self.cfg.set("timeout", 120)
+        self.cfg.set("loglevel", "warning")
+        self.cfg.set("bind", f"0.0.0.0:{config.config.settings.port}")
+
+    def load(self) -> OrcFlask:
+        _start_services(self._app.orc, self._boot)
+        return self._app
+
+
 def flask() -> None:
     subprocess.run(["tailwindcss", "-i", "src/css/tailwind.src.css", "-o", "src/orc/static/tailwind.min.css", "--minify"], check=True)
-    app = _build_app()
-    _start_services(app.orc)
+    boot = Boot()
+    app = _build_app(boot)
+    _start_services(app.orc, boot)
     app.run(host="0.0.0.0", port=config.config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
@@ -51,14 +78,18 @@ def secrets() -> None:
         sys.exit(1)
 
 
-def _split_stderr() -> None:
-    """Python keeps stderr via a private dup; fd 2 itself goes to /dev/null.
+def web() -> None:
+    _split_stderr()
+    boot = Boot()
+    try:
+        app = _build_app(boot)
+    except Exception:
+        traceback.print_exc()
+        sys.exit(4)
+    GunicornApp(app, boot).run()
 
-    Native libraries (onnxruntime, ALSA, JACK, …) spew to fd 2 directly and can't be
-    muted per-thread, while everything Python-side (print, logging, tracebacks) goes
-    through sys.stderr. Splitting them once at startup silences all C noise for good
-    without ever redirecting the stream Python logs to.
-    """
+
+def _split_stderr() -> None:
     saved = os.dup(2)
     devnull = os.open(os.devnull, os.O_WRONLY)
     os.dup2(devnull, 2)
@@ -66,74 +97,41 @@ def _split_stderr() -> None:
     sys.stderr = os.fdopen(saved, "w", buffering=1)
 
 
-def web() -> None:
-    _split_stderr()
-    try:
-        app = _build_app()
-    except Exception:
-        traceback.print_exc()
-        sys.exit(4)
-
-    class GunicornApp(BaseApplication):
-        def load_config(self) -> None:
-            self.cfg.set("workers", 1)
-            self.cfg.set("threads", 1)
-            self.cfg.set("timeout", 120)
-            self.cfg.set("loglevel", "warning")
-            self.cfg.set("bind", f"0.0.0.0:{config.config.settings.port}")
-
-        def load(self) -> OrcFlask:
-            _start_services(app.orc)
-            return app
-
-    GunicornApp().run()
-
-
-_boot: m.LogEntry | None = None
-_boot_started: float | None = None
-
-
 @contextmanager
-def _step(name: str) -> Iterator[None]:
-    global _boot, _boot_started
+def _step(boot: Boot, name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
-    if _boot is None:
-        _boot, _boot_started = api.log(m.LogSource.SYSTEM, Log.BOOT, m.System("boot")), start
-    _boot.add(m.LogSource.SYSTEM, Log.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
+    if boot.entry is None:
+        boot.entry, boot.started = api.log(m.LogSource.SYSTEM, Log.BOOT, m.System("boot")), start
+    boot.entry.add(m.LogSource.SYSTEM, Log.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
 
 
-def _boot_done() -> None:
-    assert _boot is not None and _boot_started is not None
-    _boot.add(m.LogSource.SYSTEM, Log.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - _boot_started:.1f}"))
-
-
-def _start_services(ctx: m.AppContext) -> None:
-    # Start the scheduler and its services here, after gunicorn has forked the worker:
-    # the scheduler's thread and the mqtt network loops don't survive the fork, so they
-    # must start in the worker, not in _build_app (which runs pre-fork in web()).
-    with _step("scheduler start"):
+def _start_services(ctx: m.AppContext, boot: Boot) -> None:
+    step = partial(_step, boot)
+    with step("scheduler start"):
         ctx.scheduler.start(ctx)
         api.setup_scheduler(ctx)
     for hook in config.config.registry.setup_hooks:
-        with _step(hook.__module__):
+        with step(hook.__module__):
             hook(ctx)
-    with _step("mqtt"):
+    with step("mqtt"):
         config.config.providers.mqtt.start()
-    with _step("ble"):
+    with step("ble"):
         api.start_ble_listener()
-    with _step("scheduler resume"):
+    with step("scheduler resume"):
         ctx.scheduler.resume()
-    with _step("presence check"):
+    with step("presence check"):
         api.schedule_presence_check(m.Cron("presence"))
-    _boot_done()
+    assert boot.entry is not None and boot.started is not None
+    boot.entry.add(m.LogSource.SYSTEM, Log.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
-def _build_app() -> OrcFlask:
-    with _step("config"):
+def _build_app(boot: Boot) -> OrcFlask:
+    step = partial(_step, boot)
+    with step("config"):
         config.config.load()
-    with _step("database"):
+    with step("database"):
         api.init_db()
 
     ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz))
