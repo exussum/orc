@@ -169,6 +169,26 @@ def test_a_second_motion_discards_what_the_first_heard(house):
                 "`All Lights Off`",
                 "Snapshot for `entrance_sensor` until 03:48: all off",
                 "Trigger sensor off: applying OFF",
+                "Entrance motion with nobody tracked before or after",
             ],
         ),
     ]
+
+
+@pytest.mark.plugins(entrance_sensor)
+def test_a_tag_heard_in_the_quiet_minutes_waits_for_its_next_broadcast(house):
+    house.lan.clear()
+    house.advertise("Rex")
+    house.tick(hours=1)
+    assert house.ctx.api.present_names() == {"Rex"}
+    house.entrance_sensor("active")
+    house.tick(seconds=30)
+    house.entrance_sensor("inactive")
+    house.tick(seconds=20)
+    house.advertise("Rex")
+    house.leave("Rex")
+    assert house.ctx.api.present_names() == set()
+    house.tick(minutes=2)
+    assert house.ctx.api.present_names() == set()
+    house.advertise("Rex")
+    assert house.ctx.api.present_names() == {"Rex"}
