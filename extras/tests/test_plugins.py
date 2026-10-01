@@ -179,6 +179,17 @@ def test_walk_in_cancels_pending_cleanup(ctx, sensor):
     ctx.scheduler.cancel.assert_called_once_with("trigger-sensor")
 
 
+def test_before_set_is_captured_once(ctx, sensor):
+    ctx.api.local_now.return_value = _DAYTIME
+    ctx.api.present_names.return_value = {"rex"}
+    ctx.plugin_state = {entrance_sensor: None}
+    _trigger_sensor(ctx, sensor, "16", "active")
+    ctx.api.present_names.return_value = set()
+    _trigger_sensor(ctx, sensor, "16", "inactive")
+    _trigger_sensor(ctx, sensor, "16", "active")
+    assert ctx.plugin_state[entrance_sensor].present_before == {"rex"}
+
+
 def test_motion_groups_under_the_trigger_entry(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
     entry = m.LogEntry(_DAYTIME, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))

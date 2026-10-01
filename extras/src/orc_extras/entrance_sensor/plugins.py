@@ -38,7 +38,9 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
         log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger)
         if new == sensor.setting.active_event and previous:
             previous.entry.add(Log.ENTRANCE, CANCELLED_MSG)
-        ctx.plugin_state[orc_extras.entrance_sensor] = Visit(log_entry, previous.present_before if previous else set())
+        ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
+            log_entry, previous.present_before if previous else set(ctx.api.present_names())
+        )
         ctx.scheduler.now(_run_motion, sensor, new, log_entry, name="Entrance Motion")
 
 
@@ -54,9 +56,6 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, att
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     if new == sensor.setting.active_event:
-        present_before = ctx.plugin_state[orc_extras.entrance_sensor].present_before
-        present_before.clear()
-        present_before.update(ctx.api.present_names())
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(log_entry.trigger)
         ctx.scheduler.cancel(JOB_ID)
@@ -79,6 +78,8 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
 
 @requires_ctx
 def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
+    visit = ctx.plugin_state[orc_extras.entrance_sensor]
+    ctx.plugin_state[orc_extras.entrance_sensor] = None
     present = ctx.api.check_presence(log_entry.trigger, probe=True)
     ctx.api.resume_presence(log_entry.trigger)
     people = present - {sensor.setting.listener}
@@ -98,10 +99,8 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
             ctx, SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry
         )
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
-        if not ctx.plugin_state[orc_extras.entrance_sensor].present_before and not present:
+        if not visit.present_before and not present:
             ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification_tag=("entrance",))
-    if ctx.plugin_state[orc_extras.entrance_sensor].entry is log_entry:
-        ctx.plugin_state[orc_extras.entrance_sensor] = None
 
 
 def battery_state(ctx: m.AppContext, sensor: SimpleNamespace) -> list[m.DeviceStatus]:
