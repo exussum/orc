@@ -16,6 +16,8 @@ from orc.kernel import cast, engine
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 _WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
 
+_POLAR_LATITUDE = 65.7
+
 GRAMMAR = """
 ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<devices> <state>]
 ad_hoc append <name> <devices> <state>
@@ -114,6 +116,9 @@ def validate(config: SimpleNamespace) -> None:
         raise ConfigError(f"Missing required settings: {', '.join(unset)}")
     if config.setting.emergency_routine not in config.routine:
         raise ConfigError(f"Unknown routine {config.setting.emergency_routine!r}: expected one of {tuple(config.routine)}")
+    sun_timed = [e.routine.name for theme in config.theme.values() for e in theme.entries if e.when in (m.SUNRISE, m.SUNSET)]
+    if sun_timed and abs(config.setting.lat) > _POLAR_LATITUDE:
+        raise ConfigError(f"Latitude {config.setting.lat} has days without a sunrise or sunset: {', '.join(sun_timed)}")
     for tag in config.tag:
         if tag.person not in config.person:
             raise ConfigError(f"Unknown person {tag.person!r} in tag line: expected one of {tuple(config.person)}")
