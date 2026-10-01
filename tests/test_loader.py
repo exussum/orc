@@ -367,6 +367,11 @@ def test_validate_missing_routines():
         validate(parse("validate_missing_routines"))
 
 
+def test_validate_polar_sun_times():
+    with pytest.raises(ConfigError, match="Latitude 70.0 has days without a sunrise or sunset: Welcome"):
+        validate(parse("validate_polar_sun_times"))
+
+
 def test_validate_missing_themes():
     with pytest.raises(ConfigError, match="Missing required themes: day off, work day"):
         validate(parse("validate_missing_themes"))

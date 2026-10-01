@@ -493,9 +493,7 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
         sunrise, sunset = _sun_times(local_midnight, config.settings.lat, config.settings.long, config.settings.sunset_lead_hours)
 
         for when, routine in _scheduled_theme(today).entries:
-            run_at = _entry_time(when, sunrise, sunset, now)
-            if run_at is not None:
-                result.append((run_at, routine))
+            result.append((_entry_time(when, sunrise, sunset, now), routine))
     return result
 
 
@@ -508,7 +506,7 @@ def _scheduled_theme(today: date) -> m.Theme:
     return theme
 
 
-def _entry_time(when: dt_time | str, sunrise: datetime | None, sunset: datetime | None, now: datetime) -> datetime | None:
+def _entry_time(when: dt_time | str, sunrise: datetime, sunset: datetime, now: datetime) -> datetime:
     if when == m.SUNRISE:
         return sunrise
     elif when == m.SUNSET:
@@ -523,7 +521,7 @@ def _almanac(lat: float, long: float) -> tuple[Any, Any]:
     return load.timescale(), almanac.dark_twilight_day(ephemeris, wgs84.latlon(lat, long))
 
 
-def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: int) -> tuple[datetime | None, datetime | None]:
+def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: int) -> tuple[datetime, datetime]:
     ts, twilight = _almanac(lat, long)
     start, end = ts.from_datetime(midnight), ts.from_datetime(midnight + timedelta(days=1))
     prev, sunrise, sunset = int(twilight(start).item()), None, None
@@ -534,6 +532,7 @@ def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: i
         elif (prev, curr) == (4, 3):
             sunset = t.astimezone(midnight.tzinfo) - timedelta(hours=sunset_lead_hours)
         prev = curr
+    assert sunrise is not None and sunset is not None
     return sunrise, sunset
 
 
