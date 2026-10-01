@@ -42,7 +42,7 @@ def test_a_second_walk_in_starts_its_own_entry(house):
 
 
 @pytest.mark.plugins(entrance_sensor)
-def test_a_tag_heard_after_the_door_keeps_the_listener_home(house):
+def test_a_broadcast_during_the_pause_is_ignored(house):
     house.lan.clear()
     house.advertise("Rex")
     house.tick(hours=1)
@@ -108,7 +108,7 @@ def test_a_walk_in_with_nobody_tracked_before_or_after_is_pushed(house):
 
 
 @pytest.mark.plugins(entrance_sensor)
-def test_the_cleanup_probes_a_tag_that_went_quiet(house):
+def test_the_probe_finds_a_quiet_tag(house):
     house.lan.clear()
     house.advertise("Rex")
     house.tick(hours=1)
@@ -132,7 +132,7 @@ def test_the_cleanup_probes_a_tag_that_went_quiet(house):
 
 
 @pytest.mark.plugins(entrance_sensor)
-def test_a_second_motion_discards_what_the_first_heard(house):
+def test_a_tag_passing_through_mid_visit_counts_for_neither(house):
     house.lan.clear()
     house.entrance_sensor("active")
     house.tick(seconds=30)
@@ -192,3 +192,22 @@ def test_a_tag_heard_in_the_quiet_minutes_waits_for_its_next_broadcast(house):
     assert house.ctx.api.present_names() == set()
     house.advertise("Rex")
     assert house.ctx.api.present_names() == {"Rex"}
+
+
+@pytest.mark.plugins(entrance_sensor)
+def test_a_second_motion_keeps_the_before_set(house):
+    house.lan.clear()
+    house.advertise("Rex")
+    house.tick(hours=1)
+    house.entrance_sensor("active")
+    house.tick(seconds=30)
+    house.entrance_sensor("inactive")
+    house.tick(seconds=20)
+    house.leave("Rex")
+    house.entrance_sensor("active")
+    house.tick(seconds=30)
+    house.entrance_sensor("inactive")
+    house.tick(minutes=2)
+
+    assert house.log()[-1][2][-1] == "Trigger sensor off: applying OFF"
+    assert house.pushed == []
