@@ -14,21 +14,17 @@ device define Light
 device add Light LAMP h1 --room Bedroom
 device add Light DESK h2
 device seal Light
-
 device define USB
 device add USB AUDIO 'USB Audio'
 device seal USB
-
 device only Chromecast CC host3 --room Living
 
 routine define ROUTINE_RESET   Reset
 routine append ROUTINE_RESET   Light         off --trigger SYSTEM
 routine append .               Chromecast.CC stop
 routine define ROUTINE_DEFAULT Welcome
-routine append ROUTINE_DEFAULT Light         on
 routine define ROUTINE_MEETING Meeting --skip-replay
 routine define ROUTINE_EMERGENCY Emergency
-routine append ROUTINE_EMERGENCY USB.AUDIO 100
 
 theme 'work day' ROUTINE_RESET   1:00
 theme 'day off'  ROUTINE_DEFAULT sunset
@@ -38,7 +34,9 @@ room Bedroom Light.LAMP on
 device only Button REMOTE scene
 
 person Alice host9 aa:bb
+
 tag Alice EIK_ALICE 2026-01-02T03:04:05+00:00
+
 routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger Alice
 
 ad_hoc define Silence           --no-reset Chromecast.CC stop
