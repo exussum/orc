@@ -282,7 +282,7 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
     stream: dict[Any, tuple[str, str]] = {}
     todo: list[_Job] = []
     for command in commands:
-        w = command.channel.one()
+        w = command.subject.one()
         if command not in survived:
             entry.add(entry.source, Log.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"))
         elif w in config.virtual_devices:
@@ -621,24 +621,24 @@ def world_reader(present: set[str] | None = None, now: datetime | None = None) -
     when = local_now() if now is None else now
 
     @cache
-    def read(channel: engine.Channel) -> engine.Value:
-        match channel:
-            case m.PersonChannel(name):
+    def read(subject: engine.Subject) -> engine.Value:
+        match subject:
+            case m.PersonSubject(name):
                 return name in pnames
-            case m.AnyoneChannel():
+            case m.AnyoneSubject():
                 return bool(pnames)
-            case m.WeatherChannel():
+            case m.WeatherSubject():
                 return _fetch_weather(when) if pnames else frozenset()
             case _:
-                raise KeyError(channel)
+                raise KeyError(subject)
 
     return read
 
 
-def clock_reader(channel: engine.Channel) -> engine.Value:
-    if isinstance(channel, engine.Clock):
+def clock_reader(subject: engine.Subject) -> engine.Value:
+    if isinstance(subject, engine.ClockSubject):
         return local_now()
-    raise KeyError(channel)
+    raise KeyError(subject)
 
 
 def runtime() -> engine.Runtime:

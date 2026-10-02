@@ -27,17 +27,17 @@ class Log(m.LogSourceEnum):
 
 
 @dataclass(frozen=True)
-class ChangeChannel(engine.Channel):
-    channel: engine.Channel
+class ChangeSubject(engine.Subject):
+    subject: engine.Subject
 
 
 @dataclass(frozen=True)
 class Transition:
-    channel: m.MqttDeviceChannel
+    subject: m.MqttDeviceSubject
     to: engine.Value
 
     def holds(self, read: engine.Read) -> bool:
-        change = read(ChangeChannel(self.channel))
+        change = read(ChangeSubject(self.subject))
         old, new = cast.instance(change, tuple) if change else (None, None)
         return new == self.to and old != self.to
 
@@ -68,16 +68,16 @@ class When(NamedTuple):
 
 @dataclass(frozen=True)
 class AcIs:
-    channel: m.AcChannel
+    subject: m.AcSubject
     allowed: m.AcState
 
     def holds(self, read: engine.Read) -> bool:
-        current = read(self.channel)
+        current = read(self.subject)
         return isinstance(current, m.AcState) and current in self.allowed
 
 
 @dataclass(frozen=True)
-class FormulaChannel(engine.Channel):
+class FormulaSubject(engine.Subject):
     device: m.DeviceEnum
     expr: str
 
@@ -88,18 +88,18 @@ class DeviceChanged:
     expr: str
 
     def holds(self, read: engine.Read) -> bool:
-        return read(ChangeChannel(m.Devices(self.device))) is not None
+        return read(ChangeSubject(m.Devices(self.device))) is not None
 
 
 @dataclass(unsafe_hash=True)
 class Range:
-    channel: engine.Channel
+    subject: engine.Subject
     low: float
     high: float
     last_measurement: float | None = field(hash=False, default=None)
 
     def holds(self, read: engine.Read) -> bool:
-        value = read(self.channel)
+        value = read(self.subject)
         if not isinstance(value, (int, float, str)):
             return False
         try:
@@ -117,22 +117,22 @@ class Present:
     names: tuple[str, ...]
 
     def holds(self, read: engine.Read) -> bool:
-        return any(read(m.PersonChannel(name)) for name in self.names)
+        return any(read(m.PersonSubject(name)) for name in self.names)
 
 
 def condition(when: When | None) -> tuple[engine.Condition, ...]:
     if when is None:
         return ()
     elif isinstance(when.state, m.AcState):
-        return (AcIs(m.AcChannel(when.device), when.state),)
+        return (AcIs(m.AcSubject(when.device), when.state),)
     elif isinstance(when.state, m.Playback):
-        return (engine.Is(m.CastChannel(when.device), when.state),)
+        return (engine.Is(m.CastSubject(when.device), when.state),)
     else:
-        return (engine.Is(m.MqttDeviceChannel(when.device, TRIGGERS[when.state]), when.state),)
+        return (engine.Is(m.MqttDeviceSubject(when.device, TRIGGERS[when.state]), when.state),)
 
 
 def source_of(automation: engine.Automation[Any]) -> m.DeviceEnum:
     trigger = automation.trigger
     if isinstance(trigger, Transition):
-        return trigger.channel.device
+        return trigger.subject.device
     return cast.instance(trigger, DeviceChanged).device

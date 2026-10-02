@@ -13,29 +13,29 @@ from threading import RLock
 from typing import Any, NamedTuple, Protocol, overload, runtime_checkable
 
 
-class Channel:
+class Subject:
     pass
 
 
 @runtime_checkable
-class DeviceChannel(Protocol):
+class DeviceSubject(Protocol):
     def one(self) -> Any: ...
 
 
 type Value = Hashable
-type Read = Callable[[Channel], Value]
+type Read = Callable[[Subject], Value]
 
 
-class Clock(Channel):
+class ClockSubject(Subject):
     pass
 
 
-CLOCK = Clock()
+CLOCK = ClockSubject()
 
 
 @dataclass(frozen=True)
-class Command[T = None, C: Channel = Channel]:
-    channel: C
+class Command[T = None, C: Subject = Subject]:
+    subject: C
     value: Value
     tag: T | None = None
 
@@ -55,34 +55,34 @@ NEVER = Never()
 
 @dataclass(frozen=True)
 class Is:
-    channel: Channel
+    subject: Subject
     value: Value
 
     def holds(self, read: Read) -> bool:
-        return read(self.channel) == self.value
+        return read(self.subject) == self.value
 
 
 @dataclass(frozen=True)
 class In:
-    channel: Channel
+    subject: Subject
     value: Value
 
     def holds(self, read: Read) -> bool:
-        values = read(self.channel)
+        values = read(self.subject)
         if not isinstance(values, Collection):
-            raise TypeError(f"{self.channel} read {values!r}, not a collection")
+            raise TypeError(f"{self.subject} read {values!r}, not a collection")
         return self.value in values
 
 
 @dataclass(frozen=True)
 class Has:
-    channel: Channel
+    subject: Subject
 
     def holds(self, read: Read) -> bool:
-        return read(self.channel) is not None
+        return read(self.subject) is not None
 
 
-class Step[C: Channel = Channel](NamedTuple):
+class Step[C: Subject = Subject](NamedTuple):
     conditions: tuple[Condition, ...]
     command: Command[Any, C]
 
@@ -91,7 +91,7 @@ class Step[C: Channel = Channel](NamedTuple):
 
 
 @dataclass(frozen=True)
-class Rule[C: Channel = Channel]:
+class Rule[C: Subject = Subject]:
     steps: tuple[Step[C], ...]
     name: str = ""
     tags: frozenset[str] = frozenset()
@@ -108,12 +108,12 @@ class Rule[C: Channel = Channel]:
 
 
 @dataclass(frozen=True)
-class Action[C: Channel = Channel]:
+class Action[C: Subject = Subject]:
     commands: tuple[Command[Any, C], ...] = ()
 
 
 @dataclass(frozen=True)
-class Automation[C: Channel = Channel]:
+class Automation[C: Subject = Subject]:
     trigger: Condition
     rule: Rule[C]
     delay: timedelta = timedelta()
@@ -121,38 +121,38 @@ class Automation[C: Channel = Channel]:
     cancel: Condition = NEVER
 
 
-class Report[C: Channel = Channel](NamedTuple):
+class Report[C: Subject = Subject](NamedTuple):
     item: Item[C]
     commands: tuple[Command[Any, C], ...]
 
 
 @dataclass(frozen=True)
-class Deferred[C: Channel = Channel]:
+class Deferred[C: Subject = Subject]:
     automation: Automation[C]
     when: datetime
 
 
 @dataclass(frozen=True)
-class Cancel[C: Channel = Channel]:
+class Cancel[C: Subject = Subject]:
     automation: Automation[C]
 
 
-type Item[C: Channel = Channel] = Rule[C] | Action[C] | Automation[C] | Deferred[C]
-type Outcome[C: Channel = Channel] = Report[C] | Deferred[C] | Cancel[C]
+type Item[C: Subject = Subject] = Rule[C] | Action[C] | Automation[C] | Deferred[C]
+type Outcome[C: Subject = Subject] = Report[C] | Deferred[C] | Cancel[C]
 
 
-class SnapShot[C: Channel = Channel](NamedTuple):
+class SnapShot[C: Subject = Subject](NamedTuple):
     routine: tuple[Command[Any, C], ...]
     end: datetime
     label: str = ""
 
 
 def _layered(first: Read, then: Read) -> Read:
-    def read(channel: Channel) -> Value:
+    def read(subject: Subject) -> Value:
         try:
-            return first(channel)
+            return first(subject)
         except KeyError:
-            return then(channel)
+            return then(subject)
 
     return read
 
@@ -191,14 +191,14 @@ class Runtime:
             return {key: payload for key, (payload, deadline) in self._snapshots.items() if now <= deadline}
 
     @overload
-    def evaluate[C: Channel](
+    def evaluate[C: Subject](
         self, items: Iterable[Rule[C] | Action[C] | Deferred[C]], *, read: Read, force: bool
     ) -> tuple[Report[C], ...]: ...
 
     @overload
-    def evaluate[C: Channel](self, items: Iterable[Item[C]], *, read: Read, force: bool) -> tuple[Outcome[C], ...]: ...
+    def evaluate[C: Subject](self, items: Iterable[Item[C]], *, read: Read, force: bool) -> tuple[Outcome[C], ...]: ...
 
-    def evaluate[C: Channel](self, items: Iterable[Item[C]], *, read: Read, force: bool) -> tuple[Outcome[C], ...]:
+    def evaluate[C: Subject](self, items: Iterable[Item[C]], *, read: Read, force: bool) -> tuple[Outcome[C], ...]:
         with self._lock:
             read = _layered(read, self._read)
             now = self._now(read)
@@ -219,7 +219,7 @@ class Runtime:
         if not self.snapshot_active(name):
             self.save_snapshot(name, SnapShot(ctx.api.capture_lights(), end, label), end)
             captured = self.read_snapshot(name).routine
-            items = ", ".join(f"`{_one_name(c.channel)}`={c.value}" for c in captured if c.value != ctx.api.m.OFF)
+            items = ", ".join(f"`{_one_name(c.subject)}`={c.value}" for c in captured if c.value != ctx.api.m.OFF)
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or ctx.api.Log.SNAPSHOT_ALL_OFF))
         ctx.api.dispatch(commands, force=True, entry=entry)
 
@@ -236,7 +236,7 @@ class Runtime:
             raise TypeError(f"{CLOCK} read {told!r}, not a datetime")
         return told
 
-    def _automated[C: Channel](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> Outcome[C]:
+    def _automated[C: Subject](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> Outcome[C]:
         if not automation.trigger.holds(read):
             if automation.delay and automation.cancel.holds(read):
                 return Cancel(automation)
@@ -245,7 +245,7 @@ class Runtime:
             return Deferred(automation, now + automation.delay)
         return Report(automation, self._applied_once(automation, now, read, force))
 
-    def _applied_once[C: Channel](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> tuple[Command[Any, C], ...]:
+    def _applied_once[C: Subject](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> tuple[Command[Any, C], ...]:
         last = self._last_fired.get(automation)
         if automation.cooldown and last is not None and now - last < automation.cooldown:
             return ()
@@ -254,7 +254,7 @@ class Runtime:
             self._last_fired[automation] = now
         return commands
 
-    def _applied[C: Channel](self, rule: Rule[C], now: datetime, read: Read, force: bool) -> tuple[Command[Any, C], ...]:
+    def _applied[C: Subject](self, rule: Rule[C], now: datetime, read: Read, force: bool) -> tuple[Command[Any, C], ...]:
         override_key = self._override_key
         snapshot = self._snapshots.get(override_key) if override_key is not None else None
         active = snapshot is not None and now <= snapshot[1]
@@ -267,8 +267,8 @@ class Runtime:
                 if command.tag == self._bypass:
                     if override_key is not None and snapshot is not None and active:
                         payload, deadline = snapshot
-                        merged = {c.channel: c for c in payload.routine}
-                        merged[command.channel] = command
+                        merged = {c.subject: c for c in payload.routine}
+                        merged[command.subject] = command
                         self._snapshots[override_key] = (payload._replace(routine=tuple(merged.values())), deadline)
                 elif active:
                     continue
@@ -276,7 +276,7 @@ class Runtime:
         return tuple(out)
 
 
-def _one_name(channel: Channel) -> str:
-    if not isinstance(channel, DeviceChannel):
-        raise TypeError(f"{channel} is not a device channel")
-    return str(channel.one().name)
+def _one_name(subject: Subject) -> str:
+    if not isinstance(subject, DeviceSubject):
+        raise TypeError(f"{subject} is not a device subject")
+    return str(subject.one().name)

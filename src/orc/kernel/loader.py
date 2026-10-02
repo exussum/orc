@@ -182,11 +182,11 @@ def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
     if trigger in (None, m.Tag.SYSTEM):
         return ()
     elif trigger in _WEATHER_TRIGGERS:
-        return (engine.In(m.WeatherChannel(), m.WeatherCondition(trigger)),)
+        return (engine.In(m.WeatherSubject(), m.WeatherCondition(trigger)),)
     elif trigger == m.Tag.ANYONE:
-        return (engine.Is(m.AnyoneChannel(), True),)
+        return (engine.Is(m.AnyoneSubject(), True),)
     else:
-        return (engine.Is(m.PersonChannel(trigger), True),)
+        return (engine.Is(m.PersonSubject(trigger), True),)
 
 
 def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Step[m.Devices]:

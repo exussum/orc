@@ -25,19 +25,19 @@ def test_condition_system_is_unconditional():
 
 
 def test_condition_anyone():
-    assert loader._conditions("ANYONE") == (engine.Is(m.AnyoneChannel(), True),)
+    assert loader._conditions("ANYONE") == (engine.Is(m.AnyoneSubject(), True),)
 
 
 def test_condition_weather_is_membership():
-    assert loader._conditions("SUNNY") == (engine.In(m.WeatherChannel(), m.WeatherCondition.SUNNY),)
+    assert loader._conditions("SUNNY") == (engine.In(m.WeatherSubject(), m.WeatherCondition.SUNNY),)
 
 
 def test_condition_person():
-    assert loader._conditions("alice") == (engine.Is(m.PersonChannel("alice"), True),)
+    assert loader._conditions("alice") == (engine.Is(m.PersonSubject("alice"), True),)
 
 
 def test_condition_holds_against_world():
-    world = {m.AnyoneChannel(): True, m.PersonChannel("bob"): False}
+    world = {m.AnyoneSubject(): True, m.PersonSubject("bob"): False}
     read = world.__getitem__
     assert loader._conditions("ANYONE")[0].holds(read)
     assert not loader._conditions("bob")[0].holds(read)
