@@ -37,16 +37,22 @@ def _cmd(device, state):
     return engine.Command[str, m.Devices](m.Devices(device), state)
 
 
-def _window(start, stop, *commands):
-    return entrance_sensor.Timed(start=start, stop=stop, commands=commands)
+def _window(name, start, stop, *commands):
+    return engine.Rule(tuple(engine.Step((engine.During(start, stop),), c) for c in commands), name=name)
 
 
 def _snapshot(*commands, end=_FUTURE):
     return m.SnapShot(routine=tuple(commands), end=end)
 
 
+def _no_world(subject):
+    raise KeyError(subject)
+
+
 @pytest.fixture
 def ctx(ctx):
+    ctx.engine.evaluate.side_effect = engine.Runtime(lambda _subject: ctx.api.local_now()).evaluate
+    ctx.api.world_reader.return_value = _no_world
     ctx.api.present_names.return_value = set()
     ctx.config.settings.tz = _UTC
     ctx.config.ad_hoc_routines = {
@@ -66,10 +72,10 @@ def ctx(ctx):
 # for the current window; the Night window stops the media outright; the
 # cleanup job settles the house depending on who is home.
 @pytest.fixture
-def sensor():
+def raw_sensor():
     timed = {
-        "Day": [_window(time(8), time(22), _cmd(Light.day_bulb, 20))],
-        "Night": [_window(time(22), time(8), _cmd(Light.night_bulb, 1), _cmd(Chromecast.cc, m.STOP))],
+        "Day": [entrance_sensor.Timed(start=time(8), stop=time(22), commands=(_cmd(Light.day_bulb, 20),))],
+        "Night": [entrance_sensor.Timed(start=time(22), stop=time(8), commands=(_cmd(Light.night_bulb, 1), _cmd(Chromecast.cc, m.STOP)))],
     }
     rules = entrance_sensor.Rules(inside="Lights Off", present="Silence", absent="Resume", shutdown="Lamp Off")
     return SimpleNamespace(
@@ -92,6 +98,12 @@ def sensor():
         rules=rules,
         timed=timed,
     )
+
+
+@pytest.fixture
+def sensor(raw_sensor):
+    raw_sensor.timed = entrance_sensor._windows(raw_sensor.timed)
+    return raw_sensor
 
 
 @pytest.fixture
@@ -139,10 +151,7 @@ def test_night_walk_in_dims_entrance_and_stops_media(ctx, sensor):
 
 def test_walk_in_uses_first_window_that_contains_now(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
-    sensor.timed = {
-        "Afternoon": [_window(time(14), time(16), _cmd(Light.night_bulb, 50))],
-        **sensor.timed,
-    }
+    sensor.timed = (_window("Afternoon", time(14), time(16), _cmd(Light.night_bulb, 50)), *sensor.timed)
     _trigger_sensor(ctx, sensor, "16", "active")
     executed = ctx.api.dispatch.call_args[0][0]
     assert engine.Command(m.Devices(Light.night_bulb), 50) in executed
@@ -151,7 +160,7 @@ def test_walk_in_uses_first_window_that_contains_now(ctx, sensor):
 
 def test_walk_in_outside_any_window_dispatches_nothing(ctx, sensor):
     ctx.api.local_now.return_value = _DAYTIME
-    sensor.timed = {"Morning": [_window(time(8), time(9), _cmd(Light.day_bulb, 20))]}
+    sensor.timed = (_window("Morning", time(8), time(9), _cmd(Light.day_bulb, 20)),)
     _trigger_sensor(ctx, sensor, "16", "active")
     ctx.api.dispatch.assert_called_once_with(m.squish(()), force=True, entry=ANY)
 
@@ -318,12 +327,16 @@ def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx, sensor):
     ]
 
 
-def test_setup_registers_listener_and_bound_provider(plugin_ctx, sensor):
-    sensor.rules = {trigger: [name] for trigger, name in sensor.rules._asdict().items()}
+def test_setup_registers_listener_and_bound_provider(plugin_ctx, raw_sensor):
+    raw_sensor.rules = {trigger: [name] for trigger, name in raw_sensor.rules._asdict().items()}
     plugin_ctx.config.people = {"rex": []}
     plugin_ctx.config.ble_tags = {}
-    with patch.object(entrance_sensor, "load_plugin_config", return_value=sensor):
+    with patch.object(entrance_sensor, "load_plugin_config", return_value=raw_sensor):
         entrance_sensor.setup(plugin_ctx)
+    assert raw_sensor.timed == (
+        _window("Day", time(8), time(22), _cmd(Light.day_bulb, 20)),
+        _window("Night", time(22), time(8), _cmd(Light.night_bulb, 1), _cmd(Chromecast.cc, m.STOP)),
+    )
     plugin_ctx.api.add_listener.assert_called_once()
     title, provider = plugin_ctx.api.add_state_provider.call_args[0]
     assert title == "Entrance Sensors"

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 
@@ -42,6 +42,30 @@ def test_in_holds_when_value_is_among_the_reading():
     assert condition.holds(read_from({"weather": frozenset({"sunny", "mild"})}))
     assert not condition.holds(read_from({"weather": frozenset({"cloudy"})}))
     assert not condition.holds(read_from({"weather": frozenset()}))
+
+
+@pytest.mark.parametrize(
+    ("start", "stop", "now", "expected"),
+    [
+        (time(8), time(22), time(15), True),
+        (time(8), time(22), time(8), True),
+        (time(8), time(22), time(22), False),
+        (time(8), time(22), time(3), False),
+        (time(8), time(8), time(8), False),
+        (time(22), time(8), time(23), True),
+        (time(22), time(8), time(3), True),
+        (time(22), time(8), time(8), False),
+        (time(22), time(8), time(15), False),
+    ],
+    ids=["inside", "at-start", "at-stop", "before", "empty", "wrap-evening", "wrap-morning", "wrap-at-stop", "wrap-outside"],
+)
+def test_during_is_half_open_and_wraps_midnight(start, stop, now, expected):
+    assert e.During(start, stop).holds(read_from({e.CLOCK: datetime.combine(T0.date(), now)})) is expected
+
+
+def test_during_rejects_a_non_time_reading():
+    with pytest.raises(TypeError):
+        e.During(time(8), time(22)).holds(read_from({e.CLOCK: "15:00"}))
 
 
 def test_snapshots_active_until_deadline(runtime, clock):
