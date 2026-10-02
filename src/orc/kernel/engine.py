@@ -1,4 +1,4 @@
-"""A generic rule evaluator: a rule's clauses apply when their conditions hold.
+"""A generic rule evaluator: a rule's steps apply when their conditions hold.
 
 Self-contained by design — no orc imports — so the whole file can be lifted out as a
 standalone package later. The host (orc) supplies the world as a `Read` callback and the
@@ -79,7 +79,7 @@ class Has:
         return read(self.channel) is not None
 
 
-class Clause[C: Channel = Channel](NamedTuple):
+class Step[C: Channel = Channel](NamedTuple):
     conditions: tuple[Condition, ...]
     command: Command[Any, C]
 
@@ -89,19 +89,19 @@ class Clause[C: Channel = Channel](NamedTuple):
 
 @dataclass(frozen=True)
 class Rule[C: Channel = Channel]:
-    items: tuple[Clause[C], ...]
+    steps: tuple[Step[C], ...]
     name: str = ""
     tags: frozenset[str] = frozenset()
 
     @property
     def commands(self) -> tuple[Command[Any, C], ...]:
-        return tuple(clause.command for clause in self.items)
+        return tuple(step.command for step in self.steps)
 
     def holds(self, read: Read) -> bool:
-        return any(clause.holds(read) for clause in self.items)
+        return any(step.holds(read) for step in self.steps)
 
     def where(self, keep: Callable[[Command[Any, C]], bool]) -> Rule[C]:
-        return Rule(tuple(clause for clause in self.items if keep(clause.command)), self.name, self.tags)
+        return Rule(tuple(step for step in self.steps if keep(step.command)), self.name, self.tags)
 
 
 @dataclass(frozen=True)
@@ -197,7 +197,7 @@ class Runtime:
                     case Automation():
                         out.append(self._automated(item, now, read, force))
                     case Action(plain):
-                        out.append(Report(item, self._applied(Rule(tuple(Clause((), c) for c in plain)), now, read, force)))
+                        out.append(Report(item, self._applied(Rule(tuple(Step((), c) for c in plain)), now, read, force)))
                     case _:
                         out.append(Report(item, self._applied(item, now, read, force)))
             return tuple(out)
@@ -241,10 +241,10 @@ class Runtime:
         snapshot = self._snapshots.get(override_key) if override_key is not None else None
         active = snapshot is not None and now <= snapshot[1]
         out: list[Command[Any, C]] = []
-        for clause in rule.items:
-            if not clause.holds(read):
+        for step in rule.steps:
+            if not step.holds(read):
                 continue
-            command = clause.command
+            command = step.command
             if not force:
                 if command.tag == self._bypass:
                     if override_key is not None and snapshot is not None and active:

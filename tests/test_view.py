@@ -14,9 +14,9 @@ from orc.view import bp
 
 
 def _routine(name, when, *commands, skip_replay=False):
-    clauses = tuple(engine.Clause(loader._conditions(c.tag), c) for c in commands)
+    steps = tuple(engine.Step(loader._conditions(c.tag), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
-    return engine.Rule(clauses, name=name, tags=tags)
+    return engine.Rule(steps, name=name, tags=tags)
 
 
 def _room(*commands):
