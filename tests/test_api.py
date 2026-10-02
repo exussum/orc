@@ -336,8 +336,14 @@ class TestLog:
     def test_a_nested_line_still_notifies(self):
         api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
-            api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification_tag=("calendar", "dentist"))
-        assert api._ctx.scheduler.now.call_args.args[1:] == ("[Plugin 01/05]", "later x", "calendar:dentist", m.Integration("x"), None)
+            api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification=m.Notification(("calendar", "dentist")))
+        assert api._ctx.scheduler.now.call_args.args[1:] == (
+            "[Plugin 01/05]",
+            "later x",
+            m.Notification(("calendar", "dentist")),
+            m.Integration("x"),
+            None,
+        )
 
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
@@ -349,7 +355,7 @@ class TestLog:
         assert now.call_args.args[1:] == (
             "[System 01/05]",
             "Notifications enabled on this device",
-            "greeting",
+            m.Notification(("greeting",)),
             m.Manual("notify"),
             (subscriptions[1],),
         )
@@ -367,7 +373,7 @@ class TestLog:
         for subscription in subscriptions:
             api.subscribe_push(subscription)
         push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
-        entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification_tag=("leak",))
+        entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification=m.Notification(("leak",)))
         api._push_job("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None, ctx=api._ctx)
         assert push_provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in subscriptions]
         assert set(sqlite.fetch_push_subscriptions()) == {subscriptions[0], subscriptions[2]}
