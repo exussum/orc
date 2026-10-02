@@ -278,3 +278,10 @@ def test_log_page_bells_a_notifying_line_and_its_parent(client):
     api.log(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
     html = client.get("/log/").get_data(as_text=True)
     assert html.count("🔔") == 2
+
+
+def test_system_page_lists_each_light(client):
+    response = client.get("/system/")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert all(f">{light.name}</td>" in html for light in config.devices.Light)
