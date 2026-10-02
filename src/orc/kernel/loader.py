@@ -171,11 +171,11 @@ def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapp
         raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {state!r}")
 
 
-def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> engine.Command[str]:
+def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> engine.Command[str, m.Devices]:
     devices = cast.devices(args.devices, objects)
     state = cast.state(args.state)
     validate_ac_state(devices.all(), state, objects["device"].enums, source=args.devices)
-    return engine.Command[str](devices, state, tag=trigger)
+    return engine.Command[str, m.Devices](devices, state, tag=trigger)
 
 
 def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
@@ -189,7 +189,7 @@ def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
         return (engine.Is(m.PersonChannel(trigger), True),)
 
 
-def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Clause:
+def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Clause[m.Devices]:
     return engine.Clause(_conditions(trigger), _command(objects, args, trigger))
 
 
@@ -234,25 +234,24 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
     rooms = objects["room"]
-    base = rooms.get(args.name, engine.Rule(engine.NEVER, (), name=args.name))
-    rooms[args.name] = replace(base, items=(*base.items, engine.Clause((), _command(objects, args))))
+    base = rooms.get(args.name, engine.Action())
+    rooms[args.name] = replace(base, commands=(*base.commands, _command(objects, args)))
 
 
 def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
     ad_hoc_routines = objects["ad_hoc"]
     if args.define:
-        ad_hoc_routines[args.name] = m.AdhocAction(
+        config = m.AdhocAction(
             snapshot=timedelta(minutes=args.snapshot) if args.snapshot is not None else None,
             delay=timedelta(minutes=args.delay) if args.delay is not None else timedelta(),
             section=cast.section(args.section),
             reset=not args.no_reset,
         )
-        if args.devices is not None:
-            ad_hoc_routines[args.name].commands = (_command(objects, args),)
     elif (config := ad_hoc_routines.get(args.name)) is None:
         raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(ad_hoc_routines)}")
-    else:
-        config.commands = (*config.commands, _command(objects, args))
+    if args.devices is not None:
+        config = replace(config, commands=(*config.commands, _command(objects, args)))
+    ad_hoc_routines[args.name] = config
 
 
 def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
@@ -282,7 +281,7 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     routines = objects["routine"]
     if args.define:
         tags = frozenset({m.SKIP_REPLAY_TAG}) if args.skip_replay else frozenset()
-        routines[args.id] = engine.Rule(engine.NEVER, (), name=args.name, tags=tags)
+        routines[args.id] = engine.Rule((), name=args.name, tags=tags)
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:
@@ -296,7 +295,7 @@ def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if (routine := objects["routine"].get(args.routine)) is None:
         raise ValueError(f"Unknown routine {args.routine!r}: expected one of {tuple(objects['routine'])}")
     theme = objects["theme"].setdefault(args.name, m.Theme(args.name))
-    theme.configs = (*theme.configs, replace(routine, trigger=engine.At(args.time)))
+    theme.entries = (*theme.entries, m.ThemeEntry(args.time, routine))
 
 
 def load_plugin_config(

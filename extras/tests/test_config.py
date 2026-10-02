@@ -56,11 +56,11 @@ def entrance_ctx(ctx):
     ctx.config.ble_tags = {}
     ctx.config.reset_config = SimpleNamespace(commands=(RESET,))
     ctx.config.ad_hoc_routines = {
-        "Lights Off": m.AdhocAction(LIGHTS_OFF, reset=False),
-        "Silence": m.AdhocAction(SILENCE, reset=False),
-        "Dog": m.AdhocAction(DOG, delay=timedelta(minutes=6)),
-        "Day Scene": m.AdhocAction(DAY, reset=False),
-        "Night Scene": m.AdhocAction(NIGHT, reset=False),
+        "Lights Off": m.AdhocAction((LIGHTS_OFF,), reset=False),
+        "Silence": m.AdhocAction((SILENCE,), reset=False),
+        "Dog": m.AdhocAction((DOG,), delay=timedelta(minutes=6)),
+        "Day Scene": m.AdhocAction((DAY,), reset=False),
+        "Night Scene": m.AdhocAction((NIGHT,), reset=False),
     }
     return ctx
 
