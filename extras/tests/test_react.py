@@ -91,7 +91,7 @@ def _make(devices, attribute, state, action, target=None, delay=None, when=None)
     for source in devices.all():
         command = engine.Command(target or m.Devices(source), action)
         trigger = model.Transition(m.MqttDeviceChannel(source, attribute), state)
-        automations.append(engine.Automation(trigger, engine.Rule((engine.Clause(cond, command),)), span, model.COOLDOWN))
+        automations.append(engine.Automation(trigger, engine.Rule((engine.Step(cond, command),)), span, model.COOLDOWN))
     return automations
 
 
@@ -151,7 +151,7 @@ def test_config_registers_listener(ctx, configured):
     assert len(rules) == 8  # line 1 fans out to lamp + desk; lines 2..7 are single-device
     assert rules[0].trigger == model.Transition(m.MqttDeviceChannel(Light.lamp, "switch"), m.ON)
     assert rules[1].trigger == model.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
-    assert rules[0].rule.items[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
+    assert rules[0].rule.steps[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
     assert rules[0].delay == timedelta(minutes=10)
     assert ctx.api.add_listener.call_args.args[0].args[1] == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
 
@@ -225,7 +225,7 @@ def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, switch_rep
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
     rules = configured
-    assert rules[4].rule.items[0].command.channel == m.Devices(Ac)
+    assert rules[4].rule.steps[0].command.channel == m.Devices(Ac)
 
 
 def test_targeted_action_goes_to_the_target(ctx, ruleset, dispatches, switch_report):
@@ -244,14 +244,14 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
 
 def test_if_clause_parses_device_and_condition(ctx, configured):
     rules = configured
-    assert rules[2].rule.items[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
-    assert rules[3].rule.items[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
+    assert rules[2].rule.steps[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
+    assert rules[3].rule.steps[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
 
 
 def test_set_clause_parses_explicit_target(ctx, configured):
     rules = configured
-    assert rules[0].rule.items[0].command.channel == m.Devices(Light.lamp)
-    assert rules[2].rule.items[0].command.channel == m.Devices(Ac.living)
+    assert rules[0].rule.steps[0].command.channel == m.Devices(Light.lamp)
+    assert rules[2].rule.steps[0].command.channel == m.Devices(Ac.living)
 
 
 def test_target_must_match_action_kind():
@@ -264,18 +264,18 @@ def test_target_must_match_action_kind():
 
 def test_if_clause_covers_lights_and_chromecasts(ctx, configured):
     rules = configured
-    assert rules[5].rule.items[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
-    assert rules[6].rule.items[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
+    assert rules[5].rule.steps[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert rules[6].rule.steps[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
 
 
 def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
     # regression: docopt's optional-group matching lets the bracketed `if <device> is
     # <condition>` absorb a stray token even without the literal if/is present, which
-    # made a bare `set <target> <action>` (no if clause) misparse as `set <action>`
+    # made a bare `set <target> <action>` (no if step) misparse as `set <action>`
     rules = configured
     assert rules[7].trigger == model.Transition(m.MqttDeviceChannel(Sensor.living, "motion"), "active")
-    assert rules[7].rule.items[0].conditions == ()
-    assert rules[7].rule.items[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
+    assert rules[7].rule.steps[0].conditions == ()
+    assert rules[7].rule.steps[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
 
 
 def test_when_requires_a_known_condition():
@@ -377,7 +377,7 @@ def _make_range(sensor, expr, low, high, target, action, people=None):
         conditions.extend(model.AcIs(m.AcChannel(ac), m.AcState.OFF) for ac in target.all())
     conditions.append(model.Range(formula, low, high))
     command = engine.Command(target, action)
-    rule = engine.Rule((engine.Clause(tuple(conditions), command),))
+    rule = engine.Rule((engine.Step(tuple(conditions), command),))
     return [engine.Automation(model.DeviceChanged(sensor, expr), rule, cooldown=model.COOLDOWN)]
 
 
@@ -398,17 +398,17 @@ def test_range_rule_parses_expressions(ctx):
     temp = model.FormulaChannel(Sensor.living, "temperature")
     dewpoint = model.FormulaChannel(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[0].trigger == model.DeviceChanged(Sensor.living, "temperature")
-    assert rules[0].rule.items[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
-    assert rules[0].rule.items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
+    assert rules[0].rule.steps[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
+    assert rules[0].rule.steps[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[1].rule.items[0].conditions == (
+    assert rules[1].rule.steps[0].conditions == (
         model.Present(("alice", "bob")),
         model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF),
         model.Range(dewpoint, 50, 60),
     )
     assert rules[2].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[2].rule.items[0].conditions == (engine.Is(m.AnyoneChannel(), True), model.Range(dewpoint, 59, 104))
-    assert rules[3].rule.items[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
+    assert rules[2].rule.steps[0].conditions == (engine.Is(m.AnyoneChannel(), True), model.Range(dewpoint, 59, 104))
+    assert rules[3].rule.steps[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
 
 
 @pytest.mark.parametrize(

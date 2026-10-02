@@ -113,7 +113,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
             conditions.extend(model.AcIs(AcChannel(ac), AcState.OFF) for ac in target.all())
         conditions.append(model.Range(formula, args.low, args.high))
         command = engine.Command(target, action)
-        rule = engine.Rule((engine.Clause(tuple(conditions), command),))
+        rule = engine.Rule((engine.Step(tuple(conditions), command),))
         automation = engine.Automation(model.DeviceChanged(source, args.expr), rule, delay, model.COOLDOWN)
         objects["react"].append(model.Reaction(automation, pause, args.name))
 
@@ -134,7 +134,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     for source in cast.devices(args.devices, objects).all():
         command = engine.Command(target or Devices(source), action)
         channel = MqttDeviceChannel(source, attribute)
-        rule = engine.Rule((engine.Clause(cond, command),))
+        rule = engine.Rule((engine.Step(cond, command),))
         automation = engine.Automation(
             model.Transition(channel, args.state), rule, delay, model.COOLDOWN, cancel=engine.Has(model.ChangeChannel(channel))
         )

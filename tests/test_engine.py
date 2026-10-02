@@ -74,7 +74,7 @@ def _gate(rt, commands, now, *, force):
 
 def test_evaluate_keeps_only_rules_whose_condition_holds():
     rt = e.Runtime()
-    rule = e.Rule((e.Clause((e.Is("ac", "on"),), LIGHT),))
+    rule = e.Rule((e.Step((e.Is("ac", "on"),), LIGHT),))
     assert rt.evaluate([rule], T0, read=read_from({"ac": "on"}), force=True) == (e.Report(rule, (LIGHT,)),)
     assert rt.evaluate([rule], T0, read=read_from({"ac": "off"}), force=True) == (e.Report(rule, ()),)
 
@@ -84,7 +84,7 @@ CLOSED = e.Is("door", "closed")
 
 
 def test_a_delayed_automation_defers_and_cancels_on_its_cancel_condition():
-    automation = e.Automation(OPEN, e.Rule((e.Clause((), LIGHT),)), delay=timedelta(minutes=5), cancel=CLOSED)
+    automation = e.Automation(OPEN, e.Rule((e.Step((), LIGHT),)), delay=timedelta(minutes=5), cancel=CLOSED)
     rt = e.Runtime()
     assert rt.evaluate([automation], T0, read=read_from({"door": "open"}), force=True) == (
         e.Deferred(automation, T0 + timedelta(minutes=5)),
@@ -94,13 +94,13 @@ def test_a_delayed_automation_defers_and_cancels_on_its_cancel_condition():
 
 
 def test_deferred_rechecks_its_conditions_when_run():
-    automation = e.Automation(OPEN, e.Rule((e.Clause((e.Is("ac", "on"),), LIGHT),)), delay=timedelta(minutes=5))
+    automation = e.Automation(OPEN, e.Rule((e.Step((e.Is("ac", "on"),), LIGHT),)), delay=timedelta(minutes=5))
     (deferred,) = e.Runtime().evaluate([automation], T0, read=read_from({"door": "open"}), force=True)
     assert e.Runtime().evaluate([deferred], T0, read=read_from({"ac": "off"}), force=True) == (e.Report(deferred, ()),)
 
 
 def test_cooldown_silences_a_repeat_within_the_window():
-    automation = e.Automation(OPEN, e.Rule((e.Clause((), LIGHT),)), cooldown=timedelta(seconds=10))
+    automation = e.Automation(OPEN, e.Rule((e.Step((), LIGHT),)), cooldown=timedelta(seconds=10))
     rt = e.Runtime()
     read = read_from({"door": "open"})
     assert rt.evaluate([automation], T0, read=read, force=True) == (e.Report(automation, (LIGHT,)),)
