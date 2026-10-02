@@ -504,7 +504,7 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
 
 
 @dataclass(frozen=True)
-class Devices(engine.Channel):
+class Devices(engine.Subject):
     members: tuple[DeviceEnum, ...]
 
     def __init__(self, what: "DeviceEnum | type[DeviceEnum] | Iterable[DeviceEnum] | Devices") -> None:
@@ -544,36 +544,36 @@ class AdhocAction(engine.Action[Devices]):
 
 
 @dataclass(frozen=True)
-class PersonChannel(engine.Channel):
+class PersonSubject(engine.Subject):
     name: str
 
 
 @dataclass(frozen=True)
-class AnyoneChannel(engine.Channel):
+class AnyoneSubject(engine.Subject):
     pass
 
 
 @dataclass(frozen=True)
-class WeatherChannel(engine.Channel):
+class WeatherSubject(engine.Subject):
     pass
 
 
-PresenceChannel = PersonChannel | AnyoneChannel
+PresenceSubject = PersonSubject | AnyoneSubject
 
 
 @dataclass(frozen=True)
-class MqttDeviceChannel(engine.Channel):
+class MqttDeviceSubject(engine.Subject):
     device: DeviceEnum
     attribute: str
 
 
 @dataclass(frozen=True)
-class AcChannel(engine.Channel):
+class AcSubject(engine.Subject):
     device: DeviceEnum
 
 
 @dataclass(frozen=True)
-class CastChannel(engine.Channel):
+class CastSubject(engine.Subject):
     device: DeviceEnum
 
 
@@ -656,7 +656,7 @@ def squish(
     """Merge commands as if run sequentially — dedupe per device, handle brightness/stop changes."""
     grouped: defaultdict[Any, list[DeviceCommand]] = defaultdict(list)
     for command in commands:
-        for e in command.channel.all():
+        for e in command.subject.all():
             value = command.value if state_override is None else state_override
             grouped[e].append(engine.Command(Devices(e), value, command.tag))
 
@@ -672,7 +672,7 @@ def squish(
 
 
 def _op_cmp(k: DeviceCommand) -> tuple[float, int]:
-    class_sort = type(k.channel.one())._sort
+    class_sort = type(k.subject.one())._sort
     if k.value == STOP:
         sub_sort = _STATE_SORT_STOP
     elif isinstance(k.value, int):

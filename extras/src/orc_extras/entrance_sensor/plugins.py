@@ -152,5 +152,5 @@ def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot
     # lights is plugin-caused, not household state - don't replay it.
     if snapshot is None:
         return ()
-    inside = {d for c in ctx.config.ad_hoc_routines[sensor.rules.inside].commands for d in c.channel.all()}
-    return tuple(c for c in snapshot.routine if c.channel.one() not in inside)
+    inside = {d for c in ctx.config.ad_hoc_routines[sensor.rules.inside].commands for d in c.subject.all()}
+    return tuple(c for c in snapshot.routine if c.subject.one() not in inside)

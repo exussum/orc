@@ -10,14 +10,14 @@ import orc_extras.react
 from orc.kernel import cast, engine
 from orc.kernel.loader import load_plugin_config, validate_ac_state
 from orc.model import (
-    AcChannel,
     AcCommand,
     AcState,
-    AnyoneChannel,
+    AcSubject,
+    AnyoneSubject,
     AppContext,
     DeviceEnum,
     Devices,
-    MqttDeviceChannel,
+    MqttDeviceSubject,
     Playback,
     Tag,
 )
@@ -101,16 +101,16 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     pause = _pause(args.pause)
     for source in cast.devices(args.devices, objects).all():
-        formula = model.FormulaChannel(source, args.expr)
+        formula = model.FormulaSubject(source, args.expr)
         conditions: list[engine.Condition] = []
         if args.people == Tag.ANYONE:
-            conditions.append(engine.Is(AnyoneChannel(), True))
+            conditions.append(engine.Is(AnyoneSubject(), True))
         elif args.people:
             people = tuple(name.strip() for name in args.people.split(","))
             conditions.append(model.Present(people))
         conditions.extend(model.condition(when))
         if isinstance(action, AcCommand):
-            conditions.extend(model.AcIs(AcChannel(ac), AcState.OFF) for ac in target.all())
+            conditions.extend(model.AcIs(AcSubject(ac), AcState.OFF) for ac in target.all())
         conditions.append(model.Range(formula, args.low, args.high))
         command = engine.Command(target, action)
         rule = engine.Rule((engine.Step(tuple(conditions), command),))
@@ -133,10 +133,10 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     pause = _pause(args.pause)
     for source in cast.devices(args.devices, objects).all():
         command = engine.Command(target or Devices(source), action)
-        channel = MqttDeviceChannel(source, attribute)
+        subject = MqttDeviceSubject(source, attribute)
         rule = engine.Rule((engine.Step(cond, command),))
         automation = engine.Automation(
-            model.Transition(channel, args.state), rule, delay, model.COOLDOWN, cancel=engine.Has(model.ChangeChannel(channel))
+            model.Transition(subject, args.state), rule, delay, model.COOLDOWN, cancel=engine.Has(model.ChangeSubject(subject))
         )
         objects["react"].append(model.Reaction(automation, pause, args.name))
 

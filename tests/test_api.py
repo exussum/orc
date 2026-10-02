@@ -577,7 +577,7 @@ class TestPresence:
         with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
             api.replay_day(api.local_now(), entry)
         squished = dispatch.call_args.args[0]
-        assert [(c.channel.one(), c.value) for c in squished] == [(orc.Light.a, m.OFF)]
+        assert [(c.subject.one(), c.value) for c in squished] == [(orc.Light.a, m.OFF)]
 
     def test_replay_day_skips_skip_replay_routines(self, entry):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)

@@ -350,7 +350,7 @@ def durations() -> tuple[dict[str, Any], int]:
 
 
 def _states_by_name(commands: m.Commands) -> dict[str, Any]:
-    return {c.channel.one().name: c.value for c in commands}
+    return {c.subject.one().name: c.value for c in commands}
 
 
 def _volumes_by_name(sounds: tuple[m.SoundState, ...]) -> dict[str, int]:

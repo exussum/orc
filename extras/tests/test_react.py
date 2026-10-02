@@ -47,14 +47,14 @@ def _device_enums(monkeypatch):
 
 
 def _world_read(mock):
-    def read(channel):
-        match channel:
-            case m.PersonChannel(name):
+    def read(subject):
+        match subject:
+            case m.PersonSubject(name):
                 return name in mock.api.present_names()
-            case m.AnyoneChannel():
+            case m.AnyoneSubject():
                 return bool(mock.api.present_names())
             case _:
-                raise KeyError(channel)
+                raise KeyError(subject)
 
     return read
 
@@ -90,7 +90,7 @@ def _make(devices, attribute, state, action, target=None, delay=None, when=None)
     automations = []
     for source in devices.all():
         command = engine.Command(target or m.Devices(source), action)
-        trigger = model.Transition(m.MqttDeviceChannel(source, attribute), state)
+        trigger = model.Transition(m.MqttDeviceSubject(source, attribute), state)
         automations.append(engine.Automation(trigger, engine.Rule((engine.Step(cond, command),)), span, model.COOLDOWN))
     return automations
 
@@ -127,7 +127,7 @@ def ac_report(ctx):
 
 @pytest.fixture
 def dispatches(ctx):
-    return lambda: [(c.channel.one(), c.value) for c in ctx.api.dispatch.call_args.args[0]]
+    return lambda: [(c.subject.one(), c.value) for c in ctx.api.dispatch.call_args.args[0]]
 
 
 def _payload(call):
@@ -149,8 +149,8 @@ def deferred_run(ctx):
 def test_config_registers_listener(ctx, configured):
     rules = configured
     assert len(rules) == 8  # line 1 fans out to lamp + desk; lines 2..7 are single-device
-    assert rules[0].trigger == model.Transition(m.MqttDeviceChannel(Light.lamp, "switch"), m.ON)
-    assert rules[1].trigger == model.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert rules[0].trigger == model.Transition(m.MqttDeviceSubject(Light.lamp, "switch"), m.ON)
+    assert rules[1].trigger == model.Transition(m.MqttDeviceSubject(Light.desk, "switch"), m.ON)
     assert rules[0].rule.steps[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
     assert rules[0].delay == timedelta(minutes=10)
     assert ctx.api.add_listener.call_args.args[0].args[1] == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
@@ -225,7 +225,7 @@ def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, switch_rep
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
     rules = configured
-    assert rules[4].rule.steps[0].command.channel == m.Devices(Ac)
+    assert rules[4].rule.steps[0].command.subject == m.Devices(Ac)
 
 
 def test_targeted_action_goes_to_the_target(ctx, ruleset, dispatches, switch_report):
@@ -244,14 +244,14 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
 
 def test_if_clause_parses_device_and_condition(ctx, configured):
     rules = configured
-    assert rules[2].rule.steps[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
-    assert rules[3].rule.steps[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
+    assert rules[2].rule.steps[0].conditions[0] == model.AcIs(m.AcSubject(Ac.living), m.AcState.ON)
+    assert rules[3].rule.steps[0].conditions[0] == model.AcIs(m.AcSubject(Ac.living), m.AcState.COOL)
 
 
 def test_set_clause_parses_explicit_target(ctx, configured):
     rules = configured
-    assert rules[0].rule.steps[0].command.channel == m.Devices(Light.lamp)
-    assert rules[2].rule.steps[0].command.channel == m.Devices(Ac.living)
+    assert rules[0].rule.steps[0].command.subject == m.Devices(Light.lamp)
+    assert rules[2].rule.steps[0].command.subject == m.Devices(Ac.living)
 
 
 def test_target_must_match_action_kind():
@@ -264,8 +264,8 @@ def test_target_must_match_action_kind():
 
 def test_if_clause_covers_lights_and_chromecasts(ctx, configured):
     rules = configured
-    assert rules[5].rule.steps[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
-    assert rules[6].rule.steps[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
+    assert rules[5].rule.steps[0].conditions[0] == engine.Is(m.MqttDeviceSubject(Light.desk, "switch"), m.ON)
+    assert rules[6].rule.steps[0].conditions[0] == engine.Is(m.CastSubject(Chromecast.tv), m.Playback.PLAYING)
 
 
 def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
@@ -273,7 +273,7 @@ def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
     # <condition>` absorb a stray token even without the literal if/is present, which
     # made a bare `set <target> <action>` (no if step) misparse as `set <action>`
     rules = configured
-    assert rules[7].trigger == model.Transition(m.MqttDeviceChannel(Sensor.living, "motion"), "active")
+    assert rules[7].trigger == model.Transition(m.MqttDeviceSubject(Sensor.living, "motion"), "active")
     assert rules[7].rule.steps[0].conditions == ()
     assert rules[7].rule.steps[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
 
@@ -337,9 +337,9 @@ def test_reader_resolves_ac_playback_and_attr(ctx, ac_report):
     ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, "s", 30, m.Playback.PLAYING),)
     ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)]
     read = plugins._reader(ctx)
-    assert read(m.AcChannel(Ac.living)) == m.AcState.COOL
-    assert read(m.CastChannel(Chromecast.tv)) == m.Playback.PLAYING
-    assert read(m.MqttDeviceChannel(Light.desk, "switch")) == m.ON
+    assert read(m.AcSubject(Ac.living)) == m.AcState.COOL
+    assert read(m.CastSubject(Chromecast.tv)) == m.Playback.PLAYING
+    assert read(m.MqttDeviceSubject(Light.desk, "switch")) == m.ON
 
 
 def test_reader_formula_evaluates_and_raises_with_context(ctx):
@@ -347,34 +347,34 @@ def test_reader_formula_evaluates_and_raises_with_context(ctx):
         m.DeviceState(id=5, name="sensor", attributes={"temperature": 77, "humidity": 60}, last_activity=None)
     ]
     read = plugins._reader(ctx)
-    assert read(model.FormulaChannel(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(62.1, abs=0.2)
+    assert read(model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(62.1, abs=0.2)
     ctx.api.device_states.return_value = [m.DeviceState(id=5, name="sensor", attributes={"humidity": 60}, last_activity=None)]
     with pytest.raises(ValueError, match="dewpoint"):
-        read(model.FormulaChannel(Sensor.living, "dewpoint(temperature,humidity)"))
+        read(model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)"))
 
 
 def test_condition_maps_when_by_kind():
     assert model.condition(None) == ()
-    assert model.condition(model.When(Ac.living, m.AcState.ON)) == (model.AcIs(m.AcChannel(Ac.living), m.AcState.ON),)
-    assert model.condition(model.When(Chromecast.tv, m.Playback.PLAYING)) == (engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING),)
-    assert model.condition(model.When(Light.desk, m.ON)) == (engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON),)
+    assert model.condition(model.When(Ac.living, m.AcState.ON)) == (model.AcIs(m.AcSubject(Ac.living), m.AcState.ON),)
+    assert model.condition(model.When(Chromecast.tv, m.Playback.PLAYING)) == (engine.Is(m.CastSubject(Chromecast.tv), m.Playback.PLAYING),)
+    assert model.condition(model.When(Light.desk, m.ON)) == (engine.Is(m.MqttDeviceSubject(Light.desk, "switch"), m.ON),)
 
 
 def test_ac_is_bitmask_respects_flag_membership():
-    assert not model.AcIs(m.AcChannel(Ac.living), m.AcState.COOL).holds(lambda channel: m.AcState.ON)
-    assert model.AcIs(m.AcChannel(Ac.living), m.AcState.ON).holds(lambda channel: m.AcState.COOL)
-    assert not model.AcIs(m.AcChannel(Ac.living), m.AcState.COOL).holds(lambda channel: None)
+    assert not model.AcIs(m.AcSubject(Ac.living), m.AcState.COOL).holds(lambda subject: m.AcState.ON)
+    assert model.AcIs(m.AcSubject(Ac.living), m.AcState.ON).holds(lambda subject: m.AcState.COOL)
+    assert not model.AcIs(m.AcSubject(Ac.living), m.AcState.COOL).holds(lambda subject: None)
 
 
 def _make_range(sensor, expr, low, high, target, action, people=None):
-    formula = model.FormulaChannel(sensor, expr)
+    formula = model.FormulaSubject(sensor, expr)
     conditions = []
     if people == m.Tag.ANYONE:
-        conditions.append(engine.Is(m.AnyoneChannel(), True))
+        conditions.append(engine.Is(m.AnyoneSubject(), True))
     elif people:
         conditions.append(model.Present(people))
     if isinstance(action, m.AcCommand):
-        conditions.extend(model.AcIs(m.AcChannel(ac), m.AcState.OFF) for ac in target.all())
+        conditions.extend(model.AcIs(m.AcSubject(ac), m.AcState.OFF) for ac in target.all())
     conditions.append(model.Range(formula, low, high))
     command = engine.Command(target, action)
     rule = engine.Rule((engine.Step(tuple(conditions), command),))
@@ -395,20 +395,20 @@ def range_event(ctx):
 def test_range_rule_parses_expressions(ctx):
     ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_range.orc").read_text()}
     rules = react.setup(ctx)
-    temp = model.FormulaChannel(Sensor.living, "temperature")
-    dewpoint = model.FormulaChannel(Sensor.living, "dewpoint(temperature,humidity)")
+    temp = model.FormulaSubject(Sensor.living, "temperature")
+    dewpoint = model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[0].trigger == model.DeviceChanged(Sensor.living, "temperature")
-    assert rules[0].rule.steps[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
+    assert rules[0].rule.steps[0].conditions == (model.AcIs(m.AcSubject(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
     assert rules[0].rule.steps[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[1].rule.steps[0].conditions == (
         model.Present(("alice", "bob")),
-        model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF),
+        model.AcIs(m.AcSubject(Ac.living), m.AcState.OFF),
         model.Range(dewpoint, 50, 60),
     )
     assert rules[2].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[2].rule.steps[0].conditions == (engine.Is(m.AnyoneChannel(), True), model.Range(dewpoint, 59, 104))
-    assert rules[3].rule.steps[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
+    assert rules[2].rule.steps[0].conditions == (engine.Is(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104))
+    assert rules[3].rule.steps[0].conditions == (model.AcIs(m.AcSubject(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
 
 
 @pytest.mark.parametrize(
@@ -484,7 +484,7 @@ def test_disabled_rule_expires_after_its_pause(configured):
 
 def test_disabled_rule_does_not_fire(ctx, configured, switch_report):
     plugins.sleep(ctx, "Lights off")
-    switch_report(configured[0].trigger.channel.device.value, m.OFF, m.ON)
+    switch_report(configured[0].trigger.subject.device.value, m.OFF, m.ON)
     ctx.api.dispatch.assert_not_called()
 
 

@@ -10,8 +10,8 @@ T1 = T0 + timedelta(hours=1)
 
 
 def read_from(world):
-    def read(channel):
-        return world[channel]
+    def read(subject):
+        return world[subject]
 
     return read
 
