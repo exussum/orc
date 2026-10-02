@@ -62,6 +62,11 @@ class PushSubscription(NamedTuple):
     auth_secret: str
 
 
+class Notification(NamedTuple):
+    tag: tuple[str, ...]
+    url: str = ""
+
+
 class Remote(NamedTuple):
     device: "DeviceEnum"
     button: int

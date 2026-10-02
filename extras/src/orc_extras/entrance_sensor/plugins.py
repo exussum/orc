@@ -100,7 +100,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         )
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
         if not visit.present_before and not present:
-            ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification_tag=("entrance",))
+            ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification=m.Notification(("entrance",)))
 
 
 def battery_state(ctx: m.AppContext, sensor: SimpleNamespace) -> list[m.DeviceStatus]:

@@ -1,4 +1,5 @@
 import dataclasses
+import re
 from datetime import datetime, timedelta
 from itertools import chain, islice
 from typing import Any
@@ -10,6 +11,8 @@ from orc_extras.calendar.dal.interfaces import FeedService
 WARNING = "warning"
 ALARM = "alarm"
 CRON_ID = "cal-cron"
+_LINK_FIELDS = ("X-GOOGLE-CONFERENCE", "X-MICROSOFT-SKYPETEAMSMEETINGURL", "URL", "LOCATION", "DESCRIPTION")
+_LINK = re.compile(r"""https?://([\w-]+\.)*(meet\.google\.com|zoom\.us|teams\.microsoft\.com)/[^\s<>"']*""")
 
 
 class Log(m.LogSourceEnum):
@@ -22,6 +25,7 @@ class CalendarEvent:
     summary: str
     datetime: datetime
     type: str
+    url: str
 
     @staticmethod
     def from_cal(cal: Any, feed: str, type: str, offset: timedelta, tz: Any) -> CalendarEvent:
@@ -30,6 +34,7 @@ class CalendarEvent:
             cal.summary.to_ical().decode("utf-8"),
             cal.start.astimezone(tz) + offset,
             type,
+            link(cal),
         )
 
 
@@ -37,6 +42,13 @@ class CalendarEvent:
 class CalendarJob:
     event_type: str
     summary: str
+    url: str
+
+
+def link(cal: Any) -> str:
+    hits = (_LINK.search(str(cal.get(field, ""))) for field in _LINK_FIELDS)
+    found = next((hit for hit in hits if hit), None)
+    return found.group() if found else ""
 
 
 def schedule_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:
@@ -75,7 +87,7 @@ def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], 
         ctx.scheduler.once(
             _run_event,
             event.datetime,
-            CalendarJob(event.type, event.summary),
+            CalendarJob(event.type, event.summary, event.url),
             id=id,
             name=event.summary if event.type == ALARM else f"{event.summary} ({event.type})",
         )
@@ -88,5 +100,5 @@ def _run_event(job: CalendarJob, *, ctx: m.AppContext) -> None:
         entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, job.summary, trigger)
         ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
     else:
-        entry = ctx.api.log(Log.CALENDAR, job.summary, trigger, notification_tag=("calendar",))
+        entry = ctx.api.log(Log.CALENDAR, job.summary, trigger, notification=m.Notification(("calendar",), job.url))
         ctx.api.alert(m.Alarm.ATTENTION, text=job.summary, entry=entry)
