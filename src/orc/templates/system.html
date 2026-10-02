@@ -45,9 +45,9 @@
                                 <th class="orc-th">Retried</th>
                             </tr>
                             {% for c in lights %}
-                                {% set s = retry_stats.get(c.channel.one().value) %}
+                                {% set s = retry_stats.get(c.subject.one().value) %}
                                 <tr>
-                                    <td class="orc-td">{{ c.channel.one().name }}</td>
+                                    <td class="orc-td">{{ c.subject.one().name }}</td>
                                     <td class="orc-td">{{ c.value }}</td>
                                     <td class="orc-td">{{ s.failed if s else '—' }}</td>
                                     <td class="orc-td">{{ s.clean if s else '—' }}</td>
@@ -93,7 +93,7 @@
                                     <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
                                         <ul class="list-disc list-inside ml-4">
                                             {% for c in snap.routine if c.value != "off" %}
-                                                <li>{{ c.channel.one().name }}={{ c.value }}</li>
+                                                <li>{{ c.subject.one().name }}={{ c.value }}</li>
                                             {% else %}
                                                 <li>all off</li>
                                             {% endfor %}
