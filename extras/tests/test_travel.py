@@ -2,7 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, create_autospec
+from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -14,7 +14,6 @@ from orc_extras.travel.dal.drive import stub as drive_stub
 from orc_extras.travel.dal.drive import tomtom
 from orc_extras.travel.dal.flight import stub as flight_stub
 
-from orc import api
 from orc.kernel import cast
 from orc.kernel.declarations import Declarations
 
@@ -22,9 +21,7 @@ FIXTURE = Path(__file__).parent / "fixture"
 ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
 
 
-def _setup_runtime():
-    ctx = MagicMock()
-    ctx.api = create_autospec(api)
+def _setup_runtime(ctx):
     ctx.plugin_state = {}
     ctx.config.plugin_configs = {travel.CONFIG: (FIXTURE / "travel.orc").read_text()}
     travel.setup(ctx)
@@ -37,9 +34,7 @@ def test_travel_declares_its_configured_keys():
     assert builder.secrets == {"TOMTOM_KEY": cast.nonblank, "AERODATABOX_KEY": cast.nonblank}
 
 
-def _ctx(rt):
-    ctx = MagicMock()
-    ctx.api = create_autospec(api)
+def _with_runtime(ctx, rt):
     ctx.plugin_state = {travel: rt}
     return ctx
 
@@ -57,8 +52,8 @@ def _runtime(extras, buffer=0):
     )
 
 
-def test_travel_config_loads():
-    rt = _setup_runtime()
+def test_travel_config_loads(ctx):
+    rt = _setup_runtime(ctx)
     assert rt.settings == m.Settings(
         drive_backend="orc_extras.travel.dal.drive.stub",
         flight_backend="orc_extras.travel.dal.flight.stub",
@@ -161,29 +156,29 @@ def _boom(msg):
     return raiser
 
 
-def test_evaluate_destination_success():
+def test_evaluate_destination_success(ctx):
     job = m.TravelJob("Home", "Home", ARRIVE, set())
-    arrival, sched = plugins.evaluate(_ctx(_runtime([])), job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
+    arrival, sched = plugins.evaluate(_with_runtime(ctx, _runtime([])), job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
     assert arrival == m.Arrival(ARRIVE, "Home", None)
     assert sched.leave_at is not None
 
 
-def test_evaluate_destination_failure_bubbles_reason():
-    ctx = _ctx(_runtime([])._replace(drive=SimpleNamespace(drive_minutes=_boom("route unavailable"))))
+def test_evaluate_destination_failure_bubbles_reason(ctx):
+    _with_runtime(ctx, _runtime([])._replace(drive=SimpleNamespace(drive_minutes=_boom("route unavailable"))))
     job = m.TravelJob("Nowhere", "Nowhere", ARRIVE, set())
     with pytest.raises(ValueError, match="route unavailable"):
         plugins.evaluate(ctx, job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
 
 
-def test_evaluate_flight_same_day_checks_aviation():
-    ctx = _ctx(_runtime([])._replace(flight=SimpleNamespace(arrival=_boom("no such flight"))))
+def test_evaluate_flight_same_day_checks_aviation(ctx):
+    _with_runtime(ctx, _runtime([])._replace(flight=SimpleNamespace(arrival=_boom("no such flight"))))
     job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
     with pytest.raises(ValueError, match="no such flight"):
         plugins.evaluate(ctx, job, timezone.utc, ARRIVE, lambda: None)
 
 
-def test_evaluate_flight_future_date_skips_check():
-    ctx = _ctx(_runtime([])._replace(flight=SimpleNamespace(arrival=_boom("should not be called"))))
+def test_evaluate_flight_future_date_skips_check(ctx):
+    _with_runtime(ctx, _runtime([])._replace(flight=SimpleNamespace(arrival=_boom("should not be called"))))
     job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
     arrival, sched = plugins.evaluate(ctx, job, timezone.utc, ARRIVE - timedelta(days=5), lambda: None)
     assert arrival is None
@@ -238,12 +233,12 @@ def test_next_run_rechecks_every_ten_minutes_within_two_hours():
     assert sched.next_fire == now + timedelta(minutes=10)
 
 
-def test_run_job_syncs_arrive_to_live_verified_time(monkeypatch):
+def test_run_job_syncs_arrive_to_live_verified_time(ctx, monkeypatch):
     verified = ARRIVE + timedelta(hours=10)
     rt = _runtime([])._replace(flight=SimpleNamespace(arrival=lambda *a, **k: (verified, "JFK", None)))
     monkeypatch.setattr(plugins, "_reschedule", lambda *a, **k: None)
     job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
-    ctx = _ctx(rt)
+    _with_runtime(ctx, rt)
     ctx.config.settings.tz = timezone.utc
     ctx.api.local_now.return_value = ARRIVE - timedelta(hours=3)
     plugins.run_job(job, ctx=ctx)
