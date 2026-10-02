@@ -189,8 +189,8 @@ def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
         return (engine.Is(m.PersonChannel(trigger), True),)
 
 
-def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Clause[m.Devices]:
-    return engine.Clause(_conditions(trigger), _command(objects, args, trigger))
+def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Step[m.Devices]:
+    return engine.Step(_conditions(trigger), _command(objects, args, trigger))
 
 
 def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any, tuple[Any, ...]]) -> type[m.DeviceEnum]:
@@ -288,7 +288,7 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
         known = (None, *(t.value for t in m.Tag), *(w.value for w in m.WeatherCondition), *objects["person"])
         if args.trigger not in known:
             raise ValueError(f"Unknown trigger {args.trigger!r}: expected one of {known[1:]}")
-        routines[args.id] = replace(routine, items=(*routine.items, _clause(objects, args, args.trigger)))
+        routines[args.id] = replace(routine, steps=(*routine.steps, _clause(objects, args, args.trigger)))
 
 
 def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:

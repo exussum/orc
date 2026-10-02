@@ -124,7 +124,7 @@ def _dispatch(ctx: m.AppContext, automation: engine.Automation[m.Devices], name:
 
 
 def _log(ctx: m.AppContext, automation: engine.Automation[m.Devices], name: str, note: str) -> m.LogEntry:
-    command = automation.rule.items[0].command
+    command = automation.rule.steps[0].command
     return ctx.api.log(
         Log.REACT,
         f"`{name}` {_trigger_label(automation)}{note} → set {_targets(command.channel)} {command.value}",
@@ -133,7 +133,7 @@ def _log(ctx: m.AppContext, automation: engine.Automation[m.Devices], name: str,
 
 
 def _command(automation: engine.Automation[m.Devices]) -> m.DeviceCommand:
-    command = automation.rule.items[0].command
+    command = automation.rule.steps[0].command
     return engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM)
 
 

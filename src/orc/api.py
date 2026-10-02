@@ -544,7 +544,7 @@ def next_iot_job(present_names: set[str]) -> Job | None:
             j
             for j in jobs
             if j.next_run_time
-            and not any(clause.command.tag == m.Tag.SYSTEM for clause in j.args[0].rule.items)
+            and not any(step.command.tag == m.Tag.SYSTEM for step in j.args[0].rule.steps)
             and matching_items(j.args[0].rule, j.next_run_time, present_names)
         ),
         None,
@@ -569,7 +569,7 @@ def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], f
         if not pnames:
             detail = "nobody home"
         else:
-            unmet = sorted({clause.command.tag for clause in rule.items if clause.command.tag not in (None, m.Tag.SYSTEM, m.Tag.ANYONE)})
+            unmet = sorted({step.command.tag for step in rule.steps if step.command.tag not in (None, m.Tag.SYSTEM, m.Tag.ANYONE)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
         entry.action += f" — {Log.RULE_SKIPPED.format(detail=detail)}"
         return
@@ -599,12 +599,12 @@ def _presence(rule: m.Routine) -> m.Routine:
 
 
 def has_presence(rule: m.Routine) -> bool:
-    return bool(_presence(rule).items)
+    return bool(_presence(rule).steps)
 
 
 def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
     presence = _presence(rule)
-    return bool(presence.items) and not presence.holds(world_reader(present_names))
+    return bool(presence.steps) and not presence.holds(world_reader(present_names))
 
 
 def weather_active(rule: m.Routine, now: datetime) -> bool:
