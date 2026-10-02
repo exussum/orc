@@ -44,7 +44,11 @@ def set_volume(device: m.DeviceEnum, lvl: int) -> None:
 
 
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
-    return m.SoundState(what=device, content=None, volume=system_volume.get_volume(device.value))
+    try:
+        volume = system_volume.get_volume(device.value)
+    except RuntimeError:
+        volume = 0
+    return m.SoundState(what=device, content=None, volume=volume)
 
 
 @cache
