@@ -12,7 +12,7 @@ from orc.plugins import battery, buttons, external
 
 
 def _ctx():
-    return m.AppContext(scheduler=MagicMock())
+    return m.AppContext(scheduler=MagicMock(), engine=api.runtime())
 
 
 def _capture(name, fn):

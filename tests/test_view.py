@@ -30,7 +30,7 @@ def scheduler():
 
 @pytest.fixture
 def ctx(scheduler):
-    context = m.AppContext(scheduler=scheduler)
+    context = m.AppContext(scheduler=scheduler, engine=api.runtime())
     api.set_ctx(context)
     return context
 
@@ -122,7 +122,7 @@ def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
         patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
-    assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots(api.local_now())
+    assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots()
     capture.assert_not_called()
     ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 

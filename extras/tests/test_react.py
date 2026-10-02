@@ -61,7 +61,7 @@ def _world_read(mock):
 
 @pytest.fixture
 def ctx(ctx):
-    ctx.engine = engine.Runtime()
+    ctx.engine = engine.Runtime(lambda _channel: ctx.api.local_now())
     ctx.scheduler = create_autospec(m.Scheduler, instance=True)
     ctx.api.local_now.return_value = _NOW
     ctx.api.device_state.side_effect = lambda target: next(

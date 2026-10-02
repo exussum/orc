@@ -87,9 +87,9 @@
                 <div class="font-semibold mb-1">Status</div>
                 <ul class="list-disc list-inside">
                     <li>Snapshot State:
-                        {% if ctx.engine.snapshots(ctx.api.local_now()) %}
+                        {% if ctx.engine.snapshots() %}
                             <ul class="list-disc list-inside ml-4">
-                                {% for name, snap in ctx.engine.snapshots(ctx.api.local_now()).items() %}
+                                {% for name, snap in ctx.engine.snapshots().items() %}
                                     <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
                                         <ul class="list-disc list-inside ml-4">
                                             {% for c in snap.routine if c.value != "off" %}

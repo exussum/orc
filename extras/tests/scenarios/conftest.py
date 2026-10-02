@@ -135,7 +135,7 @@ def house(request, monkeypatch, tmp_path):
         api.set_ac(SimpleNamespace(command=lambda *args: None, state=lambda device: None, temperature=lambda device: None))
 
         scheduler = FakeScheduler()
-        ctx = m.AppContext(scheduler=scheduler)
+        ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())
         api.set_ctx(ctx)
 
         app = Flask(__name__)

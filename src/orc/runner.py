@@ -134,7 +134,7 @@ def _build_app(boot: Boot) -> OrcFlask:
     with step("database"):
         api.init_db()
 
-    ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz))
+    ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz), api.runtime())
     api.set_ctx(ctx)
     return _build_flask(ctx)
 
