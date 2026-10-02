@@ -15,7 +15,7 @@ orc.config.load(m.Secrets(), {})
 
 @pytest.fixture(autouse=True)
 def _reset_ctx():
-    api.set_ctx(m.AppContext(MagicMock()))
+    api.set_ctx(m.AppContext(MagicMock(), api.runtime()))
 
 
 @pytest.fixture

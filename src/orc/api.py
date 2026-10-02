@@ -232,7 +232,7 @@ def run_action(
         action = RunAction(lambda entry: run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True))
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
-        if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT, local_now()):
+        if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
             action = RunAction(lambda entry: ctx.engine.override_scene(ctx, ORC_SYSTEM_SNAPSHOT, routine.commands, end, id, entry))
         else:
@@ -277,7 +277,7 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
     assert _ctx is not None
     commands = m.squish(commands)
     always = engine.Action(commands)
-    survived = set(_ctx.engine.evaluate((always,), local_now(), force=force)[0].commands)
+    survived = set(_ctx.engine.evaluate((always,), read=clock_reader, force=force)[0].commands)
 
     stream: dict[Any, tuple[str, str]] = {}
     todo: list[_Job] = []
@@ -613,7 +613,7 @@ def weather_active(rule: m.Routine, now: datetime) -> bool:
 
 def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
     assert _ctx is not None
-    return _ctx.engine.evaluate((rule,), now, read=world_reader(pnames, now), force=True)[0].commands
+    return _ctx.engine.evaluate((rule,), read=world_reader(pnames, now), force=True)[0].commands
 
 
 def world_reader(present: set[str] | None = None, now: datetime | None = None) -> engine.Read:
@@ -633,6 +633,16 @@ def world_reader(present: set[str] | None = None, now: datetime | None = None) -
                 raise KeyError(channel)
 
     return read
+
+
+def clock_reader(channel: engine.Channel) -> engine.Value:
+    if isinstance(channel, engine.Clock):
+        return local_now()
+    raise KeyError(channel)
+
+
+def runtime() -> engine.Runtime:
+    return engine.Runtime(clock_reader, bypass=m.Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT)
 
 
 def _fetch_weather(now: datetime) -> frozenset[m.WeatherCondition]:

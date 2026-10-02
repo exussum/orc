@@ -59,7 +59,7 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(log_entry.trigger)
         ctx.scheduler.cancel(JOB_ID)
-        restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME, ctx.api.local_now()))
+        restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME))
         timed_name, timed_commands = _timed_commands(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
         ctx.api.dispatch(m.squish((*restore, *timed_commands)), force=True, entry=log_entry)

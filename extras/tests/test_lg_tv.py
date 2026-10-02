@@ -53,7 +53,7 @@ class TestDispatchLGTV:
 
         self.ctx = MagicMock()
         self.ctx.api = create_autospec(api)
-        self.ctx.engine = engine.Runtime()
+        self.ctx.engine = engine.Runtime(lambda _channel: datetime.now(UTC))
         mock_registry(ctx=self.ctx, LGTV=(LGTV, plugins._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room

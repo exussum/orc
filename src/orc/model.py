@@ -469,7 +469,7 @@ class AppContext:
     can't import orc.api at import time (api imports model)."""
 
     scheduler: Scheduler
-    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime(bypass=Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT))
+    engine: engine.Runtime
     plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))

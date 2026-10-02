@@ -98,7 +98,7 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     read = _reader(ctx, changed, old, new)
     awake = [automation for automation in state.automations if not is_disabled(state, automation, now)]
     fired: list[engine.Automation[m.Devices]] = []
-    for outcome in ctx.engine.evaluate(awake, now, read=read, force=True):
+    for outcome in ctx.engine.evaluate(awake, read=read, force=True):
         match outcome:
             case engine.Cancel(automation):
                 ctx.scheduler.cancel(_job(automation))
@@ -139,8 +139,7 @@ def _command(automation: engine.Automation[m.Devices]) -> m.DeviceCommand:
 
 @requires_ctx
 def _run_react(deferred: engine.Deferred[m.Devices], name: str, *, ctx: m.AppContext) -> None:
-    now = ctx.api.local_now()
     automation = deferred.automation
-    (report,) = ctx.engine.evaluate((deferred,), now, read=_reader(ctx), force=True)
+    (report,) = ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True)
     if report.commands:
         _dispatch(ctx, automation, name, f" {int(automation.delay.total_seconds() // 60)}m ago")
