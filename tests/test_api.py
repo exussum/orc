@@ -52,14 +52,14 @@ class TestManagingConfig:
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=PAST), PAST)
         api._ctx.engine.restore_scene(api._ctx, "test", snapshot_config, entry)
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
-        assert not api._ctx.engine.snapshots(api.local_now())
+        assert not api._ctx.engine.snapshots()
 
     def test_get_pops_the_snapshot_once(self, dispatch, snapshot_config):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        assert api._ctx.engine.pop_snapshot("test", api.local_now()).routine is snapshot_config
-        assert api._ctx.engine.pop_snapshot("test", api.local_now()) is None
+        assert api._ctx.engine.pop_snapshot("test").routine is snapshot_config
+        assert api._ctx.engine.pop_snapshot("test") is None
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=PAST), PAST)
-        assert api._ctx.engine.pop_snapshot("test", api.local_now()) is None
+        assert api._ctx.engine.pop_snapshot("test") is None
         dispatch.assert_not_called()
 
 
@@ -72,7 +72,7 @@ class TestIntercepts:
         api.dispatch((command,), entry=entry)
         api.dispatch((command,), entry=entry)
 
-        assert api._ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine == (
+        assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             engine.Command(m.Devices(orc.Light.a), m.ON),
             engine.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM),
         )
@@ -84,7 +84,7 @@ class TestIntercepts:
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         api.dispatch((command,), entry=entry)
 
-        assert api._ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine == (
+        assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             engine.Command(m.Devices(orc.Light.a), m.ON),
             engine.Command(m.Devices(orc.Light.b), m.OFF),
             command,
@@ -97,7 +97,7 @@ class TestIntercepts:
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         api.dispatch((command,), entry=entry)
 
-        assert api._ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine == (
+        assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             engine.Command(m.Devices(orc.Light.a), m.ON),
             engine.Command(m.Devices(orc.Light.b), m.OFF),
         )
@@ -109,7 +109,7 @@ class TestIntercepts:
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=PAST), PAST)
         api.dispatch((command,), entry=entry)
 
-        assert not api._ctx.engine.snapshots(api.local_now())
+        assert not api._ctx.engine.snapshots()
         assert update_light.call_args_list == [call(orc.Light.c, on=True)]
 
     def test_unrelated_plugin_snapshot_does_not_suppress(self, update_light, snapshot_config, entry):
@@ -127,7 +127,7 @@ class TestIntercepts:
 
         api.dispatch((command,), force=True, entry=entry)
 
-        assert api._ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine == (
+        assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             engine.Command(m.Devices(orc.Light.a), m.ON),
             engine.Command(m.Devices(orc.Light.b), m.OFF),
         )
@@ -138,7 +138,7 @@ class TestIntercepts:
 
         api.dispatch((engine.Command(m.Devices(orc.Light.a), m.OFF),), force=True, entry=entry)  # room control during the scene
 
-        assert api._ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine == (
+        assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             engine.Command(m.Devices(orc.Light.a), m.ON),
             engine.Command(m.Devices(orc.Light.b), m.OFF),
         )
@@ -186,7 +186,7 @@ def test_button_ad_hoc_snapshot():
         patch.object(api, "dispatch") as ex,
     ):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
-    snap = ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT]
+    snap = ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
     ex.assert_called_once_with(routine.commands, force=True, entry=ANY)
@@ -206,7 +206,7 @@ def test_button_ad_hoc_snapshot_does_not_stack():
     ):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
-    assert ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine is existing
+    assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
     ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 

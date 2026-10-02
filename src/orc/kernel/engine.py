@@ -26,8 +26,11 @@ type Value = Hashable
 type Read = Callable[[Channel], Value]
 
 
-def _no_read(_channel: Channel) -> Value:
-    return None
+class Clock(Channel):
+    pass
+
+
+CLOCK = Clock()
 
 
 @dataclass(frozen=True)
@@ -144,8 +147,19 @@ class SnapShot[C: Channel = Channel](NamedTuple):
     label: str = ""
 
 
+def _layered(first: Read, then: Read) -> Read:
+    def read(channel: Channel) -> Value:
+        try:
+            return first(channel)
+        except KeyError:
+            return then(channel)
+
+    return read
+
+
 class Runtime:
-    def __init__(self, *, bypass: Any = None, override_key: str | None = None) -> None:
+    def __init__(self, read: Read, *, bypass: Any = None, override_key: str | None = None) -> None:
+        self._read = read
         self._snapshots: dict[str, tuple[Any, datetime]] = {}
         self._last_fired: dict[Automation[Any], datetime] = {}
         self._lock = RLock()
@@ -156,39 +170,38 @@ class Runtime:
         with self._lock:
             self._snapshots[key] = (payload, deadline)
 
-    def snapshot_active(self, key: str, now: datetime) -> bool:
+    def snapshot_active(self, key: str) -> bool:
         with self._lock:
             entry = self._snapshots.get(key)
-            return bool(entry and now <= entry[1])
+            return bool(entry and self._now(self._read) <= entry[1])
 
-    def read_snapshot(self, key: str, now: datetime) -> Any:
+    def read_snapshot(self, key: str) -> Any:
         with self._lock:
             entry = self._snapshots.get(key)
-            return entry[0] if entry and now <= entry[1] else None
+            return entry[0] if entry and self._now(self._read) <= entry[1] else None
 
-    def pop_snapshot(self, key: str, now: datetime) -> Any:
+    def pop_snapshot(self, key: str) -> Any:
         with self._lock:
             entry = self._snapshots.pop(key, None)
-            return entry[0] if entry and now <= entry[1] else None
+            return entry[0] if entry and self._now(self._read) <= entry[1] else None
 
-    def snapshots(self, now: datetime) -> dict[str, Any]:
+    def snapshots(self) -> dict[str, Any]:
         with self._lock:
+            now = self._now(self._read)
             return {key: payload for key, (payload, deadline) in self._snapshots.items() if now <= deadline}
 
     @overload
     def evaluate[C: Channel](
-        self, items: Iterable[Rule[C] | Action[C] | Deferred[C]], now: datetime, *, read: Read = _no_read, force: bool
+        self, items: Iterable[Rule[C] | Action[C] | Deferred[C]], *, read: Read, force: bool
     ) -> tuple[Report[C], ...]: ...
 
     @overload
-    def evaluate[C: Channel](
-        self, items: Iterable[Item[C]], now: datetime, *, read: Read = _no_read, force: bool
-    ) -> tuple[Outcome[C], ...]: ...
+    def evaluate[C: Channel](self, items: Iterable[Item[C]], *, read: Read, force: bool) -> tuple[Outcome[C], ...]: ...
 
-    def evaluate[C: Channel](
-        self, items: Iterable[Item[C]], now: datetime, *, read: Read = _no_read, force: bool
-    ) -> tuple[Outcome[C], ...]:
+    def evaluate[C: Channel](self, items: Iterable[Item[C]], *, read: Read, force: bool) -> tuple[Outcome[C], ...]:
         with self._lock:
+            read = _layered(read, self._read)
+            now = self._now(read)
             out: list[Outcome[C]] = []
             for item in items:
                 match item:
@@ -203,20 +216,25 @@ class Runtime:
             return tuple(out)
 
     def override_scene(self, ctx: Any, name: str, commands: tuple[Command[Any], ...], end: datetime, label: str, entry: Any) -> None:
-        now = ctx.api.local_now()
-        if not self.snapshot_active(name, now):
+        if not self.snapshot_active(name):
             self.save_snapshot(name, SnapShot(ctx.api.capture_lights(), end, label), end)
-            captured = self.read_snapshot(name, now).routine
+            captured = self.read_snapshot(name).routine
             items = ", ".join(f"`{_one_name(c.channel)}`={c.value}" for c in captured if c.value != ctx.api.m.OFF)
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or ctx.api.Log.SNAPSHOT_ALL_OFF))
         ctx.api.dispatch(commands, force=True, entry=entry)
 
     def restore_scene(self, ctx: Any, name: str, commands: tuple[Command[Any], ...], entry: Any) -> None:
-        snapshot = self.pop_snapshot(name, ctx.api.local_now())
+        snapshot = self.pop_snapshot(name)
         if snapshot:
             commands = snapshot.routine
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
         ctx.api.dispatch(commands, force=True, entry=entry)
+
+    def _now(self, read: Read) -> datetime:
+        told = read(CLOCK)
+        if not isinstance(told, datetime):
+            raise TypeError(f"{CLOCK} read {told!r}, not a datetime")
+        return told
 
     def _automated[C: Channel](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> Outcome[C]:
         if not automation.trigger.holds(read):
