@@ -16,7 +16,7 @@ def setup(ctx: m.AppContext) -> None:
 
 def _on_button(ctx: m.AppContext, mapping: dict[tuple[Any, int, str], str], device_id: int, button: int, event_type: str) -> None:
     action = mapping.get((device_id, button, event_type))
-    trigger = m.Broker(id=str(device_id), source="hubitat")
+    trigger = m.Button(str(device_id))
     if action is not None and not ctx.api.run_action(ctx, action, trigger, source=m.LogSource.EXTERNAL):
         msg = Log.BUTTON_ACTION_UNKNOWN.format(id=action)
         entry = ctx.api.log(m.LogSource.SYSTEM, msg, trigger, notification_tag=("button",))

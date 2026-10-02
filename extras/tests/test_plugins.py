@@ -56,8 +56,14 @@ def ctx(ctx):
     ctx.api.device_state.side_effect = _device_state_side_effect(ctx)
     ctx.config.settings.tz = _UTC
     ctx.config.ad_hoc_routines = {
-        "Lights Off": m.AdhocAction(_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF), reset=False),
-        "Lamp Off": m.AdhocAction(_cmd(Light.lamp, m.OFF), reset=False),
+        "Lights Off": m.AdhocAction(
+            (
+                _cmd(Light.day_bulb, m.OFF),
+                _cmd(Light.night_bulb, m.OFF),
+            ),
+            reset=False,
+        ),
+        "Lamp Off": m.AdhocAction((_cmd(Light.lamp, m.OFF),), reset=False),
     }
     return ctx
 

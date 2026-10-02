@@ -1,18 +1,16 @@
-"""A generic rule engine: on a trigger edge, if a condition holds, emit commands.
+"""A generic rule evaluator: a rule's clauses apply when their conditions hold.
 
 Self-contained by design — no orc imports — so the whole file can be lifted out as a
-standalone package later. The host (orc) supplies the world as a `Read` callback, the clock
-as a `now` argument, and performs the returned commands and `Reaction`s.
-`Runtime` holds in-memory cooldown and snapshot state and reads no clock, calls no
-scheduler, and starts no threads — it decides and returns instructions the host acts on.
+standalone package later. The host (orc) supplies the world as a `Read` callback and the
+clock as a `now` argument, and performs the returned commands. `Runtime` holds in-memory
+cooldown and snapshot state and reads no clock, calls no scheduler, and starts no threads.
 """
 
-from collections.abc import Callable, Collection, Hashable, Iterable, Sequence
+from collections.abc import Callable, Collection, Hashable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
-from enum import Enum, auto
+from datetime import datetime, timedelta
 from threading import RLock
-from typing import Any, NamedTuple, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, overload, runtime_checkable
 
 
 class Channel:
@@ -39,56 +37,17 @@ class Command[T = None, C: Channel = Channel]:
     tag: T | None = None
 
 
-@dataclass(frozen=True)
-class Event:
-    channel: Channel
-    prev: Value
-    now: Value
-
-
-class Trigger(Protocol):
-    def fired(self, event: Event) -> bool: ...
-
-
 class Condition(Protocol):
     def holds(self, read: Read) -> bool: ...
-
-    @property
-    def channels(self) -> tuple[Channel, ...]: ...
-
-
-@dataclass(frozen=True)
-class Transition:
-    channel: Channel
-    value: Value
-
-    def fired(self, event: Event) -> bool:
-        return event.channel == self.channel and event.now == self.value and event.prev != event.now
-
-
-@dataclass(frozen=True)
-class Changed:
-    channels: tuple[Channel, ...]
-
-    def fired(self, event: Event) -> bool:
-        return event.channel in self.channels
 
 
 @dataclass(frozen=True)
 class Never:
-    def fired(self, event: Event) -> bool:
+    def holds(self, read: Read) -> bool:
         return False
 
 
 NEVER = Never()
-
-
-@dataclass(frozen=True)
-class At:
-    when: time | str
-
-    def fired(self, event: Event) -> bool:
-        return False
 
 
 @dataclass(frozen=True)
@@ -98,10 +57,6 @@ class Is:
 
     def holds(self, read: Read) -> bool:
         return read(self.channel) == self.value
-
-    @property
-    def channels(self) -> tuple[Channel, ...]:
-        return (self.channel,)
 
 
 @dataclass(frozen=True)
@@ -115,22 +70,26 @@ class In:
             raise TypeError(f"{self.channel} read {values!r}, not a collection")
         return self.value in values
 
-    @property
-    def channels(self) -> tuple[Channel, ...]:
-        return (self.channel,)
+
+@dataclass(frozen=True)
+class Has:
+    channel: Channel
+
+    def holds(self, read: Read) -> bool:
+        return read(self.channel) is not None
 
 
 class Clause[C: Channel = Channel](NamedTuple):
     conditions: tuple[Condition, ...]
     command: Command[Any, C]
 
+    def holds(self, read: Read) -> bool:
+        return all(cond.holds(read) for cond in self.conditions)
+
 
 @dataclass(frozen=True)
 class Rule[C: Channel = Channel]:
-    trigger: Trigger
     items: tuple[Clause[C], ...]
-    delay: timedelta = timedelta()
-    cooldown: timedelta = timedelta()
     name: str = ""
     tags: frozenset[str] = frozenset()
 
@@ -138,32 +97,45 @@ class Rule[C: Channel = Channel]:
     def commands(self) -> tuple[Command[Any, C], ...]:
         return tuple(clause.command for clause in self.items)
 
+    def holds(self, read: Read) -> bool:
+        return any(clause.holds(read) for clause in self.items)
 
-class Disposition(Enum):
-    FIRED = auto()
-    COOLED = auto()
-    BLOCKED = auto()
-
-
-@dataclass(frozen=True)
-class Report:
-    rule: Rule
-    disposition: Disposition
-    since: timedelta | None = None
+    def where(self, keep: Callable[[Command[Any, C]], bool]) -> Rule[C]:
+        return Rule(tuple(clause for clause in self.items if keep(clause.command)), self.name, self.tags)
 
 
 @dataclass(frozen=True)
-class Deferred:
-    rule: Rule
+class Action[C: Channel = Channel]:
+    commands: tuple[Command[Any, C], ...] = ()
+
+
+@dataclass(frozen=True)
+class Automation[C: Channel = Channel]:
+    trigger: Condition
+    rule: Rule[C]
+    delay: timedelta = timedelta()
+    cooldown: timedelta = timedelta()
+    cancel: Condition = NEVER
+
+
+class Report[C: Channel = Channel](NamedTuple):
+    item: Item[C]
+    commands: tuple[Command[Any, C], ...]
+
+
+@dataclass(frozen=True)
+class Deferred[C: Channel = Channel]:
+    automation: Automation[C]
     when: datetime
 
 
 @dataclass(frozen=True)
-class Cancel:
-    rule: Rule
+class Cancel[C: Channel = Channel]:
+    automation: Automation[C]
 
 
-type Reaction = Report | Deferred | Cancel
+type Item[C: Channel = Channel] = Rule[C] | Action[C] | Automation[C] | Deferred[C]
+type Outcome[C: Channel = Channel] = Report[C] | Deferred[C] | Cancel[C]
 
 
 class SnapShot[C: Channel = Channel](NamedTuple):
@@ -173,47 +145,12 @@ class SnapShot[C: Channel = Channel](NamedTuple):
 
 
 class Runtime:
-    def __init__(self, rules: Sequence[Rule] = (), *, bypass: Any = None, override_key: str | None = None) -> None:
-        self._rules: list[Rule] = []
-        self._last_fired: dict[int, datetime] = {}
+    def __init__(self, *, bypass: Any = None, override_key: str | None = None) -> None:
         self._snapshots: dict[str, tuple[Any, datetime]] = {}
+        self._last_fired: dict[Automation[Any], datetime] = {}
         self._lock = RLock()
         self._bypass = bypass
         self._override_key = override_key
-        self.add_rules(rules)
-
-    def on_event(self, event: Event, now: datetime, read: Read) -> tuple[Reaction, ...]:
-        with self._lock:
-            out: list[Reaction] = []
-            for rule in self._rules:
-                if rule.trigger.fired(event):
-                    if rule.delay:
-                        out.append(Deferred(rule, now + rule.delay))
-                    else:
-                        out.append(self._fire(rule, now, read))
-                elif rule.delay and isinstance(rule.trigger, Transition) and rule.trigger.channel == event.channel:
-                    out.append(Cancel(rule))
-            return tuple(out)
-
-    def on_fire(self, deferred: Deferred, now: datetime, read: Read) -> Report:
-        with self._lock:
-            return self._fire(deferred.rule, now, read)
-
-    def add_rules(self, rules: Sequence[Rule]) -> None:
-        if any(isinstance(rule.trigger, Never) for rule in rules):
-            raise ValueError("a NEVER-triggered rule never fires on an event")
-        with self._lock:
-            self._rules.extend(rules)
-
-    def _fire(self, rule: Rule, now: datetime, read: Read) -> Report:
-        key = hash(rule)
-        last = self._last_fired.get(key)
-        if last is not None and now - last < rule.cooldown:
-            return Report(rule, Disposition.COOLED, now - last)
-        if not self.evaluate([rule], now, read=read, force=True):
-            return Report(rule, Disposition.BLOCKED)
-        self._last_fired[key] = now
-        return Report(rule, Disposition.FIRED)
 
     def save_snapshot(self, key: str, payload: Any, deadline: datetime) -> None:
         with self._lock:
@@ -238,29 +175,31 @@ class Runtime:
         with self._lock:
             return {key: payload for key, (payload, deadline) in self._snapshots.items() if now <= deadline}
 
+    @overload
     def evaluate[C: Channel](
-        self, rules: Iterable[Rule[C]], now: datetime, *, read: Read = _no_read, force: bool
-    ) -> tuple[Command[Any, C], ...]:
+        self, items: Iterable[Rule[C] | Action[C] | Deferred[C]], now: datetime, *, read: Read = _no_read, force: bool
+    ) -> tuple[Report[C], ...]: ...
+
+    @overload
+    def evaluate[C: Channel](
+        self, items: Iterable[Item[C]], now: datetime, *, read: Read = _no_read, force: bool
+    ) -> tuple[Outcome[C], ...]: ...
+
+    def evaluate[C: Channel](
+        self, items: Iterable[Item[C]], now: datetime, *, read: Read = _no_read, force: bool
+    ) -> tuple[Outcome[C], ...]:
         with self._lock:
-            override_key = self._override_key
-            snapshot = self._snapshots.get(override_key) if override_key is not None else None
-            active = snapshot is not None and now <= snapshot[1]
-            out: list[Command[Any, C]] = []
-            for rule in rules:
-                for clause in rule.items:
-                    if not all(cond.holds(read) for cond in clause.conditions):
-                        continue
-                    command = clause.command
-                    if not force:
-                        if command.tag == self._bypass:
-                            if override_key is not None and snapshot is not None and active:
-                                payload, deadline = snapshot
-                                merged = {c.channel: c for c in payload.routine}
-                                merged[command.channel] = command
-                                self._snapshots[override_key] = (payload._replace(routine=tuple(merged.values())), deadline)
-                        elif active:
-                            continue
-                    out.append(command)
+            out: list[Outcome[C]] = []
+            for item in items:
+                match item:
+                    case Deferred(automation, _):
+                        out.append(Report(item, self._applied_once(automation, now, read, force)))
+                    case Automation():
+                        out.append(self._automated(item, now, read, force))
+                    case Action(plain):
+                        out.append(Report(item, self._applied(Rule(tuple(Clause((), c) for c in plain)), now, read, force)))
+                    case _:
+                        out.append(Report(item, self._applied(item, now, read, force)))
             return tuple(out)
 
     def override_scene(self, ctx: Any, name: str, commands: tuple[Command[Any], ...], end: datetime, label: str, entry: Any) -> None:
@@ -278,6 +217,45 @@ class Runtime:
             commands = snapshot.routine
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
         ctx.api.dispatch(commands, force=True, entry=entry)
+
+    def _automated[C: Channel](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> Outcome[C]:
+        if not automation.trigger.holds(read):
+            if automation.delay and automation.cancel.holds(read):
+                return Cancel(automation)
+            return Report(automation, ())
+        if automation.delay:
+            return Deferred(automation, now + automation.delay)
+        return Report(automation, self._applied_once(automation, now, read, force))
+
+    def _applied_once[C: Channel](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> tuple[Command[Any, C], ...]:
+        last = self._last_fired.get(automation)
+        if automation.cooldown and last is not None and now - last < automation.cooldown:
+            return ()
+        commands = self._applied(automation.rule, now, read, force)
+        if commands:
+            self._last_fired[automation] = now
+        return commands
+
+    def _applied[C: Channel](self, rule: Rule[C], now: datetime, read: Read, force: bool) -> tuple[Command[Any, C], ...]:
+        override_key = self._override_key
+        snapshot = self._snapshots.get(override_key) if override_key is not None else None
+        active = snapshot is not None and now <= snapshot[1]
+        out: list[Command[Any, C]] = []
+        for clause in rule.items:
+            if not clause.holds(read):
+                continue
+            command = clause.command
+            if not force:
+                if command.tag == self._bypass:
+                    if override_key is not None and snapshot is not None and active:
+                        payload, deadline = snapshot
+                        merged = {c.channel: c for c in payload.routine}
+                        merged[command.channel] = command
+                        self._snapshots[override_key] = (payload._replace(routine=tuple(merged.values())), deadline)
+                elif active:
+                    continue
+            out.append(command)
+        return tuple(out)
 
 
 def _one_name(channel: Channel) -> str:

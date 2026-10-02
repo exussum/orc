@@ -6,7 +6,7 @@ from orc import model as m
 from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
 from orc.security import safe_eval
-from orc_extras.react.model import FUNCTIONS, DeviceChanged, Formula, Log, State, source_of
+from orc_extras.react.model import FUNCTIONS, ChangeChannel, DeviceChanged, FormulaChannel, Log, State, Transition, source_of
 
 JOB_ID = "react"
 
@@ -15,6 +15,9 @@ def sleep(ctx: m.AppContext, name: str) -> datetime:
     state = ctx.plugin_state[orc_extras.react]
     until = ctx.api.local_now() + state.groups[name].pause
     state.disabled[name] = until
+    for automation in state.automations:
+        if automation.rule in state.groups[name].rules:
+            ctx.scheduler.cancel(_job(automation))
     ctx.api.log(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
     return until
 
@@ -32,23 +35,27 @@ def disabled_until(state: State, name: str, now: datetime) -> datetime | None:
     return None
 
 
-def is_disabled(state: State, rule: engine.Rule[Any], now: datetime) -> bool:
-    name = state.name_of.get(rule)
+def is_disabled(state: State, automation: engine.Automation[Any], now: datetime) -> bool:
+    name = state.name_of.get(automation.rule)
     return bool(name and disabled_until(state, name, now))
 
 
-def _trigger_label(rule: engine.Rule) -> Any:
-    trigger = rule.trigger
-    if isinstance(trigger, engine.Transition):
-        return trigger.value
+def _trigger_label(automation: engine.Automation[Any]) -> Any:
+    trigger = automation.trigger
+    if isinstance(trigger, Transition):
+        return trigger.to
     return cast.instance(trigger, DeviceChanged).expr
 
 
-def _reader(ctx: m.AppContext) -> engine.Read:
+def _reader(ctx: m.AppContext, changed: m.MqttDeviceChannel | None = None, old: Any = None, new: Any = None) -> engine.Read:
     world_read = ctx.api.world_reader()
 
     def read(channel: engine.Channel) -> engine.Value:
         match channel:
+            case ChangeChannel(m.Devices() as devices) if changed is not None:
+                return (old, new) if changed.device in devices.all() else None
+            case ChangeChannel(watched):
+                return (old, new) if changed == watched else None
             case m.MqttDeviceChannel(device, attribute):
                 found = next((s for s in ctx.api.device_states() if s.id == device.value), None)
                 return found.attributes.get(attribute) if found else None
@@ -58,7 +65,7 @@ def _reader(ctx: m.AppContext) -> engine.Read:
             case m.CastChannel(device):
                 sound = next((s for s in ctx.api.capture_sounds() if s.what is device), None)
                 return sound.playback if sound else None
-            case Formula(device, expr):
+            case FormulaChannel(device, expr):
                 target = str(device.value)
                 found = ctx.api.device_state(target)
                 if found is None:
@@ -85,60 +92,55 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     source = sources.get(device.id)
     if source is None:
         return
-    event = engine.Event(m.MqttDeviceChannel(source, attribute), old, new)
+    changed = m.MqttDeviceChannel(source, attribute)
     state = ctx.plugin_state[orc_extras.react]
     now = ctx.api.local_now()
-    fired: list[engine.Report] = []
-    for reaction in ctx.engine.on_event(event, now, _reader(ctx)):
-        match reaction:
-            case engine.Cancel():
-                ctx.scheduler.cancel(f"{JOB_ID}-{hash(reaction.rule)}")
-            case _ if is_disabled(state, reaction.rule, now):
-                continue
-            case engine.Report() if reaction.disposition is engine.Disposition.FIRED:
-                fired.append(reaction)
-            case engine.Deferred():
-                ctx.scheduler.once(
-                    _run_react,
-                    reaction.when,
-                    reaction,
-                    device.name,
-                    name=f"React {device.name}",
-                    id=f"{JOB_ID}-{hash(reaction.rule)}",
-                )
+    read = _reader(ctx, changed, old, new)
+    awake = [automation for automation in state.automations if not is_disabled(state, automation, now)]
+    fired: list[engine.Automation[m.Devices]] = []
+    for outcome in ctx.engine.evaluate(awake, now, read=read, force=True):
+        match outcome:
+            case engine.Cancel(automation):
+                ctx.scheduler.cancel(_job(automation))
+            case engine.Deferred(automation, when):
+                ctx.scheduler.once(_run_react, when, outcome, device.name, name=f"React {device.name}", id=_job(automation))
+            case engine.Report(engine.Automation() as automation, commands) if commands:
+                fired.append(automation)
     if fired:
-        entries = [_log(ctx, report, device.name, "") for report in fired]
+        entries = [_log(ctx, automation, device.name, "") for automation in fired]
         ctx.api.dispatch(ctx.api.squish(map(_command, fired), entries[0]), entry=entries[0])
 
 
-def _targets(what: engine.Channel) -> str:
-    return ", ".join(f"`{d.label or d.name}`" for d in cast.instance(what, m.Devices).all())
+def _job(automation: engine.Automation[Any]) -> str:
+    return f"{JOB_ID}-{hash(automation)}"
 
 
-def _dispatch(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> None:
-    if report.disposition is not engine.Disposition.FIRED:
-        return
-    ctx.api.dispatch((_command(report),), entry=_log(ctx, report, name, note))
+def _targets(what: m.Devices) -> str:
+    return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
-def _log(ctx: m.AppContext, report: engine.Report, name: str, note: str) -> m.LogEntry:
-    command = report.rule.items[0].command
+def _dispatch(ctx: m.AppContext, automation: engine.Automation[m.Devices], name: str, note: str) -> None:
+    ctx.api.dispatch((_command(automation),), entry=_log(ctx, automation, name, note))
+
+
+def _log(ctx: m.AppContext, automation: engine.Automation[m.Devices], name: str, note: str) -> m.LogEntry:
+    command = automation.rule.items[0].command
     return ctx.api.log(
         Log.REACT,
-        f"`{name}` {_trigger_label(report.rule)}{note} → set {_targets(command.channel)} {command.value}",
-        m.Broker(id=str(source_of(report.rule).value), source="hubitat"),
+        f"`{name}` {_trigger_label(automation)}{note} → set {_targets(command.channel)} {command.value}",
+        m.Broker(id=str(source_of(automation).value), source="hubitat"),
     )
 
 
-def _command(report: engine.Report) -> m.DeviceCommand:
-    command = report.rule.items[0].command
-    return engine.Command(cast.instance(command.channel, m.Devices), command.value, tag=m.Tag.SYSTEM)
+def _command(automation: engine.Automation[m.Devices]) -> m.DeviceCommand:
+    command = automation.rule.items[0].command
+    return engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM)
 
 
 @requires_ctx
-def _run_react(deferred: engine.Deferred, name: str, *, ctx: m.AppContext) -> None:
+def _run_react(deferred: engine.Deferred[m.Devices], name: str, *, ctx: m.AppContext) -> None:
     now = ctx.api.local_now()
-    if is_disabled(ctx.plugin_state[orc_extras.react], deferred.rule, now):
-        return
-    report = ctx.engine.on_fire(deferred, now, _reader(ctx))
-    _dispatch(ctx, report, name, f" {int(deferred.rule.delay.total_seconds() // 60)}m ago")
+    automation = deferred.automation
+    (report,) = ctx.engine.evaluate((deferred,), now, read=_reader(ctx), force=True)
+    if report.commands:
+        _dispatch(ctx, automation, name, f" {int(automation.delay.total_seconds() // 60)}m ago")

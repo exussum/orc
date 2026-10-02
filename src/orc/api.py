@@ -1,13 +1,13 @@
 import contextlib
 import math
 import time
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor as Pool
 from datetime import date, datetime, timedelta
+from datetime import time as dt_time
 from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
-from types import UnionType
 from typing import Any, NamedTuple
 from urllib.parse import quote
 
@@ -232,7 +232,7 @@ def run_action(
         action = RunAction(lambda entry: run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True))
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
-        if isinstance(trigger, m.Broker) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT, local_now()):
+        if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT, local_now()):
             end = local_now() + routine.snapshot
             action = RunAction(lambda entry: ctx.engine.override_scene(ctx, ORC_SYSTEM_SNAPSHOT, routine.commands, end, id, entry))
         else:
@@ -276,8 +276,8 @@ type _Job = tuple[Callable[..., None], m.DeviceEnum, engine.Command[Any]]
 def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
     assert _ctx is not None
     commands = m.squish(commands)
-    always = engine.Rule(engine.NEVER, tuple(engine.Clause((), command) for command in commands))
-    survived = set(_ctx.engine.evaluate((always,), local_now(), force=force))
+    always = engine.Action(commands)
+    survived = set(_ctx.engine.evaluate((always,), local_now(), force=force)[0].commands)
 
     stream: dict[Any, tuple[str, str]] = {}
     todo: list[_Job] = []
@@ -492,10 +492,10 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.settings.tz)
         sunrise, sunset = _sun_times(local_midnight, config.settings.lat, config.settings.long, config.settings.sunset_lead_hours)
 
-        for e in _scheduled_theme(today).configs:
-            when = _entry_time(e, sunrise, sunset, now)
-            if when is not None:
-                result.append((when, e))
+        for when, routine in _scheduled_theme(today).entries:
+            run_at = _entry_time(when, sunrise, sunset, now)
+            if run_at is not None:
+                result.append((run_at, routine))
     return result
 
 
@@ -508,14 +508,13 @@ def _scheduled_theme(today: date) -> m.Theme:
     return theme
 
 
-def _entry_time(e: m.Routine, sunrise: datetime | None, sunset: datetime | None, now: datetime) -> datetime | None:
-    when = cast.instance(e.trigger, engine.At).when
+def _entry_time(when: dt_time | str, sunrise: datetime | None, sunset: datetime | None, now: datetime) -> datetime | None:
     if when == m.SUNRISE:
         return sunrise
     elif when == m.SUNSET:
         return sunset
-    assert not isinstance(when, str)
-    return now.replace(hour=when.hour, minute=when.minute, second=0)
+    clock = cast.instance(when, dt_time)
+    return now.replace(hour=clock.hour, minute=clock.minute, second=0)
 
 
 @lru_cache(maxsize=1)
@@ -595,36 +594,26 @@ def setup_scheduler(ctx: m.AppContext) -> None:
         ctx.scheduler.cron(func, crontab, id=job_id, name=name)
 
 
-def _holds(clauses: Sequence[engine.Clause[m.Devices]], read: engine.Read, now: datetime) -> m.Commands:
-    assert _ctx is not None
-    return _ctx.engine.evaluate((engine.Rule(engine.NEVER, tuple(clauses)),), now, read=read, force=True)
-
-
-def _reads(clause: engine.Clause[m.Devices], channel: type | UnionType) -> bool:
-    return any(isinstance(ch, channel) for cond in clause.conditions for ch in cond.channels)
+def _presence(rule: m.Routine) -> m.Routine:
+    return rule.where(lambda command: command.tag not in (None, m.Tag.SYSTEM, *_WEATHER_TRIGGERS))
 
 
 def has_presence(rule: m.Routine) -> bool:
-    return any(_reads(clause, m.PresenceChannel) for clause in rule.items)
+    return bool(_presence(rule).items)
 
 
 def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
-    presence = tuple(clause for clause in rule.items if _reads(clause, m.PresenceChannel))
-    if not presence:
-        return False
-    now = local_now()
-    return not _holds(presence, world_reader(present_names, now), now)
+    presence = _presence(rule)
+    return bool(presence.items) and not presence.holds(world_reader(present_names))
 
 
 def weather_active(rule: m.Routine, now: datetime) -> bool:
-    weather = tuple(clause for clause in rule.items if _reads(clause, m.WeatherChannel))
-    today = _fetch_weather(now)
-    return bool(_holds(weather, lambda _channel: today, now))
+    return rule.where(lambda command: command.tag in _WEATHER_TRIGGERS).holds(lambda _channel: _fetch_weather(now))
 
 
 def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
     assert _ctx is not None
-    return _ctx.engine.evaluate((rule,), now, read=world_reader(pnames, now), force=True)
+    return _ctx.engine.evaluate((rule,), now, read=world_reader(pnames, now), force=True)[0].commands
 
 
 def world_reader(present: set[str] | None = None, now: datetime | None = None) -> engine.Read:

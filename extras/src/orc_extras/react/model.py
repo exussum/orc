@@ -26,8 +26,24 @@ class Log(m.LogSourceEnum):
     REACT = "react"
 
 
+@dataclass(frozen=True)
+class ChangeChannel(engine.Channel):
+    channel: engine.Channel
+
+
+@dataclass(frozen=True)
+class Transition:
+    channel: m.MqttDeviceChannel
+    to: engine.Value
+
+    def holds(self, read: engine.Read) -> bool:
+        change = read(ChangeChannel(self.channel))
+        old, new = cast.instance(change, tuple) if change else (None, None)
+        return new == self.to and old != self.to
+
+
 class Reaction(NamedTuple):
-    rule: engine.Rule[m.Devices]
+    automation: engine.Automation[m.Devices]
     pause: timedelta
     name: str
 
@@ -39,6 +55,7 @@ class Group(NamedTuple):
 
 @dataclass
 class State:
+    automations: tuple[engine.Automation[m.Devices], ...]
     groups: dict[str, Group]
     name_of: dict[engine.Rule[Any], str]
     disabled: dict[str, datetime] = field(default_factory=dict)
@@ -58,13 +75,9 @@ class AcIs:
         current = read(self.channel)
         return isinstance(current, m.AcState) and current in self.allowed
 
-    @property
-    def channels(self) -> tuple[engine.Channel, ...]:
-        return (self.channel,)
-
 
 @dataclass(frozen=True)
-class Formula(engine.Channel):
+class FormulaChannel(engine.Channel):
     device: m.DeviceEnum
     expr: str
 
@@ -74,8 +87,8 @@ class DeviceChanged:
     device: m.DeviceEnum
     expr: str
 
-    def fired(self, event: engine.Event) -> bool:
-        return isinstance(event.channel, m.MqttDeviceChannel) and event.channel.device == self.device
+    def holds(self, read: engine.Read) -> bool:
+        return read(ChangeChannel(m.Devices(self.device))) is not None
 
 
 @dataclass(unsafe_hash=True)
@@ -98,10 +111,6 @@ class Range:
         except ValueError:
             return False
 
-    @property
-    def channels(self) -> tuple[engine.Channel, ...]:
-        return (self.channel,)
-
 
 @dataclass(frozen=True)
 class Present:
@@ -109,10 +118,6 @@ class Present:
 
     def holds(self, read: engine.Read) -> bool:
         return any(read(m.PersonChannel(name)) for name in self.names)
-
-    @property
-    def channels(self) -> tuple[engine.Channel, ...]:
-        return tuple(m.PersonChannel(name) for name in self.names)
 
 
 def condition(when: When | None) -> tuple[engine.Condition, ...]:
@@ -126,8 +131,8 @@ def condition(when: When | None) -> tuple[engine.Condition, ...]:
         return (engine.Is(m.MqttDeviceChannel(when.device, TRIGGERS[when.state]), when.state),)
 
 
-def source_of(rule: engine.Rule) -> m.DeviceEnum:
-    trigger = rule.trigger
-    if isinstance(trigger, engine.Transition):
-        return cast.instance(trigger.channel, m.MqttDeviceChannel).device
+def source_of(automation: engine.Automation[Any]) -> m.DeviceEnum:
+    trigger = automation.trigger
+    if isinstance(trigger, Transition):
+        return trigger.channel.device
     return cast.instance(trigger, DeviceChanged).device
