@@ -24,15 +24,11 @@ def _room(*commands):
 
 
 @pytest.fixture
-def scheduler():
-    return create_autospec(m.Scheduler, instance=True)
+def rooms(monkeypatch):
+    def install(payload):
+        monkeypatch.setattr(config, "rooms", payload)
 
-
-@pytest.fixture
-def ctx(scheduler):
-    context = m.AppContext(scheduler=scheduler, engine=api.runtime())
-    api.set_ctx(context)
-    return context
+    return install
 
 
 @pytest.fixture
@@ -66,65 +62,53 @@ def test_console_plugin(client, ctx):
     exec_plugin.assert_called_once_with(ctx, plugin, None, entry=ANY)
 
 
-def test_console_schedule_routine(client):
+def test_console_schedule_routine(client, dispatched):
     routine = _routine("r", "", engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM))
-    with (
-        patch.object(config, "schedule_routines", {"r": routine}),
-        patch.object(config, "plugins", {}),
-        patch.object(api, "dispatch") as ex,
-    ):
+    with patch.object(config, "schedule_routines", {"r": routine}), patch.object(config, "plugins", {}):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY)
+    dispatched.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY)
 
 
-def test_console_ad_hoc(client):
+def test_console_ad_hoc(client, dispatched):
     reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
     routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),))
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
-        patch.object(api, "dispatch") as ex,
-    ):
+    with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset):
         client.get("/api/run/r")
-    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
+    dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
-def test_console_ad_hoc_no_reset(client):
+def test_console_ad_hoc_no_reset(client, dispatched):
     routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
-        patch.object(api, "dispatch") as ex,
-    ):
+    with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}):
         client.get("/api/run/r")
-    ex.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
+    dispatched.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
 
 
-def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, scheduler):
+def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, dispatched):
     routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), reset=False, delay=timedelta(minutes=7))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
-        patch.object(api, "dispatch") as ex,
         freeze_time(api.local_now()) as frozen,
     ):
         client.get("/api/run/r")
         frozen.tick(timedelta(minutes=7))
-        scheduler.once.call_args.args[0](ctx=ctx)
+        ctx.scheduler.once.call_args.args[0](ctx=ctx)
     (queued,) = api.log_entries()
     assert [c.action for c in queued.children] == ["`r`"]
-    ex.assert_called_once_with(routine.commands, force=True, entry=queued)
+    dispatched.assert_called_once_with(routine.commands, force=True, entry=queued)
 
 
-def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
+def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx, dispatched):
     routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "capture_lights") as capture,
-        patch.object(api, "dispatch") as ex,
     ):
         client.get("/api/run/r")
     assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots()
     capture.assert_not_called()
-    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
+    dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
 def test_console_unknown_returns_404(client):
@@ -136,54 +120,46 @@ def test_console_unknown_returns_404(client):
 # --- /api/room: 4-way branch on state ---
 
 
-def test_room_on(client):
-    with (
-        patch.object(config, "rooms", {"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))}),
-        patch.object(api, "dispatch") as ex,
-    ):
-        client.get("/api/room/Living Room?state=on")
-    ex.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
+def test_room_on(client, rooms, dispatched):
+    rooms({"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))})
+    client.get("/api/room/Living Room?state=on")
+    dispatched.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
 
 
-def test_room_off_replaces_state(client):
-    with (
-        patch.object(config, "rooms", {"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))}),
-        patch.object(api, "dispatch") as ex,
-    ):
-        client.get("/api/room/Living Room?state=off")
-    (cmds,), _ = ex.call_args
+def test_room_off_replaces_state(client, rooms, dispatched):
+    rooms({"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))})
+    client.get("/api/room/Living Room?state=off")
+    (cmds,), _ = dispatched.call_args
     assert all(c.value == m.OFF for c in cmds)
 
 
-def test_room_follow(client):
-    rooms = {
-        "Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON)),
-        "Bedroom": _room(engine.Command(m.Devices(orc.Light.b), m.ON)),
-    }
-    with (
-        patch.object(config, "rooms", rooms),
-        patch.object(api, "dispatch") as ex,
-    ):
-        client.get("/api/room/Living Room?state=follow")
+def test_room_follow(client, rooms, dispatched):
+    rooms(
+        {
+            "Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON)),
+            "Bedroom": _room(engine.Command(m.Devices(orc.Light.b), m.ON)),
+        }
+    )
+    client.get("/api/room/Living Room?state=follow")
     expected = (
         engine.Command(m.Devices(orc.Light.a), m.OFF),
         engine.Command(m.Devices(orc.Light.b), m.OFF),
         engine.Command(m.Devices(orc.Light.a), m.ON),
     )
-    ex.assert_called_once_with(expected, force=True, entry=ANY)
+    dispatched.assert_called_once_with(expected, force=True, entry=ANY)
 
 
-def test_room_unknown_state_raises(client):
-    with patch.object(config, "rooms", {"Living Room": ()}):
-        response = client.get("/api/room/Living Room?state=bogus")
+def test_room_unknown_state_raises(client, rooms):
+    rooms({"Living Room": ()})
+    response = client.get("/api/room/Living Room?state=bogus")
     assert response.status_code == 500
 
 
-def test_room_unknown_id_returns_404(client):
-    with patch.object(config, "rooms", {}), patch.object(api, "dispatch") as ex:
-        response = client.get("/api/room/nope?state=on")
+def test_room_unknown_id_returns_404(client, rooms, dispatched):
+    rooms({})
+    response = client.get("/api/room/nope?state=on")
     assert response.status_code == 404
-    ex.assert_not_called()
+    dispatched.assert_not_called()
 
 
 # --- /api/schedule/theme: form parsing + conditional date.fromisoformat ---
@@ -232,14 +208,14 @@ def test_durations_returns_config(client):
 
 
 @pytest.mark.parametrize("paused", [True, False])
-def test_pause_sets_the_absolute_state(client, scheduler, paused):
-    scheduler.set_paused.return_value = True
+def test_pause_sets_the_absolute_state(client, ctx, paused):
+    ctx.scheduler.set_paused.return_value = True
     client.get(f"/api/schedule/iot-x/pause?paused={int(paused)}")
-    scheduler.set_paused.assert_called_once_with("iot-x", paused)
+    ctx.scheduler.set_paused.assert_called_once_with("iot-x", paused)
 
 
-def test_pause_unknown_job_returns_404(client, scheduler):
-    scheduler.set_paused.return_value = False
+def test_pause_unknown_job_returns_404(client, ctx):
+    ctx.scheduler.set_paused.return_value = False
     response = client.get("/api/schedule/nope/pause?paused=1")
     assert response.status_code == 404
 

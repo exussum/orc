@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, create_autospec, patch
+from unittest.mock import patch
 
 import pytest
 from orc_extras.lg_tv import plugins
@@ -41,7 +41,7 @@ def mock_registry(monkeypatch):
 
 class TestDispatchLGTV:
     @pytest.fixture(autouse=True)
-    def _lg_tv_enums(self, mock_registry):
+    def _lg_tv_enums(self, mock_registry, ctx):
         class LGTV(m.DeviceEnum):
             living_room = 1
 
@@ -51,8 +51,7 @@ class TestDispatchLGTV:
         class BroadLink(m.DeviceEnum):
             living_room = 1
 
-        self.ctx = MagicMock()
-        self.ctx.api = create_autospec(api)
+        self.ctx = ctx
         self.ctx.engine = engine.Runtime(lambda _channel: datetime.now(UTC))
         mock_registry(ctx=self.ctx, LGTV=(LGTV, plugins._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lg_tv = LGTV.living_room

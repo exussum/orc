@@ -1,6 +1,5 @@
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
-from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, create_autospec, patch
 
 import pytest
@@ -13,7 +12,6 @@ from orc import api, config, plugins
 from orc import model as m
 from orc.dal import net, push, scheduler, sqlite
 from orc.dal.mqtt import stub as mqtt_stub
-from orc.dal.push import stub as push_stub
 from orc.kernel import engine, loader
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
@@ -176,24 +174,21 @@ def test_back_on_schedule_checks_presence_then_replays(entry):
     ctx.api.replay_day.assert_called_once_with(ctx.api.local_now.return_value, entry)
 
 
-def test_button_ad_hoc_snapshot():
-    ctx = api._ctx
+def test_button_ad_hoc_snapshot(ctx, dispatched):
     routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     captured = (engine.Command(m.Devices(orc.Light.a), m.ON),)
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "capture_lights", return_value=captured),
-        patch.object(api, "dispatch") as ex,
     ):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     snap = ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
-    ex.assert_called_once_with(routine.commands, force=True, entry=ANY)
+    dispatched.assert_called_once_with(routine.commands, force=True, entry=ANY)
 
 
-def test_button_ad_hoc_snapshot_does_not_stack():
-    ctx = api._ctx
+def test_button_ad_hoc_snapshot_does_not_stack(ctx, dispatched):
     routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
     existing = (engine.Command(m.Devices(orc.Light.a), m.ON),)
@@ -202,41 +197,37 @@ def test_button_ad_hoc_snapshot_does_not_stack():
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "capture_lights") as capture,
-        patch.object(api, "dispatch") as ex,
     ):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
-    ex.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
+    dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
-def test_dispatch_routes_ac_commands(entry):
-    with patch.object(config.registry, "ac") as backend:
-        api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.AcCommand(m.AcMode.COOL, "low", 75)),), force=True, entry=entry)
-        api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=entry)
-        api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.OFF),), force=True, entry=entry)
+def test_dispatch_routes_ac_commands(entry, ac):
+    api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.AcCommand(m.AcMode.COOL, "low", 75)),), force=True, entry=entry)
+    api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=entry)
+    api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.OFF),), force=True, entry=entry)
 
-    assert backend.command.call_args_list == [
+    assert ac.command.call_args_list == [
         call(orc.AC.unit, m.ON, m.AcMode.COOL, "low", 75),
         call(orc.AC.unit, m.ON, None, None, None),
         call(orc.AC.unit, m.OFF, None, None, None),
     ]
 
 
-def _ac(state, temperature=None):
-    return SimpleNamespace(command=lambda *args: None, state=lambda device: state, temperature=lambda device: temperature)
-
-
-def test_capture_acs_reads_each_device_through_the_handler():
-    with patch.object(config.registry, "ac", _ac(m.AcState.COOL)):
-        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL),)
+def test_capture_acs_reads_each_device_through_the_handler(ac):
+    ac.state.return_value = m.AcState.COOL
+    assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL),)
+    api.set_ac(None)
     assert api.capture_acs() == (m.AcStatus(orc.AC.unit, None),)
 
 
-def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one():
-    with patch.object(config.registry, "ac", _ac(m.AcState.COOL, 72)):
-        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
+def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one(ac):
+    ac.state.return_value = m.AcState.COOL
+    ac.temperature.return_value = 72
+    assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
 
 
 def test_capture_sensors_reads_the_device_cache():
@@ -246,8 +237,7 @@ def test_capture_sensors_reads_the_device_cache():
 
 
 def test_capture_sensors_lists_sensors_missing_from_the_cache():
-    with patch.object(mqtt_stub, "snapshot", return_value=[]):
-        assert api.capture_sensors() == [m.DeviceStatus(name=orc.Sensor.living.name, details={})]
+    assert api.capture_sensors() == [m.DeviceStatus(name=orc.Sensor.living.name, details={})]
 
 
 def test_dispatch_usb_rejects_on_off_state(entry):
@@ -279,10 +269,9 @@ class TestLog:
         assert [e.action for e in api.log_entries()] == ["react"]
         assert requester.requests == ()
 
-    def test_a_bare_on_is_answered_by_any_powered_state(self):
+    def test_a_bare_on_is_answered_by_any_powered_state(self, ac):
         requester = api.log(m.LogSource.PLUGIN, "react", m.Integration("sensor"))
-        with patch.object(config.registry, "ac"):
-            api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=requester)
+        api.dispatch((engine.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=requester)
         api.log(
             m.LogSource.PLUGIN,
             "report",
@@ -350,14 +339,10 @@ class TestLog:
             api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification_tag=("calendar", "dentist"))
         assert api._ctx.scheduler.now.call_args.args[1:] == ("[Plugin 01/05]", "later x", "calendar:dentist", m.Integration("x"), None)
 
-    def test_a_greeted_subscription_is_pushed_alone(self):
+    def test_a_greeted_subscription_is_pushed_alone(self, push_provider):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
         api.subscribe_push(subscriptions[0])
-        provider = create_autospec(push_stub)
-        with (
-            freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)),
-            patch.object(config, "providers", config.providers._replace(push=provider)),
-        ):
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
             api.subscribe_push(subscriptions[1], greet=True)
         now = api._ctx.scheduler.now
         assert now.call_args.args[0] is api._push_job
@@ -377,16 +362,14 @@ class TestLog:
         api.unsubscribe_push(subscriptions[0].endpoint)
         assert sqlite.fetch_push_subscriptions() == [subscriptions[1]]
 
-    def test_a_push_reaches_every_subscription_and_drops_gone_ones(self):
+    def test_a_push_reaches_every_subscription_and_drops_gone_ones(self, push_provider):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "abc"]
         for subscription in subscriptions:
             api.subscribe_push(subscription)
-        provider = create_autospec(push_stub)
-        provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
+        push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
         entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification_tag=("leak",))
-        with patch.object(config, "providers", config.providers._replace(push=provider)):
-            api._push_job("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None, ctx=api._ctx)
-        assert provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in subscriptions]
+        api._push_job("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None, ctx=api._ctx)
+        assert push_provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in subscriptions]
         assert set(sqlite.fetch_push_subscriptions()) == {subscriptions[0], subscriptions[2]}
         assert [c.action for c in entry.children] == ["Push failed for `…xample/c`: boom"]
 
@@ -422,8 +405,7 @@ class TestActiveOverride:
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
 class TestIsWorkingDay:
     def test_a_weekday_that_the_market_trades_is_a_working_day(self):
-        with patch.object(config.providers.holiday, "market_holiday", return_value=False):
-            assert api.is_working_day(date(2026, 1, 5)) is True
+        assert api.is_working_day(date(2026, 1, 5)) is True
 
     def test_a_weekend_is_not(self):
         assert api.is_working_day(date(2026, 1, 3)) is False
@@ -434,8 +416,7 @@ class TestIsWorkingDay:
 
     def test_an_override_decides_it(self):
         api.set_theme_override("day off", date(2026, 1, 5), date(2026, 1, 5))
-        with patch.object(config.providers.holiday, "market_holiday", return_value=False):
-            assert api.is_working_day(date(2026, 1, 5)) is False
+        assert api.is_working_day(date(2026, 1, 5)) is False
 
 
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
@@ -506,86 +487,78 @@ class TestPresence:
         api.mark_present(["Alice"], datetime(2026, 1, 4, 23, 30, tzinfo=config.settings.tz), TRIGGER)
         assert api.present_names() == set()
 
-    def test_run_iot_job_skips_when_presence_absent(self):
+    def test_run_iot_job_skips_when_presence_absent(self, dispatched):
         rule = self._routine("partner-r", "Alice")
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_not_called()
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_not_called()
 
-    def test_run_iot_job_runs_when_presence_present(self):
+    def test_run_iot_job_runs_when_presence_present(self, dispatched):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("partner-r", "Alice")
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag="Alice"),)), force=False, entry=ANY)
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag="Alice"),)), force=False, entry=ANY)
 
-    def test_run_iot_job_runs_when_no_presence_required(self):
+    def test_run_iot_job_runs_when_no_presence_required(self, dispatched):
         rule = _routine("r", time(8, 0), engine.Command(m.Devices(orc.Light.a), m.OFF))
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
-    def test_run_iot_job_system_trigger_bypasses_presence(self):
+    def test_run_iot_job_system_trigger_bypasses_presence(self, dispatched):
         rule = self._routine("reset-r", m.Tag.SYSTEM)
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_called_once_with(
             m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=False, entry=ANY
         )
 
-    def test_run_iot_job_anyone_trigger_runs_when_someone_present(self):
+    def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, dispatched):
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
         rule = self._routine("anyone-r", m.Tag.ANYONE)
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_called_once_with(
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_called_once_with(
             m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.ANYONE),)), force=False, entry=ANY
         )
 
-    def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self):
+    def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, dispatched):
         rule = self._routine("anyone-r", m.Tag.ANYONE)
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_not_called()
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_not_called()
 
-    def test_run_iot_job_skip_log_blames_absence_not_weather(self):
+    def test_run_iot_job_skip_log_blames_absence_not_weather(self, dispatched):
         rule = self._routine("sunny-r", "SUNNY")
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_not_called()
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_not_called()
         assert "nobody home" in api.log_entries()[0].action
 
-    def test_run_iot_job_skip_log_lists_weather_when_someone_home(self):
+    def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, dispatched):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("cloudy-r", "CLOUDY")
-        with patch.object(api, "dispatch") as dispatch:
-            api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatch.assert_not_called()
+        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        dispatched.assert_not_called()
         assert "CLOUDY" in api.log_entries()[0].action
 
-    def test_replay_day_skips_routines_for_absent_people(self, entry):
+    def test_replay_day_skips_routines_for_absent_people(self, entry, dispatched):
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
-        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
+        with patch.object(api, "get_schedule", return_value=[(past, partner)]):
             api.replay_day(api.local_now(), entry)
-        dispatch.assert_called_once_with((), force=True, entry=entry)
+        dispatched.assert_called_once_with((), force=True, entry=entry)
 
-    def test_replay_day_runs_routines_for_present_people(self, entry):
+    def test_replay_day_runs_routines_for_present_people(self, entry, dispatched):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
-        with patch.object(api, "get_schedule", return_value=[(past, partner)]), patch.object(api, "dispatch") as dispatch:
+        with patch.object(api, "get_schedule", return_value=[(past, partner)]):
             api.replay_day(api.local_now(), entry)
-        squished = dispatch.call_args.args[0]
+        squished = dispatched.call_args.args[0]
         assert [(c.subject.one(), c.value) for c in squished] == [(orc.Light.a, m.OFF)]
 
-    def test_replay_day_skips_skip_replay_routines(self, entry):
+    def test_replay_day_skips_skip_replay_routines(self, entry, dispatched):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         meeting = replace(self._routine("meeting-r", "Alice"), tags=frozenset({m.SKIP_REPLAY_TAG}))
-        with patch.object(api, "get_schedule", return_value=[(past, meeting)]), patch.object(api, "dispatch") as dispatch:
+        with patch.object(api, "get_schedule", return_value=[(past, meeting)]):
             api.replay_day(api.local_now(), entry)
-        dispatch.assert_called_once_with((), force=True, entry=entry)
+        dispatched.assert_called_once_with((), force=True, entry=entry)
 
     def test_check_presence_continues_when_one_host_fails_to_resolve(self):
         with patch.object(config, "people", {"Alice": {("alice.local", "aa:aa:aa:aa:aa:aa")}, "Bob": {("bob.local", "bb:bb:bb:bb:bb:bb")}}):

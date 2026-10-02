@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import create_autospec, patch
 
 import pytest
 from flask import Flask
@@ -132,7 +132,10 @@ def house(request, monkeypatch, tmp_path):
         net.presence.__init__()
         net.presence._tz = config.settings.tz
         api.start_ble_listener()
-        api.set_ac(SimpleNamespace(command=lambda *args: None, state=lambda device: None, temperature=lambda device: None))
+        ac = create_autospec(m.AcService, instance=True)
+        ac.state.return_value = None
+        ac.temperature.return_value = None
+        api.set_ac(ac)
 
         scheduler = FakeScheduler()
         ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())
