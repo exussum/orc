@@ -88,9 +88,8 @@ def test_routine_skip_replay_flag():
 
 def test_themes_schedule_routines():
     themes = parse("core").theme
-    assert [c.name for c in themes["work day"].configs] == ["Reset"]
-    assert themes["work day"].configs[0].trigger == engine.At(time(1, 0))
-    assert themes["day off"].configs[0].trigger == engine.At(m.SUNSET)
+    assert [(e.when, e.routine.name) for e in themes["work day"].entries] == [(time(1, 0), "Reset")]
+    assert [(e.when, e.routine.name) for e in themes["day off"].entries] == [(m.SUNSET, "Welcome")]
 
 
 def test_rooms_collect_member_states():

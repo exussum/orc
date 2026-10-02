@@ -61,7 +61,7 @@ def _world_read(mock):
 
 @pytest.fixture
 def ctx(ctx):
-    ctx.engine = engine.Runtime([])
+    ctx.engine = engine.Runtime()
     ctx.scheduler = create_autospec(m.Scheduler, instance=True)
     ctx.api.local_now.return_value = _NOW
     ctx.api.device_state.side_effect = lambda target: next(
@@ -72,7 +72,7 @@ def ctx(ctx):
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)
     ctx.config.settings.tz = _UTC
     ctx.config.registry = orc.config.registry
-    ctx.plugin_state = {react: model.State({}, {})}
+    ctx.plugin_state = {react: model.State((), {}, {})}
     return ctx
 
 
@@ -87,12 +87,12 @@ def configured(ctx):
 def _make(devices, attribute, state, action, target=None, delay=None, when=None):
     cond = model.condition(when)
     span = timedelta(minutes=delay) if delay else timedelta()
-    rules = []
+    automations = []
     for source in devices.all():
         command = engine.Command(target or m.Devices(source), action)
-        trigger = engine.Transition(m.MqttDeviceChannel(source, attribute), state)
-        rules.append(engine.Rule(trigger, (engine.Clause(cond, command),), span, cooldown=model.COOLDOWN))
-    return rules
+        trigger = model.Transition(m.MqttDeviceChannel(source, attribute), state)
+        automations.append(engine.Automation(trigger, engine.Rule((engine.Clause(cond, command),)), span, model.COOLDOWN))
+    return automations
 
 
 def _hub(id):
@@ -101,8 +101,8 @@ def _hub(id):
 
 @pytest.fixture
 def ruleset(ctx):
-    def ruleset(engine_rules, sources):
-        ctx.engine.add_rules(engine_rules)
+    def ruleset(automations, sources):
+        ctx.plugin_state[react].automations = tuple(automations)
         ctx.sources = sources
 
     return ruleset
@@ -149,9 +149,9 @@ def deferred_run(ctx):
 def test_config_registers_listener(ctx, configured):
     rules = configured
     assert len(rules) == 8  # line 1 fans out to lamp + desk; lines 2..7 are single-device
-    assert rules[0].trigger == engine.Transition(m.MqttDeviceChannel(Light.lamp, "switch"), m.ON)
-    assert rules[1].trigger == engine.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
-    assert rules[0].items[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
+    assert rules[0].trigger == model.Transition(m.MqttDeviceChannel(Light.lamp, "switch"), m.ON)
+    assert rules[1].trigger == model.Transition(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert rules[0].rule.items[0].command == engine.Command(m.Devices(Light.lamp), m.OFF)
     assert rules[0].delay == timedelta(minutes=10)
     assert ctx.api.add_listener.call_args.args[0].args[1] == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
 
@@ -182,11 +182,10 @@ def test_sleeping_rule_schedules_nothing(ctx, configured, switch_report):
     ctx.scheduler.once.assert_not_called()
 
 
-def test_sleeping_rule_still_cancels_its_pending_job(ctx, configured, switch_report):
+def test_sleep_cancels_a_pending_job(ctx, configured, switch_report):
     switch_report(1, m.OFF, m.ON)
-    plugins.sleep(ctx, "Lights off")
     ctx.scheduler.reset_mock()
-    switch_report(1, m.ON, m.OFF)
+    plugins.sleep(ctx, "Lights off")
     assert ctx.scheduler.cancel.called
 
 
@@ -226,7 +225,7 @@ def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, switch_rep
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
     rules = configured
-    assert rules[4].items[0].command.channel == m.Devices(Ac)
+    assert rules[4].rule.items[0].command.channel == m.Devices(Ac)
 
 
 def test_targeted_action_goes_to_the_target(ctx, ruleset, dispatches, switch_report):
@@ -245,14 +244,14 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
 
 def test_if_clause_parses_device_and_condition(ctx, configured):
     rules = configured
-    assert rules[2].items[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
-    assert rules[3].items[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
+    assert rules[2].rule.items[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.ON)
+    assert rules[3].rule.items[0].conditions[0] == model.AcIs(m.AcChannel(Ac.living), m.AcState.COOL)
 
 
 def test_set_clause_parses_explicit_target(ctx, configured):
     rules = configured
-    assert rules[0].items[0].command.channel == m.Devices(Light.lamp)
-    assert rules[2].items[0].command.channel == m.Devices(Ac.living)
+    assert rules[0].rule.items[0].command.channel == m.Devices(Light.lamp)
+    assert rules[2].rule.items[0].command.channel == m.Devices(Ac.living)
 
 
 def test_target_must_match_action_kind():
@@ -265,8 +264,8 @@ def test_target_must_match_action_kind():
 
 def test_if_clause_covers_lights_and_chromecasts(ctx, configured):
     rules = configured
-    assert rules[5].items[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
-    assert rules[6].items[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
+    assert rules[5].rule.items[0].conditions[0] == engine.Is(m.MqttDeviceChannel(Light.desk, "switch"), m.ON)
+    assert rules[6].rule.items[0].conditions[0] == engine.Is(m.CastChannel(Chromecast.tv), m.Playback.PLAYING)
 
 
 def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
@@ -274,9 +273,9 @@ def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
     # <condition>` absorb a stray token even without the literal if/is present, which
     # made a bare `set <target> <action>` (no if clause) misparse as `set <action>`
     rules = configured
-    assert rules[7].trigger == engine.Transition(m.MqttDeviceChannel(Sensor.living, "motion"), "active")
-    assert rules[7].items[0].conditions == ()
-    assert rules[7].items[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
+    assert rules[7].trigger == model.Transition(m.MqttDeviceChannel(Sensor.living, "motion"), "active")
+    assert rules[7].rule.items[0].conditions == ()
+    assert rules[7].rule.items[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
 
 
 def test_when_requires_a_known_condition():
@@ -348,10 +347,10 @@ def test_reader_formula_evaluates_and_raises_with_context(ctx):
         m.DeviceState(id=5, name="sensor", attributes={"temperature": 77, "humidity": 60}, last_activity=None)
     ]
     read = plugins._reader(ctx)
-    assert read(model.Formula(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(62.1, abs=0.2)
+    assert read(model.FormulaChannel(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(62.1, abs=0.2)
     ctx.api.device_states.return_value = [m.DeviceState(id=5, name="sensor", attributes={"humidity": 60}, last_activity=None)]
     with pytest.raises(ValueError, match="dewpoint"):
-        read(model.Formula(Sensor.living, "dewpoint(temperature,humidity)"))
+        read(model.FormulaChannel(Sensor.living, "dewpoint(temperature,humidity)"))
 
 
 def test_condition_maps_when_by_kind():
@@ -368,7 +367,7 @@ def test_ac_is_bitmask_respects_flag_membership():
 
 
 def _make_range(sensor, expr, low, high, target, action, people=None):
-    formula = model.Formula(sensor, expr)
+    formula = model.FormulaChannel(sensor, expr)
     conditions = []
     if people == m.Tag.ANYONE:
         conditions.append(engine.Is(m.AnyoneChannel(), True))
@@ -378,7 +377,8 @@ def _make_range(sensor, expr, low, high, target, action, people=None):
         conditions.extend(model.AcIs(m.AcChannel(ac), m.AcState.OFF) for ac in target.all())
     conditions.append(model.Range(formula, low, high))
     command = engine.Command(target, action)
-    return [engine.Rule(model.DeviceChanged(sensor, expr), (engine.Clause(tuple(conditions), command),), cooldown=model.COOLDOWN)]
+    rule = engine.Rule((engine.Clause(tuple(conditions), command),))
+    return [engine.Automation(model.DeviceChanged(sensor, expr), rule, cooldown=model.COOLDOWN)]
 
 
 @pytest.fixture
@@ -395,20 +395,20 @@ def range_event(ctx):
 def test_range_rule_parses_expressions(ctx):
     ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_range.orc").read_text()}
     rules = react.setup(ctx)
-    temp = model.Formula(Sensor.living, "temperature")
-    dewpoint = model.Formula(Sensor.living, "dewpoint(temperature,humidity)")
+    temp = model.FormulaChannel(Sensor.living, "temperature")
+    dewpoint = model.FormulaChannel(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[0].trigger == model.DeviceChanged(Sensor.living, "temperature")
-    assert rules[0].items[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
-    assert rules[0].items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
+    assert rules[0].rule.items[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
+    assert rules[0].rule.items[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[1].items[0].conditions == (
+    assert rules[1].rule.items[0].conditions == (
         model.Present(("alice", "bob")),
         model.AcIs(m.AcChannel(Ac.living), m.AcState.OFF),
         model.Range(dewpoint, 50, 60),
     )
     assert rules[2].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[2].items[0].conditions == (engine.Is(m.AnyoneChannel(), True), model.Range(dewpoint, 59, 104))
-    assert rules[3].items[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
+    assert rules[2].rule.items[0].conditions == (engine.Is(m.AnyoneChannel(), True), model.Range(dewpoint, 59, 104))
+    assert rules[3].rule.items[0].conditions == (model.AcIs(m.AcChannel(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
 
 
 @pytest.mark.parametrize(
@@ -470,12 +470,12 @@ def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, range_
 
 def test_each_line_keeps_its_pause(ctx, configured):
     groups = ctx.plugin_state[react].groups
-    assert groups["Lights off"] == model.Group((configured[0], configured[1]), timedelta(minutes=10))
+    assert groups["Lights off"] == model.Group((configured[0].rule, configured[1].rule), timedelta(minutes=10))
     assert groups["Desk cools"].pause == timedelta(minutes=30)
 
 
 def test_disabled_rule_expires_after_its_pause(configured):
-    state = model.State({"Lights off": model.Group((configured[0],), timedelta(minutes=10))}, {configured[0]: "Lights off"})
+    state = model.State((), {"Lights off": model.Group((configured[0].rule,), timedelta(minutes=10))}, {configured[0].rule: "Lights off"})
     state.disabled["Lights off"] = _NOW + timedelta(minutes=10)
     assert plugins.is_disabled(state, configured[0], _NOW + timedelta(minutes=9))
     assert not plugins.is_disabled(state, configured[0], _NOW + timedelta(minutes=10))

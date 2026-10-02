@@ -4,7 +4,6 @@ from orc.kernel import engine as e
 
 LIGHT = e.Command("light", "on")
 T0 = datetime(2024, 1, 1, 12, 0, 0)
-DOOR_OPEN = e.Event("door", "closed", "open")
 
 
 def read_from(world):
@@ -12,24 +11,6 @@ def read_from(world):
         return world[channel]
 
     return read
-
-
-def test_transition_fired_on_matching_channel_and_value():
-    assert e.Transition("door", "open").fired(e.Event("door", "closed", "open"))
-
-
-def test_transition_ignores_other_channel_and_other_value():
-    trigger = e.Transition("door", "open")
-    assert not trigger.fired(e.Event("window", "closed", "open"))
-    assert not trigger.fired(e.Event("door", "open", "closed"))
-    assert not trigger.fired(e.Event("door", "open", "open"))
-
-
-def test_changed_fires_on_any_listed_channel_regardless_of_value():
-    trigger = e.Changed(("temp", "humidity"))
-    assert trigger.fired(e.Event("temp", 70, 71))
-    assert trigger.fired(e.Event("humidity", 50, 50))
-    assert not trigger.fired(e.Event("battery", 90, 89))
 
 
 def test_is_holds_reads_the_world():
@@ -45,60 +26,11 @@ def test_in_holds_when_value_is_among_the_reading():
     assert not condition.holds(read_from({"weather": frozenset()}))
 
 
-def test_empty_conditions_fire_without_reading():
-    def read(channel):
-        raise AssertionError("empty conditions must not call read")
-
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),))
-    assert e.Runtime([rule]).on_event(DOOR_OPEN, T0, read) == (e.Report(rule, e.Disposition.FIRED),)
-
-
-def test_runtime_cooldown_reports_cooled_with_elapsed():
-    rt = e.Runtime([e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), cooldown=timedelta(seconds=10))])
-    assert rt.on_event(DOOR_OPEN, T0, read_from({}))[0].disposition is e.Disposition.FIRED
-    cooled = rt.on_event(DOOR_OPEN, T0 + timedelta(seconds=5), read_from({}))[0]
-    assert cooled.disposition is e.Disposition.COOLED
-    assert cooled.since == timedelta(seconds=5)
-    assert rt.on_event(DOOR_OPEN, T0 + timedelta(seconds=11), read_from({}))[0].disposition is e.Disposition.FIRED
-
-
-def test_runtime_condition_failure_reports_blocked():
-    rt = e.Runtime([e.Rule(e.Transition("door", "open"), (e.Clause((e.Is("ac", "on"),), LIGHT),))])
-    assert rt.on_event(DOOR_OPEN, T0, read_from({"ac": "off"}))[0].disposition is e.Disposition.BLOCKED
-
-
-def test_runtime_delayed_rule_defers_without_reporting():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
-    reaction = e.Runtime([rule]).on_event(DOOR_OPEN, T0, read_from({}))
-    assert reaction == (e.Deferred(rule, T0 + timedelta(minutes=5)),)
-
-
-def test_runtime_on_fire_reports_fired():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
-    rt = e.Runtime([rule])
-    (deferred,) = rt.on_event(DOOR_OPEN, T0, read_from({}))
-    assert rt.on_fire(deferred, T0 + timedelta(minutes=5), read_from({})) == e.Report(rule, e.Disposition.FIRED)
-
-
-def test_runtime_reverse_edge_cancels_pending():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause((), LIGHT),), timedelta(minutes=5))
-    rt = e.Runtime([rule])
-    assert rt.on_event(e.Event("door", "open", "closed"), T0, read_from({})) == (e.Cancel(rule),)
-
-
-def test_runtime_on_fire_rechecks_condition():
-    rule = e.Rule(e.Transition("door", "open"), (e.Clause((e.Is("ac", "on"),), LIGHT),), timedelta(minutes=5))
-    rt = e.Runtime([rule])
-    (deferred,) = rt.on_event(DOOR_OPEN, T0, read_from({}))
-    fired = rt.on_fire(deferred, T0 + timedelta(minutes=5), read_from({"ac": "off"}))
-    assert fired.disposition is e.Disposition.BLOCKED
-
-
 T1 = T0 + timedelta(hours=1)
 
 
 def test_snapshots_active_until_deadline():
-    snaps = e.Runtime([])
+    snaps = e.Runtime()
     snaps.save_snapshot("s", "scene", T1)
     assert snaps.snapshot_active("s", T0) is True
     assert snaps.snapshot_active("s", T1) is True
@@ -107,7 +39,7 @@ def test_snapshots_active_until_deadline():
 
 
 def test_snapshots_peek_reads_without_popping():
-    snaps = e.Runtime([])
+    snaps = e.Runtime()
     snaps.save_snapshot("s", "scene", T1)
     assert snaps.read_snapshot("s", T0) == "scene"
     assert snaps.read_snapshot("s", T0) == "scene"
@@ -115,40 +47,69 @@ def test_snapshots_peek_reads_without_popping():
 
 
 def test_snapshots_get_pops_live_payload():
-    snaps = e.Runtime([])
+    snaps = e.Runtime()
     snaps.save_snapshot("s", "scene", T1)
     assert snaps.pop_snapshot("s", T0) == "scene"
     assert snaps.read_snapshot("s", T0) is None
 
 
 def test_snapshots_get_expired_returns_none_but_pops():
-    snaps = e.Runtime([])
+    snaps = e.Runtime()
     snaps.save_snapshot("s", "scene", T0)
     assert snaps.pop_snapshot("s", T1) is None
     assert snaps.snapshots(T0) == {}
 
 
 def test_snapshots_lists_only_live():
-    snaps = e.Runtime([])
+    snaps = e.Runtime()
     snaps.save_snapshot("live", "a", T1)
     snaps.save_snapshot("dead", "b", T0)
     assert snaps.snapshots(T0 + timedelta(minutes=1)) == {"live": "a"}
 
 
 def _gate(rt, commands, now, *, force):
-    rules = [e.Rule(e.NEVER, (e.Clause((), c),)) for c in commands]
-    return rt.evaluate(rules, now, force=force)
+    (report,) = rt.evaluate([e.Action(commands)], now, force=force)
+    return report.commands
 
 
 def test_evaluate_keeps_only_rules_whose_condition_holds():
-    rt = e.Runtime([])
-    rule = e.Rule(e.NEVER, (e.Clause((e.Is("ac", "on"),), LIGHT),))
-    assert rt.evaluate([rule], T0, read=read_from({"ac": "on"}), force=True) == (LIGHT,)
-    assert rt.evaluate([rule], T0, read=read_from({"ac": "off"}), force=True) == ()
+    rt = e.Runtime()
+    rule = e.Rule((e.Clause((e.Is("ac", "on"),), LIGHT),))
+    assert rt.evaluate([rule], T0, read=read_from({"ac": "on"}), force=True) == (e.Report(rule, (LIGHT,)),)
+    assert rt.evaluate([rule], T0, read=read_from({"ac": "off"}), force=True) == (e.Report(rule, ()),)
+
+
+OPEN = e.Is("door", "open")
+CLOSED = e.Is("door", "closed")
+
+
+def test_a_delayed_automation_defers_and_cancels_on_its_cancel_condition():
+    automation = e.Automation(OPEN, e.Rule((e.Clause((), LIGHT),)), delay=timedelta(minutes=5), cancel=CLOSED)
+    rt = e.Runtime()
+    assert rt.evaluate([automation], T0, read=read_from({"door": "open"}), force=True) == (
+        e.Deferred(automation, T0 + timedelta(minutes=5)),
+    )
+    assert rt.evaluate([automation], T0, read=read_from({"door": "closed"}), force=True) == (e.Cancel(automation),)
+    assert rt.evaluate([automation], T0, read=read_from({"door": "ajar"}), force=True) == (e.Report(automation, ()),)
+
+
+def test_deferred_rechecks_its_conditions_when_run():
+    automation = e.Automation(OPEN, e.Rule((e.Clause((e.Is("ac", "on"),), LIGHT),)), delay=timedelta(minutes=5))
+    (deferred,) = e.Runtime().evaluate([automation], T0, read=read_from({"door": "open"}), force=True)
+    assert e.Runtime().evaluate([deferred], T0, read=read_from({"ac": "off"}), force=True) == (e.Report(deferred, ()),)
+
+
+def test_cooldown_silences_a_repeat_within_the_window():
+    automation = e.Automation(OPEN, e.Rule((e.Clause((), LIGHT),)), cooldown=timedelta(seconds=10))
+    rt = e.Runtime()
+    read = read_from({"door": "open"})
+    assert rt.evaluate([automation], T0, read=read, force=True) == (e.Report(automation, (LIGHT,)),)
+    assert rt.evaluate([automation], T0 + timedelta(seconds=5), read=read, force=True) == (e.Report(automation, ()),)
+    assert rt.evaluate([automation], T0 + timedelta(seconds=10), read=read, force=True) == (e.Report(automation, (LIGHT,)),)
 
 
 def test_evaluate_forced_passes_all_without_recording():
-    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
+    rt = e.Runtime(bypass="SYSTEM", override_key="s")
     rt.save_snapshot("s", e.SnapShot((), T1), T1)
     cmd = e.Command("light", "on", tag="Alice")
     assert _gate(rt, (cmd,), T0, force=True) == (cmd,)
@@ -157,25 +118,25 @@ def test_evaluate_forced_passes_all_without_recording():
 
 def test_evaluate_passes_all_when_no_snapshot_active():
     cmd = e.Command("light", "on", tag="Alice")
-    assert _gate(e.Runtime([], bypass="SYSTEM", override_key="s"), (cmd,), T0, force=False) == (cmd,)
+    assert _gate(e.Runtime(bypass="SYSTEM", override_key="s"), (cmd,), T0, force=False) == (cmd,)
 
 
 def test_evaluate_suppresses_non_bypass_while_override_snapshot_active():
-    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
+    rt = e.Runtime(bypass="SYSTEM", override_key="s")
     rt.save_snapshot("s", e.SnapShot((), T1), T1)
     cmd = e.Command("light", "on", tag="Alice")
     assert _gate(rt, (cmd,), T0, force=False) == ()
 
 
 def test_evaluate_ignores_snapshots_under_other_keys():
-    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
+    rt = e.Runtime(bypass="SYSTEM", override_key="s")
     rt.save_snapshot("entrance_sensor", e.SnapShot((), T1), T1)
     cmd = e.Command("light", "on", tag="Alice")
     assert _gate(rt, (cmd,), T0, force=False) == (cmd,)
 
 
 def test_evaluate_records_bypass_into_override_snapshot_only():
-    rt = e.Runtime([], bypass="SYSTEM", override_key="s")
+    rt = e.Runtime(bypass="SYSTEM", override_key="s")
     rt.save_snapshot("s", e.SnapShot((e.Command("light", "off"),), T1), T1)
     rt.save_snapshot("other", e.SnapShot((), T1), T1)
     cmd = e.Command("light", "on", tag="SYSTEM")

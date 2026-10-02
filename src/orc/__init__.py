@@ -53,7 +53,7 @@ class Config:
 
         self.default_config = self.routines["ROUTINE_DEFAULT"]
         self.reset_config = self.routines["ROUTINE_RESET"]
-        self.schedule_routines = {r.name: r for theme in self.themes.values() for r in theme.configs}
+        self.schedule_routines = {e.routine.name: e.routine for theme in self.themes.values() for e in theme.entries}
         self.rooms = parsed.room
 
     @property

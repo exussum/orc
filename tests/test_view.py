@@ -16,11 +16,11 @@ from orc.view import bp
 def _routine(name, when, *commands, skip_replay=False):
     clauses = tuple(engine.Clause(loader._conditions(c.tag), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
-    return engine.Rule(engine.At(when), clauses, name=name, tags=tags)
+    return engine.Rule(clauses, name=name, tags=tags)
 
 
 def _room(*commands):
-    return engine.Rule(engine.NEVER, tuple(engine.Clause((), c) for c in commands))
+    return engine.Action(commands)
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ def test_console_schedule_routine(client):
 
 def test_console_ad_hoc(client):
     reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON))
+    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "dispatch") as ex,
@@ -89,7 +89,7 @@ def test_console_ad_hoc(client):
 
 
 def test_console_ad_hoc_no_reset(client):
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), reset=False)
+    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "dispatch") as ex,
@@ -99,7 +99,7 @@ def test_console_ad_hoc_no_reset(client):
 
 
 def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, scheduler):
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), reset=False, delay=timedelta(minutes=7))
+    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), reset=False, delay=timedelta(minutes=7))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "dispatch") as ex,
@@ -114,7 +114,7 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, schedu
 
 
 def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx):
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),

@@ -24,7 +24,7 @@ PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
 def _routine(name, when, *commands, skip_replay=False):
     clauses = tuple(engine.Clause(loader._conditions(c.tag), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
-    return engine.Rule(engine.At(when), clauses, name=name, tags=tags)
+    return engine.Rule(clauses, name=name, tags=tags)
 
 
 @pytest.fixture
@@ -178,14 +178,14 @@ def test_back_on_schedule_checks_presence_then_replays(entry):
 
 def test_button_ad_hoc_snapshot():
     ctx = api._ctx
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     captured = (engine.Command(m.Devices(orc.Light.a), m.ON),)
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         patch.object(api, "capture_lights", return_value=captured),
         patch.object(api, "dispatch") as ex,
     ):
-        api.run_action(ctx, "r", m.Broker(id="1", source="hubitat"), source=m.LogSource.EXTERNAL)
+        api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     snap = ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
@@ -194,7 +194,7 @@ def test_button_ad_hoc_snapshot():
 
 def test_button_ad_hoc_snapshot_does_not_stack():
     ctx = api._ctx
-    routine = m.AdhocAction(engine.Command(m.Devices(orc.Light.b), m.ON), snapshot=timedelta(hours=3))
+    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
     existing = (engine.Command(m.Devices(orc.Light.a), m.ON),)
     snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
@@ -204,7 +204,7 @@ def test_button_ad_hoc_snapshot_does_not_stack():
         patch.object(api, "capture_lights") as capture,
         patch.object(api, "dispatch") as ex,
     ):
-        api.run_action(ctx, "r", m.Broker(id="1", source="hubitat"), source=m.LogSource.EXTERNAL)
+        api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots(api.local_now())[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
@@ -443,7 +443,7 @@ class TestIsWorkingDay:
 class TestGetSchedule:
     @staticmethod
     def _theme(name, *routine_names):
-        return m.Theme(name, *(_routine(n, time(8, 0)) for n in routine_names))
+        return m.Theme(name, tuple(m.ThemeEntry(time(8, 0), _routine(n, time(8, 0))) for n in routine_names))
 
     @pytest.fixture(autouse=True)
     def _setup(self):

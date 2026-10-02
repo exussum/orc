@@ -288,6 +288,9 @@ class Integration(Trigger): ...
 class Manual(Trigger): ...
 
 
+class Button(Trigger): ...
+
+
 @dataclass(frozen=True)
 class Request(Trigger):
     command: Any
@@ -419,41 +422,15 @@ class CallablePlugin:
     delay: timedelta = field(default_factory=timedelta)
 
 
-@dataclass
-class AdhocAction:
-    commands: Commands
-    snapshot: timedelta | None = None
-    delay: timedelta = field(default_factory=timedelta)
-    section: str | None = None
-    reset: bool = True
-
-    def __init__(
-        self,
-        *commands: DeviceCommand,
-        snapshot: timedelta | None = None,
-        delay: timedelta = timedelta(),
-        section: str | None = None,
-        reset: bool = True,
-    ) -> None:
-        if snapshot and delay:
-            raise ValueError("snapshot and delay cannot both be set")
-        if snapshot and not reset:
-            raise ValueError("snapshot and reset=false cannot both be set")
-        self.commands = tuple(commands)
-        self.snapshot = snapshot
-        self.delay = delay
-        self.section = section
-        self.reset = reset
+class ThemeEntry(NamedTuple):
+    when: time | str
+    routine: Routine
 
 
 @dataclass
 class Theme:
     name: str
-    configs: tuple[Routine, ...]
-
-    def __init__(self, name: str, *configs: Routine) -> None:
-        self.name = name
-        self.configs = tuple(configs)
+    entries: tuple[ThemeEntry, ...] = ()
 
 
 @dataclass
@@ -492,7 +469,7 @@ class AppContext:
     can't import orc.api at import time (api imports model)."""
 
     scheduler: Scheduler
-    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime([], bypass=Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT))
+    engine: engine.Runtime = field(default_factory=lambda: engine.Runtime(bypass=Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT))
     plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
@@ -550,6 +527,20 @@ class Devices(engine.Channel):
 
 SnapShot = engine.SnapShot[Devices]
 Routine = engine.Rule[Devices]
+
+
+@dataclass(frozen=True)
+class AdhocAction(engine.Action[Devices]):
+    delay: timedelta = timedelta()
+    snapshot: timedelta | None = None
+    section: str | None = None
+    reset: bool = True
+
+    def __post_init__(self) -> None:
+        if self.snapshot and self.delay:
+            raise ValueError("snapshot and delay cannot both be set")
+        if self.snapshot and not self.reset:
+            raise ValueError("snapshot and reset=false cannot both be set")
 
 
 @dataclass(frozen=True)
