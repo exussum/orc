@@ -5,10 +5,10 @@ setting lat              40.7143
 setting long             -74.0060
 setting broadlink_codes  /etc/orc/codes.json
 setting mqtt_host        ''
-setting warning_device   Chromecast.CC
+setting warning_device   USB.AUDIO
 setting attention_device USB.AUDIO
 setting emergency_device USB.AUDIO
-setting emergency_routine ROUTINE_EMERGENCY
+setting emergency_routine ROUTINE_RESET
 
 provider secrets    orc.dal.secrets.stub
 provider weather    orc.dal.weather.stub
@@ -19,21 +19,10 @@ provider blaster    orc.dal.blaster.stub
 provider hubitat    orc.dal.hubitat.stub
 provider audio      orc.dal.audio.stub
 
-device define Light
-device add Light LAMP h1
-device seal Light
-
-device define USB
-device add USB AUDIO 'USB Audio'
-device seal USB
-
-device only Chromecast CC host1
+device only USB AUDIO 'USB Audio'
 
 routine define ROUTINE_RESET   Reset
-routine append ROUTINE_RESET   Light off --trigger SYSTEM
 routine define ROUTINE_DEFAULT Welcome
-routine append ROUTINE_DEFAULT Light on
 
 theme 'work day' ROUTINE_RESET   1:00
 theme 'day off'  ROUTINE_DEFAULT sunset
-
