@@ -4,6 +4,7 @@ from typing import Any, NamedTuple, Sequence
 
 import orc_extras.entrance_sensor
 from orc import model as m
+from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
@@ -133,18 +134,9 @@ def _sensor(devices: Sequence[m.DeviceState], device_id: int) -> m.DeviceState |
 
 
 def _timed_commands(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, m.Commands]:
-    # First group whose window contains now wins; a group's window is its first row.
-    t = ctx.api.local_now().time()
-
-    def in_window(row: Any) -> bool:
-        if row.start <= row.stop:
-            return row.start <= t < row.stop
-        return t >= row.start or t < row.stop  # window wraps midnight
-
-    return next(
-        ((name, tuple(c for row in rows for c in row.commands)) for (name, rows) in sensor.timed.items() if rows and in_window(rows[0])),
-        ("(no window found)", ()),
-    )
+    reports = ctx.engine.evaluate(sensor.timed, read=ctx.api.world_reader(), force=True)
+    hit = next((report for report in reports if report.commands), None)
+    return (cast.instance(hit.item, engine.Rule).name, hit.commands) if hit else ("(no window found)", ())
 
 
 def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot | None) -> m.Commands:

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from orc_extras import calendar, entrance_sensor
 from orc_extras.calendar import Feed
-from orc_extras.entrance_sensor import Settings, Timed
+from orc_extras.entrance_sensor import Settings
 
 import orc
 from orc import model as m
@@ -79,7 +79,8 @@ def test_entrance_config_loads(entrance_ctx):
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
     assert sensor.rules.shutdown == "Lights Off"
     assert sensor.rules.absent == "Dog"
-    assert sensor.timed["Night"] == [Timed(start=time(22, 0), stop=time(8, 0), commands=(NIGHT,))]
+    night = engine.Step((engine.During(time(22, 0), time(8, 0)),), NIGHT)
+    assert engine.Rule((night,), name="Night") in sensor.timed
 
 
 def test_entrance_ble_needs_slower_cleanup(entrance_ctx):

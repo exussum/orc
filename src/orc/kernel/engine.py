@@ -8,7 +8,7 @@ cooldown and snapshot state and reads no clock, calls no scheduler, and starts n
 
 from collections.abc import Callable, Collection, Hashable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from threading import RLock
 from typing import Any, NamedTuple, Protocol, overload, runtime_checkable
 
@@ -82,6 +82,18 @@ class Has:
         return read(self.subject) is not None
 
 
+@dataclass(frozen=True)
+class During:
+    start: time
+    stop: time
+
+    def holds(self, read: Read) -> bool:
+        now = _clock(read).time()
+        if self.start <= self.stop:
+            return self.start <= now < self.stop
+        return now >= self.start or now < self.stop
+
+
 class Step[C: Subject = Subject](NamedTuple):
     conditions: tuple[Condition, ...]
     command: Command[Any, C]
@@ -147,6 +159,13 @@ class SnapShot[C: Subject = Subject](NamedTuple):
     label: str = ""
 
 
+def _clock(read: Read) -> datetime:
+    told = read(CLOCK)
+    if not isinstance(told, datetime):
+        raise TypeError(f"{CLOCK} read {told!r}, not a datetime")
+    return told
+
+
 def _layered(first: Read, then: Read) -> Read:
     def read(subject: Subject) -> Value:
         try:
@@ -173,21 +192,21 @@ class Runtime:
     def snapshot_active(self, key: str) -> bool:
         with self._lock:
             entry = self._snapshots.get(key)
-            return bool(entry and self._now(self._read) <= entry[1])
+            return bool(entry and _clock(self._read) <= entry[1])
 
     def read_snapshot(self, key: str) -> Any:
         with self._lock:
             entry = self._snapshots.get(key)
-            return entry[0] if entry and self._now(self._read) <= entry[1] else None
+            return entry[0] if entry and _clock(self._read) <= entry[1] else None
 
     def pop_snapshot(self, key: str) -> Any:
         with self._lock:
             entry = self._snapshots.pop(key, None)
-            return entry[0] if entry and self._now(self._read) <= entry[1] else None
+            return entry[0] if entry and _clock(self._read) <= entry[1] else None
 
     def snapshots(self) -> dict[str, Any]:
         with self._lock:
-            now = self._now(self._read)
+            now = _clock(self._read)
             return {key: payload for key, (payload, deadline) in self._snapshots.items() if now <= deadline}
 
     @overload
@@ -201,7 +220,7 @@ class Runtime:
     def evaluate[C: Subject](self, items: Iterable[Item[C]], *, read: Read, force: bool) -> tuple[Outcome[C], ...]:
         with self._lock:
             read = _layered(read, self._read)
-            now = self._now(read)
+            now = _clock(read)
             out: list[Outcome[C]] = []
             for item in items:
                 match item:
@@ -229,12 +248,6 @@ class Runtime:
             commands = snapshot.routine
             entry.add(entry.source, ctx.api.Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
         ctx.api.dispatch(commands, force=True, entry=entry)
-
-    def _now(self, read: Read) -> datetime:
-        told = read(CLOCK)
-        if not isinstance(told, datetime):
-            raise TypeError(f"{CLOCK} read {told!r}, not a datetime")
-        return told
 
     def _automated[C: Subject](self, automation: Automation[C], now: datetime, read: Read, force: bool) -> Outcome[C]:
         if not automation.trigger.holds(read):

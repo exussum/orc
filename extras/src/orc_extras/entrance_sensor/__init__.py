@@ -5,9 +5,9 @@ from typing import Any, NamedTuple
 from command_cfg import group, scalar
 
 import orc_extras.entrance_sensor
-from orc.kernel import cast
+from orc.kernel import cast, engine
 from orc.kernel.loader import load_plugin_config
-from orc.model import AppContext, Commands, DeviceEnum
+from orc.model import AppContext, Commands, DeviceEnum, Routine
 from orc_extras.entrance_sensor import plugins
 
 # Presence is paused and purged at the door event, so cleanup only counts tags
@@ -73,6 +73,16 @@ def _timed(ctx: AppContext, **values: Any) -> Timed:
     return Timed(start=cast.clock(values["start"]), stop=cast.clock(values["stop"]), commands=_routine_commands(ctx, values["routine"]))
 
 
+def _windows(timed: dict[str, list[Timed]]) -> tuple[Routine, ...]:
+    return tuple(
+        engine.Rule(
+            tuple(engine.Step((engine.During(row.start, row.stop),), command) for row in rows for command in row.commands),
+            name=name,
+        )
+        for name, rows in timed.items()
+    )
+
+
 def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup])
 
@@ -93,6 +103,7 @@ def setup(ctx: AppContext) -> None:
         },
     )
     sensor.rules = Rules(**{trigger: rows[0] for trigger, rows in sensor.rules.items()})
+    sensor.timed = _windows(sensor.timed)
     if sensor.setting.listener not in ctx.config.people:
         raise ValueError(f"unknown listener {sensor.setting.listener!r} — expected one of {tuple(ctx.config.people)}")
     if ctx.config.ble_tags and sensor.setting.cleanup_delay_minutes < MIN_BLE_CLEANUP_MINUTES:
