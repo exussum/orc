@@ -1,7 +1,7 @@
 from datetime import time, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, create_autospec, patch
+from unittest.mock import patch
 
 import pytest
 from orc_extras import calendar, entrance_sensor
@@ -9,7 +9,6 @@ from orc_extras.calendar import Feed
 from orc_extras.entrance_sensor import Settings, Timed
 
 import orc
-from orc import api
 from orc import model as m
 from orc.kernel import cast, engine
 from orc.kernel.declarations import Declarations
@@ -96,9 +95,7 @@ def test_calendar_declares_each_feed_as_a_url():
     assert builder.secrets == {"ICS_URL": cast.url, "ICS_URL_PERSONAL": cast.url}
 
 
-def test_calendar_config_loads():
-    ctx = MagicMock()
-    ctx.api = create_autospec(api)
+def test_calendar_config_loads(ctx):
     ctx.config.plugin_configs = {calendar.CONFIG: (FIXTURE / "calendar.orc").read_text()}
     with patch.object(calendar.plugins, "schedule_cron") as schedule_cron:
         calendar.setup(ctx)

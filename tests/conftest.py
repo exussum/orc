@@ -87,11 +87,47 @@ def orc_state_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _reset_ctx():
-    from unittest.mock import MagicMock
+def ctx():
+    from unittest.mock import create_autospec
 
     from orc import api
-    from orc import model as m
 
     api._ACTIVITY_LOG.clear()
-    api.set_ctx(m.AppContext(MagicMock(), api.runtime()))
+    context = m.AppContext(create_autospec(m.Scheduler, instance=True), api.runtime())
+    api.set_ctx(context)
+    return context
+
+
+@pytest.fixture
+def dispatched():
+    from unittest.mock import patch
+
+    from orc import api
+
+    with patch.object(api, "dispatch") as dispatch:
+        yield dispatch
+
+
+@pytest.fixture
+def ac():
+    from unittest.mock import create_autospec, patch
+
+    from orc import config
+
+    backend = create_autospec(m.AcService, instance=True)
+    backend.state.return_value = None
+    backend.temperature.return_value = None
+    with patch.object(config.registry, "ac", backend):
+        yield backend
+
+
+@pytest.fixture
+def push_provider():
+    from unittest.mock import create_autospec, patch
+
+    from orc import config
+    from orc.dal.push import stub as push_stub
+
+    provider = create_autospec(push_stub)
+    with patch.object(config, "providers", config.providers._replace(push=provider)):
+        yield provider

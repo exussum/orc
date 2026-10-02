@@ -1,5 +1,5 @@
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from freezegun import freeze_time
@@ -11,10 +11,6 @@ from orc.dal.mqtt import stub as mqtt_stub
 from orc.plugins import battery, buttons, external
 
 
-def _ctx():
-    return m.AppContext(scheduler=MagicMock(), engine=api.runtime())
-
-
 def _capture(name, fn):
     captured = {}
     with patch.object(mqtt_stub, name, side_effect=lambda listener: captured.setdefault("fn", listener)):
@@ -23,27 +19,27 @@ def _capture(name, fn):
 
 
 class TestButtons:
-    def _wire(self, remotes):
-        ctx = _ctx()
+    @staticmethod
+    def _wire(ctx, remotes):
         with patch.object(config, "remotes", remotes):
-            return ctx, _capture("add_button_listener", lambda: buttons.setup(ctx))
+            return _capture("add_button_listener", lambda: buttons.setup(ctx))
 
-    def test_mapped_event_runs_action(self):
-        ctx, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
+    def test_mapped_event_runs_action(self, ctx):
+        on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action", return_value=True) as run:
             on_button(orc.Light.a.value, 1, "held")
         run.assert_called_once_with(ctx, "TV Lights", m.Button(str(orc.Light.a.value)), source=m.LogSource.EXTERNAL)
 
-    def test_unmapped_event_is_ignored(self):
-        _, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
+    def test_unmapped_event_is_ignored(self, ctx):
+        on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action") as run:
             on_button(99, 1, "held")
             on_button(orc.Light.a.value, 2, "held")
             on_button(orc.Light.a.value, 1, "pushed")
         run.assert_not_called()
 
-    def test_unknown_action_logs(self):
-        _, on_button = self._wire((m.Remote(orc.Light.a, 1, "held", "No Such Routine"),))
+    def test_unknown_action_logs(self, ctx):
+        on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "No Such Routine"),))
         with patch.object(api, "run_action", return_value=False), patch.object(api, "log") as log, patch.object(api, "alert"):
             on_button(orc.Light.a.value, 1, "held")
         log.assert_called_once()
@@ -55,8 +51,8 @@ class TestBattery:
         "old, new, expected",
         [("20", "5", True), ("5", "5", False), ("5", "80", False)],
     )
-    def test_notifies_on_crossing_into_critical(self, old, new, expected):
-        on_event = _capture("add_listener", lambda: battery.setup(_ctx()))
+    def test_notifies_on_crossing_into_critical(self, ctx, old, new, expected):
+        on_event = _capture("add_listener", lambda: battery.setup(ctx))
         device = m.DeviceState(id=16, name="front door", attributes={"battery": new}, last_activity=None)
         with patch.object(api, "log") as log:
             on_event(device, "battery", old, new)
@@ -70,8 +66,8 @@ class TestBattery:
         else:
             log.assert_not_called()
 
-    def test_ignores_other_attributes(self):
-        on_event = _capture("add_listener", lambda: battery.setup(_ctx()))
+    def test_ignores_other_attributes(self, ctx):
+        on_event = _capture("add_listener", lambda: battery.setup(ctx))
         device = m.DeviceState(id=16, name="front door", attributes={"motion": "active"}, last_activity=None)
         with patch.object(api, "log") as log:
             on_event(device, "motion", "inactive", "active")
@@ -79,8 +75,8 @@ class TestBattery:
 
 
 class TestExternal:
-    def test_a_swarm_of_external_changes_rolls_up(self):
-        on_external = _capture("add_external_listener", lambda: external.setup(_ctx()))
+    def test_a_swarm_of_external_changes_rolls_up(self, ctx):
+        on_external = _capture("add_external_listener", lambda: external.setup(ctx))
         api._ACTIVITY_LOG.clear()
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
             on_external(m.DeviceState(1, "lamp a", {}, None), "switch", "off", "on")

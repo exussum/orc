@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import create_autospec
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -62,11 +61,7 @@ def _world_read(mock):
 @pytest.fixture
 def ctx(ctx):
     ctx.engine = engine.Runtime(lambda _channel: ctx.api.local_now())
-    ctx.scheduler = create_autospec(m.Scheduler, instance=True)
     ctx.api.local_now.return_value = _NOW
-    ctx.api.device_state.side_effect = lambda target: next(
-        (s for s in ctx.api.device_states.return_value if str(s.id) == target or s.name == target), None
-    )
     ctx.api.world_reader.return_value = _world_read(ctx)
     ctx.api.squish.side_effect = lambda commands, entry: m.squish(commands)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState.OFF),)

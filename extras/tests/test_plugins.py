@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
-from unittest.mock import ANY, create_autospec, patch
+from unittest.mock import ANY, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -45,15 +45,9 @@ def _snapshot(*commands, end=_FUTURE):
     return m.SnapShot(routine=tuple(commands), end=end)
 
 
-def _device_state_side_effect(mock):
-    return lambda target: next((s for s in mock.api.device_states.return_value if str(s.id) == target or s.name == target), None)
-
-
 @pytest.fixture
 def ctx(ctx):
-    ctx.scheduler = create_autospec(m.Scheduler, instance=True)
     ctx.api.present_names.return_value = set()
-    ctx.api.device_state.side_effect = _device_state_side_effect(ctx)
     ctx.config.settings.tz = _UTC
     ctx.config.ad_hoc_routines = {
         "Lights Off": m.AdhocAction(
