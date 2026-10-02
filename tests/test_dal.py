@@ -55,7 +55,7 @@ class TestWebPush:
         response = SimpleNamespace(status_code=status)
         with patch("orc.dal.push.webpush.webpush", side_effect=WebPushException("gone", response=response)):
             with pytest.raises(push.Gone):
-                webpush.send(SUBSCRIPTION, "[Plugin 01/05]", "hi", "leak")
+                webpush.send(SUBSCRIPTION, "[Plugin 01/05]", "hi", m.Notification(("leak",)))
 
 
 _HOLIDAYS = [

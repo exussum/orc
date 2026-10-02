@@ -16,6 +16,7 @@ from orc.model import (
     DeviceState,
     Listener,
     MediaUrl,
+    Notification,
     PushSubscription,
     RetryStats,
     Secrets,
@@ -75,7 +76,7 @@ class BlasterService(Backend, Protocol):
 
 class PushService(Backend, Protocol):
     def public_key(self) -> str: ...
-    def send(self, subscription: PushSubscription, title: str, body: str, tag: str) -> None: ...
+    def send(self, subscription: PushSubscription, title: str, body: str, notification: Notification) -> None: ...
 
 
 class HubitatService(Backend, Protocol):

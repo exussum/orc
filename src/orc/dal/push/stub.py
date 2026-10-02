@@ -20,5 +20,5 @@ def public_key() -> str:
     return base64.urlsafe_b64encode(point).rstrip(b"=").decode()
 
 
-def send(subscription: m.PushSubscription, title: str, body: str, tag: str) -> None:
+def send(subscription: m.PushSubscription, title: str, body: str, notification: m.Notification) -> None:
     pass

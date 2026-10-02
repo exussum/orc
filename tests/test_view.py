@@ -275,6 +275,6 @@ def test_schedule_badges(client, kwargs, present, present_badges, absent_badges)
 def test_log_page_bells_a_notifying_line_and_its_parent(client):
     trigger = m.Manual("bell")
     api.log(m.LogSource.SYSTEM, "Walk in", trigger)
-    api.log(m.LogSource.SYSTEM, "Nobody home", trigger, notification_tag=("entrance",))
+    api.log(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
     html = client.get("/log/").get_data(as_text=True)
     assert html.count("🔔") == 2
