@@ -26,7 +26,7 @@ def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> N
         wrong = sorted(
             device.name
             for c in ctx.api.capture_lights()
-            if (device := c.channel.one()) not in ctx.config.virtual_devices and (c.value != m.OFF) != expect_on
+            if (device := c.subject.one()) not in ctx.config.virtual_devices and (c.value != m.OFF) != expect_on
         )
         if wrong:
             template = Log.LIGHT_TEST_STILL_OFF if expect_on else Log.LIGHT_TEST_STILL_ON

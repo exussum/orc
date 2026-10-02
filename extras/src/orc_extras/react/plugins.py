@@ -6,7 +6,7 @@ from orc import model as m
 from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
 from orc.security import safe_eval
-from orc_extras.react.model import FUNCTIONS, ChangeChannel, DeviceChanged, FormulaChannel, Log, State, Transition, source_of
+from orc_extras.react.model import FUNCTIONS, ChangeSubject, DeviceChanged, FormulaSubject, Log, State, Transition, source_of
 
 JOB_ID = "react"
 
@@ -47,25 +47,25 @@ def _trigger_label(automation: engine.Automation[Any]) -> Any:
     return cast.instance(trigger, DeviceChanged).expr
 
 
-def _reader(ctx: m.AppContext, changed: m.MqttDeviceChannel | None = None, old: Any = None, new: Any = None) -> engine.Read:
+def _reader(ctx: m.AppContext, changed: m.MqttDeviceSubject | None = None, old: Any = None, new: Any = None) -> engine.Read:
     world_read = ctx.api.world_reader()
 
-    def read(channel: engine.Channel) -> engine.Value:
-        match channel:
-            case ChangeChannel(m.Devices() as devices) if changed is not None:
+    def read(subject: engine.Subject) -> engine.Value:
+        match subject:
+            case ChangeSubject(m.Devices() as devices) if changed is not None:
                 return (old, new) if changed.device in devices.all() else None
-            case ChangeChannel(watched):
+            case ChangeSubject(watched):
                 return (old, new) if changed == watched else None
-            case m.MqttDeviceChannel(device, attribute):
+            case m.MqttDeviceSubject(device, attribute):
                 found = next((s for s in ctx.api.device_states() if s.id == device.value), None)
                 return found.attributes.get(attribute) if found else None
-            case m.AcChannel(device):
+            case m.AcSubject(device):
                 status = next((s for s in ctx.api.capture_acs() if s.what is device), None)
                 return status.state if status else None
-            case m.CastChannel(device):
+            case m.CastSubject(device):
                 sound = next((s for s in ctx.api.capture_sounds() if s.what is device), None)
                 return sound.playback if sound else None
-            case FormulaChannel(device, expr):
+            case FormulaSubject(device, expr):
                 target = str(device.value)
                 found = ctx.api.device_state(target)
                 if found is None:
@@ -76,7 +76,7 @@ def _reader(ctx: m.AppContext, changed: m.MqttDeviceChannel | None = None, old: 
                 except Exception as exc:
                     raise ValueError(f"react rule `{expr}` on `{device.name}`: {exc}") from exc
             case _:
-                return world_read(channel)
+                return world_read(subject)
 
     return read
 
@@ -92,7 +92,7 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     source = sources.get(device.id)
     if source is None:
         return
-    changed = m.MqttDeviceChannel(source, attribute)
+    changed = m.MqttDeviceSubject(source, attribute)
     state = ctx.plugin_state[orc_extras.react]
     now = ctx.api.local_now()
     read = _reader(ctx, changed, old, new)
@@ -127,14 +127,14 @@ def _log(ctx: m.AppContext, automation: engine.Automation[m.Devices], name: str,
     command = automation.rule.steps[0].command
     return ctx.api.log(
         Log.REACT,
-        f"`{name}` {_trigger_label(automation)}{note} → set {_targets(command.channel)} {command.value}",
+        f"`{name}` {_trigger_label(automation)}{note} → set {_targets(command.subject)} {command.value}",
         m.Broker(id=str(source_of(automation).value), source="hubitat"),
     )
 
 
 def _command(automation: engine.Automation[m.Devices]) -> m.DeviceCommand:
     command = automation.rule.steps[0].command
-    return engine.Command(command.channel, command.value, tag=m.Tag.SYSTEM)
+    return engine.Command(command.subject, command.value, tag=m.Tag.SYSTEM)
 
 
 @requires_ctx

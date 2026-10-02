@@ -172,7 +172,7 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, sensor):
     ctx.engine.pop_snapshot.return_value = snap
     _trigger_sensor(ctx, sensor, "16", "active")
     executed = ctx.api.dispatch.call_args[0][0]
-    assert {c.channel.one(): c.value for c in executed} == {
+    assert {c.subject.one(): c.value for c in executed} == {
         Light.saved: m.ON,  # restored
         Light.day_bulb: 20,  # follows the current window, never the snapshot
     }
