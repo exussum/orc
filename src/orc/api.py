@@ -607,7 +607,7 @@ def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
 
 
 def weather_active(rule: m.Routine, now: datetime) -> bool:
-    return rule.where(lambda command: command.tag in _WEATHER_TRIGGERS).holds(lambda _channel: _fetch_weather(now))
+    return rule.where(lambda command: command.tag in _WEATHER_TRIGGERS).holds(lambda _subject: _fetch_weather(now))
 
 
 def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:

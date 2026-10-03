@@ -52,7 +52,7 @@ class TestDispatchLGTV:
             living_room = 1
 
         self.ctx = ctx
-        self.ctx.engine = engine.Runtime(lambda _channel: datetime.now(UTC))
+        self.ctx.engine = engine.Runtime(lambda _subject: datetime.now(UTC))
         mock_registry(ctx=self.ctx, LGTV=(LGTV, plugins._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room
