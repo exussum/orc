@@ -126,7 +126,7 @@ class Presence:
             os.kill(os.getppid(), signal.SIGTERM)
 
     async def _run(self) -> None:
-        async with BleakScanner(self._seen):
+        async with BleakScanner(self._seen, bluez={"filters": {"DuplicateData": True}}):
             while True:
                 self._index = _eid_index(self._tags, self._clocks.copy(), self._now())
                 await asyncio.sleep(_BLE_INDEX_REFRESH_SECONDS)
