@@ -108,7 +108,7 @@ def test_snapshots_lists_only_live(runtime, clock):
 
 def test_a_reader_without_a_clock_is_rejected():
     with pytest.raises(TypeError):
-        e.Runtime(lambda _channel: None).snapshots()
+        e.Runtime(lambda _subject: None).snapshots()
 
 
 def test_evaluate_keeps_only_rules_whose_condition_holds(runtime):

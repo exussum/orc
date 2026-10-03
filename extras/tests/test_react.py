@@ -60,7 +60,7 @@ def _world_read(mock):
 
 @pytest.fixture
 def ctx(ctx):
-    ctx.engine = engine.Runtime(lambda _channel: ctx.api.local_now())
+    ctx.engine = engine.Runtime(lambda _subject: ctx.api.local_now())
     ctx.api.local_now.return_value = _NOW
     ctx.api.world_reader.return_value = _world_read(ctx)
     ctx.api.squish.side_effect = lambda commands, entry: m.squish(commands)
