@@ -115,7 +115,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
         conditions.append(model.Range(formula, args.low, args.high, edge=True))
         command = em.Command(target, action)
         rule = em.Rule((em.Step(em.And(*conditions), command),))
-        watch = em.Watch(model.DeviceChanged(source, args.expr), rule, delay, model.COOLDOWN)
+        watch = em.Watch(em.Changed(formula), rule, delay, model.COOLDOWN)
         objects["react"].append(model.Reaction(watch, pause, args.name))
 
 
