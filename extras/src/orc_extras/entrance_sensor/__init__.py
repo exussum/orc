@@ -80,7 +80,7 @@ def _timed(ctx: AppContext, **values: Any) -> Timed:
 def _windows(timed: dict[str, list[Timed]]) -> tuple[Routine, ...]:
     return tuple(
         engine.Rule(
-            tuple(engine.Step((engine.During(row.start, row.stop),), command) for row in rows for command in row.commands),
+            tuple(engine.Step(engine.During(row.start, row.stop), command) for row in rows for command in row.commands),
             name=name,
         )
         for name, rows in timed.items()
