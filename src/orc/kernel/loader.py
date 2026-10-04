@@ -185,19 +185,19 @@ def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None
     return engine.Command[str, m.Devices](devices, state, tag=trigger)
 
 
-def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
+def _condition(trigger: str | None) -> engine.Condition:
     if trigger in (None, m.Tag.SYSTEM):
-        return ()
+        return engine.And()
     elif trigger in _WEATHER_TRIGGERS:
-        return (engine.In(m.WeatherSubject(), m.WeatherCondition(trigger)),)
+        return engine.In(m.WeatherSubject(), m.WeatherCondition(trigger))
     elif trigger == m.Tag.ANYONE:
-        return (engine.Eq(m.AnyoneSubject(), True),)
+        return engine.Eq(m.AnyoneSubject(), True)
     else:
-        return (engine.Eq(m.PersonSubject(trigger), True),)
+        return engine.Eq(m.PersonSubject(trigger), True)
 
 
 def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Step[m.Devices]:
-    return engine.Step(_conditions(trigger), _command(objects, args, trigger))
+    return engine.Step(_condition(trigger), _command(objects, args, trigger))
 
 
 def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any, tuple[Any, ...]]) -> type[m.DeviceEnum]:

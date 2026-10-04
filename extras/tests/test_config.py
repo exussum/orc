@@ -79,7 +79,7 @@ def test_entrance_config_loads(entrance_ctx):
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
     assert sensor.rules.shutdown == "Lights Off"
     assert sensor.rules.absent == "Dog"
-    night = engine.Step((engine.During(time(22, 0), time(8, 0)),), NIGHT)
+    night = engine.Step(engine.During(time(22, 0), time(8, 0)), NIGHT)
     assert engine.Rule((night,), name="Night") in sensor.timed
 
 

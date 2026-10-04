@@ -38,7 +38,7 @@ def _cmd(device, state):
 
 
 def _window(name, start, stop, *commands):
-    return engine.Rule(tuple(engine.Step((engine.During(start, stop),), c) for c in commands), name=name)
+    return engine.Rule(tuple(engine.Step(engine.During(start, stop), c) for c in commands), name=name)
 
 
 def _snapshot(*commands, end=_FUTURE):

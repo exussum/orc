@@ -86,7 +86,7 @@ def _make(devices, attribute, state, action, target=None, delay=None, when=None)
     for source in devices.all():
         command = engine.Command(target or m.Devices(source), action)
         trigger = model.Transition(m.MqttDeviceSubject(source, attribute), state)
-        automations.append(engine.Automation(trigger, engine.Rule((engine.Step(cond, command),)), span, model.COOLDOWN))
+        automations.append(engine.Automation(trigger, engine.Rule((engine.Step(engine.And(*cond), command),)), span, model.COOLDOWN))
     return automations
 
 
@@ -239,8 +239,8 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
 
 def test_if_clause_parses_device_and_condition(ctx, configured):
     rules = configured
-    assert rules[2].rule.steps[0].conditions[0] == model.AcIs(m.AcSubject(Ac.living), m.AcState.ON)
-    assert rules[3].rule.steps[0].conditions[0] == model.AcIs(m.AcSubject(Ac.living), m.AcState.COOL)
+    assert rules[2].rule.steps[0].condition == engine.And(model.AcIs(m.AcSubject(Ac.living), m.AcState.ON))
+    assert rules[3].rule.steps[0].condition == engine.And(model.AcIs(m.AcSubject(Ac.living), m.AcState.COOL))
 
 
 def test_set_clause_parses_explicit_target(ctx, configured):
@@ -259,8 +259,8 @@ def test_target_must_match_action_kind():
 
 def test_if_clause_covers_lights_and_chromecasts(ctx, configured):
     rules = configured
-    assert rules[5].rule.steps[0].conditions[0] == engine.Eq(m.MqttDeviceSubject(Light.desk, "switch"), m.ON)
-    assert rules[6].rule.steps[0].conditions[0] == engine.Eq(m.CastSubject(Chromecast.tv), m.Playback.PLAYING)
+    assert rules[5].rule.steps[0].condition == engine.And(engine.Eq(m.MqttDeviceSubject(Light.desk, "switch"), m.ON))
+    assert rules[6].rule.steps[0].condition == engine.And(engine.Eq(m.CastSubject(Chromecast.tv), m.Playback.PLAYING))
 
 
 def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
@@ -269,7 +269,7 @@ def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
     # made a bare `set <target> <action>` (no if step) misparse as `set <action>`
     rules = configured
     assert rules[7].trigger == model.Transition(m.MqttDeviceSubject(Sensor.living, "motion"), "active")
-    assert rules[7].rule.steps[0].conditions == ()
+    assert rules[7].rule.steps[0].condition == engine.And()
     assert rules[7].rule.steps[0].command == engine.Command(m.Devices(Light.lamp), m.ON)
 
 
@@ -372,7 +372,7 @@ def _make_range(sensor, expr, low, high, target, action, people=None):
         conditions.extend(model.AcIs(m.AcSubject(ac), m.AcState.OFF) for ac in target.all())
     conditions.append(model.Range(formula, low, high))
     command = engine.Command(target, action)
-    rule = engine.Rule((engine.Step(tuple(conditions), command),))
+    rule = engine.Rule((engine.Step(engine.And(*conditions), command),))
     return [engine.Automation(model.DeviceChanged(sensor, expr), rule, cooldown=model.COOLDOWN)]
 
 
@@ -393,17 +393,17 @@ def test_range_rule_parses_expressions(ctx):
     temp = model.FormulaSubject(Sensor.living, "temperature")
     dewpoint = model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)")
     assert rules[0].trigger == model.DeviceChanged(Sensor.living, "temperature")
-    assert rules[0].rule.steps[0].conditions == (model.AcIs(m.AcSubject(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
+    assert rules[0].rule.steps[0].condition == engine.And(model.AcIs(m.AcSubject(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75))
     assert rules[0].rule.steps[0].command == engine.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
     assert rules[1].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[1].rule.steps[0].conditions == (
+    assert rules[1].rule.steps[0].condition == engine.And(
         model.Present(("alice", "bob")),
         model.AcIs(m.AcSubject(Ac.living), m.AcState.OFF),
         model.Range(dewpoint, 50, 60),
     )
     assert rules[2].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[2].rule.steps[0].conditions == (engine.Eq(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104))
-    assert rules[3].rule.steps[0].conditions == (model.AcIs(m.AcSubject(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
+    assert rules[2].rule.steps[0].condition == engine.And(engine.Eq(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104))
+    assert rules[3].rule.steps[0].condition == engine.And(model.AcIs(m.AcSubject(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
 
 
 @pytest.mark.parametrize(
