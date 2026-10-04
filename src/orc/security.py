@@ -1,7 +1,6 @@
 import base64
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -24,10 +23,6 @@ FMDN_ROTATION_SECONDS = 1024
 _FMDN_K = 10
 _FMDN_FRAME_TYPES = (0x40, 0x41)
 _P256_ORDER = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-
-
-def safe_eval(val: str, ns: dict[str, Any]) -> Any:
-    return eval(val, ns)  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
 
 
 def load_ca(cert_pem: bytes, key_pem: bytes) -> CA:
