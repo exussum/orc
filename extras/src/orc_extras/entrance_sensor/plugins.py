@@ -2,7 +2,8 @@ from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, NamedTuple, Sequence
 
-from orc_engine import cast, engine
+from orc_engine import cast
+from orc_engine import model as em
 
 import orc_extras.entrance_sensor
 from orc import model as m
@@ -133,9 +134,9 @@ def _sensor(devices: Sequence[m.DeviceState], device_id: int) -> m.DeviceState |
 
 
 def _timed_commands(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, m.Commands]:
-    reports = ctx.engine.evaluate(sensor.timed, read=ctx.api.world_reader(), force=True)
+    reports = ctx.engine.evaluate(sensor.timed, read=ctx.api.reader(), force=True)
     hit = next((report for report in reports if report.commands), None)
-    return (cast.instance(hit.item, engine.Rule).name, hit.commands) if hit else ("(no window found)", ())
+    return (cast.instance(hit.item, em.Rule).name, hit.commands) if hit else ("(no window found)", ())
 
 
 def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot | None) -> m.Commands:

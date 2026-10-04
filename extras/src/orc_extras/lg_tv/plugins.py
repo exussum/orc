@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, Any
 
-from orc_engine import cast, engine
+from orc_engine import cast
+from orc_engine import model as em
 
 import orc_extras.lg_tv
 from orc.kernel.loader import resolve_backend
@@ -24,7 +25,7 @@ def off(ctx: AppContext, tv: DeviceEnum) -> None:
     backend(ctx).off(ctx.api.connection, tv)
 
 
-def _dispatch(ctx: AppContext, w: DeviceEnum, command: "engine.Command[Any]", stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch(ctx: AppContext, w: DeviceEnum, command: "em.Command[Any]", stream: dict[Any, tuple[str, str]]) -> None:
     webos_device, bl_device = ctx.config.devices.WebOS[w.name], ctx.config.devices.BroadLink[w.name]
     if command.value == OFF:
         off(ctx, webos_device)

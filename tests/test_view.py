@@ -5,7 +5,7 @@ import pytest
 from apscheduler.job import Job
 from flask import Flask
 from freezegun import freeze_time
-from orc_engine import engine
+from orc_engine import model as em
 
 import orc
 from orc import api, config
@@ -15,13 +15,13 @@ from orc.view import bp
 
 
 def _routine(name, when, *commands, skip_replay=False):
-    steps = tuple(engine.Step(loader._condition(c.tag), c) for c in commands)
+    steps = tuple(em.Step(loader._condition(c.tag), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
-    return engine.Rule(steps, name=name, tags=tags)
+    return em.Rule(steps, name=name, tags=tags)
 
 
 def _room(*commands):
-    return engine.Action(commands)
+    return em.Action(commands)
 
 
 @pytest.fixture
@@ -64,29 +64,29 @@ def test_console_plugin(client, ctx):
 
 
 def test_console_schedule_routine(client, dispatched):
-    routine = _routine("r", "", engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM))
+    routine = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM))
     with patch.object(config, "schedule_routines", {"r": routine}), patch.object(config, "plugins", {}):
         client.get("/api/run/r")
-    dispatched.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY)
+    dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY)
 
 
 def test_console_ad_hoc(client, dispatched):
-    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
-    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),))
+    reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
+    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),))
     with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset):
         client.get("/api/run/r")
     dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
 def test_console_ad_hoc_no_reset(client, dispatched):
-    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
+    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
     with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}):
         client.get("/api/run/r")
     dispatched.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
 
 
 def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, dispatched):
-    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), reset=False, delay=timedelta(minutes=7))
+    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False, delay=timedelta(minutes=7))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
         freeze_time(api.local_now()) as frozen,
@@ -100,8 +100,8 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, dispat
 
 
 def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx, dispatched):
-    routine = m.AdhocAction((engine.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
-    reset = _routine("reset", "", engine.Command(m.Devices(orc.Light.a), m.OFF))
+    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
+    reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
     with (
         patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
         patch.object(api, "capture_lights") as capture,
@@ -122,13 +122,13 @@ def test_console_unknown_returns_404(client):
 
 
 def test_room_on(client, rooms, dispatched):
-    rooms({"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))})
+    rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
     client.get("/api/room/Living Room?state=on")
-    dispatched.assert_called_once_with(m.squish((engine.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
+    dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
 
 
 def test_room_off_replaces_state(client, rooms, dispatched):
-    rooms({"Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON))})
+    rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
     client.get("/api/room/Living Room?state=off")
     (cmds,), _ = dispatched.call_args
     assert all(c.value == m.OFF for c in cmds)
@@ -137,15 +137,15 @@ def test_room_off_replaces_state(client, rooms, dispatched):
 def test_room_follow(client, rooms, dispatched):
     rooms(
         {
-            "Living Room": _room(engine.Command(m.Devices(orc.Light.a), m.ON)),
-            "Bedroom": _room(engine.Command(m.Devices(orc.Light.b), m.ON)),
+            "Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON)),
+            "Bedroom": _room(em.Command(m.Devices(orc.Light.b), m.ON)),
         }
     )
     client.get("/api/room/Living Room?state=follow")
     expected = (
-        engine.Command(m.Devices(orc.Light.a), m.OFF),
-        engine.Command(m.Devices(orc.Light.b), m.OFF),
-        engine.Command(m.Devices(orc.Light.a), m.ON),
+        em.Command(m.Devices(orc.Light.a), m.OFF),
+        em.Command(m.Devices(orc.Light.b), m.OFF),
+        em.Command(m.Devices(orc.Light.a), m.ON),
     )
     dispatched.assert_called_once_with(expected, force=True, entry=ANY)
 
@@ -231,7 +231,7 @@ def test_device_unknown_returns_404(client):
 
 def _fake_iot_job(name="job", trigger=m.Tag.SYSTEM, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
-    rule = _routine(name, "", engine.Command(m.Devices(MagicMock()), "on", tag=trigger), skip_replay=skip_replay)
+    rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger), skip_replay=skip_replay)
     job = create_autospec(Job, instance=True)
     job.id = name
     job.name = name

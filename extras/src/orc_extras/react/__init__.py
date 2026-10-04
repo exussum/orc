@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from command_cfg import each
-from orc_engine import engine
+from orc_engine import model as em
 
 import orc_extras.react
 from orc.kernel import cast
@@ -78,11 +78,11 @@ def _group(reactions: Iterable[model.Reaction]) -> dict[str, model.Group]:
     for reaction in reactions:
         found = groups.get(reaction.name)
         if found is None:
-            groups[reaction.name] = model.Group((reaction.automation.rule,), reaction.pause)
+            groups[reaction.name] = model.Group((reaction.watch.rule,), reaction.pause)
         elif found.pause != reaction.pause:
             raise ValueError(f"react {reaction.name!r}: every line sharing a name needs the same --pause")
         else:
-            groups[reaction.name] = found._replace(rules=(*found.rules, reaction.automation.rule))
+            groups[reaction.name] = found._replace(rules=(*found.rules, reaction.watch.rule))
     return groups
 
 
@@ -103,20 +103,20 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
     pause = _pause(args.pause)
     for source in cast.devices(args.devices, objects).all():
         formula = model.FormulaSubject(source, args.expr)
-        conditions: list[engine.Condition] = []
+        conditions: list[em.Condition] = []
         if args.people == Tag.ANYONE:
-            conditions.append(engine.Eq(AnyoneSubject(), True))
+            conditions.append(em.Eq(AnyoneSubject(), True))
         elif args.people:
             people = tuple(name.strip() for name in args.people.split(","))
             conditions.append(model.Present(people))
         conditions.extend(model.condition(when))
         if isinstance(action, AcCommand):
             conditions.extend(model.AcIs(AcSubject(ac), AcState.OFF) for ac in target.all())
-        conditions.append(model.Range(formula, args.low, args.high))
-        command = engine.Command(target, action)
-        rule = engine.Rule((engine.Step(engine.And(*conditions), command),))
-        automation = engine.Automation(model.DeviceChanged(source, args.expr), rule, delay, model.COOLDOWN)
-        objects["react"].append(model.Reaction(automation, pause, args.name))
+        conditions.append(model.Range(formula, args.low, args.high, edge=True))
+        command = em.Command(target, action)
+        rule = em.Rule((em.Step(em.And(*conditions), command),))
+        watch = em.Watch(model.DeviceChanged(source, args.expr), rule, delay, model.COOLDOWN)
+        objects["react"].append(model.Reaction(watch, pause, args.name))
 
 
 def _rule(objects: dict[str, Any], args: Any) -> None:
@@ -133,31 +133,29 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     pause = _pause(args.pause)
     for source in cast.devices(args.devices, objects).all():
-        command = engine.Command(target or Devices(source), action)
+        command = em.Command(target or Devices(source), action)
         subject = MqttDeviceSubject(source, attribute)
-        rule = engine.Rule((engine.Step(engine.And(*cond), command),))
-        automation = engine.Automation(
-            model.Transition(subject, args.state), rule, delay, model.COOLDOWN, cancel=engine.Has(model.ChangeSubject(subject))
-        )
-        objects["react"].append(model.Reaction(automation, pause, args.name))
+        rule = em.Rule((em.Step(em.And(*cond), command),))
+        watch = em.Watch(model.Transition(subject, args.state), rule, delay, model.COOLDOWN, cancel=em.Changed(subject))
+        objects["react"].append(model.Reaction(watch, pause, args.name))
 
 
 def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup], blueprints={"rules": react_bp}, scripts=[Path(__file__).parent / "static" / "react.js"])
 
 
-def setup(ctx: AppContext) -> tuple[engine.Automation[Devices], ...]:
+def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
     cfg = load_plugin_config(
         CONFIG,
         ctx.config,
         GRAMMAR,
         serializers={"react": each(_rule, default=list, types={"delay": int, "low": int, "high": int, "pause": int})},
     )
-    automations = tuple(reaction.automation for reaction in cfg.react)
+    watches = tuple(reaction.watch for reaction in cfg.react)
     groups = _group(cfg.react)
     ctx.plugin_state[orc_extras.react] = model.State(
-        automations, groups, {rule: name for name, group in groups.items() for rule in group.rules}
+        watches, groups, {rule: name for name, group in groups.items() for rule in group.rules}
     )
-    sources = {model.source_of(automation).value: model.source_of(automation) for automation in automations}
+    sources = {model.source_of(watch).value: model.source_of(watch) for watch in watches}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
-    return automations
+    return watches

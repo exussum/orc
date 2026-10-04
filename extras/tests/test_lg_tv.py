@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from orc_engine import engine
+from orc_engine import model as em
 from orc_extras.lg_tv import plugins
 
 import orc
@@ -52,7 +53,7 @@ class TestDispatchLGTV:
             living_room = 1
 
         self.ctx = ctx
-        self.ctx.engine = engine.Runtime(lambda _subject: datetime.now(UTC))
+        self.ctx.engine = engine.Runtime(UTC)
         mock_registry(ctx=self.ctx, LGTV=(LGTV, plugins._dispatch), WebOS=(WebOS, None), BroadLink=(BroadLink, None))
         self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room
@@ -61,17 +62,17 @@ class TestDispatchLGTV:
 
     def test_off_powers_webos_off(self):
         with patch.object(plugins, "off") as webos_off:
-            api.dispatch((engine.Command(m.Devices(self.lg_tv), m.OFF),), entry=self.entry)
+            api.dispatch((em.Command(m.Devices(self.lg_tv), m.OFF),), entry=self.entry)
         webos_off.assert_called_once_with(self.ctx, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
         with patch.object(plugins, "is_off", return_value=True):
-            api.dispatch((engine.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
+            api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
         self.ctx.api.tv_toggle.assert_called_once_with(self.bl)
 
     def test_on_skips_toggle_when_tv_already_on(self):
         with patch.object(plugins, "is_off", return_value=False):
-            api.dispatch((engine.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
+            api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
         self.ctx.api.tv_toggle.assert_not_called()
 
     def test_device_command_routes_to_lg_tv_handler(self):
