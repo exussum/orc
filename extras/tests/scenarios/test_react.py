@@ -1,5 +1,5 @@
 import pytest
-from orc_engine import engine
+from orc_engine import model as em
 from orc_extras import react
 from orc_extras.lg_ac import plugins as lg_ac_plugins
 from orc_extras.lg_ac.model import ACState
@@ -49,7 +49,7 @@ def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
 
 
 def _cmd(device, value):
-    return engine.Command(m.Devices(device), value, tag=m.Tag.SYSTEM)
+    return em.Command(m.Devices(device), value, tag=m.Tag.SYSTEM)
 
 
 @pytest.mark.plugins(react)

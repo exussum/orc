@@ -1,4 +1,4 @@
-from orc_engine import engine
+from orc_engine import model as em
 
 from orc import model as m
 from orc.model import DeviceEnum
@@ -19,7 +19,7 @@ Chromecast._sort = 1
 
 
 def _cmd(what, value):
-    return engine.Command(m.Devices(what), value)
+    return em.Command(m.Devices(what), value)
 
 
 def test_squish_dim_then_off():

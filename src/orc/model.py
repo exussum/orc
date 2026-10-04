@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self
 from zoneinfo import ZoneInfo
 
 from apscheduler.job import Job
-from orc_engine import engine
+from orc_engine import cast, engine
+from orc_engine import model as em
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -45,7 +46,7 @@ class TagClock(NamedTuple):
 
 type Listener = Callable[[DeviceState, str, Any, Any], None]
 type ButtonListener = Callable[[int, int, str], None]
-type DeviceCommand = engine.Command[Any, Devices]
+type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
 
 
@@ -140,7 +141,6 @@ THEME_WORK_DAY = "work day"
 THEME_DAY_OFF = "day off"
 UNASSIGNED_ROOM = "Unassigned"
 
-_ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
 
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
@@ -508,7 +508,7 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
 
 
 @dataclass(frozen=True)
-class Devices(engine.Subject):
+class Devices(em.Subject):
     members: tuple[DeviceEnum, ...]
 
     def __init__(self, what: "DeviceEnum | type[DeviceEnum] | Iterable[DeviceEnum] | Devices") -> None:
@@ -529,12 +529,12 @@ class Devices(engine.Subject):
         return self.members[0]
 
 
-SnapShot = engine.SnapShot[Devices]
-Routine = engine.Rule[Devices]
+SnapShot = em.SnapShot[Devices]
+Routine = em.Rule[Devices]
 
 
 @dataclass(frozen=True)
-class AdhocAction(engine.Action[Devices]):
+class AdhocAction(em.Action[Devices]):
     delay: timedelta = timedelta()
     snapshot: timedelta | None = None
     section: str | None = None
@@ -548,17 +548,17 @@ class AdhocAction(engine.Action[Devices]):
 
 
 @dataclass(frozen=True)
-class PersonSubject(engine.Subject):
+class PersonSubject(em.Subject):
     name: str
 
 
 @dataclass(frozen=True)
-class AnyoneSubject(engine.Subject):
+class AnyoneSubject(em.Subject):
     pass
 
 
 @dataclass(frozen=True)
-class WeatherSubject(engine.Subject):
+class WeatherSubject(em.Subject):
     pass
 
 
@@ -566,18 +566,40 @@ PresenceSubject = PersonSubject | AnyoneSubject
 
 
 @dataclass(frozen=True)
-class MqttDeviceSubject(engine.Subject):
+class Present(em.Condition):
+    name: str
+
+    def holds(self, world: em.World) -> bool:
+        return world.read(PersonSubject(self.name)) is True
+
+
+@dataclass(frozen=True)
+class Anyone(em.Condition):
+    def holds(self, world: em.World) -> bool:
+        return world.read(AnyoneSubject()) is True
+
+
+@dataclass(frozen=True)
+class Weather(em.Condition):
+    condition: WeatherCondition
+
+    def holds(self, world: em.World) -> bool:
+        return self.condition in cast.instance(world.read(WeatherSubject()), frozenset)
+
+
+@dataclass(frozen=True)
+class MqttDeviceSubject(em.Subject):
     device: DeviceEnum
     attribute: str
 
 
 @dataclass(frozen=True)
-class AcSubject(engine.Subject):
+class AcSubject(em.Subject):
     device: DeviceEnum
 
 
 @dataclass(frozen=True)
-class CastSubject(engine.Subject):
+class CastSubject(em.Subject):
     device: DeviceEnum
 
 
@@ -639,18 +661,6 @@ class Registry:
     ac: AcService | None = None
 
 
-def resolve_time(value: str) -> time | str:
-    if value in (SUNRISE, SUNSET):
-        return value
-    parts = value.split(":")
-    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
-        raise ValueError(_ERR_TIME.format(value))
-    hour, minute = int(parts[0]), int(parts[1])
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        raise ValueError(_ERR_TIME.format(value))
-    return time(hour, minute)
-
-
 def squish(
     commands: Iterable[DeviceCommand],
     *,
@@ -662,7 +672,7 @@ def squish(
     for command in commands:
         for e in command.subject.all():
             value = command.value if state_override is None else state_override
-            grouped[e].append(engine.Command(Devices(e), value, command.tag))
+            grouped[e].append(em.Command(Devices(e), value, command.tag))
 
     flattened: list[DeviceCommand] = []
     for what, items in grouped.items():
