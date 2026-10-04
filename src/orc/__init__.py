@@ -7,6 +7,7 @@ from typing import Any
 from command_cfg import ConfigError
 
 from orc import model as m
+from orc.collections import of_type
 from orc.dal.secrets import stub as secrets_stub
 from orc.kernel.declarations import collect_declarations
 from orc.kernel.loader import ble_keys, check_secrets, parse_config, secret_needs, validate
@@ -61,7 +62,7 @@ class Config:
         return self.registry.devices
 
     def plugin(self, id: str) -> m.CallablePlugin | None:
-        return next((p for p in self.plugins if p.name == id and isinstance(p, m.CallablePlugin)), None)
+        return next((p for p in of_type(self.plugins, m.CallablePlugin) if p.name == id), None)
 
     def plugins_in(self, section: str) -> tuple[m.Plugin, ...]:
         return tuple(p for p in self.plugins if p.section == section)
