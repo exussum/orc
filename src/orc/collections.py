@@ -1,6 +1,6 @@
 import threading
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any
 
 
@@ -62,3 +62,7 @@ class LockedDeque[T]:
 
 def where[V](items: Mapping[str, V], **kwargs: Any) -> dict[str, V]:
     return {k: v for k, v in items.items() if all(getattr(v, attr) == val for attr, val in kwargs.items())}
+
+
+def of_type[T](items: Iterable[object], cls: type[T]) -> Iterator[T]:
+    return (item for item in items if isinstance(item, cls))

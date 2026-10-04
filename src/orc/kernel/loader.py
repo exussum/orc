@@ -12,6 +12,7 @@ from orc_engine import cast as engine_cast
 from orc_engine import model as em
 
 from orc import model as m
+from orc.collections import of_type
 from orc.dal import interfaces
 from orc.kernel import cast
 
@@ -171,7 +172,7 @@ def check_secrets(secrets: m.Secrets, needs: Mapping[str, Callable[[str], Any]])
 
 def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, type[m.DeviceEnum]], *, source: str) -> None:
     ac_cls = enums.get("AC")
-    acs = tuple(d for d in members if isinstance(d, ac_cls)) if ac_cls else ()
+    acs = tuple(of_type(members, ac_cls)) if ac_cls else ()
     if isinstance(state, m.AcCommand) and len(acs) != len(members):
         raise ValueError(f"AC command {state} applies only to AC devices, got {source!r}")
     elif not isinstance(state, m.AcCommand) and acs and state not in (m.ON, m.OFF):
