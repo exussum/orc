@@ -508,7 +508,7 @@ class DeviceEnum(Enum, metaclass=DeviceEnumMeta):
 
 
 @dataclass(frozen=True)
-class Devices(em.Subject):
+class Devices:
     members: tuple[DeviceEnum, ...]
 
     def __init__(self, what: "DeviceEnum | type[DeviceEnum] | Iterable[DeviceEnum] | Devices") -> None:
@@ -563,6 +563,11 @@ class WeatherSubject(em.Subject):
 
 
 PresenceSubject = PersonSubject | AnyoneSubject
+
+
+@dataclass(frozen=True)
+class Device(em.Subject):
+    device: DeviceEnum
 
 
 @dataclass(frozen=True)
