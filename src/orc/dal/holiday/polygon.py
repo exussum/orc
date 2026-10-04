@@ -4,9 +4,9 @@ from functools import lru_cache
 from typing import Any
 
 import requests
+from orc_engine import cast
 
 from orc import config
-from orc.kernel import cast
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {"market_holidays_url": cast.url}
 

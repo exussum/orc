@@ -2,13 +2,13 @@ from pathlib import Path
 from typing import Any
 
 from command_cfg import array, group, scalar
+from orc_engine import cast
 
 import example
 from example import plugins
 from example.dal import sqlite
 from example.model import Runtime, Settings, Widget, Zone
 from example.web import example_bp
-from orc.kernel import cast
 from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
 

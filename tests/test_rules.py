@@ -1,7 +1,8 @@
 from enum import Enum
 
+from orc_engine import engine
+
 from orc import model as m
-from orc.kernel import engine
 
 
 class Light(Enum):

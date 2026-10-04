@@ -10,10 +10,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+from orc_engine import cast
 
 import orc
 from orc import model as m
-from orc.kernel import cast
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {"hubitat_access_token": cast.uuid}
 

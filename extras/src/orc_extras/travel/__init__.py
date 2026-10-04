@@ -2,9 +2,9 @@ from pathlib import Path
 from typing import Any
 
 from command_cfg import array, scalar
+from orc_engine import cast
 
 import orc_extras.travel
-from orc.kernel import cast
 from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
 from orc_extras.travel.dal import sqlite

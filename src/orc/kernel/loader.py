@@ -8,10 +8,12 @@ from typing import Any
 
 import command_cfg
 from command_cfg import ConfigError, array, each, group, raw, scalar
+from orc_engine import cast as engine_cast
+from orc_engine import engine
 
 from orc import model as m
 from orc.dal import interfaces
-from orc.kernel import cast, engine
+from orc.kernel import cast
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 _WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
@@ -63,18 +65,18 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         "routine": each(_routine, default=dict),
         "highlight": each(_highlight, default=tuple, types={"start": cast.when, "stop": cast.when}),
         "theme": each(_theme, default=dict, types={"time": cast.when}),
-        "plugin": each(_plugin, default=list, types={"module": cast.module, "backend": cast.module}),
-        "provider": scalar(interfaces.Provider, types={field: cast.module for field in interfaces.Provider._fields}),
+        "plugin": each(_plugin, default=list, types={"module": engine_cast.module, "backend": engine_cast.module}),
+        "provider": scalar(interfaces.Provider, types={field: engine_cast.module for field in interfaces.Provider._fields}),
         "setting": scalar(
             m.Settings.build,
             types={
-                "lat": cast.float,
-                "long": cast.float,
-                "http_timeout": cast.int,
-                "port": cast.int,
-                "presence_hours": cast.int,
-                "checkin_hours": cast.int,
-                "sunset_lead_hours": cast.int,
+                "lat": engine_cast.float,
+                "long": engine_cast.float,
+                "http_timeout": engine_cast.int,
+                "port": engine_cast.int,
+                "presence_hours": engine_cast.int,
+                "checkin_hours": engine_cast.int,
+                "sunset_lead_hours": engine_cast.int,
                 "warning_device": cast.device,
                 "attention_device": cast.device,
                 "emergency_device": cast.device,
@@ -137,7 +139,7 @@ def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, 
         pair_date = datetime.fromisoformat(tag.pair_date)
         if not pair_date.tzinfo:
             pair_date = pair_date.replace(tzinfo=tz)
-        keys[tag.person] = m.BleKey(cast.hex32(secrets.other[tag.secret]), int(pair_date.timestamp()))
+        keys[tag.person] = m.BleKey(engine_cast.hex32(secrets.other[tag.secret]), int(pair_date.timestamp()))
     return keys
 
 
@@ -147,7 +149,7 @@ def secret_needs(registry: m.Registry, providers: interfaces.Provider, tags: lis
         if backend:
             needs |= backend.REQUIRED_SECRETS
     needs |= registry.secrets
-    needs |= {tag.secret: cast.hex32 for tag in tags}
+    needs |= {tag.secret: engine_cast.hex32 for tag in tags}
     return needs
 
 
@@ -189,9 +191,9 @@ def _conditions(trigger: str | None) -> tuple[engine.Condition, ...]:
     elif trigger in _WEATHER_TRIGGERS:
         return (engine.In(m.WeatherSubject(), m.WeatherCondition(trigger)),)
     elif trigger == m.Tag.ANYONE:
-        return (engine.Is(m.AnyoneSubject(), True),)
+        return (engine.Eq(m.AnyoneSubject(), True),)
     else:
-        return (engine.Is(m.PersonSubject(trigger), True),)
+        return (engine.Eq(m.PersonSubject(trigger), True),)
 
 
 def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Step[m.Devices]:
@@ -276,7 +278,7 @@ def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
     if "section" in params:
         params["section"] = cast.section(params["section"])
     if args.function:
-        func = cast.resolve_function(f"{args.module.__name__}.{args.function}")
+        func = engine_cast.resolve_function(f"{args.module.__name__}.{args.function}")
         objects["plugin"].append(m.CallablePlugin(name=args.name, module=args.module, func=func, **params))
     else:
         objects["plugin"].append(m.Plugin(name=args.name, module=args.module, **params))

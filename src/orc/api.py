@@ -12,6 +12,8 @@ from typing import Any, NamedTuple
 from urllib.parse import quote
 
 from apscheduler.job import Job
+from orc_engine import cast as engine_cast
+from orc_engine import engine
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -27,7 +29,7 @@ from orc.dal.sqlite import (
 from orc.dal.sqlite import delete_theme_override as clear_theme_override
 from orc.dal.sqlite import fetch_durations as _fetch_durations
 from orc.decorators import mappable, requires_ctx
-from orc.kernel import cast, engine
+from orc.kernel import cast
 from orc.kernel.declarations import Declarations
 from orc.locale import Log
 
@@ -225,7 +227,7 @@ def run_action(
     skip_delay: bool = False,
 ) -> bool:
     if id == ORC_SYSTEM_SNAPSHOT:
-        action = RunAction(lambda entry: ctx.engine.restore_scene(ctx, ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry))
+        action = RunAction(lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry))
     elif (plugin := config.plugin(id)) is not None:
         action = RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.delay)
     elif id in config.schedule_routines:
@@ -234,7 +236,7 @@ def run_action(
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
-            action = RunAction(lambda entry: ctx.engine.override_scene(ctx, ORC_SYSTEM_SNAPSHOT, routine.commands, end, id, entry))
+            action = RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, id, entry))
         else:
             base = config.reset_config.commands if routine.reset else ()
             commands = (*base, *routine.commands)
@@ -268,6 +270,25 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
     entry = log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state), trigger)
     with record_duration(id):
         dispatch(commands, force=True, entry=entry)
+
+
+def override_scene(key: str, commands: m.Commands, end: datetime, label: str, entry: m.LogEntry) -> None:
+    assert _ctx is not None
+    if not _ctx.engine.snapshot_active(key):
+        captured = capture_lights()
+        _ctx.engine.save_snapshot(key, m.SnapShot(captured, end, label), end)
+        items = ", ".join(f"`{c.subject.one().name}`={c.value}" for c in captured if c.value != m.OFF)
+        entry.add(entry.source, Log.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Log.SNAPSHOT_ALL_OFF))
+    dispatch(commands, force=True, entry=entry)
+
+
+def restore_scene(key: str, commands: m.Commands, entry: m.LogEntry) -> None:
+    assert _ctx is not None
+    snapshot = _ctx.engine.pop_snapshot(key)
+    if snapshot:
+        commands = snapshot.routine
+        entry.add(entry.source, Log.SNAPSHOT_RESTORED.format(name=snapshot.label))
+    dispatch(commands, force=True, entry=entry)
 
 
 type _Job = tuple[Callable[..., None], m.DeviceEnum, engine.Command[Any]]
@@ -511,7 +532,7 @@ def _entry_time(when: dt_time | str, sunrise: datetime, sunset: datetime, now: d
         return sunrise
     elif when == m.SUNSET:
         return sunset
-    clock = cast.instance(when, dt_time)
+    clock = engine_cast.instance(when, dt_time)
     return now.replace(hour=clock.hour, minute=clock.minute, second=0)
 
 

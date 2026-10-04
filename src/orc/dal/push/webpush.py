@@ -4,13 +4,13 @@ from collections.abc import Callable
 from typing import Any
 
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from orc_engine import cast
 from py_vapid import Vapid
 from pywebpush import WebPushException, webpush
 
 import orc
 from orc import model as m
 from orc.dal.push import Gone
-from orc.kernel import cast
 
 _TTL_SECONDS = 24 * 60 * 60
 _GONE_STATUSES = frozenset({401, 403, 404, 410})

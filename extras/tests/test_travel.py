@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
+from orc_engine import cast
 from orc_extras import travel
 from orc_extras.travel import model as m
 from orc_extras.travel import plugins
@@ -14,7 +15,6 @@ from orc_extras.travel.dal.drive import stub as drive_stub
 from orc_extras.travel.dal.drive import tomtom
 from orc_extras.travel.dal.flight import stub as flight_stub
 
-from orc.kernel import cast
 from orc.kernel.declarations import Declarations
 
 FIXTURE = Path(__file__).parent / "fixture"

@@ -4,13 +4,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from orc_engine import cast, engine
 from orc_extras import calendar, entrance_sensor
 from orc_extras.calendar import Feed
 from orc_extras.entrance_sensor import Settings
 
 import orc
 from orc import model as m
-from orc.kernel import cast, engine
 from orc.kernel.declarations import Declarations
 from orc.model import DeviceEnum, Devices
 

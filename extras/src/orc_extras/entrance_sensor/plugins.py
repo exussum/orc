@@ -2,9 +2,10 @@ from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, NamedTuple, Sequence
 
+from orc_engine import cast, engine
+
 import orc_extras.entrance_sensor
 from orc import model as m
-from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
@@ -91,14 +92,12 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         log_entry.add(Log.ENTRANCE, sensor.message.log_door_open if door_open else sensor.message.log_present)
     elif sensor.setting.listener in present:
         # Visitor left, the listener stayed: restore the pre-visit state
-        ctx.engine.restore_scene(ctx, SNAPSHOT_NAME, (), log_entry)
+        ctx.api.restore_scene(SNAPSHOT_NAME, (), log_entry)
         ctx.api.run_action(ctx, sensor.rules.absent, log_entry.trigger, source=Log.ENTRANCE)
         log_entry.add(Log.ENTRANCE, sensor.message.log_absent)
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
-        ctx.engine.override_scene(
-            ctx, SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry
-        )
+        ctx.api.override_scene(SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry)
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
         if not visit.present_before and not present:
             ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification=m.Notification(("entrance",)))

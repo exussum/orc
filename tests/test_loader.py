@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from orc_engine import cast, engine
 
 from orc import model as m
 from orc.dal.audio import pyaudio
@@ -13,7 +14,7 @@ from orc.dal.mqtt import hubitat as mqtt_hubitat
 from orc.dal.push import webpush
 from orc.dal.secrets import bws
 from orc.dal.secrets import stub as secrets_stub
-from orc.kernel import cast, engine, loader
+from orc.kernel import loader
 from orc.kernel.loader import ConfigError, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -25,7 +26,7 @@ def test_condition_system_is_unconditional():
 
 
 def test_condition_anyone():
-    assert loader._conditions("ANYONE") == (engine.Is(m.AnyoneSubject(), True),)
+    assert loader._conditions("ANYONE") == (engine.Eq(m.AnyoneSubject(), True),)
 
 
 def test_condition_weather_is_membership():
@@ -33,7 +34,7 @@ def test_condition_weather_is_membership():
 
 
 def test_condition_person():
-    assert loader._conditions("alice") == (engine.Is(m.PersonSubject("alice"), True),)
+    assert loader._conditions("alice") == (engine.Eq(m.PersonSubject("alice"), True),)
 
 
 def test_condition_holds_against_world():

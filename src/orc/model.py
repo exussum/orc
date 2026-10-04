@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self
 from zoneinfo import ZoneInfo
 
 from apscheduler.job import Job
-
-from orc.kernel import engine
+from orc_engine import engine
 
 if TYPE_CHECKING:
     from cryptography import x509

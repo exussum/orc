@@ -14,13 +14,13 @@ from dataclasses import dataclass
 from typing import Any
 
 import paho.mqtt.client as mqtt
+from orc_engine import engine
 
 import orc
 from orc import model as m
 from orc.collections import LockedDict
 from orc.dal import sqlite
 from orc.dal.mqtt import switch_command
-from orc.kernel import engine
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 

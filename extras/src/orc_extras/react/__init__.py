@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from command_cfg import each
+from orc_engine import engine
 
 import orc_extras.react
-from orc.kernel import cast, engine
+from orc.kernel import cast
 from orc.kernel.loader import load_plugin_config, validate_ac_state
 from orc.model import (
     AcCommand,
@@ -104,7 +105,7 @@ def _range_rule(objects: dict[str, Any], args: Any) -> None:
         formula = model.FormulaSubject(source, args.expr)
         conditions: list[engine.Condition] = []
         if args.people == Tag.ANYONE:
-            conditions.append(engine.Is(AnyoneSubject(), True))
+            conditions.append(engine.Eq(AnyoneSubject(), True))
         elif args.people:
             people = tuple(name.strip() for name in args.people.split(","))
             conditions.append(model.Present(people))

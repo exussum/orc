@@ -1,7 +1,8 @@
 from typing import TYPE_CHECKING, Any
 
+from orc_engine import cast, engine
+
 import orc_extras.lg_tv
-from orc.kernel import cast, engine
 from orc.kernel.loader import resolve_backend
 from orc.model import OFF, ON, AppContext, DeviceEnum, DeviceStatus, LogEntry
 from orc_extras.lg_tv.dal.interfaces import WebOsBackend

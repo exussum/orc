@@ -6,6 +6,7 @@ requires = [
 
 [project]
 dependencies = [
+    "orc-engine",
     "APScheduler==3.11.3",
     "aiowebostv==0.10.0",
     "bleak==3.0.2",
@@ -67,7 +68,7 @@ known-third-party = ["apscheduler"]
 [tool.mypy]
 python_version = "3.14"
 files = ["src/orc", "extras/src/orc_extras"]
-mypy_path = ["extras/src"]
+mypy_path = ["extras/src", "../orc-engine/src"]
 ignore_missing_imports = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
@@ -94,6 +95,7 @@ dev = [
 members = ["extras", "data"]
 
 [tool.uv.sources]
+orc-engine = { path = "../orc-engine", editable = true }
 orc = { workspace = true }
 orc_data = { workspace = true, editable = false }
 orc_extras = { workspace = true }
