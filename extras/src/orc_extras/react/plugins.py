@@ -1,14 +1,13 @@
 from datetime import datetime
 from typing import Any
 
-from orc_engine import cast
 from orc_engine import model as em
 
 import orc_extras.react
 from orc import model as m
 from orc.plugins import requires_ctx
 from orc.security import safe_eval
-from orc_extras.react.model import FUNCTIONS, DeviceChanged, FormulaSubject, Log, State, Transition, source_of
+from orc_extras.react.model import FUNCTIONS, FormulaSubject, Log, State, Transition, source_of
 
 JOB_ID = "react"
 
@@ -43,15 +42,17 @@ def is_disabled(state: State, watch: em.Watch[Any], now: datetime) -> bool:
 
 
 def _trigger_label(watch: em.Watch[Any]) -> Any:
-    trigger = watch.condition
-    if isinstance(trigger, Transition):
-        return trigger.to
-    return cast.instance(trigger, DeviceChanged).expr
+    match watch.condition:
+        case Transition(to=to):
+            return to
+        case em.Changed(subject=FormulaSubject(expr=expr)):
+            return expr
+    raise TypeError(f"{watch.condition} has no label")
 
 
 def _changes(changed: m.MqttDeviceSubject, old: Any, new: Any) -> em.Changes:
     def changes(subject: em.Subject) -> tuple[em.Value, em.Value]:
-        if subject == changed or (isinstance(subject, m.Devices) and changed.device in subject.all()):
+        if subject == changed:
             return (old, new)
         raise KeyError(subject)
 

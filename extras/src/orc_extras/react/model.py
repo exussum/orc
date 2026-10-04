@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, NamedTuple
 
-from orc_engine import cast
 from orc_engine import model as em
 
 from orc import model as m
@@ -82,15 +81,6 @@ class FormulaSubject(em.Subject):
 
 
 @dataclass(frozen=True)
-class DeviceChanged(em.Condition):
-    device: m.DeviceEnum
-    expr: str  # the rule's name, shown in the log; `holds` does not read it
-
-    def holds(self, world: em.World) -> bool:
-        return world.changed(m.Devices(self.device)) is not None
-
-
-@dataclass(frozen=True)
 class Range(em.Condition):
     subject: em.Subject
     low: float
@@ -135,7 +125,10 @@ def condition(when: When | None) -> tuple[em.Condition, ...]:
 
 
 def source_of(watch: em.Watch[Any]) -> m.DeviceEnum:
-    trigger = watch.condition
-    if isinstance(trigger, Transition):
-        return trigger.subject.device
-    return cast.instance(trigger, DeviceChanged).device
+    condition = watch.condition
+    if isinstance(condition, Transition):
+        return condition.subject.device
+    elif isinstance(condition, em.Changed) and isinstance(condition.subject, FormulaSubject):
+        return condition.subject.device
+    else:
+        raise TypeError(f"{condition} does not watch a device")

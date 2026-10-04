@@ -389,7 +389,7 @@ def _make_range(sensor, expr, low, high, target, action, people=None):
     conditions.append(model.Range(formula, low, high, edge=True))
     command = em.Command(target, action)
     rule = em.Rule((em.Step(em.And(*conditions), command),))
-    return [em.Watch(model.DeviceChanged(sensor, expr), rule, cooldown=model.COOLDOWN)]
+    return [em.Watch(em.Changed(formula), rule, cooldown=model.COOLDOWN)]
 
 
 @pytest.fixture
@@ -408,18 +408,18 @@ def test_range_rule_parses_expressions(ctx):
     rules = react.setup(ctx)
     temp = model.FormulaSubject(Sensor.living, "temperature")
     dewpoint = model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[0].condition == model.DeviceChanged(Sensor.living, "temperature")
+    assert rules[0].condition == em.Changed(model.FormulaSubject(Sensor.living, "temperature"))
     assert rules[0].rule.steps[0].condition == em.And(
         model.AcIs(m.AcSubject(Ac.living), m.AcState.OFF), model.Range(temp, 68, 75, edge=True)
     )
     assert rules[0].rule.steps[0].command == em.Command(m.Devices(Ac), m.AcCommand(m.AcMode.COOL, "low", 72))
-    assert rules[1].condition == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
+    assert rules[1].condition == em.Changed(dewpoint)
     assert rules[1].rule.steps[0].condition == em.And(
         model.Present(("alice", "bob")),
         model.AcIs(m.AcSubject(Ac.living), m.AcState.OFF),
         model.Range(dewpoint, 50, 60, edge=True),
     )
-    assert rules[2].condition == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
+    assert rules[2].condition == em.Changed(dewpoint)
     assert rules[2].rule.steps[0].condition == em.And(em.Eq(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104, edge=True))
     assert rules[3].rule.steps[0].condition == em.And(
         model.AcIs(m.AcSubject(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55, edge=True)
