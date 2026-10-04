@@ -20,7 +20,7 @@ from skyfield.api import load, load_file, wgs84
 
 from orc import config, plugins
 from orc import model as m
-from orc.collections import LockedDeque
+from orc.collections import LockedDeque, of_type
 from orc.dal import net, push, sqlite
 from orc.dal.sqlite import (
     connection,  # noqa: F401
@@ -66,7 +66,7 @@ def fetch_durations() -> list[tuple[str, int]]:
 
 def action_delays() -> dict[str, timedelta]:
     ad_hoc = {id: routine.delay for id, routine in config.ad_hoc_routines.items()}
-    plugins = {p.name: p.delay for p in config.plugins if isinstance(p, m.CallablePlugin)}
+    plugins = {p.name: p.delay for p in of_type(config.plugins, m.CallablePlugin)}
     return ad_hoc | plugins
 
 
