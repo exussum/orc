@@ -5,11 +5,12 @@ import pytest
 from apscheduler.job import Job
 from flask import Flask
 from freezegun import freeze_time
+from orc_engine import engine
 
 import orc
 from orc import api, config
 from orc import model as m
-from orc.kernel import engine, loader
+from orc.kernel import loader
 from orc.view import bp
 
 

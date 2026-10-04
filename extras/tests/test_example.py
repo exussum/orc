@@ -3,8 +3,8 @@ from pathlib import Path
 import example
 import pytest
 from example import model as m
+from orc_engine import cast
 
-from orc.kernel import cast
 from orc.kernel.declarations import Declarations
 
 FIXTURE = Path(__file__).parent / "fixture"

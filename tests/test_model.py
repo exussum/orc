@@ -1,5 +1,6 @@
+from orc_engine import engine
+
 from orc import model as m
-from orc.kernel import engine
 from orc.model import DeviceEnum
 
 

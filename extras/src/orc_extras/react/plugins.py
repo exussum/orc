@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Any
 
+from orc_engine import cast, engine
+
 import orc_extras.react
 from orc import model as m
-from orc.kernel import cast, engine
 from orc.plugins import requires_ctx
 from orc.security import safe_eval
 from orc_extras.react.model import FUNCTIONS, ChangeSubject, DeviceChanged, FormulaSubject, Log, State, Transition, source_of

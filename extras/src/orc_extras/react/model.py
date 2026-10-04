@@ -3,8 +3,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, NamedTuple
 
+from orc_engine import cast, engine
+
 from orc import model as m
-from orc.kernel import cast, engine
 
 DEFAULT_PAUSE = timedelta(minutes=10)
 COOLDOWN = timedelta(seconds=10)  # a (rule, device) won't re-fire within this window — breaks flapping loops
@@ -126,9 +127,9 @@ def condition(when: When | None) -> tuple[engine.Condition, ...]:
     elif isinstance(when.state, m.AcState):
         return (AcIs(m.AcSubject(when.device), when.state),)
     elif isinstance(when.state, m.Playback):
-        return (engine.Is(m.CastSubject(when.device), when.state),)
+        return (engine.Eq(m.CastSubject(when.device), when.state),)
     else:
-        return (engine.Is(m.MqttDeviceSubject(when.device, TRIGGERS[when.state]), when.state),)
+        return (engine.Eq(m.MqttDeviceSubject(when.device, TRIGGERS[when.state]), when.state),)
 
 
 def source_of(automation: engine.Automation[Any]) -> m.DeviceEnum:

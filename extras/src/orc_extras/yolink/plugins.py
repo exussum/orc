@@ -9,10 +9,11 @@ from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 
+from orc_engine import cast
+
 import orc_extras.yolink
 from orc import model as m
 from orc.collections import LockedDict
-from orc.kernel import cast
 from orc_extras.yolink.dal.interfaces import CloudBackend
 
 # callback (name, kind, old, new); old/new are arbitrary field values

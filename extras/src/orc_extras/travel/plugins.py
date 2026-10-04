@@ -2,9 +2,10 @@ import re
 from datetime import datetime, time, timedelta
 from typing import Any
 
+from orc_engine import cast
+
 import orc_extras.travel
 from orc import model as m
-from orc.kernel import cast
 from orc.model import Alarm, AppContext
 from orc.plugins import requires_ctx
 from orc_extras.travel.dal.sqlite import Connection

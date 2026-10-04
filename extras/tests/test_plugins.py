@@ -4,11 +4,11 @@ from unittest.mock import ANY, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from orc_engine import engine
 from orc_extras import entrance_sensor
 from orc_extras.entrance_sensor import plugins
 
 from orc import model as m
-from orc.kernel import engine
 from orc.model import DeviceEnum
 
 _UTC = ZoneInfo("UTC")
@@ -249,7 +249,7 @@ def test_listener_home_alone_restores_pre_visit_state(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     plugin_ctx.api.check_presence.return_value = {"rex"}
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.engine.restore_scene.assert_called_once_with(plugin_ctx, plugins.SNAPSHOT_NAME, (), entry)
+    plugin_ctx.api.restore_scene.assert_called_once_with(plugins.SNAPSHOT_NAME, (), entry)
 
 
 def test_people_home_win_over_the_listener(sensor, plugin_ctx):
@@ -262,8 +262,7 @@ def test_people_home_win_over_the_listener(sensor, plugin_ctx):
 def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
     plugin_ctx.api.local_now.return_value = _DAYTIME
     entry = _cleanup(sensor, plugin_ctx)
-    plugin_ctx.engine.override_scene.assert_called_once_with(
-        plugin_ctx,
+    plugin_ctx.api.override_scene.assert_called_once_with(
         plugins.SNAPSHOT_NAME,
         (engine.Command(m.Devices(Light.lamp), m.OFF),),
         _DAYTIME + timedelta(minutes=45),

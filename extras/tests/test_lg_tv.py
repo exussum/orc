@@ -2,12 +2,12 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
+from orc_engine import engine
 from orc_extras.lg_tv import plugins
 
 import orc
 from orc import api
 from orc import model as m
-from orc.kernel import engine
 
 
 @pytest.fixture

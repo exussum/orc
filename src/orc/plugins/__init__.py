@@ -3,9 +3,10 @@ import signal
 import time
 from datetime import timedelta
 
+from orc_engine import engine
+
 from orc import model as m
 from orc.decorators import requires_ctx  # noqa: F401
-from orc.kernel import engine
 from orc.locale import Log
 
 _LIGHT_TEST_WINDOW = timedelta(minutes=10)
@@ -33,13 +34,13 @@ def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> N
             ctx.api.log(m.LogSource.PLUGIN, template.format(names=", ".join(wrong)), entry.trigger)
 
     end = ctx.api.local_now() + _LIGHT_TEST_WINDOW
-    ctx.engine.override_scene(ctx, "light_test", (engine.Command(m.Devices(ctx.config.devices.Light), m.OFF),), end, "light_test", entry)
+    ctx.api.override_scene("light_test", (engine.Command(m.Devices(ctx.config.devices.Light), m.OFF),), end, "light_test", entry)
     time.sleep(_LIGHT_TEST_SETTLE_SECONDS)
     report(expect_on=False)
     ctx.api.dispatch((engine.Command(m.Devices(ctx.config.devices.Light), m.ON),), force=True, entry=entry)
     time.sleep(_LIGHT_TEST_SETTLE_SECONDS)
     report(expect_on=True)
-    ctx.engine.restore_scene(ctx, "light_test", ctx.config.default_config.commands, entry)
+    ctx.api.restore_scene("light_test", ctx.config.default_config.commands, entry)
 
 
 def rebuild_jobs(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:

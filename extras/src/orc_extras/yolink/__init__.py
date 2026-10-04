@@ -8,9 +8,10 @@ at setup(); module tops import orc leaf modules for types and helpers.
 from functools import partial
 from typing import Any
 
+from orc_engine import cast
+
 import orc_extras.yolink
 from orc import model as m
-from orc.kernel import cast
 from orc.kernel.loader import resolve_backend
 from orc.model import AppContext
 from orc_extras.yolink import plugins

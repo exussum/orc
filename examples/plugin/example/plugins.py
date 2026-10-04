@@ -1,9 +1,10 @@
 from typing import Any
 
+from orc_engine import cast
+
 import example
 from example.dal.sqlite import Connection
 from example.model import ExampleJob, Plan, Runtime
-from orc.kernel import cast
 from orc.model import AppContext, DeviceStatus, Scheduler
 from orc.plugins import requires_ctx
 
