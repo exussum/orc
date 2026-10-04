@@ -6,13 +6,14 @@ import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 from freezegun import freeze_time
+from orc_engine import engine
 
 import orc
 from orc import api, config, plugins
 from orc import model as m
 from orc.dal import net, push, scheduler, sqlite
 from orc.dal.mqtt import stub as mqtt_stub
-from orc.kernel import engine, loader
+from orc.kernel import loader
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
 TRIGGER = m.Query("test")
@@ -39,16 +40,16 @@ def entry():
 class TestManagingConfig:
     def test_resume_with_snapshot(self, dispatch, snapshot_config, entry):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        api._ctx.engine.restore_scene(api._ctx, "test", (), entry)
+        api.restore_scene("test", (), entry)
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
 
     def test_resume_without_snapshot(self, dispatch, snapshot_config, entry):
-        api._ctx.engine.restore_scene(api._ctx, "test", snapshot_config, entry)
+        api.restore_scene("test", snapshot_config, entry)
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
 
     def test_resume_with_old_snapshot(self, dispatch, snapshot_config, entry):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=PAST), PAST)
-        api._ctx.engine.restore_scene(api._ctx, "test", snapshot_config, entry)
+        api.restore_scene("test", snapshot_config, entry)
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
         assert not api._ctx.engine.snapshots()
 
@@ -141,7 +142,7 @@ class TestIntercepts:
             engine.Command(m.Devices(orc.Light.b), m.OFF),
         )
 
-        api._ctx.engine.restore_scene(api._ctx, api.ORC_SYSTEM_SNAPSHOT, (), entry)
+        api.restore_scene(api.ORC_SYSTEM_SNAPSHOT, (), entry)
 
         assert update_light.call_args_list == [
             call(orc.Light.a, on=False),  # the deliberate off

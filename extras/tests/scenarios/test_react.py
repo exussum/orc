@@ -1,11 +1,11 @@
 import pytest
+from orc_engine import engine
 from orc_extras import react
 from orc_extras.lg_ac import plugins as lg_ac_plugins
 from orc_extras.lg_ac.model import ACState
 
 import orc
 from orc import model as m
-from orc.kernel import engine
 
 AC_ID = "clip-1"
 

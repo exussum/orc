@@ -1,10 +1,11 @@
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from orc_engine import engine
+
 from orc import model as m
 from orc.dal import warn_stub
 from orc.dal.mqtt import switch_command
-from orc.kernel import engine
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 

@@ -1024,6 +1024,7 @@ dependencies = [
     { name = "gunicorn" },
     { name = "icalendar" },
     { name = "orc-data" },
+    { name = "orc-engine" },
     { name = "paho-mqtt" },
     { name = "pillow" },
     { name = "piper-tts" },
@@ -1070,6 +1071,7 @@ requires-dist = [
     { name = "icalendar", specifier = "==7.3.0" },
     { name = "mypy", marker = "extra == 'lint'", specifier = "==2.3.1" },
     { name = "orc-data", directory = "data" },
+    { name = "orc-engine", editable = "../orc-engine" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "piper-tts", specifier = "==1.8.0" },
@@ -1095,6 +1097,23 @@ dev = [{ name = "orc-extras", extras = ["lg-ac"], editable = "extras" }]
 name = "orc-data"
 version = "0.0.1"
 source = { directory = "data" }
+
+[[package]]
+name = "orc-engine"
+version = "0.0.1"
+source = { editable = "../orc-engine" }
+dependencies = [
+    { name = "cryptography" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = "==50.0.1" },
+    { name = "mypy", marker = "extra == 'lint'", specifier = "==1.18.2" },
+    { name = "pytest", marker = "extra == 'test'", specifier = "==9.0.1" },
+    { name = "ruff", marker = "extra == 'lint'", specifier = "==0.14.2" },
+]
+provides-extras = ["test", "lint"]
 
 [[package]]
 name = "orc-extras"

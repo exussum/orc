@@ -18,9 +18,9 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+from orc_engine import cast
 
 from orc import security
-from orc.kernel import cast
 from orc.model import CA, Certificate
 from orc_extras.lg_ac import model as m
 

@@ -10,9 +10,9 @@ from functools import partial
 from typing import Any, NamedTuple
 
 from command_cfg import scalar
+from orc_engine import cast
 
 import orc_extras.lg_ac
-from orc.kernel import cast
 from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext, Secrets
 from orc_extras.lg_ac import api, plugins, web

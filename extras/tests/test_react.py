@@ -6,12 +6,12 @@ from zoneinfo import ZoneInfo
 import pytest
 from command_cfg import ConfigError
 from flask import Flask
+from orc_engine import engine
 from orc_extras import react
 from orc_extras.react import model, plugins, web
 
 import orc
 from orc import model as m
-from orc.kernel import engine
 from orc.model import DeviceEnum
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -259,8 +259,8 @@ def test_target_must_match_action_kind():
 
 def test_if_clause_covers_lights_and_chromecasts(ctx, configured):
     rules = configured
-    assert rules[5].rule.steps[0].conditions[0] == engine.Is(m.MqttDeviceSubject(Light.desk, "switch"), m.ON)
-    assert rules[6].rule.steps[0].conditions[0] == engine.Is(m.CastSubject(Chromecast.tv), m.Playback.PLAYING)
+    assert rules[5].rule.steps[0].conditions[0] == engine.Eq(m.MqttDeviceSubject(Light.desk, "switch"), m.ON)
+    assert rules[6].rule.steps[0].conditions[0] == engine.Eq(m.CastSubject(Chromecast.tv), m.Playback.PLAYING)
 
 
 def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
@@ -351,8 +351,8 @@ def test_reader_formula_evaluates_and_raises_with_context(ctx):
 def test_condition_maps_when_by_kind():
     assert model.condition(None) == ()
     assert model.condition(model.When(Ac.living, m.AcState.ON)) == (model.AcIs(m.AcSubject(Ac.living), m.AcState.ON),)
-    assert model.condition(model.When(Chromecast.tv, m.Playback.PLAYING)) == (engine.Is(m.CastSubject(Chromecast.tv), m.Playback.PLAYING),)
-    assert model.condition(model.When(Light.desk, m.ON)) == (engine.Is(m.MqttDeviceSubject(Light.desk, "switch"), m.ON),)
+    assert model.condition(model.When(Chromecast.tv, m.Playback.PLAYING)) == (engine.Eq(m.CastSubject(Chromecast.tv), m.Playback.PLAYING),)
+    assert model.condition(model.When(Light.desk, m.ON)) == (engine.Eq(m.MqttDeviceSubject(Light.desk, "switch"), m.ON),)
 
 
 def test_ac_is_bitmask_respects_flag_membership():
@@ -365,7 +365,7 @@ def _make_range(sensor, expr, low, high, target, action, people=None):
     formula = model.FormulaSubject(sensor, expr)
     conditions = []
     if people == m.Tag.ANYONE:
-        conditions.append(engine.Is(m.AnyoneSubject(), True))
+        conditions.append(engine.Eq(m.AnyoneSubject(), True))
     elif people:
         conditions.append(model.Present(people))
     if isinstance(action, m.AcCommand):
@@ -402,7 +402,7 @@ def test_range_rule_parses_expressions(ctx):
         model.Range(dewpoint, 50, 60),
     )
     assert rules[2].trigger == model.DeviceChanged(Sensor.living, "dewpoint(temperature,humidity)")
-    assert rules[2].rule.steps[0].conditions == (engine.Is(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104))
+    assert rules[2].rule.steps[0].conditions == (engine.Eq(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104))
     assert rules[3].rule.steps[0].conditions == (model.AcIs(m.AcSubject(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55))
 
 
