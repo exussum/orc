@@ -44,6 +44,7 @@ class Reaction(NamedTuple):
     watch: em.Watch[m.Devices]
     pause: timedelta
     name: str
+    source: m.DeviceEnum
 
 
 class Group(NamedTuple):
@@ -57,11 +58,6 @@ class State:
     groups: dict[str, Group]
     name_of: dict[em.Rule[Any], str]
     disabled: dict[str, datetime] = field(default_factory=dict)
-
-
-class When(NamedTuple):
-    device: m.DeviceEnum
-    state: str | m.AcState | m.Playback
 
 
 @dataclass(frozen=True)
@@ -111,24 +107,3 @@ class Present(em.Condition):
 
     def holds(self, world: em.World) -> bool:
         return any(world.read(m.PersonSubject(name)) for name in self.names)
-
-
-def condition(when: When | None) -> tuple[em.Condition, ...]:
-    if when is None:
-        return ()
-    elif isinstance(when.state, m.AcState):
-        return (AcIs(m.AcSubject(when.device), when.state),)
-    elif isinstance(when.state, m.Playback):
-        return (em.Eq(m.CastSubject(when.device), when.state),)
-    else:
-        return (em.Eq(m.MqttDeviceSubject(when.device, TRIGGERS[when.state]), when.state),)
-
-
-def source_of(watch: em.Watch[Any]) -> m.DeviceEnum:
-    condition = watch.condition
-    if isinstance(condition, Transition):
-        return condition.subject.device
-    elif isinstance(condition, em.Changed) and isinstance(condition.subject, FormulaSubject):
-        return condition.subject.device
-    else:
-        raise TypeError(f"{condition} does not watch a device")

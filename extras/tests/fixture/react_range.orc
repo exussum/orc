@@ -1,4 +1,4 @@
-react 'Cool' Sensor.living temperature between 68 and 75 set AC cool:low:72
-react 'Dry' Sensor.living dewpoint(temperature,humidity) between 50 and 60 present alice,bob set AC fan_only:low:70
-react 'Muggy off' Sensor.living dewpoint(temperature,humidity) between 59 and 104 present ANYONE set AC off
-react 'Dry off' Sensor.living dewpoint(temperature,humidity) between 0 and 55 set AC off if AC is on
+react 'Cool' Sensor.living if 'Entered(temperature, 68, 75)' set AC cool:low:72
+react 'Dry' Sensor.living if 'And(Present("alice","bob"), Entered(dewpoint(temperature,humidity), 50, 60))' set AC fan_only:low:70
+react 'Muggy off' Sensor.living if 'And(Anyone(), Entered(dewpoint(temperature,humidity), 59, 104))' set AC off
+react 'Dry off' Sensor.living if 'And(AcIs(AC.living, "on"), Entered(dewpoint(temperature,humidity), 0, 55))' set AC off

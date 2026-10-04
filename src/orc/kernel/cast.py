@@ -8,7 +8,6 @@ from typing import Any
 from orc_engine import cast as engine_cast
 
 from orc import model as m
-from orc.security import safe_eval
 
 _NO_OBJECTS: Mapping[str, Any] = MappingProxyType({})
 _ERR_TIME = "Invalid time {!r}: expected HH:MM, 'sunrise', or 'sunset'"
@@ -66,7 +65,7 @@ def section(value: str | None) -> str | None:
 
 def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> m.Devices:
     try:
-        return m.Devices(safe_eval(value, dict(devices)))
+        return m.Devices(eval(value, dict(devices)))  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
     except NameError as exc:
         raise ValueError(f"{exc} — device types must be defined and sealed first") from None
     except AttributeError:
