@@ -3,7 +3,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, NamedTuple
 
-from orc_engine import cast, engine
+from orc_engine import cast
+from orc_engine import model as em
 
 from orc import model as m
 
@@ -28,37 +29,34 @@ class Log(m.LogSourceEnum):
 
 
 @dataclass(frozen=True)
-class ChangeSubject(engine.Subject):
-    subject: engine.Subject
-
-
-@dataclass(frozen=True)
-class Transition:
+class Transition(em.Condition):
     subject: m.MqttDeviceSubject
-    to: engine.Value
+    to: em.Value
 
-    def holds(self, read: engine.Read) -> bool:
-        change = read(ChangeSubject(self.subject))
-        old, new = cast.instance(change, tuple) if change else (None, None)
+    def holds(self, world: em.World) -> bool:
+        change = world.changed(self.subject)
+        if change is None:
+            return False
+        old, new = change
         return new == self.to and old != self.to
 
 
 class Reaction(NamedTuple):
-    automation: engine.Automation[m.Devices]
+    watch: em.Watch[m.Devices]
     pause: timedelta
     name: str
 
 
 class Group(NamedTuple):
-    rules: tuple[engine.Rule[m.Devices], ...]
+    rules: tuple[em.Rule[m.Devices], ...]
     pause: timedelta
 
 
 @dataclass
 class State:
-    automations: tuple[engine.Automation[m.Devices], ...]
+    watches: tuple[em.Watch[m.Devices], ...]
     groups: dict[str, Group]
-    name_of: dict[engine.Rule[Any], str]
+    name_of: dict[em.Rule[Any], str]
     disabled: dict[str, datetime] = field(default_factory=dict)
 
 
@@ -68,72 +66,76 @@ class When(NamedTuple):
 
 
 @dataclass(frozen=True)
-class AcIs:
+class AcIs(em.Condition):
     subject: m.AcSubject
     allowed: m.AcState
 
-    def holds(self, read: engine.Read) -> bool:
-        current = read(self.subject)
+    def holds(self, world: em.World) -> bool:
+        current = world.read(self.subject)
         return isinstance(current, m.AcState) and current in self.allowed
 
 
 @dataclass(frozen=True)
-class FormulaSubject(engine.Subject):
+class FormulaSubject(em.Subject):
     device: m.DeviceEnum
     expr: str
 
 
 @dataclass(frozen=True)
-class DeviceChanged:
+class DeviceChanged(em.Condition):
     device: m.DeviceEnum
-    expr: str
+    expr: str  # the rule's name, shown in the log; `holds` does not read it
 
-    def holds(self, read: engine.Read) -> bool:
-        return read(ChangeSubject(m.Devices(self.device))) is not None
+    def holds(self, world: em.World) -> bool:
+        return world.changed(m.Devices(self.device)) is not None
 
 
-@dataclass(unsafe_hash=True)
-class Range:
-    subject: engine.Subject
+@dataclass(frozen=True)
+class Range(em.Condition):
+    subject: em.Subject
     low: float
     high: float
-    last_measurement: float | None = field(hash=False, default=None)
+    edge: bool = False
 
-    def holds(self, read: engine.Read) -> bool:
-        value = read(self.subject)
+    def holds(self, world: em.World) -> bool:
+        if not self.edge:
+            return self._inside(world.read(self.subject))
+        change = world.changed(self.subject)
+        if change is None:
+            return False
+        old, new = change
+        return self._inside(new) and not self._inside(old)
+
+    def _inside(self, value: Any) -> bool:
         if not isinstance(value, (int, float, str)):
             return False
         try:
-            result = self.low <= float(value) <= self.high and (
-                self.last_measurement is None or not self.low <= self.last_measurement <= self.high
-            )
-            self.last_measurement = float(value)
-            return result
+            return self.low <= float(value) <= self.high
         except ValueError:
             return False
 
 
 @dataclass(frozen=True)
-class Present:
+class Present(em.Condition):
     names: tuple[str, ...]
 
-    def holds(self, read: engine.Read) -> bool:
-        return any(read(m.PersonSubject(name)) for name in self.names)
+    def holds(self, world: em.World) -> bool:
+        return any(world.read(m.PersonSubject(name)) for name in self.names)
 
 
-def condition(when: When | None) -> tuple[engine.Condition, ...]:
+def condition(when: When | None) -> tuple[em.Condition, ...]:
     if when is None:
         return ()
     elif isinstance(when.state, m.AcState):
         return (AcIs(m.AcSubject(when.device), when.state),)
     elif isinstance(when.state, m.Playback):
-        return (engine.Eq(m.CastSubject(when.device), when.state),)
+        return (em.Eq(m.CastSubject(when.device), when.state),)
     else:
-        return (engine.Eq(m.MqttDeviceSubject(when.device, TRIGGERS[when.state]), when.state),)
+        return (em.Eq(m.MqttDeviceSubject(when.device, TRIGGERS[when.state]), when.state),)
 
 
-def source_of(automation: engine.Automation[Any]) -> m.DeviceEnum:
-    trigger = automation.trigger
+def source_of(watch: em.Watch[Any]) -> m.DeviceEnum:
+    trigger = watch.condition
     if isinstance(trigger, Transition):
         return trigger.subject.device
     return cast.instance(trigger, DeviceChanged).device

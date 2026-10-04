@@ -9,7 +9,7 @@ from typing import Any
 import command_cfg
 from command_cfg import ConfigError, array, each, group, raw, scalar
 from orc_engine import cast as engine_cast
-from orc_engine import engine
+from orc_engine import model as em
 
 from orc import model as m
 from orc.dal import interfaces
@@ -178,26 +178,26 @@ def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapp
         raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {state!r}")
 
 
-def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> engine.Command[str, m.Devices]:
+def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> em.Command[str, m.Devices]:
     devices = cast.devices(args.devices, objects)
     state = cast.state(args.state)
     validate_ac_state(devices.all(), state, objects["device"].enums, source=args.devices)
-    return engine.Command[str, m.Devices](devices, state, tag=trigger)
+    return em.Command[str, m.Devices](devices, state, tag=trigger)
 
 
-def _condition(trigger: str | None) -> engine.Condition:
+def _condition(trigger: str | None) -> em.Condition:
     if trigger in (None, m.Tag.SYSTEM):
-        return engine.And()
+        return em.And()
     elif trigger in _WEATHER_TRIGGERS:
-        return engine.In(m.WeatherSubject(), m.WeatherCondition(trigger))
+        return m.Weather(m.WeatherCondition(trigger))
     elif trigger == m.Tag.ANYONE:
-        return engine.Eq(m.AnyoneSubject(), True)
+        return m.Anyone()
     else:
-        return engine.Eq(m.PersonSubject(trigger), True)
+        return m.Present(trigger)
 
 
-def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> engine.Step[m.Devices]:
-    return engine.Step(_condition(trigger), _command(objects, args, trigger))
+def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> em.Step[m.Devices]:
+    return em.Step(_condition(trigger), _command(objects, args, trigger))
 
 
 def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any, tuple[Any, ...]]) -> type[m.DeviceEnum]:
@@ -241,7 +241,7 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
 
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
     rooms = objects["room"]
-    base = rooms.get(args.name, engine.Action())
+    base = rooms.get(args.name, em.Action())
     rooms[args.name] = replace(base, commands=(*base.commands, _command(objects, args)))
 
 
@@ -288,7 +288,7 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     routines = objects["routine"]
     if args.define:
         tags = frozenset({m.SKIP_REPLAY_TAG}) if args.skip_replay else frozenset()
-        routines[args.id] = engine.Rule((), name=args.name, tags=tags)
+        routines[args.id] = em.Rule((), name=args.name, tags=tags)
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:

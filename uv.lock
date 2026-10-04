@@ -1109,6 +1109,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = "==50.0.1" },
+    { name = "freezegun", marker = "extra == 'test'", specifier = "==1.5.5" },
     { name = "mypy", marker = "extra == 'lint'", specifier = "==1.18.2" },
     { name = "pytest", marker = "extra == 'test'", specifier = "==9.0.1" },
     { name = "ruff", marker = "extra == 'lint'", specifier = "==0.14.2" },

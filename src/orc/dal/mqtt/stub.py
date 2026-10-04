@@ -1,7 +1,7 @@
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from orc_engine import engine
+from orc_engine import model as em
 
 from orc import model as m
 from orc.dal import warn_stub
@@ -26,7 +26,7 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
 
 
 def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Commands:
-    return tuple(engine.Command(m.Devices(light), _states.get(light, m.OFF)) for light in lights)
+    return tuple(em.Command(m.Devices(light), _states.get(light, m.OFF)) for light in lights)
 
 
 def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:

@@ -4,7 +4,7 @@ from typing import Any, NamedTuple
 
 from command_cfg import group, scalar
 from orc_engine import cast as engine_cast
-from orc_engine import engine
+from orc_engine import model as em
 
 import orc_extras.entrance_sensor
 from orc.kernel import cast
@@ -72,15 +72,14 @@ def _rule(ctx: AppContext, **values: Any) -> str:
 
 
 def _timed(ctx: AppContext, **values: Any) -> Timed:
-    return Timed(
-        start=engine_cast.clock(values["start"]), stop=engine_cast.clock(values["stop"]), commands=_routine_commands(ctx, values["routine"])
-    )
+    start, stop = engine_cast.clock(values["start"]), engine_cast.clock(values["stop"])
+    return Timed(start=start, stop=stop, commands=_routine_commands(ctx, values["routine"]))
 
 
 def _windows(timed: dict[str, list[Timed]]) -> tuple[Routine, ...]:
     return tuple(
-        engine.Rule(
-            tuple(engine.Step(engine.During(row.start, row.stop), command) for row in rows for command in row.commands),
+        Routine(
+            tuple(em.Step(em.During(row.start, row.stop), command) for row in rows for command in row.commands),
             name=name,
         )
         for name, rows in timed.items()

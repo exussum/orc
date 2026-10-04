@@ -1,10 +1,11 @@
 import re
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from orc_engine import cast, engine
+from orc_engine import model as em
 
 from orc import model as m
 from orc.dal.audio import pyaudio
@@ -21,27 +22,27 @@ FIXTURE = Path(__file__).parent / "fixture"
 
 
 def test_condition_system_is_unconditional():
-    assert loader._condition(None) == engine.And()
-    assert loader._condition("SYSTEM") == engine.And()
+    assert loader._condition(None) == em.And()
+    assert loader._condition("SYSTEM") == em.And()
 
 
 def test_condition_anyone():
-    assert loader._condition("ANYONE") == engine.Eq(m.AnyoneSubject(), True)
+    assert loader._condition("ANYONE") == m.Anyone()
 
 
 def test_condition_weather_is_membership():
-    assert loader._condition("SUNNY") == engine.In(m.WeatherSubject(), m.WeatherCondition.SUNNY)
+    assert loader._condition("SUNNY") == m.Weather(m.WeatherCondition.SUNNY)
 
 
 def test_condition_person():
-    assert loader._condition("alice") == engine.Eq(m.PersonSubject("alice"), True)
+    assert loader._condition("alice") == m.Present("alice")
 
 
 def test_condition_holds_against_world():
     world = {m.AnyoneSubject(): True, m.PersonSubject("bob"): False}
-    read = world.__getitem__
-    assert loader._condition("ANYONE").holds(read)
-    assert not loader._condition("bob").holds(read)
+    seen = engine.Runtime(UTC).world(world.__getitem__)
+    assert loader._condition("ANYONE").holds(seen)
+    assert not loader._condition("bob").holds(seen)
 
 
 def parse(case, **kwargs):
@@ -76,8 +77,8 @@ def test_routines_append_devices_and_triggers():
     light, cc = parsed.enums["Light"], parsed.enums["Chromecast"]["CC"]
     assert parsed.routine["ROUTINE_RESET"].name == "Reset"
     assert parsed.routine["ROUTINE_RESET"].commands == (
-        engine.Command(m.Devices(light), "off", tag="SYSTEM"),
-        engine.Command(m.Devices(cc), "stop"),
+        em.Command(m.Devices(light), "off", tag="SYSTEM"),
+        em.Command(m.Devices(cc), "stop"),
     )
 
 
@@ -95,7 +96,7 @@ def test_themes_schedule_routines():
 
 def test_rooms_collect_member_states():
     parsed = parse("core")
-    assert parsed.room["Bedroom"].commands == (engine.Command(m.Devices(parsed.enums["Light"]["LAMP"]), "on"),)
+    assert parsed.room["Bedroom"].commands == (em.Command(m.Devices(parsed.enums["Light"]["LAMP"]), "on"),)
 
 
 def test_settings_typed_and_defaulted():
@@ -225,7 +226,7 @@ def test_secret_casts(shape, value, ok):
 def test_ad_hoc_define_with_inline_first_item():
     parsed = parse("core")
     silence = parsed.ad_hoc["Silence"]
-    assert silence.commands == (engine.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),)
+    assert silence.commands == (em.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),)
     assert silence.reset is False
     assert silence.section is None
 
@@ -255,8 +256,8 @@ def test_state_youtube_ids_stay_strings():
 def test_ad_hoc_append_extends_items():
     parsed = parse("core")
     assert parsed.ad_hoc["All Lights Off"].commands == (
-        engine.Command(m.Devices(parsed.enums["Light"]), "off"),
-        engine.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),
+        em.Command(m.Devices(parsed.enums["Light"]), "off"),
+        em.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),
     )
 
 

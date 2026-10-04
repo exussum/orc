@@ -14,6 +14,7 @@ from urllib.parse import quote
 from apscheduler.job import Job
 from orc_engine import cast as engine_cast
 from orc_engine import engine
+from orc_engine import model as em
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 
@@ -70,7 +71,7 @@ def action_delays() -> dict[str, timedelta]:
 
 
 @contextlib.contextmanager
-def record_duration(name: str) -> Iterator[None]:
+def _record_duration(name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     update_avg(name, time.perf_counter() - start)
@@ -183,7 +184,7 @@ def capture_sounds() -> tuple[m.SoundState, ...]:
 
 
 def capture_acs() -> tuple[m.AcStatus, ...]:
-    return tuple(m.AcStatus(w, ac_state(w), ac_temperature(w)) for w in config.devices.AC)
+    return tuple(m.AcStatus(w, ac_state(w), _ac_temperature(w)) for w in config.devices.AC)
 
 
 def capture_sensors() -> list[m.DeviceStatus]:
@@ -231,7 +232,7 @@ def run_action(
     elif (plugin := config.plugin(id)) is not None:
         action = RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.delay)
     elif id in config.schedule_routines:
-        action = RunAction(lambda entry: run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True))
+        action = RunAction(lambda entry: _run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True))
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
@@ -245,7 +246,7 @@ def run_action(
         return False
 
     display = f"`{_RUN_DISPLAY.get(id, id)}`"
-    with record_duration(id):
+    with _record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
             log(source, Log.TASK_QUEUED.format(id=id, when=when), trigger)
@@ -268,7 +269,7 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
     else:
         raise ValueError(f"Unknown room state: {state}")
     entry = log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state), trigger)
-    with record_duration(id):
+    with _record_duration(id):
         dispatch(commands, force=True, entry=entry)
 
 
@@ -291,14 +292,14 @@ def restore_scene(key: str, commands: m.Commands, entry: m.LogEntry) -> None:
     dispatch(commands, force=True, entry=entry)
 
 
-type _Job = tuple[Callable[..., None], m.DeviceEnum, engine.Command[Any]]
+type _Job = tuple[Callable[..., None], m.DeviceEnum, em.Command[Any]]
 
 
 def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
     assert _ctx is not None
     commands = m.squish(commands)
-    always = engine.Action(commands)
-    survived = set(_ctx.engine.evaluate((always,), read=clock_reader, force=force)[0].commands)
+    always = em.Action(commands)
+    survived = set(_ctx.engine.evaluate((always,), read=engine.nothing, force=force)[0].commands)
 
     stream: dict[Any, tuple[str, str]] = {}
     todo: list[_Job] = []
@@ -343,14 +344,14 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
         dispatch(config.routines[config.settings.emergency_routine].commands, force=True, entry=entry)
         if text is not None:
             video_url = m.AlertVideo(f"{config.settings.base_url}/api/alert.mp4?text={quote(text)}")
-            dispatch((engine.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, entry=entry)
+            dispatch((em.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, entry=entry)
             if not isinstance(device, config.devices.Chromecast):
-                dispatch((engine.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
+                dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
     elif text is not None:
-        dispatch((engine.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
+        dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
     else:
         assert path is not None
-        dispatch((engine.Command(m.Devices(device), path),), force=True, entry=entry)
+        dispatch((em.Command(m.Devices(device), path),), force=True, entry=entry)
 
 
 def reboot_hubitat() -> None:
@@ -369,7 +370,7 @@ def set_ac(backend: m.AcService) -> None:
     config.registry.ac = backend
 
 
-def ac_command(device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None) -> None:
+def _ac_command(device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None) -> None:
     if config.registry.ac is None:
         raise RuntimeError("no AC backend registered; enable an AC plugin (e.g. orc_extras.lg_ac)")
     config.registry.ac.command(device, state, mode, fan, temp)
@@ -379,7 +380,7 @@ def ac_state(device: m.DeviceEnum) -> m.AcState | None:
     return config.registry.ac.state(device) if config.registry.ac else None
 
 
-def ac_temperature(device: m.DeviceEnum) -> int | None:
+def _ac_temperature(device: m.DeviceEnum) -> int | None:
     return config.registry.ac.temperature(device) if config.registry.ac else None
 
 
@@ -399,7 +400,7 @@ def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
         if dispatch_handler is not None and id in cls.__members__:
             member = cls[id]
             entry.requests += (m.Request(str(member.value), parsed),)
-            dispatch_handler(_ctx, member, engine.Command(m.Devices(member), parsed), {})
+            dispatch_handler(_ctx, member, em.Command(m.Devices(member), parsed), {})
             return True
     return False
 
@@ -420,7 +421,7 @@ def active_theme_override(today: date) -> m.ThemeOverride | None:
 def calculate_theme(today: date) -> str:
     if override := active_theme_override(today):
         return override.name
-    return base_theme(today)
+    return _base_theme(today)
 
 
 def is_working_day(today: date) -> bool:
@@ -428,7 +429,7 @@ def is_working_day(today: date) -> bool:
     return calculate_theme(today) == m.THEME_WORK_DAY
 
 
-def base_theme(today: date) -> str:
+def _base_theme(today: date) -> str:
     if today.weekday() in (5, 6):
         return m.THEME_DAY_OFF
     return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
@@ -522,7 +523,7 @@ def _scheduled_theme(today: date) -> m.Theme:
     if override := active_theme_override(today):
         theme = config.themes.get(override.name)
     else:
-        theme = config.themes.get(today.strftime("%A").lower()) or config.themes.get(base_theme(today))
+        theme = config.themes.get(today.strftime("%A").lower()) or config.themes.get(_base_theme(today))
     assert theme is not None
     return theme
 
@@ -565,7 +566,7 @@ def next_iot_job(present_names: set[str]) -> Job | None:
             for j in jobs
             if j.next_run_time
             and not any(step.command.tag == m.Tag.SYSTEM for step in j.args[0].rule.steps)
-            and matching_items(j.args[0].rule, j.next_run_time, present_names)
+            and _matching_items(j.args[0].rule, j.next_run_time, present_names)
         ),
         None,
     )
@@ -573,7 +574,7 @@ def next_iot_job(present_names: set[str]) -> Job | None:
 
 @requires_ctx
 def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
-    run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`", m.Scheduled(job.rule.name)), present_names())
+    _run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`", m.Scheduled(job.rule.name)), present_names())
 
 
 def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry) -> m.Commands:
@@ -583,9 +584,9 @@ def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry) -> m.Commands
     return m.squish(commands, on_conflict=log_conflict)
 
 
-def run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
+def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
     now = local_now()
-    if not (matched := matching_items(rule, now, pnames)):
+    if not (matched := _matching_items(rule, now, pnames)):
         if not pnames:
             detail = "nobody home"
         else:
@@ -623,25 +624,27 @@ def has_presence(rule: m.Routine) -> bool:
 
 
 def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
+    assert _ctx is not None
     presence = _presence(rule)
-    return bool(presence.steps) and not presence.holds(world_reader(present_names))
+    return bool(presence.steps) and not presence.holds(_ctx.engine.world(reader(present_names)))
 
 
 def weather_active(rule: m.Routine, now: datetime) -> bool:
-    return rule.where(lambda command: command.tag in _WEATHER_TRIGGERS).holds(lambda _subject: _fetch_weather(now))
-
-
-def matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
     assert _ctx is not None
-    return _ctx.engine.evaluate((rule,), read=world_reader(pnames, now), force=True)[0].commands
+    return rule.where(lambda command: command.tag in _WEATHER_TRIGGERS).holds(_ctx.engine.world(lambda _subject: _fetch_weather(now)))
 
 
-def world_reader(present: set[str] | None = None, now: datetime | None = None) -> engine.Read:
+def _matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
+    assert _ctx is not None
+    return _ctx.engine.evaluate((rule,), read=reader(pnames, now), force=True)[0].commands
+
+
+def reader(present: set[str] | None = None, now: datetime | None = None) -> em.Read:
     pnames = present_names() if present is None else present
     when = local_now() if now is None else now
 
     @cache
-    def read(subject: engine.Subject) -> engine.Value:
+    def read(subject: em.Subject) -> em.Value:
         match subject:
             case m.PersonSubject(name):
                 return name in pnames
@@ -655,14 +658,8 @@ def world_reader(present: set[str] | None = None, now: datetime | None = None) -
     return read
 
 
-def clock_reader(subject: engine.Subject) -> engine.Value:
-    if isinstance(subject, engine.ClockSubject):
-        return local_now()
-    raise KeyError(subject)
-
-
 def runtime() -> engine.Runtime:
-    return engine.Runtime(clock_reader, bypass=m.Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT)
+    return engine.Runtime(config.settings.tz, bypass=m.Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT)
 
 
 def _fetch_weather(now: datetime) -> frozenset[m.WeatherCondition]:
@@ -682,7 +679,7 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
 def replay_day(now: datetime, entry: m.LogEntry) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
-    matched = [c for (when, cfg) in jobs if when <= now and m.SKIP_REPLAY_TAG not in cfg.tags for c in matching_items(cfg, now, present)]
+    matched = [c for (when, cfg) in jobs if when <= now and m.SKIP_REPLAY_TAG not in cfg.tags for c in _matching_items(cfg, now, present)]
     dispatch(tuple(matched), force=True, entry=entry)
 
 
@@ -694,14 +691,14 @@ def _scheduler() -> m.Scheduler:
     return _ctx.scheduler
 
 
-def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(command.value, int):
         config.providers.mqtt.publish_light(w, brightness=command.value)
     else:
         config.providers.mqtt.publish_light(w, on=command.value == m.ON)
 
 
-def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(command.value, int):
         config.providers.chromecast.set_volume(w, command.value)
     elif isinstance(command.value, m.Speak):
@@ -723,7 +720,7 @@ def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Com
         raise ValueError(f"Unsupported Chromecast state: {command.value!r}")
 
 
-def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(command.value, int):
         config.providers.audio.set_volume(w, command.value)
     elif isinstance(command.value, m.Speak):
@@ -734,11 +731,11 @@ def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[An
         config.providers.audio.alert(w, command.value)
 
 
-def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: engine.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
+def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
     if isinstance(command.value, m.AcCommand):
-        ac_command(w, m.ON, command.value.mode, command.value.fan, command.value.temp)
+        _ac_command(w, m.ON, command.value.mode, command.value.fan, command.value.temp)
     elif command.value in (m.ON, m.OFF):
-        ac_command(w, command.value)
+        _ac_command(w, command.value)
     else:
         raise ValueError(f"AC devices don't support state {command.value!r}")
 

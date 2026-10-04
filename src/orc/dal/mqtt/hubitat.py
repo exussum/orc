@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import paho.mqtt.client as mqtt
-from orc_engine import engine
+from orc_engine import model as em
 
 import orc
 from orc import model as m
@@ -146,7 +146,7 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Commands:
         switch = attrs.get("switch", m.OFF)
         return int(attrs["level"]) if ("level" in attrs and switch == m.ON) else switch
 
-    return tuple(engine.Command(m.Devices(light), state(light)) for light in lights)
+    return tuple(em.Command(m.Devices(light), state(light)) for light in lights)
 
 
 def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:
