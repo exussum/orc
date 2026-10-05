@@ -49,7 +49,7 @@ class TestButtons:
 class TestBattery:
     @pytest.mark.parametrize(
         "old, new, expected",
-        [("20", "5", True), ("5", "5", False), ("5", "80", False)],
+        [("20", "5", True), ("5", "5", False), ("5", "80", False), (None, "5", True)],
     )
     def test_notifies_on_crossing_into_critical(self, ctx, old, new, expected):
         on_event = _capture("add_listener", lambda: battery.setup(ctx))

@@ -17,7 +17,8 @@ def _on_event(ctx: m.AppContext, device: m.DeviceState, attribute: str, old: Any
     if attribute != "battery":
         return
     level = m.BatteryLevel.from_fraction(new, 100)
-    if level.is_critical and not m.BatteryLevel.from_fraction(old, 100).is_critical:
+    was_critical = old is not None and m.BatteryLevel.from_fraction(old, 100).is_critical
+    if level.is_critical and not was_critical:
         msg = Log.LOW_BATTERY.format(device=device.name, level=level.value)
         ctx.api.log(
             m.LogSource.SYSTEM, msg, m.Broker(id=str(device.id), source="hubitat"), notification=m.Notification(("battery", device.name))
