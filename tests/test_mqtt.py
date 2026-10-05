@@ -33,7 +33,6 @@ def clean_state(monkeypatch):
     monkeypatch.setattr(mqtt, "_devices", LockedDict())
     monkeypatch.setattr(mqtt, "_hub_id", None)
     monkeypatch.setattr(mqtt, "_listeners", [])
-    monkeypatch.setattr(mqtt, "_button_listeners", [])
 
 
 def _receive(docs):
@@ -152,35 +151,43 @@ def _button_msg(event_type, device_id=10, button=1):
 
 
 class TestButtonEvents:
-    def test_fires_listener_with_device_button_event(self):
+    def test_fires_listener_as_a_change_with_no_before(self):
         events = []
-        mqtt.add_button_listener(lambda d, b, e: events.append((d, b, e)))
+        mqtt.add_listener(lambda d, a, old, new: events.append((d.id, d.name, a, old, new)))
+        _receive([_doc(id=10, name="remote", attributes={"pushed": "1"})])
         mqtt._on_message(None, None, _button_msg("held"))
-        assert events == [("10", 1, "held")]
+        assert events == [("10", "remote", "held", None, 1)]
+
+    def test_press_from_a_device_the_hub_never_exported_is_dropped(self):
+        events = []
+        mqtt.add_listener(lambda *a: events.append(a))
+        mqtt._on_message(None, None, _button_msg("held"))
+        assert events == []
 
     def test_clearing_publish_ignored(self):
         events = []
-        mqtt.add_button_listener(lambda *a: events.append(a))
+        mqtt.add_listener(lambda *a: events.append(a))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"", retain=False))
         assert events == []
 
     def test_command_echo_ignored(self):
         events = []
-        mqtt.add_button_listener(lambda *a: events.append(a))
+        mqtt.add_listener(lambda *a: events.append(a))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/commands/release", b"1", retain=False))
         assert events == []
 
     def test_bad_payload_ignored(self):
         events = []
-        mqtt.add_button_listener(lambda *a: events.append(a))
+        mqtt.add_listener(lambda *a: events.append(a))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"not json", retain=False))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", {"unexpected": "shape"}, retain=False))
         assert events == []
 
     def test_failing_listener_does_not_break_others(self):
         events = []
-        mqtt.add_button_listener(lambda d, b, e: 1 / 0)
-        mqtt.add_button_listener(lambda d, b, e: events.append(e))
+        mqtt.add_listener(lambda d, a, old, new: 1 / 0)
+        mqtt.add_listener(lambda d, a, old, new: events.append(a))
+        _receive([_doc(id=10, name="remote", attributes={"pushed": "1"})])
         mqtt._on_message(None, None, _button_msg("pushed"))
         assert events == ["pushed"]
 
@@ -256,6 +263,11 @@ class TestFetchHubitatConfig:
         fake.docs = docs
         monkeypatch.setattr(mqtt.mqtt, "Client", lambda *a, **k: fake)
         return mqtt.fetch_hubitat_config(secrets or m.Secrets(mqtt_user="u", mqtt_password="p"), timeout=timeout)
+
+    def test_discovery_warms_the_device_cache(self, monkeypatch):
+        self._fetch(monkeypatch, [_doc(id=17, name="entrance bulb 1")])
+        assert [state.device.name for state in mqtt.snapshot()] == ["entrance bulb 1"]
+        assert mqtt._hub_id == HUB
 
     def test_maps_name_to_id_and_infers_dimmable_from_level(self, monkeypatch):
         docs = [

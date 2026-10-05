@@ -147,10 +147,6 @@ def add_listener(fn: m.Listener) -> None:
     config.providers.mqtt.add_listener(fn)
 
 
-def add_button_listener(fn: m.ButtonListener) -> None:
-    config.providers.mqtt.add_button_listener(fn)
-
-
 def add_external_listener(fn: m.Listener) -> None:
     config.providers.mqtt.add_external_listener(fn)
 

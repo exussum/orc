@@ -72,17 +72,13 @@ _commanded: LockedDict[str, _Command] = LockedDict()  # device id -> expected ou
 # motion active/inactive, contact open/close, switch state, all attributes alike.
 # State is never an event: first sightings (the retained flood at boot) and replays
 # (a document identical to the cached one — reconnect floods, hub republish after
-# reboot) update the cache but fire no listeners, so ``old`` is never None. No other
-# dedup: the hub regenerates the document only when something happens, so a changed
-# document fires every attribute, unchanged ones included (old == new); consumers
-# filter for what they care about. Callbacks run on the mqtt thread; keep them fast
-# and don't block.
+# reboot) update the cache but fire no listeners, so ``old`` is None only for a button
+# press, which rides the same list as (device, event type, None, button number) — a
+# dedicated event message with nothing before it. No other dedup: the hub regenerates
+# the document only when something happens, so a changed document fires every
+# attribute, unchanged ones included (old == new); consumers filter for what they care
+# about. Callbacks run on the mqtt thread; keep them fast and don't block.
 _listeners: list[m.Listener] = []
-
-# Button-event listeners: fired as (device id, button number, event type) for every
-# ``devices/<id>/button/<n>`` publish. Unlike the document topics these are dedicated
-# event messages (not retained, no flood replay), so no staleness filtering applies.
-_button_listeners: list[m.ButtonListener] = []
 
 # External-control listeners: fired as (device, attribute, old, new) for each
 # switch/level change with no recent orc command behind it. Same contract as
@@ -92,10 +88,6 @@ _external_listeners: list[m.Listener] = []
 
 def add_listener(fn: m.Listener) -> None:
     _listeners.append(fn)
-
-
-def add_button_listener(fn: m.ButtonListener) -> None:
-    _button_listeners.append(fn)
 
 
 def add_external_listener(fn: m.Listener) -> None:
@@ -153,8 +145,11 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
     found: dict[str, tuple[str, frozenset[m.Capability]]] = {}
 
     def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+        global _hub_id
         state = _parse_device_state(msg)
         if state is not None:
+            _hub_id = msg.topic.split("/")[1]
+            _devices[state.device.id] = state
             dimmable = "level" in state.attributes
             found[state.device.name] = (state.device.id, frozenset([m.Capability.change_level]) if dimmable else frozenset())
 
@@ -265,11 +260,14 @@ def _receive_command_echo(msg: mqtt.MQTTMessage) -> None:
 def _receive_button_event(msg: mqtt.MQTTMessage) -> None:
     try:
         doc = json.loads(msg.payload)
-        event = msg.topic.split("/")[3], int(doc["button"]), doc["event_type"]
+        device_id, button, event_type = msg.topic.split("/")[3], int(doc["button"]), doc["event_type"]
     except ValueError, KeyError, TypeError:
         _log.exception("mqtt: bad button event on %s", msg.topic)
         return
-    _fire(_button_listeners, msg.topic, *event)
+    known = _devices.get(device_id)
+    if known is None:
+        return
+    _fire(_listeners, msg.topic, known.device, event_type, None, button)
 
 
 def _fire(listeners: Sequence[Callable[..., None]], topic: str, *args: Any) -> None:
