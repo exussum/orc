@@ -176,7 +176,7 @@ def run_routine(id: str) -> dict[str, Any]:
 
 @bp.route("/api/presence/<name>/checkin")
 def checkin_presence(name: str) -> dict[str, Any]:
-    trigger = m.Manual(name)
+    trigger = m.Manual(_person(name))
     api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger)
     api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger)
     return {}
@@ -184,7 +184,7 @@ def checkin_presence(name: str) -> dict[str, Any]:
 
 @bp.route("/api/presence/<name>/expire")
 def expire_presence(name: str) -> dict[str, Any]:
-    trigger = m.Manual(name)
+    trigger = m.Manual(_person(name))
     api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger)
     api.expire_presence([name], trigger, force=True)
     return {}
@@ -238,7 +238,8 @@ def presence() -> str:
 
 @bp.route("/api/device/<id>")
 def device_api(id: str) -> dict[str, Any]:
-    state = request.args.get("state")
+    if (state := request.args.get("state")) is None:
+        abort(400, "Missing state")
     if not api.device_command(id, state, api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), m.Manual(id))):
         abort(404, "Unknown device")
     return {}
@@ -368,3 +369,9 @@ def _to_level(state: object) -> int:
     if isinstance(state, int):
         return state
     return 100 if state == m.ON else 0
+
+
+def _person(name: str) -> str:
+    if name not in config.people:
+        abort(404, f"Unknown person: {name}")
+    return name

@@ -221,6 +221,16 @@ def test_pause_unknown_job_returns_404(client, ctx):
     assert response.status_code == 404
 
 
+def test_device_missing_state_returns_400(client):
+    response = client.get("/api/device/nope")
+    assert (response.status_code, response.get_json()) == (400, {"error": "Missing state"})
+
+
+def test_checkin_unknown_person_returns_404(client):
+    response = client.get("/api/presence/nobody/checkin")
+    assert (response.status_code, response.get_json()) == (404, {"error": "Unknown person: nobody"})
+
+
 def test_device_unknown_returns_404(client):
     response = client.get("/api/device/nope?state=on")
     assert response.status_code == 404
