@@ -10,7 +10,7 @@ from flask import Blueprint, Flask, abort, render_template, request
 from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import HTTPException
 
 from orc import alerts, api, config
 from orc import model as m
@@ -68,9 +68,10 @@ def codespan(text: str) -> Markup:
     return Markup(_CODESPAN_RE.sub(r"<code>\1</code>", str(escape(text))))  # nosemgrep: explicit-unescape-with-markup
 
 
+@bp.errorhandler(400)
 @bp.errorhandler(404)
-def not_found(exc: NotFound) -> tuple[dict[str, str], int]:
-    return {"error": exc.description}, 404
+def http_error(exc: HTTPException) -> tuple[dict[str, str], int]:
+    return {"error": exc.description or ""}, exc.code or 500
 
 
 @bp.after_request
@@ -247,7 +248,9 @@ def device_api(id: str) -> dict[str, Any]:
 def room(id: str) -> dict[str, Any]:
     if id not in config.rooms:
         abort(404, "Unknown room")
-    api.run_room(id, request.args.get("state"), m.Manual(id))
+    elif (state := request.args.get("state")) not in (m.ON, m.OFF, m.FOLLOW):
+        abort(400, f"Unknown room state: {state}")
+    api.run_room(id, state, m.Manual(id))
     return {}
 
 

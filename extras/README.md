@@ -169,7 +169,7 @@ omitted, and `Settings` is shown with fewer fields than the real one — see
 [`src/orc_extras/entrance_sensor/__init__.py`](src/orc_extras/entrance_sensor/__init__.py)
 for the full plugin.)
 
-The grammar is one docopt pattern per line; the first word is the command.
+The grammar is one docopt-shaped usage pattern per line, parsed by command-cfg; the first word is the command.
 Values arrive as strings; a serializer's `types=` mapping (field name to
 callable) coerces the ones that need it — here `entrance_id`/`snapshot`
 become `int`. Anything not listed in `types=` stays a string, so a factory
@@ -198,7 +198,7 @@ file order and the first one containing the current time wins, so an
 overlapping window placed higher up overrides the ones below it. The winning
 window's routine is dispatched when the sensor goes active; reactions to
 arrival itself (e.g. pausing media, turning on a light) belong in a `react`
-rule on the same sensor instead. The cleanup job dispatches only `rules`
+rule on the same sensor instead (see the [react README](src/orc_extras/react/README.md)). The cleanup job dispatches only `rules`
 routines (`present`, `absent`, `shutdown`).
 
 If the main config defines BLE `tag` lines, `cleanup_delay_minutes` must be

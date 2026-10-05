@@ -6,7 +6,7 @@ from orc_engine import model as em
 import orc_extras.react
 from orc import model as m
 from orc.plugins import requires_ctx
-from orc_extras.react.model import FUNCTIONS, FormulaSubject, Log, State, Transition
+from orc_extras.react.model import FUNCTIONS, AcSubject, CastSubject, Device, FormulaSubject, Log, MqttDeviceSubject, State, Transition
 
 JOB_ID = "react"
 
@@ -16,7 +16,7 @@ def sleep(ctx: m.AppContext, name: str) -> datetime:
     until = ctx.api.local_now() + state.groups[name].pause
     state.disabled[name] = until
     for watch in state.watches:
-        if watch.rule in state.groups[name].rules:
+        if watch in state.groups[name].watches:
             ctx.scheduler.cancel(_job(watch))
     ctx.api.log(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
     return until
@@ -36,19 +36,19 @@ def disabled_until(state: State, name: str, now: datetime) -> datetime | None:
 
 
 def is_disabled(state: State, watch: em.Watch[Any], now: datetime) -> bool:
-    name = state.name_of.get(watch.rule)
+    name = state.name_of.get(watch)
     return bool(name and disabled_until(state, name, now))
 
 
 def _trigger_label(watch: em.Watch[Any], state: State) -> Any:
     if isinstance(watch.condition, Transition):
         return watch.condition.to
-    return state.name_of.get(watch.rule, "")
+    return state.name_of.get(watch, "")
 
 
-def _changes(changed: m.MqttDeviceSubject, old: Any, new: Any) -> em.Changes:
+def _changes(changed: MqttDeviceSubject, old: Any, new: Any) -> em.Changes:
     def changes(subject: em.Subject) -> tuple[em.Value, em.Value]:
-        if subject == changed or subject == m.Device(changed.device):
+        if subject == changed or subject == Device(changed.device):
             return (old, new)
         raise KeyError(subject)
 
@@ -60,20 +60,19 @@ def _reader(ctx: m.AppContext) -> em.Read:
 
     def read(subject: em.Subject) -> em.Value:
         match subject:
-            case m.MqttDeviceSubject(device, attribute):
-                found = next((s for s in ctx.api.device_states() if s.id == device.value), None)
+            case MqttDeviceSubject(device, attribute):
+                found = ctx.api.device_state(str(device.value))
                 return found.attributes.get(attribute) if found else None
-            case m.AcSubject(device):
+            case AcSubject(device):
                 status = next((s for s in ctx.api.capture_acs() if s.what is device), None)
                 return status.state if status else None
-            case m.CastSubject(device):
+            case CastSubject(device):
                 sound = next((s for s in ctx.api.capture_sounds() if s.what is device), None)
                 return sound.playback.value if sound else None
             case FormulaSubject(device, expr):
-                target = str(device.value)
-                found = ctx.api.device_state(target)
+                found = ctx.api.device_state(str(device.value))
                 if found is None:
-                    raise KeyError(target)
+                    return None
                 ns: dict[str, Any] = {**FUNCTIONS, **{name: _num(value) for name, value in found.attributes.items()}}
                 try:
                     return eval(expr, ns)  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
@@ -96,7 +95,7 @@ def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.Dev
     source = sources.get(device.id)
     if source is None:
         return
-    changed = m.MqttDeviceSubject(source, attribute)
+    changed = MqttDeviceSubject(source, attribute)
     state = ctx.plugin_state[orc_extras.react]
     now = ctx.api.local_now()
     awake = [watch for watch in state.watches if not is_disabled(state, watch, now)]
