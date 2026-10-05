@@ -117,7 +117,7 @@ class Range(em.Condition):
         if not isinstance(value, (int, float, str)):
             return False
         try:
-            return self.low <= float(value) <= self.high
+            return self.low <= float(value) < self.high
         except ValueError:
             return False
 
