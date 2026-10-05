@@ -53,7 +53,7 @@ class TestBattery:
     )
     def test_notifies_on_crossing_into_critical(self, ctx, old, new, expected):
         on_event = _capture("add_listener", lambda: battery.setup(ctx))
-        device = m.DeviceState(id=16, name="front door", attributes={"battery": new}, last_activity=None)
+        device = m.Device("16", "front door", "hubitat")
         with patch.object(api, "log") as log:
             on_event(device, "battery", old, new)
         if expected:
@@ -68,7 +68,7 @@ class TestBattery:
 
     def test_ignores_other_attributes(self, ctx):
         on_event = _capture("add_listener", lambda: battery.setup(ctx))
-        device = m.DeviceState(id=16, name="front door", attributes={"motion": "active"}, last_activity=None)
+        device = m.Device("16", "front door", "hubitat")
         with patch.object(api, "log") as log:
             on_event(device, "motion", "inactive", "active")
         log.assert_not_called()
@@ -79,10 +79,10 @@ class TestExternal:
         on_external = _capture("add_external_listener", lambda: external.setup(ctx))
         api._ACTIVITY_LOG.clear()
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            on_external(m.DeviceState(1, "lamp a", {}, None), "switch", "off", "on")
-            on_external(m.DeviceState(2, "lamp b", {}, None), "switch", "off", "on")
+            on_external(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on")
+            on_external(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on")
             frozen.tick(api._ROLLUP_WINDOW)
-            on_external(m.DeviceState(1, "lamp a", {}, None), "switch", "on", "off")
+            on_external(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off")
         assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
             ("`lamp a` switch: on → off", []),
             ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),

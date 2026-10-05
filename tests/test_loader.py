@@ -56,14 +56,18 @@ def test_devices_build_enums_with_rooms():
     assert light["DESK"].room == m.UNASSIGNED_ROOM
 
 
-def test_devices_without_zigbee_config_get_virtual_ids():
-    light = parse("core").enums["Light"]
-    assert (light["LAMP"].value, light["DESK"].value) == (-1, -2)
+def test_devices_without_zigbee_config_get_generated_ids_and_are_virtual():
+    parsed = parse("core")
+    light = parsed.enums["Light"]
+    assert len({light["LAMP"].value, light["DESK"].value}) == 2
+    assert all(len(light[name].value) == 32 for name in ("LAMP", "DESK"))
+    assert {light["LAMP"], light["DESK"]} <= parsed.virtual_devices
 
 
 def test_devices_resolve_zigbee_ids():
-    light = parse("core", zigbee_config={"h1": (5, frozenset())}).enums["Light"]
-    assert light["LAMP"].value == 5
+    parsed = parse("core", zigbee_config={"h1": ("5", frozenset())})
+    assert parsed.enums["Light"]["LAMP"].value == "5"
+    assert parsed.enums["Light"]["LAMP"] not in parsed.virtual_devices
 
 
 def test_device_only_defines_and_seals_in_one_line():

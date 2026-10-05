@@ -25,7 +25,7 @@ class Log(m.LogSourceEnum):
     ENTRANCE = "entrance"
 
 
-def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
+def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Device, attribute: str, old: Any, new: Any) -> None:
     if device.id not in (sensor.setting.entrance.value, sensor.setting.patio_door.value):
         return
     if _entrance_motion_changed(sensor, device, attribute, old, new):
@@ -35,7 +35,7 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
         # the scheduler's worker; None grace so a busy worker delays, never drops.
         previous = ctx.plugin_state[orc_extras.entrance_sensor]
         if new == sensor.setting.active_event or not previous:
-            trigger: m.Trigger = m.Broker(id=str(device.id), source="hubitat")
+            trigger: m.Trigger = m.Broker(id=device.id, source=device.source)
         else:
             trigger = previous.entry.trigger
         log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger)
@@ -47,7 +47,7 @@ def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Devic
         ctx.scheduler.now(_run_motion, sensor, new, log_entry, name="Entrance Motion")
 
 
-def _entrance_motion_changed(sensor: SimpleNamespace, device: m.DeviceState, attribute: str, old: Any, new: Any) -> bool:
+def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribute: str, old: Any, new: Any) -> bool:
     return (
         attribute == "motion"
         and old != new
@@ -108,7 +108,7 @@ def battery_state(ctx: m.AppContext, sensor: SimpleNamespace) -> list[m.DeviceSt
     devices = ctx.api.device_states()
     statuses = [
         m.DeviceStatus(
-            name=d.name if d else (member.label or member.name),
+            name=d.device.name if d else (member.label or member.name),
             details={
                 "battery": m.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
                 "last_activity": d.last_activity if d else None,
@@ -129,8 +129,8 @@ def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:
     return device is not None and device.attributes.get("contact") == "open"
 
 
-def _sensor(devices: Sequence[m.DeviceState], device_id: int) -> m.DeviceState | None:
-    return next((d for d in devices if d.id == device_id), None)
+def _sensor(devices: Sequence[m.DeviceState], device_id: str) -> m.DeviceState | None:
+    return next((d for d in devices if d.device.id == device_id), None)
 
 
 def _timed_commands(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, m.Commands]:

@@ -1,4 +1,5 @@
 import os
+import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, replace
 from datetime import datetime, timedelta, tzinfo
@@ -57,7 +58,9 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
     serializers = {
         "person": group(m.Person),
         "device": each(
-            partial(_device, zigbee_config or {}), default=lambda: SimpleNamespace(members={}, enums={}, sorts={}), types={"sort": int}
+            partial(_device, zigbee_config or {}),
+            default=lambda: SimpleNamespace(members={}, enums={}, sorts={}, virtual_devices=set()),
+            types={"sort": int},
         ),
         "room": each(_room, default=dict),
         "ad_hoc": each(_ad_hoc, default=dict, types={"snapshot": int, "delay": int}),
@@ -90,6 +93,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
     return SimpleNamespace(
         ad_hoc=objects["ad_hoc"],
         enums=objects["device"].enums,
+        virtual_devices=objects["device"].virtual_devices,
         highlight=objects["highlight"],
         person=objects["person"],
         plugin_modules=[p.module for p in objects["plugin"]],
@@ -206,14 +210,15 @@ def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any
         vals = [r[idx] for r in rows]
         if duplicates := {v for v in vals if vals.count(v) > 1}:
             raise ValueError(f"Duplicate {label} in '{type_name}': {duplicates}")
-    if type_name in ("Light", "Button", "Sensor"):
-        members = {
-            name: (*zigbee_config.get(target, (-(i + 1), frozenset())), room, label) for i, (name, target, room, label) in enumerate(rows)
-        }
+    hub = type_name in ("Light", "Button", "Sensor")
+    if hub:
+        members = {name: (*zigbee_config.get(target, (uuid.uuid4().hex, frozenset())), room, label) for name, target, room, label in rows}
     else:
         members = {name: (target, frozenset(), room, label) for name, target, room, label in rows}
     # functional Enum API: mypy checks against the member-level __new__ rather than EnumMeta.__call__
     enum: type[m.DeviceEnum] = m.DeviceEnum(type_name, members, module="orc")  # type: ignore[call-arg,arg-type,assignment]
+    if hub:
+        objects["device"].virtual_devices.update(enum[name] for name, target, _, _ in rows if target not in zigbee_config)
     if (sort := objects["device"].sorts.get(type_name)) is not None:
         enum._sort = sort
     return enum

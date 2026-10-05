@@ -232,7 +232,7 @@ def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one(ac):
 
 
 def test_capture_sensors_reads_the_device_cache():
-    device = m.DeviceState(id=orc.Sensor.living.value, name="living room sensor", attributes={"temperature": 70}, last_activity=None)
+    device = m.DeviceState(m.Device(orc.Sensor.living.value, "living room sensor", "hubitat"), {"temperature": 70}, None)
     with patch.object(mqtt_stub, "snapshot", return_value=[device]):
         assert api.capture_sensors() == [m.DeviceStatus(name="living room sensor", details={"temperature": 70})]
 

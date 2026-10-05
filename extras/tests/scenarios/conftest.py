@@ -18,7 +18,7 @@ from orc.view import bp
 
 MONDAY_AFTERNOON = datetime(2026, 1, 5, 15, tzinfo=config.settings.tz)
 HUB = {
-    target: (hub_id, frozenset())
+    target: (str(hub_id), frozenset())
     for hub_id, target in enumerate(
         ("bedroom lamp", "living room desk", "kitchen", "hall", "porch", "office", "scene", "front door motion sensor", "balcony door"), 1
     )
@@ -97,9 +97,9 @@ class House:
 
     def report(self, device, attribute, new):
         old = self.reported.get((device, attribute))
-        state = m.DeviceState(id=device.value, name=device.label, attributes={attribute: new}, last_activity=None)
+        state = m.DeviceState(m.Device(device.value, device.label, "hubitat"), {attribute: new}, None)
         for listener in self.listeners:
-            listener(state, attribute, old, new)
+            listener(state.device, attribute, old, new)
         self.reported[(device, attribute)] = new
         self.ctx.scheduler.run_due(api.local_now(), self.ctx)
 
