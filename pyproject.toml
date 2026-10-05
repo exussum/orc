@@ -31,7 +31,7 @@ dependencies = [
     "recurring-ical-events==3.8.2",
     "requests==2.34.2",
     "yt-dlp==2026.8.19",
-    "command-cfg==1.0.1",
+    "command-cfg==1.1.0",
 ]
 name = "orc"
 version = "0.0.1"
@@ -99,6 +99,6 @@ orc-engine = { path = "../orc-engine", editable = true }
 orc = { workspace = true }
 orc_data = { workspace = true, editable = false }
 orc_extras = { workspace = true }
-command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v1.0.1" }
+command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v1.1.0" }
 
 
