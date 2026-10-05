@@ -3,6 +3,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from orc_engine import cast
 from py_vapid import Vapid
@@ -15,6 +16,11 @@ from orc.dal.push import Gone
 _TTL_SECONDS = 24 * 60 * 60
 _GONE_STATUSES = frozenset({401, 403, 404, 410})
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {"vapid_private_key": cast.key32}
+
+
+def vapid_key() -> None:
+    private = ec.generate_private_key(ec.SECP256R1()).private_numbers().private_value
+    print(base64.urlsafe_b64encode(private.to_bytes(32, "big")).rstrip(b"=").decode())
 
 
 def public_key() -> str:
