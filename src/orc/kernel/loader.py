@@ -17,7 +17,6 @@ from orc.dal import interfaces
 from orc.kernel import cast
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
-_WEATHER_TRIGGERS = frozenset(wc.value for wc in m.WeatherCondition)
 
 _POLAR_LATITUDE = 65.7
 
@@ -189,7 +188,7 @@ def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None
 def _condition(trigger: str | None) -> em.Condition:
     if trigger in (None, m.Tag.SYSTEM):
         return em.And()
-    elif trigger in _WEATHER_TRIGGERS:
+    elif trigger in m.WeatherCondition:
         return m.Weather(m.WeatherCondition(trigger))
     elif trigger == m.Tag.ANYONE:
         return m.Anyone()

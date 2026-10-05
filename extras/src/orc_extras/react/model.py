@@ -28,8 +28,29 @@ class Log(m.LogSourceEnum):
 
 
 @dataclass(frozen=True)
+class Device(em.Subject):
+    device: m.DeviceEnum
+
+
+@dataclass(frozen=True)
+class MqttDeviceSubject(em.Subject):
+    device: m.DeviceEnum
+    attribute: str
+
+
+@dataclass(frozen=True)
+class AcSubject(em.Subject):
+    device: m.DeviceEnum
+
+
+@dataclass(frozen=True)
+class CastSubject(em.Subject):
+    device: m.DeviceEnum
+
+
+@dataclass(frozen=True)
 class Transition(em.Condition):
-    subject: m.MqttDeviceSubject
+    subject: MqttDeviceSubject
     to: em.Value
 
     def holds(self, world: em.World) -> bool:
@@ -48,7 +69,7 @@ class Reaction(NamedTuple):
 
 
 class Group(NamedTuple):
-    rules: tuple[em.Rule[m.Devices], ...]
+    watches: tuple[em.Watch[m.Devices], ...]
     pause: timedelta
 
 
@@ -56,13 +77,13 @@ class Group(NamedTuple):
 class State:
     watches: tuple[em.Watch[m.Devices], ...]
     groups: dict[str, Group]
-    name_of: dict[em.Rule[Any], str]
+    name_of: dict[em.Watch[Any], str]
     disabled: dict[str, datetime] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class AcIs(em.Condition):
-    subject: m.AcSubject
+    subject: AcSubject
     allowed: m.AcState
 
     def holds(self, world: em.World) -> bool:

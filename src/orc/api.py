@@ -38,7 +38,6 @@ DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolv
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
 _ROLLUP_WINDOW = timedelta(seconds=5)
-_WEATHER_TRIGGERS: frozenset[str] = frozenset(wc.value for wc in m.WeatherCondition)
 _RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 
 _ctx: m.AppContext | None = None
@@ -594,7 +593,7 @@ def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], 
             detail = ", ".join(unmet) if unmet else "no conditions met"
         entry.action += f" — {Log.RULE_SKIPPED.format(detail=detail)}"
         return
-    elif weather_triggers := {c.tag for c in matched if c.tag in _WEATHER_TRIGGERS}:
+    elif weather_triggers := {str(c.tag) for c in matched if c.tag in m.WeatherCondition}:
         entry.action += f" (weather: {', '.join(sorted(weather_triggers))})"
     dispatch(squish(matched, entry), force=force, entry=entry)
 
@@ -616,7 +615,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
 
 
 def _presence(rule: m.Routine) -> m.Routine:
-    return rule.where(lambda command: command.tag not in (None, m.Tag.SYSTEM, *_WEATHER_TRIGGERS))
+    return rule.where(lambda command: command.tag not in (None, m.Tag.SYSTEM) and command.tag not in m.WeatherCondition)
 
 
 def has_presence(rule: m.Routine) -> bool:
@@ -631,7 +630,7 @@ def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
 
 def weather_active(rule: m.Routine, now: datetime) -> bool:
     assert _ctx is not None
-    return rule.where(lambda command: command.tag in _WEATHER_TRIGGERS).holds(_ctx.engine.world(lambda _subject: _fetch_weather(now)))
+    return rule.where(lambda command: command.tag in m.WeatherCondition).holds(_ctx.engine.world(lambda _subject: _fetch_weather(now)))
 
 
 def _matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
