@@ -1,62 +1,38 @@
 # `lg_ac` plugin
 
-Local control for an LG window air conditioner (ThinQ2 "clip" protocol), replacing
-LG's cloud. The plugin serves the AC's enrollment over HTTP, runs an embedded MQTT
-broker the AC connects to, decodes its binary TLV state, and exposes control.
+Local control of an LG window air conditioner, with no LG cloud. The AC is
+pointed at orc by DNS, enrols against it over HTTPS, and then holds an MQTT
+session to a broker embedded in the plugin. orc decodes the AC's binary
+state and exposes it as the built-in `AC` device: the device page's
+mode/fan/temperature card, routines and react rules all work on it.
 
-Calibrated for `WIN_056905_WW` (model `LW1522IVSM`); other models need a one-time
-calibration (see below).
+Calibrated for `WIN_056905_WW` (model `LW1522IVSM`); another model needs a
+one-time calibration (last section).
 
 ## Credit
 
-The ThinQ2 "clip" protocol (enrollment, the AABB/TLV framing, the `lime/devices`
-transport, and the field maps) was reverse-engineered by **anszom** in the
-**rethink** project — https://github.com/anszom/rethink. This plugin is a
-Python reimplementation of that work for orc.
+The ThinQ2 "clip" protocol (enrollment, the AABB/TLV framing, the
+`lime/devices` transport and the field maps) was reverse-engineered by
+**anszom** in the **rethink** project — https://github.com/anszom/rethink.
+This plugin is a Python reimplementation of that work for orc.
 
 ## Quick start
 
-1. **Install + activate**: `uv pip install -e 'extras[lg_ac]'`, then add
-   `plugin 'LG AC' orc_extras.lg_ac` to `src/config.orc`.
-2. **Config**: create `plugins/orc_extras/lg_ac.orc` in your config dir (settings
-   block below) and set `fqdn` to this server's real FQDN.
-3. **Certs**: `python -m orc_extras.lg_ac.gen_certs`, then paste the four PEMs into
-   Bitwarden Secrets as `LG_THINQ_*`.
-4. **DNS + nginx**: point `common.lgthinq.com → this host`, and add the nginx `:443`
-   server block that rewrites `/route*` onto the plugin.
-5. **Enroll**: start orc, power on the AC — it enrolls itself. Then grab its clip id:
-   `curl -sk https://<host>/api/lg_ac/enroll/devices`.
-6. **Declare the device**: add `device only AC main <clip-id>` to `config.orc` and
-   reload — it now appears on `/device/`.
+1. Install with the extra: `pip install './extras[lg_ac]'` pulls `amqtt`,
+   the embedded broker.
+2. Add `plugin 'LG AC' orc_extras.lg_ac` to `config.orc` and create
+   `plugins/orc_extras/lg_ac.orc` (below) with `fqdn` set to this server's
+   real name.
+3. Generate the certificates and store the four PEMs as secrets
+   ([Certificates](#certificates)).
+4. Point the AC's DNS at this host and put the nginx `:443` server block in
+   front of the enrollment routes ([DNS + nginx](#dns--nginx)).
+5. Start orc and power-cycle the AC: it enrols itself. Read its clip id
+   with `curl -sk https://<host>/api/lg_ac/enroll/devices`.
+6. Declare the device with that id as its target
+   ([The AC device](#the-ac-device)) and restart.
 
-Details for each step are in the sections below. A different AC model needs a
-one-time calibration (last section).
-
-## How it talks to the AC
-
-- The AC resolves `hostname` (e.g. `common.lgthinq.com`) via your DNS and hits it
-  on **:443** for enrollment: `GET /route`, `GET /route/certificate`,
-  `POST /device/<id>/certificate`.
-- It then connects to the embedded **MQTT broker on :8883** (TLS, our CA-signed
-  server cert) and publishes/subscribes over the clip protocol.
-- Server→device traffic goes to `lime/devices/<id>` as JSON `{cmd:"packet",...}`;
-  the device publishes state on `clip/message/devices/<id>`.
-
-## Install
-
-```
-uv pip install -e 'extras[lg_ac]'        # pulls amqtt (the only extra dep)
-```
-
-## Activate
-
-In `src/config.orc`:
-
-```
-plugin 'LG AC' orc_extras.lg_ac
-```
-
-Settings live in `plugins/orc_extras/lg_ac.orc` in your config dir:
+## Config
 
 ```
 setting hostname          common.lgthinq.com
@@ -67,44 +43,47 @@ setting mqtts_advertise   8883
 setting capture           False
 ```
 
-Set `fqdn` to this server's real FQDN (it must resolve to the LAN IP the AC
-reaches; that IP is what the device uses for MQTT and is baked into the server
-cert's SAN). Both the plugin (at startup) and `gen_certs` abort while it still
-ends in `.example`.
+| Setting           | Meaning                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| `hostname`        | The LG name the AC resolves; your DNS sends it here.                                              |
+| `fqdn`            | This server's real FQDN. Its LAN IP is what the AC connects to for MQTT and is in the cert's SAN. |
+| `https_advertise` | The HTTPS port told to the AC at enrollment (nginx listens there).                                |
+| `mqtt_port`       | The broker's plain port, loopback only; orc and `lg-ac-calibrate` talk to it.                     |
+| `mqtts_advertise` | The TLS port the broker binds and the AC is told to connect to.                                   |
+| `capture`         | Buffer recent wire frames in memory for `/api/lg_ac/enroll/capture`; only for calibration.        |
 
-## Certificates (via BWS)
+Startup refuses an `fqdn` still ending in `.example`, and so does `gen_certs`.
 
-The AC requires a CA-signed server cert with `serverAuth` EKU, chaining to the CA
-served at `/route/certificate`. Store four PEMs in Bitwarden Secrets under the
-`LG_THINQ_` namespace — each secret's **value is the PEM text itself**:
+## Certificates
 
-| BWS secret             | value                               |
-| ---------------------- | ----------------------------------- |
-| `LG_THINQ_CA_CERT`     | CA certificate (PEM)                |
-| `LG_THINQ_CA_KEY`      | CA private key (PEM)                |
-| `LG_THINQ_SERVER_CERT` | server certificate, CA-signed (PEM) |
-| `LG_THINQ_SERVER_KEY`  | server private key (PEM)            |
-
-`gen_certs` produces them locally; paste each file's contents into the matching
-secret:
+The AC requires a CA-signed server cert with the `serverAuth` EKU, chaining
+to the CA it fetches at `/route/certificate`. Generate them once:
 
 ```
 python -m orc_extras.lg_ac.gen_certs
-# ca.crt → LG_THINQ_CA_CERT, ca.key → LG_THINQ_CA_KEY,
-# server-ca.crt → LG_THINQ_SERVER_CERT, server-ca.key → LG_THINQ_SERVER_KEY
 ```
 
-At boot the plugin reads these PEMs from BWS and holds them in memory. The broker's
-TLS context is built from the in-memory server PEM via a temp file that exists only
-for the `load_cert_chain` call, then is deleted — nothing persists to disk. No cert
-paths in config.
+and store each file's text as a secret. Startup checks all four as PEM
+before any plugin runs.
+
+| Secret                 | File            | Content                    |
+| ---------------------- | --------------- | -------------------------- |
+| `LG_THINQ_CA_CERT`     | `ca.crt`        | CA certificate             |
+| `LG_THINQ_CA_KEY`      | `ca.key`        | CA private key             |
+| `LG_THINQ_SERVER_CERT` | `server-ca.crt` | server certificate, signed |
+| `LG_THINQ_SERVER_KEY`  | `server-ca.key` | server private key         |
+
+The PEMs are held in memory; the broker's TLS context is built through a
+temp file that exists only for the `load_cert_chain` call. Nothing cert-
+related is written to disk and there are no cert paths in config.
 
 ## DNS + nginx
 
-Point the AC's DNS at this host (e.g. Pi-hole: `common.lgthinq.com → <host>`).
+Point `hostname` at this host in the DNS the AC uses (Pi-hole, the router).
 
-Orc mounts the enrollment blueprint at `/api/lg_ac/enroll/…`, but the AC hits the
-domain **root**. nginx terminates TLS on :443 with the LG cert and rewrites:
+The enrollment routes are mounted at `/api/lg_ac/enroll/…`, but the AC
+calls the domain root, so nginx terminates TLS on `:443` with the LG server
+cert and rewrites the three paths:
 
 ```nginx
 server {
@@ -118,73 +97,57 @@ server {
 }
 ```
 
-The broker binds `:8883` directly — the AC connects to it without nginx.
+The broker binds `mqtts_advertise` directly; the AC reaches it without
+nginx.
 
 ## The AC device
 
-The AC shows on `/device/` as orc's built-in `AC` device type, so you must declare
-it in `src/config.orc` with its **clip id as the target** (`device add <type> <id>
-<target>`). Get the clip id after the unit has enrolled:
+Declare each unit as an `AC` with its clip id as the target. One unit:
 
 ```
-curl -sk https://<host>/api/lg_ac/enroll/devices     # -> ["6c9aff96-…"]
+device only AC main 6c9aff96-6337-17b6-82f7-2887613a8910 --sort 2
 ```
 
-Single unit:
+Several:
 
 ```
-device only AC main 6c9aff96-6337-17b6-82f7-2887613a8910
-```
-
-Multiple units — one line each, distinct clip ids:
-
-```
-device define AC
+device define AC --sort 2
 device add AC living  6c9aff96-…-A --room 'Living Room' --name 'Living Room AC'
 device add AC bedroom 6c9aff96-…-B --room Bedroom       --name 'Bedroom AC'
 device seal AC
 ```
 
-Each unit is its own card on `/device/`; `_handle_ac` routes it to the matching
-clip id via the AC device's value. (An AC whose target isn't an enrolled clip id
-falls back to the single connected device.)
+Each unit is its own card on the device page and its own row in the state
+page's **AC** section. A unit whose target isn't an enrolled clip id falls
+back to the single connected device.
 
 ## Control
 
-- The `/device/` AC card's mode/temp/fan controls drive this plugin: `setup()`
-  registers its `Ac` backend with `api.set_ac`, so `ac_command` publishes to the AC instead of
-  the (removed) broadlink blaster. The card's °F is converted to °C.
-- Or set it directly: `POST /api/lg_ac/enroll/command` with e.g.
-  `{"mode":"cool","temperature":77,"fan_mode":"high"}`. A setpoint frame must
-  include `mode`, so send all three fields together.
-- Temperatures are Fahrenheit on both `/state` and `/command`; the route converts
-  to the Celsius the device stores (°C×2).
+- The device card's mode, fan and temperature controls, `routine` lines and
+  react actions (`cool:low:72`) all reach the AC through this plugin;
+  temperatures are Fahrenheit everywhere in orc and converted to the half
+  degrees Celsius the AC stores.
+- Direct: `POST /api/lg_ac/enroll/command` with
+  `{"mode":"cool","temperature":77,"fan_mode":"high"}` (a setpoint frame
+  must carry `mode`, so send all three), and `GET /api/lg_ac/enroll/state`
+  for the decoded state; add `device=<clip id>` with several units.
+- Every state report the AC sends is logged in command vocabulary, so it
+  nests under the rule or button that asked for it.
 
-## A new / different AC model
+## A new or different AC model
 
-Field maps live in `fieldmap/<MODEL>.json`, keyed on the `kind` the AC reports at
-enrollment. On connect the plugin auto-loads the matching map; an unknown model
-logs a warning and runs **capture-only** (state won't decode) until a map exists.
+Field maps live in `fieldmap/<MODEL>.json`, keyed on the model the AC
+reports at enrollment. On connect the matching map loads; an unknown model
+logs a warning and runs capture-only (state won't decode) until a map exists.
 
-To calibrate a new model:
-
-1. (Optional) Enable capture: set `capture True` in `lg_ac.orc`, restart. The most
-   recent wire frames are buffered in memory; fetch them as JSON at
+1. Set `capture True` in `lg_ac.orc` and restart. Recent frames are at
    `GET /api/lg_ac/enroll/capture`.
-2. Run the calibrator while the plugin is up and the AC is enrolled:
-   ```
-   lg-ac-calibrate
-   ```
-   It walks you through your modes, fan speeds, and the temperature range (low→high)
-   and writes `fieldmap/<MODEL>.json`.
+2. With the plugin up and the AC enrolled, run `lg-ac-calibrate`. It walks
+   through your modes, fan speeds and temperature range and writes
+   `fieldmap/<MODEL>.json`.
 3. Set `capture False` again.
 
-Same model as an existing map → it just works, no calibration.
-
-### Field-map format (writing one by hand)
-
-The calibrator just produces this file; you can also write it yourself as
-`fieldmap/<KIND>.json`:
+Or write the file by hand:
 
 ```json
 {
@@ -196,9 +159,8 @@ The calibrator just produces this file; you can also write it yourself as
 }
 ```
 
-- **`fields`** — logical field → TLV id (hex). Consistent across the clip family, so
-  usually copy verbatim.
-- **`modes`** / **`fans`** — name → the raw `0x1f9` / `0x1fa` code. Model-specific: the
-  part you have to discover. Flip each mode/fan on the unit and read the value off
-  `/capture`.
-- **`temperature`** — `raw = °C × divisor`; `min`/`max` in °C.
+- `fields`: logical field to TLV id (hex). Consistent across the clip
+  family, so usually copied verbatim.
+- `modes` / `fans`: name to the raw code. Model-specific: flip each mode and
+  fan on the unit and read the value off `/capture`.
+- `temperature`: `raw = °C × divisor`; `min` and `max` in °C.
