@@ -45,7 +45,6 @@ class TagClock(NamedTuple):
 
 
 type Listener = Callable[[Device, str, Any, Any], None]
-type ButtonListener = Callable[[int, int, str], None]
 type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
 
