@@ -15,7 +15,29 @@ meeting link. Nothing fires on a day off.
 4. Restart orc. The feeds are read on the `cron` schedule, and every event
    in the window becomes two jobs on the schedule page.
 
-## Config
+## Grammar
+
+```
+setting <key> <value>
+feed <name> <secret>
+```
+
+| Part       | Meaning                                                                                |
+| ---------- | -------------------------------------------------------------------------------------- |
+| `setting`  | One of the keys below; every key is required.                                          |
+| `<name>`   | The feed's name, prefixed to each event id so two feeds can share an event.            |
+| `<secret>` | The secret holding the feed's iCal URL; declared as a URL, so a bad one fails startup. |
+
+| Setting           | Meaning                                                                        |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `backend`         | `orc_extras.calendar.dal.ical` fetches real feeds; `...dal.stub` returns none. |
+| `cron`            | When to refresh the feeds (five fields, in `tz`).                              |
+| `window_hours`    | How far ahead each refresh looks.                                              |
+| `max_events`      | Cap on events taken from one feed per refresh.                                 |
+| `warning_minutes` | Lead time for the warning tone before each event.                              |
+| `http_timeout`    | Seconds to wait for a feed.                                                    |
+
+## Example
 
 ```
 setting backend         orc_extras.calendar.dal.ical
@@ -28,18 +50,7 @@ setting http_timeout    120
 feed default ICS_URL
 ```
 
-| Setting           | Meaning                                                                        |
-| ----------------- | ------------------------------------------------------------------------------ |
-| `backend`         | `orc_extras.calendar.dal.ical` fetches real feeds; `...dal.stub` returns none. |
-| `cron`            | When to refresh the feeds (five fields, in `tz`).                              |
-| `window_hours`    | How far ahead each refresh looks.                                              |
-| `max_events`      | Cap on events taken from one feed per refresh.                                 |
-| `warning_minutes` | Lead time for the warning tone before each event.                              |
-| `http_timeout`    | Seconds to wait for a feed.                                                    |
-
-A `feed <name> <secret>` line names a calendar and the secret holding its
-iCal URL; the URL is declared as a secret, so a missing or malformed one
-fails startup. Recurring events are expanded; all-day events are skipped.
+Recurring events are expanded; all-day events are skipped.
 
 ## Behaviour
 

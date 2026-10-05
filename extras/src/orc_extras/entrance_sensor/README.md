@@ -14,7 +14,33 @@ now empty, and runs the matching routine.
 4. Restart orc. The state page gains an **Entrance Sensors** section with
    both sensors' battery and last activity.
 
-## Config
+## Grammar
+
+```
+setting <key> <value>
+message <log> <message>
+rules <trigger> <routine>
+timed <name> <start> <stop> <routine>
+```
+
+| Part      | Meaning                                                                                                                                                          |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setting` | One of the keys below; every key is required.                                                                                                                    |
+| `message` | The line the cleanup logs for each outcome: `log_present`, `log_door_open`, `log_absent`, `log_shutdown`, `log_nobody`. All five are required.                   |
+| `rules`   | The ad hoc routine run for each trigger: `inside`, `present`, `absent`, `shutdown`. All four are required.                                                       |
+| `timed`   | A wall-clock window (wrapping midnight when `<start>` is later than `<stop>`) naming an ad hoc or routine id; the first window containing the current time wins. |
+
+| Setting                 | Meaning                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| `cleanup_delay_minutes` | Minutes after motion clears before the cleanup decides; at least 1 when `tag` lines exist. |
+| `entrance`              | The motion sensor, as `Sensor.<name>`.                                                     |
+| `patio_door`            | A contact sensor; an open door counts as someone being around.                             |
+| `active_event`          | The `motion` value that means motion (`active`).                                           |
+| `inactive_event`        | The `motion` value that means clear (`inactive`).                                          |
+| `snapshot`              | Minutes the `shutdown` scene override lasts before the scene restores itself.              |
+| `listener`              | The person whose presence alone means "the visitor left"; must be a `person`.              |
+
+## Example
 
 ```
 setting cleanup_delay_minutes 2
@@ -39,22 +65,6 @@ rules shutdown 'All Lights Off'
 timed Day   8:00  22:00 'All Lights On'
 timed Night 22:00 8:00  Silence
 ```
-
-| Setting                 | Meaning                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| `cleanup_delay_minutes` | Minutes after motion clears before the cleanup decides; at least 1 when `tag` lines exist. |
-| `entrance`              | The motion sensor, as `Sensor.<name>`.                                                     |
-| `patio_door`            | A contact sensor; an open door counts as someone being around.                             |
-| `active_event`          | The `motion` value that means motion (`active`).                                           |
-| `inactive_event`        | The `motion` value that means clear (`inactive`).                                          |
-| `snapshot`              | Minutes the `shutdown` scene override lasts before the scene restores itself.              |
-| `listener`              | The person whose presence alone means "the visitor left"; must be a `person`.              |
-
-Every `message` key is required; they are the lines the cleanup writes to
-the log. Each `rules` line names an ad hoc routine from `config.orc`; each
-`timed` line is a wall-clock window (wrapping midnight when the start is
-later than the stop) naming an ad hoc or routine id. All four `rules`
-triggers must be present.
 
 ## Behaviour
 
