@@ -15,7 +15,33 @@ arrival time through live traffic, your extras and a buffer, then says
 4. Restart orc. The System page's **Travel** button opens the dialog: the
    next three trips, a form for a new one, and a delete per trip.
 
-## Config
+## Grammar
+
+```
+setting <key> <value>
+place <name> <address>
+extra <name> <minutes>
+```
+
+| Part      | Meaning                                                                     |
+| --------- | --------------------------------------------------------------------------- |
+| `setting` | One of the keys below; all but `buffer_minutes` are required.               |
+| `place`   | A named address offered as a suggestion in the dialog's destination field.  |
+| `extra`   | A named chunk of minutes you can tick onto a trip (parking, a coffee stop). |
+
+| Setting                | Meaning                                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `drive_backend`        | `...dal.drive.tomtom` for live routes; `...dal.drive.stub` for a fixed time.        |
+| `flight_backend`       | `...dal.flight.aerodatabox` for live flights; `...dal.flight.stub` for a fixed one. |
+| `cron`, `window_hours` | Required by the loader; nothing reads them yet.                                     |
+| `tomtom_secret`        | Secret name holding the TomTom key.                                                 |
+| `aerodatabox_secret`   | Secret name holding the AeroDataBox key.                                            |
+| `http_timeout`         | Seconds to wait for either API.                                                     |
+| `buffer_minutes`       | Minutes added to every lead time (default 10).                                      |
+
+The drive origin is `config.orc`'s `lat`/`long`.
+
+## Example
 
 ```
 setting drive_backend        orc_extras.travel.dal.drive.tomtom
@@ -33,20 +59,6 @@ place Office '500 Market St, Metropolis'
 extra Coffee   10
 extra Parking  20
 ```
-
-| Setting                | Meaning                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `drive_backend`        | `...dal.drive.tomtom` for live routes; `...dal.drive.stub` for a fixed time.        |
-| `flight_backend`       | `...dal.flight.aerodatabox` for live flights; `...dal.flight.stub` for a fixed one. |
-| `cron`, `window_hours` | Required by the loader; nothing reads them yet.                                     |
-| `tomtom_secret`        | Secret name holding the TomTom key.                                                 |
-| `aerodatabox_secret`   | Secret name holding the AeroDataBox key.                                            |
-| `http_timeout`         | Seconds to wait for either API.                                                     |
-| `buffer_minutes`       | Minutes added to every lead time (default 10).                                      |
-
-A `place` is a named address offered as a suggestion in the destination
-field; an `extra` is a named chunk of minutes you can tick onto a trip
-(parking, a coffee stop). The drive origin is `config.orc`'s `lat`/`long`.
 
 ## Behaviour
 
