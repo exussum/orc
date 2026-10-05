@@ -354,6 +354,11 @@ def test_reader_formula_evaluates_and_raises_with_context(ctx):
         read(model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)"))
 
 
+@pytest.mark.parametrize("value, inside", [(65.9, False), (66, True), (119.9, True), (120, False)])
+def test_range_is_half_open(value, inside):
+    assert model.Range(m.OutsideTemperatureSubject(), 66, 120).holds(engine.Runtime(UTC).world(lambda subject: value)) is inside
+
+
 def test_ac_is_bitmask_respects_flag_membership():
     assert not model.AcIs(model.AcSubject(Ac.living), m.AcState.COOL).holds(engine.Runtime(UTC).world(lambda subject: m.AcState.ON))
     assert model.AcIs(model.AcSubject(Ac.living), m.AcState.ON).holds(engine.Runtime(UTC).world(lambda subject: m.AcState.COOL))
@@ -397,6 +402,9 @@ def test_range_rule_parses_expressions(ctx):
     assert rules[2].rule.steps[0].condition == em.And(em.And(em.Eq(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104, edge=True)))
     assert rules[3].rule.steps[0].condition == em.And(
         em.And(model.AcIs(model.AcSubject(Ac.living), m.AcState.ON), model.Range(dewpoint, 0, 55, edge=True))
+    )
+    assert rules[4].rule.steps[0].condition == em.And(
+        em.And(model.Range(temp, 75, 100, edge=True), model.Range(m.OutsideTemperatureSubject(), 66, 120))
     )
 
 

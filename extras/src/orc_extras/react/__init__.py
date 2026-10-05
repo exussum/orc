@@ -2,6 +2,7 @@ from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from command_cfg import each
@@ -17,6 +18,7 @@ from orc.model import (
     AppContext,
     DeviceEnum,
     Devices,
+    OutsideTemperatureSubject,
 )
 from orc_extras.react import model, plugins
 from orc_extras.react.model import (
@@ -223,4 +225,5 @@ VOCABULARY: Mapping[str, Any] = {
     "Anyone": lambda: em.Eq(AnyoneSubject(), True),
     "Nobody": lambda: em.Eq(AnyoneSubject(), False),
     "Playing": lambda device: em.Eq(device, "playing"),
+    "Outside": SimpleNamespace(temperature=OutsideTemperatureSubject()),
 }

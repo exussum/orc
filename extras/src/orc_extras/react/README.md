@@ -46,8 +46,8 @@ inside it are strings, so use the other quote: `if 'Eq(switch, "on")'`.
 | `Eq(<subject>, "<state>")`     | The subject reads that value.                                                         |
 | `Has(<subject>)`               | The subject reads anything but `None`.                                                |
 | `Became(<attribute>, "<to>")`  | The attribute just changed to that state (what `turns` uses).                         |
-| `Range(<measure>, low, high)`  | The measurement is inside `low..high` (level: holds on every reading in range).       |
-| `Entered(<measure>, low, high)`| The measurement just crossed into `low..high` (edge: holds on that reading only).     |
+| `Range(<measure>, low, high)`  | `low <= measurement < high` (level: holds on every reading in range).                 |
+| `Entered(<measure>, low, high)`| The measurement just crossed into `low <= x < high` (edge: holds on that reading only).|
 | `AcIs(AC.<member>, "<state>")` | The AC is in that state: `on`, `off`, `cool`, `dry`, `fan_only`, `econ`.              |
 | `Playing(Chromecast.<member>)` | That Chromecast is playing.                                                           |
 | `Present("alice", "bob")`      | Any of the named people is home.                                                      |
@@ -61,6 +61,9 @@ Names resolve in two layers:
   `Chromecast.tv` and `AC.living` are the whole device.
 - `dewpoint(temperature,humidity)` is a measurement computed from the
   device's attributes (°F); it can stand wherever an attribute can.
+- `Outside.temperature` is the outside temperature (°F) from the weather
+  provider, fetched at most once an hour; use it with `Range`, since the
+  weather doesn't report changes.
 
 ## Examples
 
