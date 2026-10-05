@@ -563,6 +563,11 @@ class WeatherSubject(em.Subject):
 
 
 @dataclass(frozen=True)
+class OutsideTemperatureSubject(em.Subject):
+    pass
+
+
+@dataclass(frozen=True)
 class Present(em.Condition):
     name: str
 

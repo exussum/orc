@@ -651,6 +651,8 @@ def reader(present: set[str] | None = None, now: datetime | None = None) -> em.R
                 return bool(pnames)
             case m.WeatherSubject():
                 return _fetch_weather(when) if pnames else frozenset()
+            case m.OutsideTemperatureSubject():
+                return config.providers.weather.fetch_temperature(when, config.settings.lat, config.settings.long)
             case _:
                 raise KeyError(subject)
 

@@ -35,6 +35,7 @@ class SecretsService(Backend, Protocol):
 
 class WeatherService(Backend, Protocol):
     def fetch_weather(self, now: datetime, lat: float, lon: float) -> frozenset[WeatherCondition]: ...
+    def fetch_temperature(self, now: datetime, lat: float, lon: float) -> float: ...
 
 
 class HolidayService(Backend, Protocol):
