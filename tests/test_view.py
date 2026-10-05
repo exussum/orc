@@ -150,10 +150,10 @@ def test_room_follow(client, rooms, dispatched):
     dispatched.assert_called_once_with(expected, force=True, entry=ANY)
 
 
-def test_room_unknown_state_raises(client, rooms):
+def test_room_unknown_state_returns_400(client, rooms):
     rooms({"Living Room": ()})
     response = client.get("/api/room/Living Room?state=bogus")
-    assert response.status_code == 500
+    assert (response.status_code, response.get_json()) == (400, {"error": "Unknown room state: bogus"})
 
 
 def test_room_unknown_id_returns_404(client, rooms, dispatched):

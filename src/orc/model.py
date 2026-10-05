@@ -562,14 +562,6 @@ class WeatherSubject(em.Subject):
     pass
 
 
-PresenceSubject = PersonSubject | AnyoneSubject
-
-
-@dataclass(frozen=True)
-class Device(em.Subject):
-    device: DeviceEnum
-
-
 @dataclass(frozen=True)
 class Present(em.Condition):
     name: str
@@ -590,22 +582,6 @@ class Weather(em.Condition):
 
     def holds(self, world: em.World) -> bool:
         return self.condition in cast.instance(world.read(WeatherSubject()), frozenset)
-
-
-@dataclass(frozen=True)
-class MqttDeviceSubject(em.Subject):
-    device: DeviceEnum
-    attribute: str
-
-
-@dataclass(frozen=True)
-class AcSubject(em.Subject):
-    device: DeviceEnum
-
-
-@dataclass(frozen=True)
-class CastSubject(em.Subject):
-    device: DeviceEnum
 
 
 class DeviceNamespace:

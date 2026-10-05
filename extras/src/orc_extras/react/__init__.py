@@ -13,17 +13,25 @@ from orc.kernel.loader import load_plugin_config, validate_ac_state
 from orc.model import (
     AcCommand,
     AcState,
-    AcSubject,
     AnyoneSubject,
     AppContext,
-    CastSubject,
-    Device,
     DeviceEnum,
     Devices,
-    MqttDeviceSubject,
 )
 from orc_extras.react import model, plugins
-from orc_extras.react.model import FUNCTIONS, TRIGGERS, AcIs, FormulaSubject, Present, Range, Transition
+from orc_extras.react.model import (
+    FUNCTIONS,
+    TRIGGERS,
+    AcIs,
+    AcSubject,
+    CastSubject,
+    Device,
+    FormulaSubject,
+    MqttDeviceSubject,
+    Present,
+    Range,
+    Transition,
+)
 from orc_extras.react.web import react_bp
 
 CONFIG = "orc_extras/react"
@@ -90,7 +98,7 @@ def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
     watches = tuple(reaction.watch for reaction in cfg.react)
     groups = _group(cfg.react)
     ctx.plugin_state[orc_extras.react] = model.State(
-        watches, groups, {rule: name for name, group in groups.items() for rule in group.rules}
+        watches, groups, {watch: name for name, group in groups.items() for watch in group.watches}
     )
     sources = {reaction.source.value: reaction.source for reaction in cfg.react}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
@@ -108,11 +116,11 @@ def _group(reactions: Iterable[model.Reaction]) -> dict[str, model.Group]:
     for reaction in reactions:
         found = groups.get(reaction.name)
         if found is None:
-            groups[reaction.name] = model.Group((reaction.watch.rule,), reaction.pause)
+            groups[reaction.name] = model.Group((reaction.watch,), reaction.pause)
         elif found.pause != reaction.pause:
             raise ValueError(f"react {reaction.name!r}: every line sharing a name needs the same --pause")
         else:
-            groups[reaction.name] = found._replace(rules=(*found.rules, reaction.watch.rule))
+            groups[reaction.name] = found._replace(watches=(*found.watches, reaction.watch))
     return groups
 
 
