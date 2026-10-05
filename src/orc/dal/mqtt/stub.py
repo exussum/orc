@@ -13,7 +13,6 @@ warn_stub("mqtt")
 
 _states: dict[m.DeviceEnum, Any] = {}
 _listeners: list[m.Listener] = []
-_button_listeners: list[m.ButtonListener] = []
 _external_listeners: list[m.Listener] = []
 
 
@@ -44,10 +43,6 @@ def add_listener(fn: m.Listener) -> None:
     _listeners.append(fn)
 
 
-def add_button_listener(fn: m.ButtonListener) -> None:
-    _button_listeners.append(fn)
-
-
 def add_external_listener(fn: m.Listener) -> None:
     _external_listeners.append(fn)
 
@@ -55,5 +50,4 @@ def add_external_listener(fn: m.Listener) -> None:
 def reset() -> None:
     _states.clear()
     _listeners.clear()
-    _button_listeners.clear()
     _external_listeners.clear()

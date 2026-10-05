@@ -18,30 +18,35 @@ def _capture(name, fn):
     return captured["fn"]
 
 
+def _remote(device_id):
+    return m.Device(device_id, "remote", "hubitat")
+
+
 class TestButtons:
     @staticmethod
     def _wire(ctx, remotes):
         with patch.object(config, "remotes", remotes):
-            return _capture("add_button_listener", lambda: buttons.setup(ctx))
+            return _capture("add_listener", lambda: buttons.setup(ctx))
 
     def test_mapped_event_runs_action(self, ctx):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action", return_value=True) as run:
-            on_button(orc.Light.a.value, 1, "held")
+            on_button(_remote(orc.Light.a.value), "held", None, 1)
         run.assert_called_once_with(ctx, "TV Lights", m.Button(str(orc.Light.a.value)), source=m.LogSource.EXTERNAL)
 
     def test_unmapped_event_is_ignored(self, ctx):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action") as run:
-            on_button(99, 1, "held")
-            on_button(orc.Light.a.value, 2, "held")
-            on_button(orc.Light.a.value, 1, "pushed")
+            on_button(_remote("99"), "held", None, 1)
+            on_button(_remote(orc.Light.a.value), "held", None, 2)
+            on_button(_remote(orc.Light.a.value), "pushed", None, 1)
+            on_button(_remote(orc.Light.a.value), "switch", "off", "on")
         run.assert_not_called()
 
     def test_unknown_action_logs(self, ctx):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "No Such Routine"),))
         with patch.object(api, "run_action", return_value=False), patch.object(api, "log") as log, patch.object(api, "alert"):
-            on_button(orc.Light.a.value, 1, "held")
+            on_button(_remote(orc.Light.a.value), "held", None, 1)
         log.assert_called_once()
         assert "No Such Routine" in log.call_args[0][1]
 
