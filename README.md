@@ -1,95 +1,83 @@
 # orc
 
-Personal home automation orchestrator. Drives lights, Chromecast speakers,
-an LG webOS TV, and an AC unit on a schedule built from sunrise/sunset,
-calendar events, and a line-based config file.
+Personal home automation orchestrator.
 
 ## What it does
 
-- Runs themed daily routines (for example, *work day* / *day off*) with
-  events tied to wall-clock times or sun position at a configured lat/long.
-- Skips market-holiday rules using a configurable holidays endpoint.
-- Controls Hubitat lights (MQTT), Chromecast speakers (pychromecast +
-  yt-dlp for YouTube audio), and an LG AC unit (local ThinQ2, via the
-  `lg_ac` plugin in `extras/`).
-- Supports weather-condition triggers (for example, `SUNNY`) through the
-  open-meteo API; the schedule UI marks weather-triggered jobs with a ☀ badge.
-- Via the optional `orc_extras` package (`extras/`): pulls calendar events
-  from an iCal feed and schedules alerts/routines around them, controls an
-  LG webOS TV (aiowebostv + BroadLink IR), monitors YoLink leak sensors
-  (fatal-level audio alert on water detection), runs the entrance-sensor
-  automation, reacts to device events and sensor measurements with
-  `react` rules, and checks drive and flight times ahead of calendar
-  travel (TomTom + AeroDataBox).
-- Tracks presence of configured people — by LAN probe (ARP/mDNS) and,
-  optionally, Google Find Hub (FMDN) BLE tags — and gates person-specific
-  routine steps on who is currently home.
-- Serves a small Flask UI for manual control, schedule inspection, theme
-  override, and an activity log.
+orc reads one config file and turns it into each day's schedule. A day
+gets a theme, such as *work day* or *day off*, chosen by weekday and
+market holidays. A theme is a list of routines pinned to clock times or to
+sunrise and sunset. A routine is a list of device commands, each of which
+can wait for a particular person to be home or for the weather to match.
 
-## Install it for real
+Out of the box:
 
-Hardware and services — skip whatever you don't have; devices you leave out
-of `config.orc` are never touched:
+- Hubitat lights, over MQTT
+- Chromecast speakers, including YouTube audio and spoken announcements
+- a USB speaker on the orc machine, for announcements and alerts
+- presence, by probing the LAN for phones and, optionally, listening for
+  Google Find Hub BLE tags
 
-- a Hubitat hub with the MQTT Export app pointed at a broker (lights); the
-  Maker API app is only needed for the reboot button
-- Chromecast speakers on the same LAN
-- an LG webOS TV, plus a BroadLink IR blaster for power-on
-- a YoLink hub with leak sensors
-- a USB audio output on the machine running orc (spoken announcements) — the
-  `device add USB <name> <host>` line's `host` must be that device's USB
-  serial number (Linux only); run `orc-audio-devices` after install to list
-  each card's index, serial, and matching ALSA/PortAudio names
-- a Bitwarden Secrets Manager account holding the runtime secrets
+A small web UI shows the schedule, the devices, who is home, and the log,
+and lets you run scenes and override the day's theme by hand. Alerts can
+also reach your phone by Web Push.
 
-Steps:
+Optional plugins in `extras/`: calendar, entrance_sensor, lg_ac, lg_tv,
+react, travel, yolink.
 
-1. **Install it on the target machine.** Add `./extras` if you want the
-   bundled plugins — LG TV, LG AC, YoLink, entrance sensor, calendar,
-   react, travel. The `command-cfg`
-   config parser resolves from the internal package registry, same as the
-   deploy flow:
+## Install
+
+Before you start you need 1) a Bitwarden Secrets Manager account and 2) an
+MQTT broker, with the Hubitat MQTT Export app pointed at it (Maker API only
+for the reboot button). Everything else is optional; a device that isn't in
+`config.orc` is never touched.
+
+1. **Install the packages.** `./extras` is optional and brings the bundled
+   plugins. `command-cfg` comes from the internal package registry.
 
    ```sh
    pip install ./data . ./extras --extra-index-url "$ORC_REGISTRY_URL"
    ```
 
-2. **Create a config directory, for example `/etc/orc`.** Copy
-   `src/config.orc` into it as a starting point. Devices, people, routines,
-   themes, room configs, and plugins are all defined there — the sample
-   file demonstrates every command except `person` and `tag`, which are
-   omitted so a stub-backed dev run never attempts privileged presence
-   scans. Per-plugin
-   configs go in a `plugins/` subdirectory of the config directory — copyable
-   samples for each plugin are in `examples/configs/`.
+   - [calendar](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/calendar) — iCal feed events that schedule alerts and routines
+   - [entrance_sensor](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/entrance_sensor) — front-door motion automation
+   - [lg_ac](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/lg_ac) — LG window AC over local ThinQ2
+   - [lg_tv](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/lg_tv) — LG webOS TV with BroadLink IR power-on
+   - [react](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/react) — rules that fire on device events and sensor measurements
+   - [travel](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/travel) — drive and flight time checks ahead of calendar travel
+   - [yolink](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/yolink) — YoLink leak sensors
 
-3. **Create the secrets in Bitwarden Secrets Manager.** See
-   [Secrets (Bitwarden)](#secrets-bitwarden), and put a machine-account
-   access token where the service can read it — for example,
-   `/etc/orc/bws_access_token`.
+2. **Create a config directory**, such as `/etc/orc`, and copy
+   [`src/config.orc`](https://github.com/exussum/orc/blob/main/src/config.orc) into it. Devices, people, routines, themes, rooms, and
+   plugins are all defined there. The sample covers every command except
+   `person` and `tag`, left out so a stub-backed dev run never attempts a
+   privileged presence scan. Plugin configs go in a `plugins/` subdirectory;
+   samples are in `examples/configs/`.
 
-4. **Set the environment.** Two variables:
+3. **Create the secrets** in Bitwarden Secrets Manager (see
+   [Secrets](#secrets-bitwarden)) and put a machine-account access token
+   where the service can read it, for example `/etc/orc/bws_access_token`.
+
+4. **Set two environment variables.**
 
    ```sh
    export ORC_CONFIG_DIR=/etc/orc
    export BWS_ACCESS_TOKEN=file:///etc/orc/bws_access_token
    ```
 
-   Everything else (URLs, DB path, timezone, coordinates, audio device, …)
-   is a `setting` line in `config.orc` — see [Configuration](#configuration).
+   Everything else is a `setting` line in `config.orc`; see
+   [Configuration](#configuration).
 
-5. **Run `orc`.** It's installed as a console script and starts `gunicorn`
-   on `0.0.0.0:<port>` (the `port` setting, default 8000). Use your process
-   manager of choice to keep it up; production here runs it under
-   `supervisor`.
+5. **Run `orc`.** The console script starts gunicorn on `0.0.0.0:<port>`
+   (the `port` setting, default 8000). Keep it up with the process manager
+   of your choice; production here uses supervisor.
 
 ## Configuration
 
 Two config surfaces:
 
 1. **Line-based config** at `ORC_CONFIG_DIR/config.orc` (the in-repo sample
-   is `src/config.orc`). Defines settings, devices, people, routines, themes,
+   is [`src/config.orc`](https://github.com/exussum/orc/blob/main/src/config.orc)). Defines settings, devices, people, routines, themes,
    room configs, ad-hoc routines, plugins, button highlights, and the secrets
    and weather providers. One command per
    line with shell-style quoting and `#` comments; a `.` repeats the token in
@@ -109,8 +97,13 @@ Two config surfaces:
    theme 'work day' ROUTINE_RESET 1:00
    ```
 
-   `device define`/`device only` lines take `--sort=<n>` to order that type's
-   commands within a dispatch batch: lower first, types without one last.
+   When a routine fires, its commands run grouped by device type.
+   `--sort=<n>` on a `device define` or `device only` line sets that type's
+   place in the order, lowest first. Types without one run last.
+
+   A `USB` device's target is the audio device's USB serial number (Linux
+   only); `orc-audio-devices` lists each card's index, serial, and
+   ALSA/PortAudio names.
 
    `setting` lines fill `orc.model.Settings` (exposed as `config.settings`).
    The required keys fail startup with a named `ConfigError` when a line is
@@ -137,10 +130,6 @@ Two config surfaces:
    | `presence_hours`    | How long a presence detection persists         | `9`                      |
    | `checkin_hours`     | How long a manual check-in persists            | `1`                      |
    | `sunset_lead_hours` | Hours before sunset that sunset routines fire  | `1`                      |
-
-   Presence lives in memory: a restart clears it, then a startup scan (when
-   `person` lines exist) and the tags' own advertisements rebuild it within
-   seconds. Manual check-ins don't survive a restart.
 
 2. **Environment variables** — only the bootstrap pair that can't live in
    the config file:
@@ -203,9 +192,7 @@ Signing uses [py-vapid](https://pypi.org/project/py-vapid/), with
    `VAPID_PRIVATE_KEY`:
 
    ```sh
-   uv run python -c "import base64; from cryptography.hazmat.primitives.asymmetric import ec; \
-   k = ec.generate_private_key(ec.SECP256R1()).private_numbers().private_value; \
-   print(base64.urlsafe_b64encode(k.to_bytes(32, 'big')).rstrip(b'=').decode())"
+   orc-vapid-key
    ```
 
 2. Open the System page on the device and press **Enable notifications**.
@@ -226,26 +213,16 @@ person Alice alices-phone.example aa:bb:cc:dd:ee:ff
 tag    Alice EIK_ALICE 2026-09-22T13:48:37+00:00
 ```
 
-Set the tag up with Google Find Hub on an Android phone (tags on Apple Find
-My can't be matched — there's no key export), then export its identity key
-and pair date with GoogleFindMyTools. Store the key (hex-encoded, 32 bytes)
-in the secrets provider under the name the `tag` line references
-(`EIK_ALICE` above), and put the pair date (ISO 8601) directly in the line.
-A naive value (no offset) is read in the configured timezone. Accuracy
-within ~15 minutes is enough — the match checks the neighbouring rotation
-windows — and the exported value is exact, so this is a non-issue in
-practice.
+Pair the tag with Google Find Hub on an Android phone, then export its
+identity key and pair date with GoogleFindMyTools. The key goes in the
+secrets provider under the name the `tag` line references (`EIK_ALICE`
+above), as 32 bytes of hex; the pair date goes in the line as ISO 8601.
 
 Matching is fully local: a background listener computes the tag's rotating
 ephemeral ID (EID) from the key and pair date and hears every advertisement
 the tag sends, so every hearing updates the person's presence directly
 instead of gambling on a scan window. After the one-time key export, nothing
 talks to Google.
-
-The presence page's rescan button additionally tries one direct connection
-to each absent tag at its last-advertised address. Success marks the person
-present; a timeout changes nothing — the address rotates with the EID, so a
-long-silent tag is simply unreachable, not proven away.
 
 The EID scheme is Google's public
 [Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).
@@ -265,7 +242,7 @@ Two entry points in `src/orc/runner.py`, both serving on `0.0.0.0:<port>`
 ## Deploy
 
 This is the author's deploy flow — it targets a private package registry, so
-if you're installing elsewhere, use [Install it for real](#install-it-for-real)
+if you're installing elsewhere, use [Install](#install)
 instead.
 
 `sh scripts/upload.sh` builds and publishes to the internal package registry.
@@ -326,7 +303,7 @@ uv run orc-dev
 ```
 
 Open <http://localhost:8000> — the scene, device, schedule, presence, and
-log views are all live, driven by the sample config in `src/config.orc`
+log views are all live, driven by the sample config in [`src/config.orc`](https://github.com/exussum/orc/blob/main/src/config.orc)
 (the `ORC_CONFIG_DIR` default). `uv sync` installs `orc` and `orc_extras`
 editable, so the dev server runs your working tree — the sample config's
 plugin lines resolve against `extras/src` directly.
