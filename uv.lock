@@ -1071,7 +1071,7 @@ requires-dist = [
     { name = "icalendar", specifier = "==7.3.0" },
     { name = "mypy", marker = "extra == 'lint'", specifier = "==2.3.1" },
     { name = "orc-data", directory = "data" },
-    { name = "orc-engine", editable = "../orc-engine" },
+    { name = "orc-engine", git = "https://github.com/exussum/orc-engine?tag=v0.1.1" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "piper-tts", specifier = "==1.8.0" },
@@ -1100,21 +1100,11 @@ source = { directory = "data" }
 
 [[package]]
 name = "orc-engine"
-version = "0.0.1"
-source = { editable = "../orc-engine" }
+version = "0.1.1"
+source = { git = "https://github.com/exussum/orc-engine?tag=v0.1.1#4f7104dc4559596ce69593da2e9bbfbc9df5170c" }
 dependencies = [
     { name = "cryptography" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "cryptography", specifier = "==50.0.1" },
-    { name = "freezegun", marker = "extra == 'test'", specifier = "==1.5.5" },
-    { name = "mypy", marker = "extra == 'lint'", specifier = "==1.18.2" },
-    { name = "pytest", marker = "extra == 'test'", specifier = "==9.0.1" },
-    { name = "ruff", marker = "extra == 'lint'", specifier = "==0.14.2" },
-]
-provides-extras = ["test", "lint"]
 
 [[package]]
 name = "orc-extras"
