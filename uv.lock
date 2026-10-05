@@ -479,8 +479,8 @@ wheels = [
 
 [[package]]
 name = "command-cfg"
-version = "1.0.1"
-source = { git = "https://github.com/exussum/command-cfg?tag=v1.0.1#472b7343da2ec80dc52d769037b34e026015531e" }
+version = "1.1.0"
+source = { git = "https://github.com/exussum/command-cfg?tag=v1.1.0#ebeac4d4aae638d3e2ffde5a91f70db771b06bdf" }
 dependencies = [
     { name = "lark" },
 ]
@@ -1062,7 +1062,7 @@ requires-dist = [
     { name = "audioop-lts", marker = "python_full_version >= '3.13'", specifier = "==0.2.2" },
     { name = "bleak", specifier = "==3.0.2" },
     { name = "broadlink", specifier = "==0.19.0" },
-    { name = "command-cfg", git = "https://github.com/exussum/command-cfg?tag=v1.0.1" },
+    { name = "command-cfg", git = "https://github.com/exussum/command-cfg?tag=v1.1.0" },
     { name = "cryptography", specifier = "==50.0.1" },
     { name = "ecdsa", specifier = "==0.19.2" },
     { name = "flask", specifier = "==3.1.3" },
