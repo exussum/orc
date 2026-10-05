@@ -46,10 +46,10 @@ class TestOnMessage:
     def test_device_document_is_cached(self):
         doc = _doc()
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", doc))
-        (device,) = mqtt.snapshot()
-        assert (device.id, device.name) == (17, "entrance bulb 1")
-        assert device.attributes == {"switch": "off", "level": "20"}
-        assert device.last_activity == doc["lastActivity"]
+        (state,) = mqtt.snapshot()
+        assert state.device == m.Device("17", "entrance bulb 1", "hubitat")
+        assert state.attributes == {"switch": "off", "level": "20"}
+        assert state.last_activity == doc["lastActivity"]
 
     def test_hub_id_captured_from_topic(self):
         assert mqtt._hub_id is None
@@ -82,7 +82,7 @@ class TestOnMessage:
     def test_snapshot_sorted_by_id(self):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/54", _doc(id=54, name="kitchen overhead")))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/1", _doc(id=1, name="office floor lamp")))
-        assert [d.id for d in mqtt.snapshot()] == [1, 54]
+        assert [d.device.id for d in mqtt.snapshot()] == ["1", "54"]
 
 
 class TestFetchLightStates:
@@ -118,8 +118,8 @@ class TestListeners:
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed", "battery": "100"})])
         assert events == []  # first sighting (retained flood): state only, no events
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open", "battery": "100"})])
-        assert (56, "contact", "closed", "open") in events
-        assert (56, "battery", "100", "100") in events  # republished unchanged, still delivered
+        assert ("56", "contact", "closed", "open") in events
+        assert ("56", "battery", "100", "100") in events  # republished unchanged, still delivered
 
     def test_failing_listener_does_not_break_cache_or_others(self):
         events = []
@@ -156,7 +156,7 @@ class TestButtonEvents:
         events = []
         mqtt.add_button_listener(lambda d, b, e: events.append((d, b, e)))
         mqtt._on_message(None, None, _button_msg("held"))
-        assert events == [(10, 1, "held")]
+        assert events == [("10", 1, "held")]
 
     def test_clearing_publish_ignored(self):
         events = []
@@ -264,8 +264,8 @@ class TestFetchHubitatConfig:
         ]
         config = self._fetch(monkeypatch, docs)
         assert config == {
-            "entrance bulb 1": (17, frozenset([m.Capability.change_level])),
-            "office floor lamp": (1, frozenset()),
+            "entrance bulb 1": ("17", frozenset([m.Capability.change_level])),
+            "office floor lamp": ("1", frozenset()),
         }
 
     def test_empty_flood_fails_boot(self, monkeypatch):

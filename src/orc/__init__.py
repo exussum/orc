@@ -89,7 +89,7 @@ class Config:
 
         globals().update(parsed.enums)
         self.registry = declarations.build(parsed.enums)
-        self.virtual_devices = {e for e in parsed.enums.get("Light", ()) if isinstance(e.value, int) and e.value < 0}
+        self.virtual_devices = parsed.virtual_devices
 
         self.people = parsed.person
         self.providers = parsed.provider

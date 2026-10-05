@@ -22,10 +22,10 @@ _FUTURE = datetime(2100, 1, 1, tzinfo=_UTC)
 
 
 class Light(DeviceEnum):
-    day_bulb = 1
-    night_bulb = 2
-    lamp = 3
-    saved = 4
+    day_bulb = "1"
+    night_bulb = "2"
+    lamp = "3"
+    saved = "4"
 
 
 class Chromecast(DeviceEnum):
@@ -33,8 +33,8 @@ class Chromecast(DeviceEnum):
 
 
 class Sensor(DeviceEnum):
-    entrance = 16
-    patio = 56
+    entrance = "16"
+    patio = "56"
 
 
 def _cmd(device, state):
@@ -135,8 +135,7 @@ def _cleanup(sensor, plugin_ctx, present_before=()):
 def _trigger_sensor(ctx, sensor, device_id, event):
     old = "inactive" if event == "active" else "active"
     name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
-    device = m.DeviceState(id=int(device_id), name=name, attributes={"motion": event}, last_activity=None)
-    plugins._on_sensor_event(ctx, sensor, device, "motion", old, event)
+    plugins._on_sensor_event(ctx, sensor, m.Device(device_id, name, "hubitat"), "motion", old, event)
     queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.now.reset_mock()
     for call in queued:
@@ -286,7 +285,7 @@ def _seed_devices(plugin_ctx, *devices):
 
 
 def _door(state):
-    return m.DeviceState(id=56, name="balcony door", attributes={"contact": state, "battery": "98"}, last_activity=None)
+    return m.DeviceState(m.Device("56", "balcony door", "hubitat"), {"contact": state, "battery": "98"}, None)
 
 
 @pytest.mark.parametrize(
@@ -303,8 +302,8 @@ def test_door_state_drives_cleanup(sensor, plugin_ctx, contact, expected):
     assert [c.action for c in entry.children] == [getattr(sensor.message, expected)]
 
 
-def _device(id=16, name="front door motion sensor", battery="100", attributes=None):
-    return m.DeviceState(id=id, name=name, attributes=attributes or {"battery": battery}, last_activity=None)
+def _device(id="16", name="front door motion sensor", battery="100", attributes=None):
+    return m.DeviceState(m.Device(id, name, "hubitat"), attributes or {"battery": battery}, None)
 
 
 def test_battery_state_reads_the_device_cache(plugin_ctx, sensor):

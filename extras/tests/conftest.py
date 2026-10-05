@@ -25,6 +25,6 @@ def ctx():
     mock.api = create_autospec(api)
     mock.scheduler = create_autospec(m.Scheduler, instance=True)
     mock.api.device_state.side_effect = lambda target: next(
-        (s for s in mock.api.device_states.return_value if str(s.id) == target or s.name == target), None
+        (s for s in mock.api.device_states.return_value if str(s.device.id) == target or s.device.name == target), None
     )
     return mock

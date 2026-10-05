@@ -19,9 +19,9 @@ def core_registry(monkeypatch):
     from orc.kernel import declarations
 
     class Light(DeviceEnum):
-        a = (1, frozenset([m.Capability.change_level]))
-        b = (2, frozenset())
-        c = (3, frozenset())
+        a = ("1", frozenset([m.Capability.change_level]))
+        b = ("2", frozenset())
+        c = ("3", frozenset())
 
     class Chromecast(DeviceEnum):
         x = 1
@@ -33,7 +33,7 @@ def core_registry(monkeypatch):
         unit = "clip-1"
 
     class Sensor(DeviceEnum):
-        living = 5
+        living = "5"
 
     # Register core dispatch into a fresh builder, then build the registry from the test
     # enums — mirroring the app's post-api reload so config.registry.dispatch is populated.

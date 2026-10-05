@@ -91,7 +91,7 @@ def _num(value: Any) -> Any:
         return value
 
 
-def _on_event(ctx: m.AppContext, sources: dict[int, m.DeviceEnum], device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
+def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], device: m.Device, attribute: str, old: Any, new: Any) -> None:
     source = sources.get(device.id)
     if source is None:
         return
@@ -121,17 +121,17 @@ def _targets(what: m.Devices) -> str:
     return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
-def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.DeviceState, note: str) -> None:
+def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: str) -> None:
     ctx.api.dispatch((_command(watch),), entry=_log(ctx, watch, device, note))
 
 
-def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.DeviceState, note: str) -> m.LogEntry:
+def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: str) -> m.LogEntry:
     state = ctx.plugin_state[orc_extras.react]
     command = watch.rule.steps[0].command
     return ctx.api.log(
         Log.REACT,
         f"`{device.name}` {_trigger_label(watch, state)}{note} → set {_targets(command.subject)} {command.value}",
-        m.Broker(id=str(device.id), source="hubitat"),
+        m.Broker(id=device.id, source=device.source),
     )
 
 
@@ -141,7 +141,7 @@ def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
 
 
 @requires_ctx
-def _run_react(deferred: em.Deferred[m.Devices], device: m.DeviceState, *, ctx: m.AppContext) -> None:
+def _run_react(deferred: em.Deferred[m.Devices], device: m.Device, *, ctx: m.AppContext) -> None:
     watch = deferred.watch
     (report,) = ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True)
     if report.commands:

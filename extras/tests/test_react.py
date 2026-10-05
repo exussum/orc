@@ -23,8 +23,8 @@ _NOW = datetime(2024, 1, 1, 15, tzinfo=_UTC)
 
 
 class Light(DeviceEnum):
-    lamp = 1
-    desk = 2
+    lamp = "1"
+    desk = "2"
 
 
 class Ac(DeviceEnum):
@@ -36,7 +36,7 @@ class Chromecast(DeviceEnum):
 
 
 class Sensor(DeviceEnum):
-    living = 5
+    living = "5"
 
 
 @pytest.fixture(autouse=True)
@@ -117,11 +117,11 @@ def ruleset(ctx):
 @pytest.fixture
 def switch_report(ctx):
     def switch_report(device_id, old, new):
-        device = m.DeviceState(id=device_id, name="lamp", attributes={"switch": new}, last_activity=None)
+        state = m.DeviceState(m.Device(device_id, "lamp", "hubitat"), {"switch": new}, None)
         known = ctx.api.device_states.return_value
-        others = [s for s in known if s.id != device_id] if isinstance(known, list) else []
-        ctx.api.device_states.return_value = [*others, device]
-        plugins._on_event(ctx, ctx.sources, device, "switch", old, new)
+        others = [s for s in known if s.device.id != device_id] if isinstance(known, list) else []
+        ctx.api.device_states.return_value = [*others, state]
+        plugins._on_event(ctx, ctx.sources, state.device, "switch", old, new)
 
     return switch_report
 
@@ -162,60 +162,60 @@ def test_config_registers_listener(ctx, configured):
     assert rules[1].condition == model.Transition(model.MqttDeviceSubject(Light.desk, "switch"), m.ON)
     assert rules[0].rule.steps[0].command == em.Command(m.Devices(Light.lamp), m.OFF)
     assert rules[0].delay == timedelta(minutes=10)
-    assert ctx.api.add_listener.call_args.args[0].args[1] == {1: Light.lamp, 2: Light.desk, 5: Sensor.living}
+    assert ctx.api.add_listener.call_args.args[0].args[1] == {"1": Light.lamp, "2": Light.desk, "5": Sensor.living}
 
 
 def test_switch_on_schedules_reaction(ctx, configured, switch_report):
-    switch_report(1, m.OFF, m.ON)
+    switch_report("1", m.OFF, m.ON)
     call = ctx.scheduler.once.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"].startswith("react-")
-    assert (_payload(call)[1].id, _payload(call)[1].name) == (1, "lamp")
+    assert _payload(call)[1] == m.Device("1", "lamp", "hubitat")
 
 
 def test_switch_already_on_schedules_nothing(ctx, configured, switch_report):
-    switch_report(1, m.ON, m.ON)
+    switch_report("1", m.ON, m.ON)
     ctx.scheduler.once.assert_not_called()
 
 
 def test_switch_off_cancels_pending_jobs(ctx, configured, switch_report):
-    switch_report(1, m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
+    switch_report("1", m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
     ctx.scheduler.reset_mock()
-    switch_report(1, m.ON, m.OFF)  # reverse edge cancels the pending
+    switch_report("1", m.ON, m.OFF)  # reverse edge cancels the pending
     assert ctx.scheduler.cancel.called
 
 
 def test_sleeping_rule_schedules_nothing(ctx, configured, switch_report):
     plugins.sleep(ctx, "Lights off")
-    switch_report(1, m.OFF, m.ON)
+    switch_report("1", m.OFF, m.ON)
     ctx.scheduler.once.assert_not_called()
 
 
 def test_sleep_cancels_a_pending_job(ctx, configured, switch_report):
-    switch_report(1, m.OFF, m.ON)
+    switch_report("1", m.OFF, m.ON)
     ctx.scheduler.reset_mock()
     plugins.sleep(ctx, "Lights off")
     assert ctx.scheduler.cancel.called
 
 
 def test_unwatched_device_is_ignored(ctx, configured, switch_report):
-    switch_report(99, m.OFF, m.ON)
+    switch_report("99", m.OFF, m.ON)
     ctx.scheduler.once.assert_not_called()
     ctx.api.dispatch.assert_not_called()
 
 
 def test_run_react_dispatches_the_action(ctx, ruleset, dispatches, deferred_run, switch_report):
-    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10), {1: Light.lamp})
-    switch_report(1, m.OFF, m.ON)
+    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10), {"1": Light.lamp})
+    switch_report("1", m.OFF, m.ON)
     deferred_run()
     assert dispatches() == [(Light.lamp, m.OFF)]
 
 
 def test_consecutive_fires_log_the_same_trigger_id(ctx, ruleset, switch_report):
-    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {1: Light.lamp})
-    switch_report(1, m.OFF, m.ON)
+    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {"1": Light.lamp})
+    switch_report("1", m.OFF, m.ON)
     ctx.frozen.move_to(_NOW + timedelta(seconds=model.COOLDOWN.total_seconds() + 1))
-    switch_report(1, m.OFF, m.ON)
+    switch_report("1", m.OFF, m.ON)
     assert [call.args[2] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("1")]
 
 
@@ -225,10 +225,10 @@ def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, switch_rep
             *_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF),
             *_make(m.Devices(Light.desk), "switch", m.ON, m.OFF),
         ],
-        {1: Light.lamp, 2: Light.desk},
+        {"1": Light.lamp, "2": Light.desk},
     )
-    switch_report(1, m.OFF, m.ON)
-    switch_report(2, m.OFF, m.ON)
+    switch_report("1", m.OFF, m.ON)
+    switch_report("2", m.OFF, m.ON)
     assert [call.args[2] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("2")]
 
 
@@ -238,17 +238,17 @@ def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
 
 
 def test_targeted_action_goes_to_the_target(ctx, ruleset, dispatches, switch_report):
-    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, target=m.Devices(Light.desk)), {1: Light.lamp})
-    switch_report(1, m.OFF, m.ON)
+    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, target=m.Devices(Light.desk)), {"1": Light.lamp})
+    switch_report("1", m.OFF, m.ON)
     assert dispatches() == [(Light.desk, m.OFF)]
 
 
 def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
     rule = _make(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), target=m.Devices(Ac))
-    ruleset(rule, {1: Light.lamp})
-    device = m.DeviceState(id=1, name="balcony door", attributes={"contact": "open"}, last_activity=None)
-    ctx.api.device_states.return_value = [device]
-    plugins._on_event(ctx, ctx.sources, device, "contact", "closed", "open")
+    ruleset(rule, {"1": Light.lamp})
+    state = m.DeviceState(m.Device("1", "balcony door", "hubitat"), {"contact": "open"}, None)
+    ctx.api.device_states.return_value = [state]
+    plugins._on_event(ctx, ctx.sources, state.device, "contact", "closed", "open")
     assert dispatches() == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
 
 
@@ -291,24 +291,24 @@ def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
 def test_when_gates_immediate_rule_on_ac_state(ctx, ruleset, dispatches, ac_report):
     cond = model.AcIs(model.AcSubject(Ac.living), m.AcState.ON)
     rule = _make(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), target=m.Devices(Ac), cond=cond)
-    ruleset(rule, {1: Light.lamp})
-    device = m.DeviceState(id=1, name="balcony door", attributes={"contact": "open"}, last_activity=None)
-    ctx.api.device_states.return_value = [device]
+    ruleset(rule, {"1": Light.lamp})
+    state = m.DeviceState(m.Device("1", "balcony door", "hubitat"), {"contact": "open"}, None)
+    ctx.api.device_states.return_value = [state]
     ac_report(m.AcState.OFF)
-    plugins._on_event(ctx, ctx.sources, device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, state.device, "contact", "closed", "open")
     ctx.api.dispatch.assert_not_called()
     ctx.api.log.assert_not_called()
     ac_report(m.AcState.COOL)
-    plugins._on_event(ctx, ctx.sources, device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, state.device, "contact", "closed", "open")
     assert dispatches() == [(Ac.living, m.AcCommand(m.AcMode.FAN_ONLY, "low", 75))]
 
 
 @pytest.mark.parametrize("ac_state, fires", [(m.AcState.COOL, True), (m.AcState.FAN_ONLY, False), (m.AcState.ON, False)])
 def test_if_ac_is_cool_gates_the_delayed_rule(ctx, ac_state, fires, ruleset, deferred_run, switch_report, ac_report):
     cond = model.AcIs(model.AcSubject(Ac.living), m.AcState.COOL)
-    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {1: Light.lamp})
+    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ac_report(ac_state)
-    switch_report(1, m.OFF, m.ON)
+    switch_report("1", m.OFF, m.ON)
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
@@ -316,9 +316,9 @@ def test_if_ac_is_cool_gates_the_delayed_rule(ctx, ac_state, fires, ruleset, def
 @pytest.mark.parametrize("playback, fires", [(m.Playback.PLAYING, True), (m.Playback.STOPPED, False)])
 def test_if_chromecast_is_playing_gates_the_delayed_rule(ctx, playback, fires, ruleset, deferred_run, switch_report):
     cond = em.Eq(model.CastSubject(Chromecast.tv), "playing")
-    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {1: Light.lamp})
+    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, None, 30, playback),)
-    switch_report(1, m.OFF, m.ON)
+    switch_report("1", m.OFF, m.ON)
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
@@ -326,9 +326,9 @@ def test_if_chromecast_is_playing_gates_the_delayed_rule(ctx, playback, fires, r
 @pytest.mark.parametrize("desk, fires", [(m.ON, True), (m.OFF, False)])
 def test_if_light_is_on_gates_the_delayed_rule(ctx, desk, fires, ruleset, deferred_run, switch_report):
     cond = em.Eq(model.MqttDeviceSubject(Light.desk, "switch"), m.ON)
-    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {1: Light.lamp})
-    ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": desk}, last_activity=None)]
-    switch_report(1, m.OFF, m.ON)
+    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
+    ctx.api.device_states.return_value = [m.DeviceState(m.Device("2", "desk", "hubitat"), {"switch": desk}, None)]
+    switch_report("1", m.OFF, m.ON)
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
@@ -336,7 +336,7 @@ def test_if_light_is_on_gates_the_delayed_rule(ctx, desk, fires, ruleset, deferr
 def test_reader_resolves_ac_playback_and_attr(ctx, ac_report):
     ac_report(m.AcState.COOL)
     ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, "s", 30, m.Playback.PLAYING),)
-    ctx.api.device_states.return_value = [m.DeviceState(id=2, name="desk", attributes={"switch": m.ON}, last_activity=None)]
+    ctx.api.device_states.return_value = [m.DeviceState(m.Device("2", "desk", "hubitat"), {"switch": m.ON}, None)]
     read = plugins._reader(ctx)
     assert read(model.AcSubject(Ac.living)) == m.AcState.COOL
     assert read(model.CastSubject(Chromecast.tv)) == "playing"
@@ -344,12 +344,10 @@ def test_reader_resolves_ac_playback_and_attr(ctx, ac_report):
 
 
 def test_reader_formula_evaluates_and_raises_with_context(ctx):
-    ctx.api.device_states.return_value = [
-        m.DeviceState(id=5, name="sensor", attributes={"temperature": 77, "humidity": 60}, last_activity=None)
-    ]
+    ctx.api.device_states.return_value = [m.DeviceState(m.Device("5", "sensor", "hubitat"), {"temperature": 77, "humidity": 60}, None)]
     read = plugins._reader(ctx)
     assert read(model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(62.1, abs=0.2)
-    ctx.api.device_states.return_value = [m.DeviceState(id=5, name="sensor", attributes={"humidity": 60}, last_activity=None)]
+    ctx.api.device_states.return_value = [m.DeviceState(m.Device("5", "sensor", "hubitat"), {"humidity": 60}, None)]
     with pytest.raises(ValueError, match="dewpoint"):
         read(model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)"))
 
@@ -381,10 +379,10 @@ def _make_range(sensor, expression, low, high, target, action, people=None):
 @pytest.fixture
 def range_event(ctx):
     def range_event(sensor, attributes):
-        device = m.DeviceState(id=sensor.value, name="sensor", attributes=attributes, last_activity=None)
-        ctx.api.device_states.return_value = [device]
+        state = m.DeviceState(m.Device(sensor.value, "sensor", "hubitat"), attributes, None)
+        ctx.api.device_states.return_value = [state]
         changed = next(iter(attributes))
-        plugins._on_event(ctx, ctx.sources, device, changed, None, attributes[changed])
+        plugins._on_event(ctx, ctx.sources, state.device, changed, None, attributes[changed])
 
     return range_event
 
@@ -411,7 +409,7 @@ def test_range_rule_parses_expressions(ctx):
 @pytest.mark.parametrize("temperature, fires", [(70, True), (80, False)])
 def test_temperature_entering_range_sets_the_ac(ctx, temperature, fires, ruleset, range_event):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
-    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})
+    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
     range_event(Sensor.living, {"temperature": temperature})
     assert ctx.api.dispatch.called is fires
 
@@ -422,7 +420,7 @@ def _past_cooldown(steps):
 
 def test_readings_inside_the_range_do_not_refire(ctx, ruleset, dispatches, range_event, ac_report):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
-    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {5: Sensor.living})
+    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
     range_event(Sensor.living, {"temperature": 70})
     assert dispatches() == [(Ac.living, ac)]  # AC comes on
 
@@ -444,7 +442,7 @@ def test_readings_inside_the_range_do_not_refire(ctx, ruleset, dispatches, range
 @pytest.mark.parametrize("humidity, fires", [(60, True), (20, False)])
 def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, range_event):
     ac = m.AcCommand(m.AcMode.FAN_ONLY, "low", 70)
-    ruleset(_make_range(Sensor.living, "dewpoint(temperature,humidity)", 59, 64, m.Devices(Ac), ac), {5: Sensor.living})
+    ruleset(_make_range(Sensor.living, "dewpoint(temperature,humidity)", 59, 64, m.Devices(Ac), ac), {"5": Sensor.living})
     range_event(Sensor.living, {"temperature": 77, "humidity": humidity})
     assert ctx.api.dispatch.called is fires
 
@@ -455,7 +453,7 @@ def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, ra
 )
 def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, range_event):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
-    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac, people=people), {5: Sensor.living})
+    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac, people=people), {"5": Sensor.living})
     ctx.api.present_names.return_value = home
     range_event(Sensor.living, {"temperature": 70})
     assert ctx.api.dispatch.called is fires

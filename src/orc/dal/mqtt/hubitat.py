@@ -29,7 +29,7 @@ _log = logging.getLogger(__name__)
 _MQTT_PORT = 1883
 
 
-_devices: LockedDict[int, m.DeviceState] = LockedDict()
+_devices: LockedDict[str, m.DeviceState] = LockedDict()
 _hub_id: str | None = None  # written only by the mqtt thread
 _client: mqtt.Client | None = None  # the standing client, retained for publishing commands
 
@@ -49,7 +49,7 @@ class _Command:
     carry agrees; levels match within 1 (drivers round through the 0-254 scale)."""
 
     time: float
-    device_id: int
+    device_id: str
     level: Any = None
     switch: Any = None
 
@@ -65,7 +65,7 @@ class _Command:
 
 # External-control detection: a switch/level change that doesn't match the pending
 # _Command fires the external listeners (Google Home, a physical switch).
-_commanded: LockedDict[int, _Command] = LockedDict()  # device id -> expected outcome
+_commanded: LockedDict[str, _Command] = LockedDict()  # device id -> expected outcome
 
 # Central event listeners: fired as (device, attribute, old, new) for every attribute
 # of every received document that represents something happening — battery levels,
@@ -129,15 +129,15 @@ def start() -> None:
 
 
 def snapshot() -> list[m.DeviceState]:
-    return sorted(_devices.values(), key=lambda d: d.id)
+    return sorted(_devices.values(), key=lambda state: state.device.id)
 
 
 def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Commands:
     """Light states from the standing subscriber's device documents (updated on every
-    device event, whatever channel commanded it). Virtual devices (negative synthetic
-    id), devices not selected in the MQTT Export app, and an unpopulated cache (broker
-    down / just booted) report off, matching the old poll's missing-device rule."""
-    found = {d.id: d.attributes for d in snapshot()}
+    device event, whatever channel commanded it). Virtual devices, devices not selected
+    in the MQTT Export app, and an unpopulated cache (broker down / just booted) report
+    off, matching the old poll's missing-device rule."""
+    found = {state.device.id: state.attributes for state in snapshot()}
 
     def state(light: m.DeviceEnum) -> int | str:
         attrs = found.get(light.value)
@@ -149,14 +149,14 @@ def fetch_light_states(lights: Sequence[m.DeviceEnum]) -> m.Commands:
     return tuple(em.Command(m.Devices(light), state(light)) for light in lights)
 
 
-def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:
-    found: dict[str, tuple[int, frozenset[m.Capability]]] = {}
+def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[m.Capability]]]:
+    found: dict[str, tuple[str, frozenset[m.Capability]]] = {}
 
     def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-        device = _parse_device_state(msg)
-        if device is not None:
-            dimmable = "level" in device.attributes
-            found[device.name] = (device.id, frozenset([m.Capability.change_level]) if dimmable else frozenset())
+        state = _parse_device_state(msg)
+        if state is not None:
+            dimmable = "level" in state.attributes
+            found[state.device.name] = (state.device.id, frozenset([m.Capability.change_level]) if dimmable else frozenset())
 
     client = _new_client(secrets, _on_connect, on_message, timeout)
     client.loop_stop()
@@ -198,8 +198,7 @@ def _parse_device_state(msg: mqtt.MQTTMessage) -> m.DeviceState | None:
     try:
         doc = json.loads(msg.payload)
         return m.DeviceState(
-            id=int(doc["id"]),
-            name=doc["name"],
+            m.Device(str(doc["id"]), doc["name"], "hubitat"),
             attributes={a["name"]: a["value"] for a in doc["attributes"]},
             last_activity=doc.get("lastActivity"),
         )
@@ -239,21 +238,22 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
 
 
 def _receive_document(msg: mqtt.MQTTMessage) -> None:
-    device = _parse_device_state(msg)
-    if device is None:
+    state = _parse_device_state(msg)
+    if state is None:
         return
-    old, _devices[device.id] = _devices.get(device.id), device
-    if old is None or old == device:
+    id = state.device.id
+    old, _devices[id] = _devices.get(id), state
+    if old is None or old == state:
         return
-    now, expected = time.monotonic(), _commanded.get(device.id)
+    now, expected = time.monotonic(), _commanded.get(id)
     for a in ("switch", "level"):
-        before, after = (_Command(now, device.id, **{a: d.attributes.get(a)}) for d in (old, device))
+        before, after = (_Command(now, id, **{a: s.attributes.get(a)}) for s in (old, state))
         if before != after != expected:
-            _fire(_external_listeners, msg.topic, device, a, old.attributes.get(a), device.attributes.get(a))
-    if expected == _Command(now, device.id, device.attributes.get("level"), device.attributes.get("switch")):
-        _commanded.pop(device.id)
-    for attribute, new_value in device.attributes.items():
-        _fire(_listeners, msg.topic, device, attribute, old.attributes.get(attribute), new_value)
+            _fire(_external_listeners, msg.topic, state.device, a, old.attributes.get(a), state.attributes.get(a))
+    if expected == _Command(now, id, state.attributes.get("level"), state.attributes.get("switch")):
+        _commanded.pop(id)
+    for attribute, new_value in state.attributes.items():
+        _fire(_listeners, msg.topic, state.device, attribute, old.attributes.get(attribute), new_value)
 
 
 def _receive_command_echo(msg: mqtt.MQTTMessage) -> None:
@@ -265,7 +265,7 @@ def _receive_command_echo(msg: mqtt.MQTTMessage) -> None:
 def _receive_button_event(msg: mqtt.MQTTMessage) -> None:
     try:
         doc = json.loads(msg.payload)
-        event = int(msg.topic.split("/")[3]), int(doc["button"]), doc["event_type"]
+        event = msg.topic.split("/")[3], int(doc["button"]), doc["event_type"]
     except ValueError, KeyError, TypeError:
         _log.exception("mqtt: bad button event on %s", msg.topic)
         return
