@@ -13,7 +13,7 @@ def setup(ctx: m.AppContext) -> None:
     ctx.api.add_listener(partial(_on_event, ctx))
 
 
-def _on_event(ctx: m.AppContext, device: m.DeviceState, attribute: str, old: Any, new: Any) -> None:
+def _on_event(ctx: m.AppContext, device: m.Device, attribute: str, old: Any, new: Any) -> None:
     if attribute != "battery":
         return
     level = m.BatteryLevel.from_fraction(new, 100)
@@ -21,5 +21,8 @@ def _on_event(ctx: m.AppContext, device: m.DeviceState, attribute: str, old: Any
     if level.is_critical and not was_critical:
         msg = Log.LOW_BATTERY.format(device=device.name, level=level.value)
         ctx.api.log(
-            m.LogSource.SYSTEM, msg, m.Broker(id=str(device.id), source="hubitat"), notification=m.Notification(("battery", device.name))
+            m.LogSource.SYSTEM,
+            msg,
+            m.Broker(id=device.id, source=device.source),
+            notification=m.Notification(("battery", device.name)),
         )

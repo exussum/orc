@@ -21,7 +21,7 @@ def start() -> None:
     pass
 
 
-def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[int, frozenset[m.Capability]]]:
+def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[m.Capability]]]:
     return {}
 
 

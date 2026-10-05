@@ -160,7 +160,7 @@ def device_states() -> list[m.DeviceState]:
 
 
 def device_state(target: str) -> m.DeviceState | None:
-    return next((s for s in device_states() if str(s.id) == target or s.name == target), None)
+    return next((s for s in device_states() if str(s.device.id) == target or s.device.name == target), None)
 
 
 @mappable
@@ -187,10 +187,10 @@ def capture_acs() -> tuple[m.AcStatus, ...]:
 
 
 def capture_sensors() -> list[m.DeviceStatus]:
-    found = {s.id: s for s in device_states()}
+    found = {s.device.id: s for s in device_states()}
     return [
         m.DeviceStatus(
-            name=found[sensor.value].name if sensor.value in found else sensor.label or sensor.name,
+            name=found[sensor.value].device.name if sensor.value in found else sensor.label or sensor.name,
             details=found[sensor.value].attributes if sensor.value in found else {},
         )
         for sensor in config.devices.Sensor

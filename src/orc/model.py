@@ -44,7 +44,7 @@ class TagClock(NamedTuple):
     eid: bytes | None = None
 
 
-type Listener = Callable[[DeviceState, str, Any, Any], None]
+type Listener = Callable[[Device, str, Any, Any], None]
 type ButtonListener = Callable[[int, int, str], None]
 type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
@@ -228,11 +228,15 @@ class Certificate:
 
 
 @dataclass(frozen=True)
-class DeviceState:
-    """Last-received device document from the hub's MQTT export."""
-
-    id: int
+class Device:
+    id: str
     name: str
+    source: str
+
+
+@dataclass(frozen=True)
+class DeviceState:
+    device: Device
     attributes: dict[str, Any]
     last_activity: str | None
 
