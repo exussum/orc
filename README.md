@@ -9,7 +9,7 @@ calendar events, and a line-based config file.
 - Runs themed daily routines (for example, *work day* / *day off*) with
   events tied to wall-clock times or sun position at a configured lat/long.
 - Skips market-holiday rules using a configurable holidays endpoint.
-- Controls Hubitat lights (MQTT/REST), Chromecast speakers (pychromecast +
+- Controls Hubitat lights (MQTT), Chromecast speakers (pychromecast +
   yt-dlp for YouTube audio), and an LG AC unit (local ThinQ2, via the
   `lg_ac` plugin in `extras/`).
 - Supports weather-condition triggers (for example, `SUNNY`) through the
@@ -17,70 +17,23 @@ calendar events, and a line-based config file.
 - Via the optional `orc_extras` package (`extras/`): pulls calendar events
   from an iCal feed and schedules alerts/routines around them, controls an
   LG webOS TV (aiowebostv + BroadLink IR), monitors YoLink leak sensors
-  (fatal-level audio alert on water detection), and runs the
-  entrance-sensor automation.
+  (fatal-level audio alert on water detection), runs the entrance-sensor
+  automation, reacts to device events and sensor measurements with
+  `react` rules, and checks drive and flight times ahead of calendar
+  travel (TomTom + AeroDataBox).
 - Tracks presence of configured people — by LAN probe (ARP/mDNS) and,
   optionally, Google Find Hub (FMDN) BLE tags — and gates person-specific
   routine steps on who is currently home.
 - Serves a small Flask UI for manual control, schedule inspection, theme
   override, and an activity log.
 
-## Quick start — development, no hardware required
-
-orc runs happily on a laptop with nothing attached: the sample config's
-`provider` lines name the stub backends (`orc.dal.<capability>.stub`), so
-every device and secret integration is faked in memory and the whole UI
-works. A real installation's config names the real backends instead
-(for example, `provider mqtt orc.dal.mqtt.hubitat`) — though `secrets`,
-`hubitat`, `mqtt`, `chromecast`, `audio`, and `push` default to their real
-backend when the `provider` line is omitted entirely, so a production config
-only needs to name `weather`, `holiday`, and `blaster` explicitly. An
-explicit `provider` line, stub or real, always overrides the default.
-
-You'll need:
-
-- **uv** — manages the venv, Python 3.14 (what CI and production use), and
-  all dependencies
-- **git LFS** — the TTS voice model and ephemeris are LFS objects; without
-  it you'll get pointer files and confusing failures.
-- **PortAudio**, to build the `pyaudio` dependency:
-  `brew install portaudio` (macOS) or
-  `sudo apt-get install portaudio19-dev` (Debian/Ubuntu)
-- **libpcap**, for packet capture (Debian/Ubuntu):
-  `sudo apt-get install libpcap-dev`
-
-Then:
-
-```sh
-git lfs install
-git clone https://github.com/exussum/orc.git && cd orc
-
-uv sync --extra test --extra lint
-
-uv run pytest && uv run pytest extras
-
-uv run orc-dev
-```
-
-Open <http://localhost:8000> — the scene, device, schedule, presence, and
-log views are all live, driven by the sample config in `src/config.orc`
-(the `ORC_CONFIG_DIR` default). `uv sync` installs `orc` and `orc_extras`
-editable, so the dev server runs your working tree — the sample config's
-plugin lines resolve against `extras/src` directly.
-
-Before your first commit, install the git hooks (ruff, opengrep, mypy,
-both test suites, and more run on every commit):
-
-```sh
-pre-commit install
-```
-
 ## Install it for real
 
 Hardware and services — skip whatever you don't have; devices you leave out
 of `config.orc` are never touched:
 
-- a Hubitat hub with the Maker API app enabled (lights)
+- a Hubitat hub with the MQTT Export app pointed at a broker (lights); the
+  Maker API app is only needed for the reboot button
 - Chromecast speakers on the same LAN
 - an LG webOS TV, plus a BroadLink IR blaster for power-on
 - a YoLink hub with leak sensors
@@ -93,7 +46,8 @@ of `config.orc` are never touched:
 Steps:
 
 1. **Install it on the target machine.** Add `./extras` if you want the
-   bundled plugins — LG TV, YoLink, entrance sensor. The `command-cfg`
+   bundled plugins — LG TV, LG AC, YoLink, entrance sensor, calendar,
+   react, travel. The `command-cfg`
    config parser resolves from the internal package registry, same as the
    deploy flow:
 
@@ -182,11 +136,11 @@ Two config surfaces:
    | `port`              | HTTP listen port                               | `8000`                   |
    | `presence_hours`    | How long a presence detection persists         | `9`                      |
    | `checkin_hours`     | How long a manual check-in persists            | `1`                      |
+   | `sunset_lead_hours` | Hours before sunset that sunset routines fire  | `1`                      |
 
    Presence lives in memory: a restart clears it, then a startup scan (when
    `person` lines exist) and the tags' own advertisements rebuild it within
    seconds. Manual check-ins don't survive a restart.
-   | `sunset_lead_hours` | Hours before sunset that sunset routines fire  | `1`                      |
 
 2. **Environment variables** — only the bootstrap pair that can't live in
    the config file:
@@ -241,12 +195,9 @@ browser's own push service (Mozilla for Firefox, FCM for Chrome, Apple
 for Safari). There is no third-party account: orc signs each push with a
 VAPID key and posts it straight to the subscription's endpoint.
 
-The push service checks the VAPID contact claim, which orc fills from
-`base_url`, and py_vapid only accepts `https://<host>` with no port there.
-An `http://` value or a port, like the sample config's
-`http://orc.internal.example`, makes every push fail with a
-`VapidException` before it is sent. Either set `base_url` to a plain
-`https://` host or leave notifications off.
+Signing uses [py-vapid](https://pypi.org/project/py-vapid/), with
+`base_url` as the contact claim, so `base_url` must be a plain
+`https://<host>` with no port or every push fails before it is sent.
 
 1. Generate a key once and store it in the secrets provider as
    `VAPID_PRIVATE_KEY`:
@@ -264,17 +215,6 @@ An `http://` value or a port, like the sample config's
    the subscription silently, which is how a device recovers after
    `jobs_db` is lost. **Disable notifications** drops the device from
    orc's table and releases the browser's subscription.
-
-Notifications arrive with the app closed. On Android, Firefox and Chrome
-both receive them through FCM, so a fresh boot delivers without opening
-the browser first; Firefox on the desktop must be running. On iOS, web
-push only reaches a site added to the home screen from Safari. Pushes to
-an endpoint that has unsubscribed, expired, or was made for a different
-VAPID key are dropped from orc's table on the push service's say-so, and
-the System page re-subscribes a device whose key no longer matches.
-
-This is orc reporting on itself while it runs; a dead orc can't push, so
-liveness monitoring still needs something outside it.
 
 ## BLE tag presence (Find Hub)
 
@@ -341,27 +281,59 @@ bounces the `orc` supervisor job.
 
 ## Layout
 
-- `src/orc/__init__.py` — `Config` (`.orc` config loading and installation)
-- `src/orc/kernel/loader.py` — the config grammar, `parse_config`/`validate`, and plugin config loading, all on `command-cfg`; `src/orc/kernel/cast.py` — the `cast` value coercions and secret shapes
-- `src/orc/runner.py` — Flask + APScheduler entry points (`web`, `flask`)
-- `src/orc/api.py` — schedule construction, rule routing, `SnapshotManager`, context-injecting executor
-- `src/orc/model.py` — state constants (`ON`, `OFF`, `STOP`, …), time parsing (`resolve_time`), routine/theme/device types
-- `src/orc/collections.py` — `LockedDict` and `where`
-- `src/orc/dal/` — integrations split by capability, each a package with a
-  real backend plus a `stub.py` for development: `mqtt/` (Hubitat MQTT
-  device cache), `hubitat/` (Hubitat Maker API), `chromecast/`,
-  `holiday/` (market holidays), `weather/` (open-meteo), `blaster/`
-  (BroadLink IR), `secrets/` (Bitwarden), `push/` (Web Push). Plus `audio.py` (pyaudio + piper
-  TTS), `net.py` (presence scanning: LAN probe + BLE), `scheduler.py`,
-  `sqlite.py`, `interfaces.py` (the `Provider` capability contracts)
-- `src/orc/decorators.py` — shared decorators and locks: `requires_ctx`, `synchronized`, `audio_lock`, `silence_fd`
-- `src/orc/declarations.py` — per-config-load plugin declaration collection, built into the device/plugin `Registry`
-- `src/orc/plugins.py` — built-in plugin functions (`light_test`, `rebuild_jobs`, `reboot`, `reboot_hubitat`, `sound_test`, `back_on_schedule`)
-- `src/orc/security.py` — certificate helpers, FMDN EID math
-- `src/orc/_build.py` — build SHA/time stamped at release
-- `src/orc/locale.py` — log-message string constants
-- `src/orc/view.py` + `templates/` + `static/` — Flask UI (schedule, device, presence, log, config views)
-- `src/config.orc` — sample device/routine/theme/plugin definitions
-- `examples/` — copyable per-plugin config samples (`configs/`) and the example plugin (`plugin/`)
+- `src/` — the `orc` package and the sample `config.orc` the dev server runs against
+- `extras/` — optional `orc_extras` plugin package with its own tests
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
-- `extras/` — optional `orc_extras` plugin package (for example, `entrance_sensor`) with its own tests
+- `examples/` — copyable per-plugin config samples and an example plugin
+- `scripts/` — build, publish, and install scripts
+- `tests/` — the core test suite
+
+## Quick start — development, no hardware required
+
+orc runs happily on a laptop with nothing attached: the sample config's
+`provider` lines name the stub backends (`orc.dal.<capability>.stub`), so
+every device and secret integration is faked in memory and the whole UI
+works. A real installation's config names the real backends instead
+(for example, `provider mqtt orc.dal.mqtt.hubitat`) — though `secrets`,
+`hubitat`, `mqtt`, `chromecast`, `audio`, and `push` default to their real
+backend when the `provider` line is omitted entirely, so a production config
+only needs to name `weather`, `holiday`, and `blaster` explicitly. An
+explicit `provider` line, stub or real, always overrides the default.
+
+You'll need:
+
+- **uv** — manages the venv, Python 3.14 (what CI and production use), and
+  all dependencies
+- **git LFS** — the TTS voice model and ephemeris are LFS objects; without
+  it you'll get pointer files and confusing failures.
+- **PortAudio**, to build the `pyaudio` dependency:
+  `brew install portaudio` (macOS) or
+  `sudo apt-get install portaudio19-dev` (Debian/Ubuntu)
+- **libpcap**, for packet capture (Debian/Ubuntu):
+  `sudo apt-get install libpcap-dev`
+
+Then:
+
+```sh
+git lfs install
+git clone https://github.com/exussum/orc.git && cd orc
+
+uv sync --extra test --extra lint
+
+uv run pytest && uv run pytest extras
+
+uv run orc-dev
+```
+
+Open <http://localhost:8000> — the scene, device, schedule, presence, and
+log views are all live, driven by the sample config in `src/config.orc`
+(the `ORC_CONFIG_DIR` default). `uv sync` installs `orc` and `orc_extras`
+editable, so the dev server runs your working tree — the sample config's
+plugin lines resolve against `extras/src` directly.
+
+Before your first commit, install the git hooks (ruff, opengrep, mypy,
+both test suites, and more run on every commit):
+
+```sh
+pre-commit install
+```
