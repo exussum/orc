@@ -54,6 +54,7 @@ orc = "orc.runner:web"
 orc-dev = "orc.runner:flask"
 orc-audio-devices = "orc.dal.audio.pyaudio:list_devices_cli"
 orc-secrets = "orc.runner:secrets"
+orc-vapid-key = "orc.dal.push.webpush:vapid_key"
 
 [tool.ruff]
 line-length = 140
