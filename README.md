@@ -32,12 +32,24 @@ MQTT broker, with the Hubitat MQTT Export app pointed at it (Maker API only
 for the reboot button). Everything else is optional; a device that isn't in
 `config.orc` is never touched.
 
-1. **Install the packages.** `./extras` is optional and brings the bundled
-   plugins. `command-cfg` comes from the internal package registry.
+1. **Install the packages.** `command-cfg` comes from the internal package
+   registry.
 
    ```sh
-   pip install ./data . ./extras --extra-index-url "$ORC_REGISTRY_URL"
+   pip install ./data . --extra-index-url "$ORC_REGISTRY_URL"
    ```
+
+   The plugins are a separate package, `./extras`. Install it to get all of
+   them, or add the extra for the one that needs more than orc already
+   ships (only `lg_ac`, for its embedded broker):
+
+   ```sh
+   pip install ./extras              # every plugin
+   pip install './extras[lg_ac]'     # plus the LG AC's broker
+   ```
+
+   Each plugin's README covers its config, secrets and `plugin` line; a
+   plugin that no `plugin` line names is never imported.
 
    - [calendar](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/calendar) — iCal feed events that schedule alerts and routines
    - [entrance_sensor](https://github.com/exussum/orc/tree/main/extras/src/orc_extras/entrance_sensor) — front-door motion automation
