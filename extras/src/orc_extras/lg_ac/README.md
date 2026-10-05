@@ -32,15 +32,10 @@ This plugin is a Python reimplementation of that work for orc.
 6. Declare the device with that id as its target
    ([The AC device](#the-ac-device)) and restart.
 
-## Config
+## Grammar
 
 ```
-setting hostname          common.lgthinq.com
-setting fqdn              lg-ac.example
-setting https_advertise   443
-setting mqtt_port         1883
-setting mqtts_advertise   8883
-setting capture           False
+setting <key> <value>
 ```
 
 | Setting           | Meaning                                                                                           |
@@ -52,7 +47,19 @@ setting capture           False
 | `mqtts_advertise` | The TLS port the broker binds and the AC is told to connect to.                                   |
 | `capture`         | Buffer recent wire frames in memory for `/api/lg_ac/enroll/capture`; only for calibration.        |
 
-Startup refuses an `fqdn` still ending in `.example`, and so does `gen_certs`.
+Every key is required. Startup refuses an `fqdn` still ending in
+`.example`, and so does `gen_certs`.
+
+## Example
+
+```
+setting hostname          common.lgthinq.com
+setting fqdn              lg-ac.example
+setting https_advertise   443
+setting mqtt_port         1883
+setting mqtts_advertise   8883
+setting capture           False
+```
 
 ## Certificates
 
