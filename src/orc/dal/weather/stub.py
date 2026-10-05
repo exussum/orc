@@ -12,3 +12,7 @@ warn_stub("weather")
 
 def fetch_weather(now: datetime, lat: float, lon: float) -> frozenset[WeatherCondition]:
     return frozenset({WeatherCondition.SUNNY})
+
+
+def fetch_temperature(now: datetime, lat: float, lon: float) -> float:
+    return 70.0
