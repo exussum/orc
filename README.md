@@ -165,6 +165,38 @@ Two config surfaces:
    env BWS_ACCESS_TOKEN=0.abc... orc-secrets /etc/orc/config.orc
    ```
 
+## Built-in plugins
+
+Three listeners on the Hubitat MQTT feed ship inside `orc` and are turned
+on the same way as any plugin, by a `plugin` line. The sample config
+carries all three; drop a line and that listener is off.
+
+```
+plugin Buttons  orc.plugins.buttons
+plugin Battery  orc.plugins.battery
+plugin External orc.plugins.external
+```
+
+- **Buttons** runs an ad hoc routine when a remote is pressed. Each
+  `remote <device> <button> <event> <action>` line maps one button and
+  event (`pushed`, `held`, ...) on a `Button` device to an ad hoc name; a
+  press with no matching line is ignored, and a line naming an unknown
+  action logs and alerts. The log attributes the run to the remote.
+
+  ```
+  remote Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
+  remote .                         1 held   Silence
+  ```
+
+- **Battery** watches every device's `battery` attribute and logs
+  ``Low battery on `<device>` (CRITICAL)`` with a phone notification once,
+  when the level first drops to 10% or below.
+
+- **External** logs every device change orc didn't command, as
+  ``<device> <attribute>: <old> → <new>`` under the External source. A wall
+  switch or the Hubitat app flipping a light shows up here; nothing is
+  reverted.
+
 ## Secrets (Bitwarden)
 
 With the default `secrets` provider (`orc.dal.secrets.bws`), secrets are
