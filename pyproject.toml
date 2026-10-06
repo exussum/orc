@@ -89,7 +89,7 @@ path = "scripts/hatch_build.py"
 
 [dependency-groups]
 dev = [
-    "orc_extras[lg_ac]",
+    "orc_extras",
 ]
 
 [tool.uv.workspace]

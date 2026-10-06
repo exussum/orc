@@ -17,7 +17,6 @@ import orc_extras.lg_ac
 from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext, Secrets
 from orc_extras.lg_ac import api, plugins, web
-from orc_extras.lg_ac.dal.broker import amqtt as broker
 from orc_extras.lg_ac.dal.capture import Capture
 from orc_extras.lg_ac.dal.mqtt.interfaces import Transport
 from orc_extras.lg_ac.dal.mqtt.thinq import Thinq
@@ -37,8 +36,6 @@ class State(NamedTuple):
 
 _SECRET_CA_CERT = "LG_THINQ_CA_CERT"
 _SECRET_CA_KEY = "LG_THINQ_CA_KEY"
-_SECRET_SERVER_CERT = "LG_THINQ_SERVER_CERT"
-_SECRET_SERVER_KEY = "LG_THINQ_SERVER_KEY"
 
 
 def setup(ctx: AppContext) -> None:
@@ -53,7 +50,6 @@ def setup(ctx: AppContext) -> None:
                     "hostname": cast.fqdn,
                     "fqdn": cast.fqdn,
                     "https_advertise": cast.int,
-                    "mqtt_port": cast.int,
                     "mqtts_advertise": cast.int,
                     "capture": cast.bool,
                 },
@@ -70,7 +66,6 @@ def setup(ctx: AppContext) -> None:
     ctx.plugin_state[orc_extras.lg_ac] = State(s, adapter, capture)
     secrets: Secrets = ctx.config.secrets
     api.configure(secrets.other[_SECRET_CA_CERT].encode(), secrets.other[_SECRET_CA_KEY].encode())
-    broker.start(s.mqtts_advertise, secrets.other[_SECRET_SERVER_CERT].encode(), secrets.other[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
     ctx.api.register_adapter(adapter)
     ctx.api.add_listener(partial(plugins._on_change, ctx))
     ctx.api.add_state_provider("AC", partial(plugins._ac_status, adapter, ctx))
@@ -83,7 +78,5 @@ def declare(declarations: Any) -> None:
         secrets={
             _SECRET_CA_CERT: cast.pem_cert,
             _SECRET_CA_KEY: cast.pem_key,
-            _SECRET_SERVER_CERT: cast.pem_cert,
-            _SECRET_SERVER_KEY: cast.pem_key,
         },
     )

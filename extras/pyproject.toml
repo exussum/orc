@@ -14,12 +14,6 @@ dependencies = [
     "orc==0.0.1",
 ]
 
-# Flask, cryptography, and paho-mqtt already ship with orc; amqtt is the only extra dep.
-[project.optional-dependencies]
-lg_ac = [
-    "amqtt==0.12.1",
-]
-
 [project.scripts]
 lg-ac-calibrate = "orc_extras.lg_ac.calibrate:main"
 
