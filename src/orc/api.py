@@ -8,7 +8,7 @@ from datetime import time as dt_time
 from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.parse import quote
 
 from apscheduler.job import Job
@@ -33,6 +33,9 @@ from orc.decorators import mappable, requires_ctx
 from orc.kernel import cast
 from orc.kernel.declarations import Declarations
 from orc.locale import Log
+
+if TYPE_CHECKING:
+    from orc.dal.interfaces import Codec
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
@@ -145,6 +148,10 @@ def log_entries() -> list[m.LogEntry]:
 
 def add_listener(fn: m.Listener) -> None:
     config.providers.mqtt.add_listener(fn)
+
+
+def register_codec(codec: "Codec") -> None:
+    config.providers.mqtt.register(codec)
 
 
 def add_external_listener(fn: m.Listener) -> None:
@@ -700,10 +707,7 @@ def _scheduler() -> m.Scheduler:
 
 
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(command.value, int):
-        config.providers.mqtt.publish_light(w, brightness=command.value)
-    else:
-        config.providers.mqtt.publish_light(w, on=command.value == m.ON)
+    config.providers.mqtt.command(w, command.value)
 
 
 def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
