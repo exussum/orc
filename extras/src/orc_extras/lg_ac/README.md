@@ -2,9 +2,9 @@
 
 Local control of an LG window air conditioner, with no LG cloud. The AC is
 pointed at orc by DNS, enrols against it over HTTPS, and then holds an MQTT
-session to a broker embedded in the plugin. orc decodes the AC's binary
-state and exposes it as the built-in `AC` device: the device page's
-mode/fan/temperature card, routines and react rules all work on it.
+session to orc's broker. orc decodes the AC's binary state and exposes it as
+the built-in `AC` device: the device page's mode/fan/temperature card,
+routines and react rules all work on it.
 
 Calibrated for `WIN_056905_WW` (model `LW1522IVSM`); another model needs a
 one-time calibration (last section).
@@ -18,13 +18,13 @@ This plugin is a Python reimplementation of that work for orc.
 
 ## Quick start
 
-1. Install with the extra: `pip install './extras[lg_ac]'` pulls `amqtt`,
-   the embedded broker.
-2. Add `plugin 'LG AC' orc_extras.lg_ac` to `config.orc` and create
+1. Add `plugin 'LG AC' orc_extras.lg_ac` to `config.orc` and create
    `plugins/orc_extras/lg_ac.orc` (below) with `fqdn` set to this server's
    real name.
-3. Generate the certificates and store the four PEMs as secrets
+2. Generate the certificates and store the four PEMs as secrets
    ([Certificates](#certificates)).
+3. Give orc's MQTT broker a TLS listener on `mqtts_advertise` with the
+   server cert ([The broker](#the-broker)).
 4. Point the AC's DNS at this host and put the nginx `:443` server block in
    front of the enrollment routes ([DNS + nginx](#dns--nginx)).
 5. Start orc and power-cycle the AC: it enrols itself. Read its clip id
@@ -43,8 +43,7 @@ setting <key> <value>
 | `hostname`        | The LG name the AC resolves; your DNS sends it here.                                              |
 | `fqdn`            | This server's real FQDN. Its LAN IP is what the AC connects to for MQTT and is in the cert's SAN. |
 | `https_advertise` | The HTTPS port told to the AC at enrollment (nginx listens there).                                |
-| `mqtt_port`       | The broker's plain port, loopback only; orc and `lg-ac-calibrate` talk to it.                     |
-| `mqtts_advertise` | The TLS port the broker binds and the AC is told to connect to.                                   |
+| `mqtts_advertise` | The broker's TLS port the AC is told to connect to.                                               |
 | `capture`         | Buffer recent wire frames in memory for `/api/lg_ac/enroll/capture`; only for calibration.        |
 
 Every key is required. Startup refuses an `fqdn` still ending in
@@ -56,7 +55,6 @@ Every key is required. Startup refuses an `fqdn` still ending in
 setting hostname          common.lgthinq.com
 setting fqdn              lg-ac.example
 setting https_advertise   443
-setting mqtt_port         1883
 setting mqtts_advertise   8883
 setting capture           False
 ```
@@ -70,19 +68,39 @@ to the CA it fetches at `/route/certificate`. Generate them once:
 python -m orc_extras.lg_ac.gen_certs
 ```
 
-and store each file's text as a secret. Startup checks all four as PEM
-before any plugin runs.
+The CA pair is what orc uses: store each file's text as a secret. Startup
+checks both as PEM before any plugin runs, and orc holds them in memory
+without ever writing them out.
 
-| Secret                 | File            | Content                    |
-| ---------------------- | --------------- | -------------------------- |
-| `LG_THINQ_CA_CERT`     | `ca.crt`        | CA certificate             |
-| `LG_THINQ_CA_KEY`      | `ca.key`        | CA private key             |
-| `LG_THINQ_SERVER_CERT` | `server-ca.crt` | server certificate, signed |
-| `LG_THINQ_SERVER_KEY`  | `server-ca.key` | server private key         |
+| Secret             | File     | Content        | Used for                                                                  |
+| ------------------ | -------- | -------------- | ------------------------------------------------------------------------- |
+| `LG_THINQ_CA_CERT` | `ca.crt` | CA certificate | served to the AC at `/route/certificate`; the AC trusts the broker by it. |
+| `LG_THINQ_CA_KEY`  | `ca.key` | CA private key | signs each AC's enrollment certificate.                                   |
 
-The PEMs are held in memory; the broker's TLS context is built through a
-temp file that exists only for the `load_cert_chain` call. Nothing cert-
-related is written to disk and there are no cert paths in config.
+The server pair, `server-ca.crt` and `server-ca.key`, is not a secret orc
+reads. Install it on disk for the two services that present it to the AC:
+
+- the broker's TLS listener on `mqtts_advertise` ([The broker](#the-broker));
+- the nginx `:443` server block for enrollment ([DNS + nginx](#dns--nginx)).
+
+## The broker
+
+The plugin is an adapter on orc's single MQTT connection, the broker that
+`setting mqtt_host` names: it decodes the AC's frames off `clip/` topics and
+answers on `lime/` topics through that connection. The same broker needs a
+TLS listener for the AC on `mqtts_advertise` presenting the server cert.
+The AC sends no username or password and speaks MQTT 3.1; it offers its
+enrollment certificate as a client cert. With mosquitto:
+
+```
+listener 1883 127.0.0.1
+
+listener 8883 0.0.0.0
+certfile /etc/mosquitto/certs/lg_ac.crt
+keyfile /etc/mosquitto/certs/lg_ac.key
+
+allow_anonymous true
+```
 
 ## DNS + nginx
 
@@ -104,7 +122,7 @@ server {
 }
 ```
 
-The broker binds `mqtts_advertise` directly; the AC reaches it without
+The AC reaches the broker's `mqtts_advertise` listener directly, without
 nginx.
 
 ## The AC device
@@ -135,8 +153,8 @@ back to the single connected device.
   temperatures are Fahrenheit everywhere in orc and converted to the half
   degrees Celsius the AC stores.
 - Direct: `POST /api/lg_ac/enroll/command` with
-  `{"mode":"cool","temperature":77,"fan_mode":"high"}` (a setpoint frame
-  must carry `mode`, so send all three), and `GET /api/lg_ac/enroll/state`
+  `{"mode":"cool","temperature":77,"fan_mode":"high"}` (a field you leave
+  out keeps the unit's current value), and `GET /api/lg_ac/enroll/state`
   for the decoded state; add `device=<clip id>` with several units.
 - Every state report the AC sends is logged in command vocabulary, so it
   nests under the rule or button that asked for it.
@@ -149,7 +167,8 @@ logs a warning and runs capture-only (state won't decode) until a map exists.
 
 1. Set `capture True` in `lg_ac.orc` and restart. Recent frames are at
    `GET /api/lg_ac/enroll/capture`.
-2. With the plugin up and the AC enrolled, run `lg-ac-calibrate`. It walks
+2. With the plugin up and the AC enrolled, run `lg-ac-calibrate` on the
+   broker's host; it subscribes on the plain loopback listener. It walks
    through your modes, fan speeds and temperature range and writes
    `fieldmap/<MODEL>.json`.
 3. Set `capture False` again.

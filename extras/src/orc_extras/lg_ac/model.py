@@ -14,8 +14,7 @@ class Settings(NamedTuple):
     hostname: str  # advertised api host, e.g. common.lgthinq.com
     fqdn: str  # this server's own FQDN; resolves to the mqtt IP the device connects to. *.example = unset
     https_advertise: int  # port advertised for the api server (nginx :443)
-    mqtt_port: int  # local plain listener the proxy client uses
-    mqtts_advertise: int  # tls port the device connects to (broker)
+    mqtts_advertise: int  # the broker's tls port the device is told to connect to
     capture: bool = False
 
 
