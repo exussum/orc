@@ -231,6 +231,23 @@ def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one(ac):
     assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
 
 
+@pytest.mark.parametrize(
+    ("attributes", "expected"),
+    [
+        ({"switch": "on", "level": "50"}, 50),
+        ({"switch": "on"}, "on"),
+        ({"switch": "off", "level": "50"}, "off"),
+        (None, "off"),
+    ],
+)
+def test_capture_lights_reads_level_switch_or_off(attributes, expected):
+    states = [m.DeviceState(m.Device(orc.Light.a.value, "lamp", "hubitat"), attributes, None)] if attributes else []
+    with patch.object(mqtt_stub, "snapshot", return_value=states):
+        captured = {m.Devices(c.subject).one(): c.value for c in api.capture_lights()}
+    assert captured[orc.Light.a] == expected
+    assert set(captured) == set(orc.Light)
+
+
 def test_capture_sensors_reads_the_device_cache():
     device = m.DeviceState(m.Device(orc.Sensor.living.value, "living room sensor", "hubitat"), {"temperature": 70}, None)
     with patch.object(mqtt_stub, "snapshot", return_value=[device]):

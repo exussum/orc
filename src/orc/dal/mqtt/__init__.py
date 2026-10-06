@@ -1,11 +1,9 @@
+from typing import Any
+
 from orc import model as m
 
 
-def switch_command(light: m.DeviceEnum, on: bool | None, brightness: int | None) -> str:
-    if brightness == 0:
-        on = False
-    elif brightness == 100:
-        on = True
-    elif brightness is not None:
-        raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {brightness}")
-    return m.ON if on else m.OFF
+def switch_on(light: m.DeviceEnum, value: Any) -> bool:
+    if isinstance(value, int) and value not in (0, 100):
+        raise ValueError(f"{light.name} does not support ChangeLevel; cannot set brightness {value}")
+    return value == m.ON or value == 100

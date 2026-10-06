@@ -129,6 +129,7 @@ def house(request, monkeypatch, tmp_path):
         monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
         sqlite.init_db()
         api._ACTIVITY_LOG.clear()
+        mqtt_stub.reset()
         net.presence.__init__()
         net.presence._tz = config.settings.tz
         api.start_ble_listener()

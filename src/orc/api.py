@@ -159,9 +159,20 @@ def device_state(target: str) -> m.DeviceState | None:
     return next((s for s in device_states() if str(s.device.id) == target or s.device.name == target), None)
 
 
+# A dimmer that's on reports its level, otherwise its switch; a light the broker has
+# never described (virtual, not exported, cache still empty) reads as off.
 @mappable
 def capture_lights() -> m.Commands:
-    return config.providers.mqtt.fetch_light_states(tuple(config.devices.Light))
+    found = {state.device.id: state.attributes for state in config.providers.mqtt.snapshot()}
+
+    def state(light: m.DeviceEnum) -> int | str:
+        attrs = found.get(light.value)
+        if attrs is None:
+            return m.OFF
+        switch = attrs.get("switch", m.OFF)
+        return int(attrs["level"]) if ("level" in attrs and switch == m.ON) else switch
+
+    return tuple(em.Command(m.Devices(light), state(light)) for light in config.devices.Light)
 
 
 @mappable
