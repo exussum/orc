@@ -62,7 +62,7 @@ class TestManagingConfig:
         dispatch.assert_not_called()
 
 
-@patch("orc.dal.mqtt.stub.publish_light")
+@patch("orc.dal.mqtt.stub.command")
 class TestIntercepts:
     def test_snapshot_update_overwrite_set(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM)
@@ -75,7 +75,7 @@ class TestIntercepts:
             em.Command(m.Devices(orc.Light.a), m.ON),
             em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM),
         )
-        assert update_light.call_args_list == [call(orc.Light.b, on=True), call(orc.Light.b, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.b, m.ON), call(orc.Light.b, m.ON)]
 
     def test_snapshot_update_add(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON, tag=m.Tag.SYSTEM)
@@ -88,7 +88,7 @@ class TestIntercepts:
             em.Command(m.Devices(orc.Light.b), m.OFF),
             command,
         )
-        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
     def test_rule_ignored(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
@@ -109,7 +109,7 @@ class TestIntercepts:
         api.dispatch((command,), entry=entry)
 
         assert not api._ctx.engine.snapshots()
-        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
     def test_unrelated_plugin_snapshot_does_not_suppress(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
@@ -117,7 +117,7 @@ class TestIntercepts:
         api._ctx.engine.save_snapshot("entrance_sensor", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         api.dispatch((command,), entry=entry)
 
-        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
     def test_snapshot_bypassed(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
@@ -130,7 +130,7 @@ class TestIntercepts:
             em.Command(m.Devices(orc.Light.a), m.ON),
             em.Command(m.Devices(orc.Light.b), m.OFF),
         )
-        assert update_light.call_args_list == [call(orc.Light.c, on=True)]
+        assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
     def test_force_off_is_not_recorded_and_resume_relights(self, update_light, snapshot_config, entry):
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
@@ -145,9 +145,9 @@ class TestIntercepts:
         api.restore_scene(api.ORC_SYSTEM_SNAPSHOT, (), entry)
 
         assert update_light.call_args_list == [
-            call(orc.Light.a, on=False),  # the deliberate off
-            call(orc.Light.a, on=True),  # resume undoes it
-            call(orc.Light.b, on=False),
+            call(orc.Light.a, m.OFF),  # the deliberate off
+            call(orc.Light.a, m.ON),  # resume undoes it
+            call(orc.Light.b, m.OFF),
         ]
 
 

@@ -11,7 +11,7 @@ from orc import model as m
 from orc.dal.audio import pyaudio
 from orc.dal.chromecast import pychromecast
 from orc.dal.hubitat import http as hubitat_http
-from orc.dal.mqtt import hubitat as mqtt_hubitat
+from orc.dal.mqtt import paho as mqtt_paho
 from orc.dal.push import webpush
 from orc.dal.secrets import bws
 from orc.dal.secrets import stub as secrets_stub
@@ -354,7 +354,7 @@ def test_unnamed_providers_default_to_the_real_backend_or_nothing():
     provider = parse("core").provider
     assert (provider.secrets, provider.mqtt, provider.chromecast, provider.hubitat, provider.audio, provider.push) == (
         bws,
-        mqtt_hubitat,
+        mqtt_paho,
         pychromecast,
         hubitat_http,
         pyaudio,

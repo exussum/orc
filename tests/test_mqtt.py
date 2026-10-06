@@ -6,7 +6,8 @@ import pytest
 
 import orc
 from orc import model as m
-from orc.dal.mqtt import hubitat as mqtt
+from orc.dal.mqtt import hubitat
+from orc.dal.mqtt import paho as mqtt
 
 
 def _msg(topic, payload, retain=True):
@@ -29,8 +30,11 @@ HUB = "05bd449a-6f6d-45a6-b2e6-7ecb91105f7e"
 
 @pytest.fixture(autouse=True)
 def clean_state(monkeypatch):
-    monkeypatch.setattr(mqtt, "_codec", mqtt.Hubitat())
+    codec = hubitat.Hubitat()
+    monkeypatch.setattr(mqtt, "_hubitat", codec)
+    monkeypatch.setattr(mqtt, "_codecs", [codec])
     monkeypatch.setattr(mqtt, "_listeners", [])
+    monkeypatch.setattr(mqtt, "_client", None)
 
 
 def _receive(docs):
@@ -49,9 +53,9 @@ class TestOnMessage:
         assert state.last_activity == doc["lastActivity"]
 
     def test_hub_id_captured_from_topic(self):
-        assert mqtt._codec.hub_id is None
+        assert mqtt._hubitat.hub_id is None
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
-        assert mqtt._codec.hub_id == HUB
+        assert mqtt._hubitat.hub_id == HUB
 
     def test_non_device_topics_ignored(self):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/location", {"id": 1, "name": "home"}))
@@ -65,7 +69,7 @@ class TestOnMessage:
         assert mqtt.snapshot() == []
 
     def test_handler_failure_is_logged_not_raised(self, monkeypatch, caplog):
-        monkeypatch.setattr(mqtt._codec, "_document", lambda topic, doc: 1 / 0)
+        monkeypatch.setattr(mqtt._hubitat, "_document", lambda topic, doc: 1 / 0)
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
         (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
         assert record.exc_info[0] is ZeroDivisionError
@@ -168,64 +172,157 @@ class TestButtonEvents:
         assert mqtt.snapshot() == []
 
 
+class _Codec:
+    namespaces = ("clip",)
+    device_types = ("AC",)
+
+    def __init__(self):
+        self.seen, self.replies, self.hello = [], [], []
+
+    def attach(self, publish):
+        self.publish = publish
+
+    def decode(self, topic, doc):
+        self.seen.append((topic, doc))
+        for reply in self.replies:
+            self.publish(reply)
+        return ()
+
+    def encode(self, device, value):
+        return (m.Message(f"clip/command/{device.value}", {"set": value}),)
+
+    def snapshot(self):
+        return ()
+
+    def start(self):
+        for message in self.hello:
+            self.publish(message)
+
+
+class TestRouting:
+    def test_namespace_picks_the_codec_and_parses_json(self):
+        codec = _Codec()
+        mqtt.register(codec)
+        mqtt._on_message(None, None, _msg("clip/message/devices/abc", {"cmd": "x"}, retain=False))
+        mqtt._on_message(None, None, _msg("clip/message/devices/abc", b'{"cmd":"y"}\x00', retain=False))
+        mqtt._on_message(None, None, _msg("clip/echo", b"42", retain=False))
+        mqtt._on_message(None, None, _msg("other/topic", b"{}", retain=False))
+        assert codec.seen == [("clip/message/devices/abc", {"cmd": "x"}), ("clip/message/devices/abc", {"cmd": "y"}), ("clip/echo", {})]
+
+    def test_a_codec_publishes_in_its_own_namespace_only(self, monkeypatch):
+        published = []
+        monkeypatch.setattr(
+            mqtt,
+            "_client",
+            SimpleNamespace(
+                publish=lambda topic, payload, retain: published.append((topic, payload, retain)), subscribe=lambda *a, **k: None
+            ),
+        )
+        codec = _Codec()
+        codec.replies = [m.Message("clip/reply", {"ok": 1}, retain=True)]
+        mqtt.register(codec)
+        mqtt._on_message(None, None, _msg("clip/in", b"{}", retain=False))
+        assert published == [("clip/reply", '{"ok": 1}', True)]
+        with pytest.raises(ValueError):
+            codec.publish(m.Message("hubitat/x", None))
+
+    def test_register_refuses_a_taken_namespace_or_device_type(self):
+        mqtt.register(_Codec())
+        with pytest.raises(ValueError):
+            mqtt.register(_Codec())
+        with pytest.raises(ValueError):
+            mqtt.register(SimpleNamespace(namespaces=("lime",), device_types=("Light",)))
+
+    def test_connect_subscribes_every_namespace(self):
+        mqtt.register(_Codec())
+        subscribed = []
+        mqtt._on_connect(SimpleNamespace(subscribe=lambda topic, qos: subscribed.append(topic)), None, None, 0)
+        assert subscribed == ["hubitat/#", "clip/#"]
+
+    def test_start_sends_each_codec_hello(self, monkeypatch):
+        published = []
+        client = SimpleNamespace(
+            publish=lambda topic, payload, retain: published.append((topic, payload, retain)), subscribe=lambda *a, **k: None
+        )
+        monkeypatch.setattr(mqtt, "_new_client", lambda *a: client)
+        codec = _Codec()
+        codec.hello = [m.Message("clip/hello", {"q": 1}, retain=True)]
+        mqtt.register(codec)
+        mqtt.start()
+        assert published == [("clip/hello", '{"q": 1}', True)]
+
+    def test_command_routes_by_device_type(self, monkeypatch):
+        published = []
+        monkeypatch.setattr(
+            mqtt,
+            "_client",
+            SimpleNamespace(publish=lambda topic, payload, retain: published.append((topic, payload)), subscribe=lambda *a, **k: None),
+        )
+        mqtt.register(_Codec())
+        mqtt.command(orc.AC.unit, "cool")
+        assert published == [("clip/command/clip-1", '{"set": "cool"}')]
+        with pytest.raises(LookupError):
+            mqtt.command(orc.Chromecast.x, 10)
+
+
 class TestPublishLight:
     @pytest.fixture(autouse=True)
     def commanding_client(self, monkeypatch):
         self.published = []
         client = SimpleNamespace(publish=lambda topic, payload=None, retain=False: self.published.append((topic, payload)))
         monkeypatch.setattr(mqtt, "_client", client)
-        mqtt._codec.hub_id = HUB
+        mqtt._hubitat.hub_id = HUB
 
     def test_on_publishes_on_command(self):
-        mqtt.publish_light(orc.Light.a, on=True)
+        mqtt.command(orc.Light.a, m.ON)
         assert self.published == [(f"hubitat/{HUB}/devices/1/commands/on", None)]
 
     def test_off_publishes_off_command(self):
-        mqtt.publish_light(orc.Light.a, on=False)
+        mqtt.command(orc.Light.a, m.OFF)
         assert self.published == [(f"hubitat/{HUB}/devices/1/commands/off", None)]
 
     def test_brightness_publishes_set_level_with_raw_payload(self):
-        mqtt.publish_light(orc.Light.a, brightness=42)
+        mqtt.command(orc.Light.a, 42)
         assert self.published == [(f"hubitat/{HUB}/devices/1/commands/setLevel", "42")]
 
     def test_brightness_zero_without_capability_publishes_off(self):
-        mqtt.publish_light(orc.Light.b, brightness=0)
+        mqtt.command(orc.Light.b, 0)
         assert self.published == [(f"hubitat/{HUB}/devices/2/commands/off", None)]
 
     def test_brightness_without_capability_raises(self):
         with pytest.raises(ValueError):
-            mqtt.publish_light(orc.Light.b, brightness=42)
+            mqtt.command(orc.Light.b, 42)
         assert self.published == []
 
     def test_unstarted_client_raises(self, monkeypatch):
         monkeypatch.setattr(mqtt, "_client", None)
         with pytest.raises(RuntimeError):
-            mqtt.publish_light(orc.Light.a, on=True)
+            mqtt.command(orc.Light.a, m.ON)
 
 
 class TestStatusSource:
     @pytest.fixture(autouse=True)
     def commanding_client(self, monkeypatch):
         monkeypatch.setattr(mqtt, "_client", SimpleNamespace(publish=lambda topic, payload=None, retain=False: None))
-        mqtt._codec.hub_id = HUB
+        mqtt._hubitat.hub_id = HUB
 
     def _sources(self, doc):
-        return {s.attribute: s.source for s in mqtt._codec.decode(f"hubitat/{HUB}/devices/1", doc)}
+        return {s.attribute: s.source for s in mqtt._hubitat.decode(f"hubitat/{HUB}/devices/1", doc)}
 
     def test_a_commanded_switch_is_orc_and_the_rest_is_the_device(self):
-        mqtt.publish_light(orc.Light.a, on=True)
+        mqtt.command(orc.Light.a, m.ON)
         self._sources(_doc(id=1, attributes={"switch": "off", "level": "20", "battery": "90"}))
         assert self._sources(_doc(id=1, attributes={"switch": "on", "level": "20", "battery": "90"})) == {
             "switch": m.Source.ORC,
-            "level": mqtt.HubitatSource.HUBITAT,
-            "battery": mqtt.HubitatSource.HUBITAT,
+            "level": hubitat.HubitatSource.HUBITAT,
+            "battery": hubitat.HubitatSource.HUBITAT,
         }
 
     def test_an_uncommanded_move_is_external(self):
         self._sources(_doc(id=1, attributes={"switch": "off", "level": "20"}))
         assert self._sources(_doc(id=1, attributes={"switch": "on", "level": "20"})) == {
             "switch": m.Source.EXTERNAL,
-            "level": mqtt.HubitatSource.HUBITAT,
+            "level": hubitat.HubitatSource.HUBITAT,
         }
 
 
@@ -234,18 +331,18 @@ class TestExternalChanges:
     def commanding_client(self, monkeypatch):
         monkeypatch.setattr(mqtt, "_client", SimpleNamespace(publish=lambda topic, payload=None, retain=False: None))
         monkeypatch.setattr(mqtt, "_external_listeners", [])
-        mqtt._codec.hub_id = HUB
+        mqtt._hubitat.hub_id = HUB
         self.external = []
         mqtt.add_external_listener(lambda d, a, old, new: self.external.append((a, old, new)))
 
     def test_a_commanded_change_is_not_external(self):
-        mqtt.publish_light(orc.Light.a, brightness=42)
+        mqtt.command(orc.Light.a, 42)
         _receive([_doc(id=1, attributes={"switch": "off", "level": "20"})])
         _receive([_doc(id=1, attributes={"switch": "on", "level": "43"})])  # drivers round through 0-254, one off is a match
         assert self.external == []
 
     def test_a_value_nobody_asked_for_is_external(self):
-        mqtt.publish_light(orc.Light.a, brightness=42)
+        mqtt.command(orc.Light.a, 42)
         _receive([_doc(id=1, attributes={"switch": "off", "level": "20"})])
         _receive([_doc(id=1, attributes={"switch": "on", "level": "80"})])
         assert self.external == [("level", "20", "80")]
@@ -256,7 +353,7 @@ class TestExternalChanges:
         assert self.external == []
 
     def test_a_matching_document_consumes_the_command(self):
-        mqtt.publish_light(orc.Light.a, on=True)
+        mqtt.command(orc.Light.a, m.ON)
         _receive([_doc(id=1, attributes={"switch": "off"})])
         _receive([_doc(id=1, attributes={"switch": "on"})])
         _receive([_doc(id=1, attributes={"switch": "off"})])

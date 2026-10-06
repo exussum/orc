@@ -22,11 +22,15 @@ def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, 
     return {}
 
 
-def publish_light(light: m.DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None:
-    if brightness is not None and m.Capability.change_level in light.capabilities:
-        _states[light] = brightness or m.OFF
+def register(codec: Any) -> None:
+    pass
+
+
+def command(device: m.DeviceEnum, value: Any) -> None:
+    if isinstance(value, int) and m.Capability.change_level in device.capabilities:
+        _states[device] = value or m.OFF
         return
-    _states[light] = m.ON if switch_on(light, brightness if brightness is not None else (m.ON if on else m.OFF)) else m.OFF
+    _states[device] = m.ON if switch_on(device, value) else m.OFF
 
 
 def snapshot() -> list[m.DeviceState]:
