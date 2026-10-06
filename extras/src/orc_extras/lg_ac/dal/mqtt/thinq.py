@@ -1,10 +1,10 @@
-"""ThinQ2 (clip) MQTT handling.
+"""ThinQ2 (clip) adapter.
 
-Background paho client connected to the local broker the AC enrolls into. Merges
-the latest raw TLV values per device from ``clip/message/devices/<did>`` (decoded
-on read), answers provisioning on ``clip/provisioning/devices/<did>``, and sends
-commands downstream on ``lime/devices/<did>``. Modeled after orc's hubitat MQTT
-subscriber: module-level client, module-level caches, listeners on the mqtt thread.
+Rides orc's broker connection as the adapter for the ``clip`` and ``lime``
+namespaces. Merges the latest raw TLV values per device from
+``clip/message/devices/<did>`` (decoded on read), answers provisioning on
+``clip/provisioning/devices/<did>``, and encodes commands downstream on
+``lime/devices/<did>``.
 
 The clip transport (the upstream/downstream topics and the JSON ``packet``
 envelope) is from anszom's rethink: https://github.com/anszom/rethink.
@@ -13,19 +13,24 @@ envelope) is from anszom's rethink: https://github.com/anszom/rethink.
 from __future__ import annotations
 
 import base64
-import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
-import paho.mqtt.client as mqtt
-
+from orc import model as om
 from orc.collections import LockedDict
 from orc_extras.lg_ac import api
 from orc_extras.lg_ac import model as m
 
 _log = logging.getLogger(__name__)
+
+SOURCE = "lg_ac"
+
+
+class ThinqSource(om.SourceEnum):
+    LG_AC = SOURCE
+
 
 # The device publishes upstream to clip/message and clip/provisioning, but it
 # subscribes to a firmware-baked-in downstream topic (lime/devices/<did>) and
@@ -35,198 +40,142 @@ _MESSAGE_PREFIX = "clip/message/devices/"
 _PROVISIONING_PREFIX = "clip/provisioning/devices/"
 _DOWNSTREAM_PREFIX = "lime/devices/"
 
-_client: mqtt.Client | None = None  # standing client, retained for publishing commands
-# on_message (paho's network thread) and Flask workers (fetch_state/default_device)
-# both touch this; LockedDict serializes them, and each update stores a fresh dict so
-# a reader iterating a returned snapshot never races an in-place mutation. Keys are in
-# first-seen order, so default_device() is the last key.
-_raw: LockedDict[str, dict[int, int]] = LockedDict()  # merged latest TLV values per device
-_models: LockedDict[str, str] = LockedDict()  # device id -> model kind from its preDeploy payload
-_raw_listeners: list[Callable[[str, bytes], None]] = []  # every inbound message, undecoded
-_event_listener: Callable[[str, str, m.ACState], None]
 
+class Thinq:
+    namespaces: tuple[str, ...] = ("clip", "lime")
+    device_types: tuple[str, ...] = ("AC",)
 
-def add_raw_listener(fn: Callable[[str, bytes], None]) -> None:
-    _raw_listeners.append(fn)
+    def __init__(self, names: dict[str, str], tap: Callable[[str, dict[str, Any]], None] | None = None) -> None:
+        self._names = names  # configured clip id -> display name
+        self._tap = tap
+        self._publish: Callable[[om.Message], None] | None = None
+        # decode (paho's network thread) and Flask workers (fetch_state/default_device)
+        # both touch these; LockedDict serializes them, and each update stores a fresh
+        # dict so a reader iterating a returned snapshot never races an in-place
+        # mutation. Keys are in first-seen order, so default_device() is the last key.
+        self._raw: LockedDict[str, dict[int, int]] = LockedDict()  # merged latest TLV values per device
+        self._models: LockedDict[str, str] = LockedDict()  # device id -> model kind from its preDeploy payload
 
+    def attach(self, publish: Callable[[om.Message], None]) -> None:
+        self._publish = publish
 
-def set_event_listener(fn: Callable[[str, str, m.ACState], None]) -> None:
-    global _event_listener
-    _event_listener = fn
+    def decode(self, topic: str, doc: dict[str, Any]) -> tuple[om.Status, ...]:
+        if self._tap is not None:
+            self._tap(topic, doc)
+        if topic.startswith(_MESSAGE_PREFIX):
+            return self._message(topic[len(_MESSAGE_PREFIX) :], doc)
+        elif topic.startswith(_PROVISIONING_PREFIX):
+            self._provisioning(topic[len(_PROVISIONING_PREFIX) :], doc)
+        return ()
 
+    def encode(self, device: om.DeviceEnum, value: Any) -> tuple[om.Message, ...]:
+        device_id = str(device.value)
+        if self._raw.get(device_id) is None:
+            return ()  # unknown/stale clip id: command nothing rather than the wrong AC
+        fm = self._fieldmap(device_id)
+        if fm is None:
+            raise RuntimeError(f"no field map for {device.name}; calibrate its model first")
+        state = self.fetch_state(device_id)
+        values: dict[str, object]
+        if value == om.OFF:
+            held, values = state.power == om.OFF, {"mode": "off"}
+        elif value == om.ON:
+            # a setpoint frame must carry mode, so a bare on keeps the device's current one
+            held, values = state.power == om.ON, {"mode": state.mode or "cool"}
+        elif isinstance(value, om.AcCommand):
+            held = state == state._replace(power=om.ON, mode=value.mode, fan_mode=value.fan, temperature=value.temp)
+            values = {"mode": value.mode, "fan_mode": value.fan, "temperature": api.celsius(value.temp)}
+        else:
+            raise ValueError(f"AC devices don't support state {value!r}")
+        if held:
+            return ()
+        return (self._packet(device_id, api.build_command(fm, values)),)
 
-def event(device_id: str, msg: str, state: m.ACState = m.ACState()) -> None:  # noqa: B008
-    _event_listener(device_id, f"AC {device_id[:8]}: {msg}", state)
+    def snapshot(self) -> tuple[om.DeviceState, ...]:
+        return tuple(om.DeviceState(self._device(device_id), self.fetch_state(device_id)._asdict(), None) for device_id in self._raw.copy())
 
-
-def _seen(device_id: str) -> None:
-    _raw.update(device_id, lambda cur: cur if cur is not None else {})
-
-
-def start(host: str, port: int = 1883, username: str | None = None, password: str | None = None, clip_ids: list[str] | None = None) -> None:
-    global _client
-    # clip_ids ride paho's per-client userdata, delivered to _on_connect on every
-    # (re)connect so it can nudge the configured ACs — no module-level state needed.
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="lg_ac", userdata=clip_ids or [])
-    if username is not None:
-        client.username_pw_set(username, password)
-    client.on_connect = _on_connect
-    client.on_message = _on_message
-    client.on_disconnect = _on_disconnect
-    client.reconnect_delay_set(min_delay=1, max_delay=60)
-    client.connect_async(host, port, keepalive=30)
-    client.loop_start()
-    _client = client
-
-
-def _fieldmap(device_id: str) -> m.Fieldmap | None:
-    model = _models.get(device_id)
-    return api.load_fieldmap(model) if model else None
-
-
-def fetch_state(device_id: str) -> m.ACState:
-    fm = _fieldmap(device_id)
-    if fm is None:
-        return m.ACState()
-    return api.state_from_raw(fm, _raw.get(device_id) or {})
-
-
-def devices() -> list[str]:
-    return list(_raw.copy())
-
-
-def default_device() -> str | None:
-    return next(reversed(_raw.copy()), None)
-
-
-def _envelope(device_id: str, cmd: str, type_: int, data: str) -> bytes:
-    return json.dumps({"did": device_id, "mid": int(time.time() * 1000), "cmd": cmd, "type": type_, "data": data}).encode()
-
-
-def _send_packet(device_id: str, frame: bytes, retain: bool = False) -> None:
-    if _client is None:
-        return
-    _client.publish(_DOWNSTREAM_PREFIX + device_id, _envelope(device_id, "packet", 1, frame.hex()), retain=retain)
-
-
-def _nudge(device_id: str) -> None:
     # Retained so a unit that reconnects after an orc restart is prompted on its next
     # subscribe, instead of sitting idle (invisible to devices()/commands) until a manual
     # power-cycle re-provisions it. Diverges from rethink, which never queries and waits
     # for the device to push state.
-    _send_packet(device_id, api.build_query(api.Query.VALUES), retain=True)
+    def discover(self, messages: Sequence[om.Message]) -> dict[str, tuple[str, frozenset[om.Capability]]]:
+        return {}
 
+    def start(self) -> None:
+        for device_id in self._names:
+            self._send(self._packet(device_id, api.build_query(api.Query.VALUES), retain=True))
 
-def publish_command(device_id: str, values: dict[str, object]) -> None:
-    if _client is None:
-        raise RuntimeError("mqtt client not started; cannot command device")
-    fm = _fieldmap(device_id)
-    if fm is None:
-        event(device_id, "command dropped, no field map")
-        return
-    _send_packet(device_id, api.build_command(fm, values))
-
-
-def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
-    failed = getattr(rc, "is_failure", None)
-    if failed is None:
-        failed = rc != 0
-    if failed:
-        _log.warning("mqtt connect failed: rc=%s", rc)
-        return
-    client.subscribe("#", qos=0)
-    for clip_id in userdata:
-        _nudge(clip_id)
-
-
-def _on_disconnect(client: mqtt.Client, userdata: Any, *args: Any) -> None:
-    _log.warning("mqtt client disconnected")
-
-
-def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    for listener in list(_raw_listeners):
-        try:
-            listener(msg.topic, msg.payload)
-        except Exception:
-            _log.exception("raw listener failed for %s", msg.topic)
-    try:
-        if msg.topic.startswith(_MESSAGE_PREFIX):
-            _receive_message(msg.topic, msg.payload)
-        elif msg.topic.startswith(_PROVISIONING_PREFIX):
-            _receive_provisioning(msg.topic, msg.payload)
-    except Exception:
-        _log.exception("message handling failed for %s", msg.topic)
-
-
-def _receive_message(topic: str, payload: bytes) -> None:
-    device_id = topic[len(_MESSAGE_PREFIX) :]
-    try:
-        msg = json.loads(payload.rstrip(b"\x00"))  # device appends a null terminator
-    except ValueError:
-        return
-    cmd = msg.get("cmd")
-    if cmd == "completeProvisioning_ack":
-        _seen(device_id)
-        _poll(device_id)
-    elif cmd == "device_packet":
-        fm = _fieldmap(device_id)
+    def fetch_state(self, device_id: str) -> m.ACState:
+        fm = self._fieldmap(device_id)
         if fm is None:
-            return  # unknown model: skip decode (enable capture to log raw frames for calibration)
-        pkt = api.frame_tlv(bytes.fromhex(msg.get("data", "")))
-        if pkt is None:
-            return
-        values = {f.type_id: f.value for f in pkt.fields}
-        old = _raw.get(device_id) or {}
-        _raw.update(device_id, lambda cur: {**(cur or {}), **values})
-        _event_state_changes(fm, device_id, old, {**old, **values})
-    elif cmd == "req_timesync":
-        _send_timesync(device_id)
+            return m.ACState()
+        return api.state_from_raw(fm, self._raw.get(device_id) or {})
+
+    def devices(self) -> list[str]:
+        return list(self._raw.copy())
+
+    def default_device(self) -> str | None:
+        return next(reversed(self._raw.copy()), None)
+
+    def _device(self, device_id: str) -> om.Device:
+        return om.Device(device_id, self._names.get(device_id, device_id), SOURCE)
+
+    def _fieldmap(self, device_id: str) -> m.Fieldmap | None:
+        model = self._models.get(device_id)
+        return api.load_fieldmap(model) if model else None
+
+    def _seen(self, device_id: str) -> None:
+        self._raw.update(device_id, lambda cur: cur if cur is not None else {})
+
+    def _message(self, device_id: str, doc: dict[str, Any]) -> tuple[om.Status, ...]:
+        cmd = doc.get("cmd")
+        if cmd == "completeProvisioning_ack":
+            self._seen(device_id)
+            self._send(self._packet(device_id, api.build_query(api.Query.CAPABILITIES)))
+            self._send(self._packet(device_id, api.build_query(api.Query.VALUES)))
+        elif cmd == "device_packet":
+            fm = self._fieldmap(device_id)
+            if fm is None:
+                return ()  # unknown model: skip decode (enable capture to log raw frames for calibration)
+            pkt = api.frame_tlv(bytes.fromhex(doc.get("data", "")))
+            if pkt is None:
+                return ()
+            values = {f.type_id: f.value for f in pkt.fields}
+            old = self._raw.get(device_id) or {}
+            self._raw.update(device_id, lambda cur: {**(cur or {}), **values})
+            before, after = api.state_from_raw(fm, old), api.state_from_raw(fm, {**old, **values})
+            # current_temperature is deliberately excluded: it drifts constantly and would flood the log
+            if any(
+                b is not None and b != a
+                for field, b, a in zip(before._fields, before, after, strict=True)
+                if field != "current_temperature"
+            ):
+                return (om.Status(self._device(device_id), "state", before, after, ThinqSource.LG_AC),)
+        elif cmd == "req_timesync":
+            now = time.gmtime()
+            buf = bytes([now.tm_year % 100, now.tm_mon - 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec, (now.tm_wday + 1) % 7])
+            self._send(om.Message(_DOWNSTREAM_PREFIX + device_id, _envelope(device_id, "resp_timesync", 1, base64.b64encode(buf).decode())))
+        return ()
+
+    def _provisioning(self, device_id: str, doc: dict[str, Any]) -> None:
+        device_cmd = doc.get("cmd")
+        if device_cmd not in ("preDeploy", "deploy"):
+            return  # ignore our own completeProvisioning response echoed back
+        model = doc.get("kind")
+        if model and model != self._models.get(device_id):
+            self._models.update(device_id, lambda cur: model)
+            if api.load_fieldmap(model) is None:
+                _log.warning("no field map for model %s; capture-only until one exists", model)
+        self._seen(device_id)
+        self._send(om.Message(_DOWNSTREAM_PREFIX + device_id, api.deploy(device_id, int(time.time() * 1000), device_cmd)))
+
+    def _send(self, message: om.Message) -> None:
+        if self._publish is not None:
+            self._publish(message)
+
+    def _packet(self, device_id: str, frame: bytes, retain: bool = False) -> om.Message:
+        return om.Message(_DOWNSTREAM_PREFIX + device_id, _envelope(device_id, "packet", 1, frame.hex()), retain=retain)
 
 
-# current_temperature is deliberately excluded: it drifts constantly and would flood the log
-def _event_state_changes(fm: m.Fieldmap, device_id: str, old: dict[int, int], new: dict[int, int]) -> None:
-    before = api.state_from_raw(fm, old)
-    after = api.state_from_raw(fm, new)
-    changes = [
-        f"{field} {b} → {a}"
-        for field, b, a in zip(before._fields, before, after, strict=True)
-        if field != "current_temperature" and b is not None and b != a
-    ]
-    if changes:
-        event(device_id, ", ".join(changes), after)
-
-
-def _send_timesync(device_id: str) -> None:
-    if _client is None:
-        return
-    now = time.gmtime()
-    buf = bytes([now.tm_year % 100, now.tm_mon - 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec, (now.tm_wday + 1) % 7])
-    _client.publish(_DOWNSTREAM_PREFIX + device_id, _envelope(device_id, "resp_timesync", 1, base64.b64encode(buf).decode()))
-
-
-def _receive_provisioning(topic: str, payload: bytes) -> None:
-    device_id = topic[len(_PROVISIONING_PREFIX) :]
-    try:
-        incoming = json.loads(payload.rstrip(b"\x00"))
-    except ValueError:
-        return
-    device_cmd = incoming.get("cmd")
-    if device_cmd not in ("preDeploy", "deploy"):
-        return  # ignore our own completeProvisioning response echoed back
-    model = incoming.get("kind")
-    if model and model != _models.get(device_id):
-        _models.update(device_id, lambda cur: model)
-        if api.load_fieldmap(model) is None:
-            _log.warning("no field map for model %s; capture-only until one exists", model)
-            event(device_id, f"no field map for model {model}; capture-only")
-    _seen(device_id)
-    if _client is not None:
-        response = api.deploy(device_id, int(time.time() * 1000), device_cmd)
-        _client.publish(_DOWNSTREAM_PREFIX + device_id, json.dumps(response).encode())
-
-
-def _poll(device_id: str) -> None:
-    if _client is None:
-        return
-    _send_packet(device_id, api.build_query(api.Query.CAPABILITIES))
-    _send_packet(device_id, api.build_query(api.Query.VALUES))
+def _envelope(device_id: str, cmd: str, type_: int, data: str) -> dict[str, Any]:
+    return {"did": device_id, "mid": int(time.time() * 1000), "cmd": cmd, "type": type_, "data": data}

@@ -640,12 +640,6 @@ class DeviceNamespace:
         return vars(self).items()
 
 
-class AcService(Protocol):
-    def command(self, device: "DeviceEnum", state: str | None, mode: str | None, fan: str | None, temp: int | None) -> None: ...
-    def state(self, device: "DeviceEnum") -> AcState | None: ...
-    def temperature(self, device: "DeviceEnum") -> int | None: ...
-
-
 @dataclass
 class Registry:
     """What plugins registered, built per config load and exposed as
@@ -671,7 +665,6 @@ class Registry:
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
     secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
-    ac: AcService | None = None
 
 
 def squish(

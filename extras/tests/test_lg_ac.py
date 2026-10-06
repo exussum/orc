@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 from cryptography import x509
@@ -12,9 +12,10 @@ from orc_extras import lg_ac
 from orc_extras.lg_ac import api, plugins, web
 from orc_extras.lg_ac import model as m
 from orc_extras.lg_ac.dal.capture import Capture
-from orc_extras.lg_ac.dal.mqtt import stub, thinq
+from orc_extras.lg_ac.dal.mqtt import stub
+from orc_extras.lg_ac.dal.mqtt.thinq import Thinq, ThinqSource
 
-from orc.model import OFF, AcCommand, AcMode, AcState, Broker, DeviceStatus
+from orc.model import OFF, ON, AcCommand, AcMode, Broker, Device, DeviceStatus, Status
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
@@ -122,9 +123,9 @@ def test_load_fieldmap_handles_unknown_models():
 @pytest.mark.parametrize(
     ("raw", "state"),
     [
-        ({FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44}, m.ACState("ON", "cool", "low", 77, 72)),
-        ({FM.power: 0, FM.mode: 0}, m.ACState("OFF", "cool")),
-        ({FM.power: 1, FM.mode: 99, FM.fan: 99}, m.ACState("ON", None, None)),
+        ({FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44}, m.ACState("on", "cool", "low", 77, 72)),
+        ({FM.power: 0, FM.mode: 0}, m.ACState("off", "cool")),
+        ({FM.power: 1, FM.mode: 99, FM.fan: 99}, m.ACState("on", None, None)),
         ({}, m.ACState()),
     ],
 )
@@ -164,7 +165,7 @@ def test_build_command_round_trips_through_the_codec():
     assert frame[:2] == b"\x01\x01"
     assert body[:9] == bytes([0x04, 0x00, 0x00, 0x00, 0x65, 2, 1, 1, len(body) - 9])
     raw = {f.type_id: f.value for f in api.dissect(body[9:]).fields}
-    assert api.state_from_raw(FM, raw) == m.ACState("ON", "cool", "low", temperature=72)
+    assert api.state_from_raw(FM, raw) == m.ACState("on", "cool", "low", temperature=72)
 
 
 # --- Provisioning responses ---
@@ -224,9 +225,13 @@ def reset_stub():
 def client():
     app = Flask(__name__)
     settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtt_port=1883, mqtts_advertise=8883)
-    app.orc = SimpleNamespace(plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())})  # type: ignore[attr-defined]
+    units = (SimpleNamespace(value=DEVICE_ID, name="LIVING", label="Living AC"),)
+    app.orc = SimpleNamespace(  # type: ignore[attr-defined]
+        plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())},
+        api=MagicMock(),
+        config=SimpleNamespace(devices=SimpleNamespace(AC=units)),
+    )
     app.register_blueprint(web.enroll)
-    thinq.set_event_listener(MagicMock())
     return app.test_client()
 
 
@@ -252,86 +257,231 @@ def test_device_certificate_signs_the_posted_csr(client, ca_pem, device_csr):
 
 
 def test_state_endpoint_reports_the_default_device(client):
-    stub.reset(states={DEVICE_ID: m.ACState("ON", "cool", "low", 25.0, 22.0)}, default=DEVICE_ID)
-    assert client.get("/state").get_json() == m.ACState("ON", "cool", "low", 25.0, 22.0)._asdict()
+    stub.reset(states={DEVICE_ID: m.ACState("on", "cool", "low", 25.0, 22.0)}, default=DEVICE_ID)
+    assert client.get("/state").get_json() == m.ACState("on", "cool", "low", 25.0, 22.0)._asdict()
 
 
 def test_state_endpoint_errors_with_no_device(client):
     assert client.get("/state").get_json() == {"error": "no device"}
 
 
-def test_command_endpoint_publishes_to_the_device(client):
+def test_command_endpoint_runs_the_device_command(client):
+    stub.reset(states={DEVICE_ID: m.ACState("on", "dry", "low", 25.0, 22.0)}, devices=[DEVICE_ID])
     body = client.post("/command", json={"device": DEVICE_ID, "mode": "cool", "temperature": 72}).get_json()
-    assert stub.published == [(DEVICE_ID, {"mode": "cool", "temperature": 22.2})]
-    assert body == {"status": "sent", "device": DEVICE_ID, "command": {"mode": "cool", "temperature": 22.2}}
+    client.application.orc.api.device_command.assert_called_once_with("LIVING", "cool:low:72", ANY)
+    assert body == {"status": "sent", "device": DEVICE_ID, "command": "cool:low:72"}
 
 
-def test_command_endpoint_errors_with_no_device(client):
+def test_command_endpoint_off_needs_no_setpoint(client):
+    stub.reset(default=DEVICE_ID)
+    assert client.post("/command", json={"mode": "off"}).get_json()["command"] == "off"
+    client.application.orc.api.device_command.assert_called_once_with("LIVING", "off", ANY)
+
+
+def test_command_endpoint_errors_with_no_device_or_half_a_setpoint(client):
     assert client.post("/command", json={"mode": "cool"}).get_json() == {"error": "no device"}
+    stub.reset(default=DEVICE_ID)
+    assert "error" in client.post("/command", json={"mode": "cool"}).get_json()
 
 
 @pytest.mark.parametrize(
     ("state", "value"),
     [
         (m.ACState(), None),
-        (m.ACState("OFF", "cool", "low", 70, 77), OFF),
-        (m.ACState("ON", "cool", "low", 70, 77), AcCommand(AcMode.COOL, "low", 77)),
-        (m.ACState("ON", "heat", "low", 70, 77), None),
-        (m.ACState("ON", "cool", None, 70, 77), None),
+        (m.ACState("off", "cool", "low", 70, 77), OFF),
+        (m.ACState("on", "cool", "low", 70, 77), AcCommand(AcMode.COOL, "low", 77)),
+        (m.ACState("on", "heat", "low", 70, 77), None),
+        (m.ACState("on", "cool", None, 70, 77), None),
     ],
 )
-def test_event_logs_the_state_as_the_command_it_answers(ctx, state, value):
-    plugins._on_event(ctx, DEVICE_ID, "AC clip-123: changed", state)
-    ctx.api.log.assert_called_once_with(m.LogSource.LG_AC, "AC clip-123: changed", Broker(id=DEVICE_ID, source="lg_ac", value=value))
+def test_change_logs_the_state_as_the_command_it_answers(ctx, state, value):
+    plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", m.ACState("on", "cool", "low", 70, 70), state)
+    ctx.api.log.assert_called_once_with(m.LogSource.LG_AC, ANY, Broker(id=DEVICE_ID, source="lg_ac", value=value))
 
 
-def test_ac_command_targets_bound_device():
-    stub.reset(devices=["clip-1", "clip-2"])
-    plugins.Ac(stub).command(SimpleNamespace(value="clip-2"), "off", None, None, None)
-    assert stub.published == [("clip-2", {"mode": "off"})]
+def test_change_line_names_what_moved(ctx):
+    before, after = m.ACState("on", "cool", "low", 70, 77), m.ACState("on", "dry", "low", 71, 75)
+    plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", before, after)
+    assert ctx.api.log.call_args[0][1] == "AC clip-123: mode cool → dry, temperature 77 → 75"
+    plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", m.ACState(), m.ACState("off"))
+    assert ctx.api.log.call_count == 1
+
+
+def test_change_ignores_other_sources_and_attributes(ctx):
+    plugins._on_change(ctx, Device(1, "lamp", "hubitat"), "state", None, None)
+    plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "power", "off", "on")
+    ctx.api.log.assert_not_called()
+
+
+# --- The adapter ---
+
+
+def _frame(values):
+    tlv = api.encode_command(FM, values)
+    return (bytes([1, 1, 4, 0, 0, 0, 0x87, 2, 1, 0, len(tlv)]) + tlv + b"\x00\x00").hex()
+
+
+def _data(message):
+    return bytes.fromhex(message.payload["data"])
+
+
+@pytest.fixture
+def adapter():
+    adapter = Thinq({"clip-1": "Living AC", "clip-2": "Bedroom AC"})
+    adapter.sent = []
+    adapter.attach(adapter.sent.append)
+    return adapter
+
+
+def _provision(adapter, device_id="clip-1"):
+    return adapter.decode(f"clip/provisioning/devices/{device_id}", {"cmd": "preDeploy", "kind": MODEL})
+
+
+def test_provisioning_learns_the_model_and_answers(adapter):
+    assert _provision(adapter) == ()
+    (reply,) = adapter.sent
+    assert (reply.topic, reply.payload["cmd"], reply.payload["data"]["provisioningType"]) == (
+        "lime/devices/clip-1",
+        "completeProvisioning",
+        "preDeploy",
+    )
+    assert adapter.devices() == ["clip-1"]
+    assert adapter.decode("clip/provisioning/devices/clip-1", {"cmd": "completeProvisioning"}) == ()
+    assert len(adapter.sent) == 1
+
+
+def test_provisioning_ack_polls_the_unit(adapter):
+    assert adapter.decode("clip/message/devices/clip-1", {"cmd": "completeProvisioning_ack"}) == ()
+    assert [_data(r) for r in adapter.sent] == [api.build_query(api.Query.CAPABILITIES), api.build_query(api.Query.VALUES)]
+
+
+def test_first_packet_updates_state_without_a_change(adapter):
+    _provision(adapter)
+    decoded = adapter.decode(
+        "clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 22})}
+    )
+    assert decoded == ()
+    assert adapter.fetch_state("clip-1") == m.ACState("on", "cool", "low", temperature=72)
+    (state,) = adapter.snapshot()
+    assert state.device == Device("clip-1", "Living AC", "lg_ac")
+    assert state.attributes["mode"] == "cool"
+
+
+def test_later_packet_merges_and_reports_one_state_change(adapter):
+    _provision(adapter)
+    adapter.decode(
+        "clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 22})}
+    )
+    decoded = adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "dry"})})
+    assert decoded == (
+        Status(
+            Device("clip-1", "Living AC", "lg_ac"),
+            "state",
+            m.ACState("on", "cool", "low", temperature=72),
+            m.ACState("on", "dry", "low", temperature=72),
+            ThinqSource.LG_AC,
+        ),
+    )
+    assert adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "dry"})}) == ()
+
+
+def test_packet_before_the_model_is_known_is_ignored(adapter):
+    assert adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "cool"})}) == ()
+
+
+def test_timesync_is_answered(adapter):
+    assert adapter.decode("clip/message/devices/clip-1", {"cmd": "req_timesync"}) == ()
+    (reply,) = adapter.sent
+    assert (reply.topic, reply.payload["cmd"]) == ("lime/devices/clip-1", "resp_timesync")
+
+
+def test_start_nudges_each_configured_unit(adapter):
+    adapter.start()
+    assert [(msg.topic, msg.retain, _data(msg)) for msg in adapter.sent] == [
+        ("lime/devices/clip-1", True, api.build_query(api.Query.VALUES)),
+        ("lime/devices/clip-2", True, api.build_query(api.Query.VALUES)),
+    ]
+
+
+def test_nothing_is_sent_before_a_publisher_is_attached():
+    adapter = Thinq({"clip-1": "Living AC"})
+    adapter.start()
+    assert adapter.decode("clip/message/devices/clip-1", {"cmd": "req_timesync"}) == ()
+
+
+def test_tap_sees_every_message():
+    seen = []
+    adapter = Thinq({}, lambda topic, doc: seen.append((topic, doc)))
+    adapter.decode("clip/message/devices/x", {"cmd": "req_timesync"})
+    assert seen == [("clip/message/devices/x", {"cmd": "req_timesync"})]
+
+
+def test_encode_off(adapter):
+    _provision(adapter, "clip-2")
+    (msg,) = adapter.encode(SimpleNamespace(value="clip-2", name="BEDROOM"), OFF)
+    assert (msg.topic, _data(msg)) == ("lime/devices/clip-2", api.build_command(FM, {"mode": "off"}))
 
 
 @pytest.mark.parametrize(
     ("state", "mode"),
     [
-        (m.ACState("OFF", "dry", "low", 70, 77), "dry"),
-        (m.ACState("ON", "dry", "low", 70, 77), "dry"),
+        (m.ACState("off", "dry", "low", 70, 77), "dry"),
         (m.ACState(), "cool"),
     ],
 )
-def test_ac_on_resumes_remembered_mode(state, mode):
-    stub.reset(states={"clip-1": state}, devices=["clip-1"])
-    plugins.Ac(stub).command(SimpleNamespace(value="clip-1"), "on", None, None, None)
-    assert stub.published == [("clip-1", {"mode": mode})]
+def test_encode_on_resumes_remembered_mode(adapter, state, mode):
+    _provision(adapter)
+    if state.mode:
+        adapter.decode(
+            "clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": state.mode, "power": state.power.lower()})}
+        )
+    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), ON)
+    assert _data(msg) == api.build_command(FM, {"mode": mode})
 
 
-def test_ac_stale_id_commands_nothing():
-    stub.reset(devices=["clip-1", "clip-2"])
-    plugins.Ac(stub).command(SimpleNamespace(value="clip-stale"), "off", None, None, None)
-    assert stub.published == []
+def test_encode_setpoint_in_celsius(adapter):
+    _provision(adapter)
+    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcCommand(AcMode.COOL, "low", 72))
+    assert _data(msg) == api.build_command(FM, {"mode": "cool", "fan_mode": "low", "temperature": 22.2})
 
 
-def test_ac_state_reads_the_bound_device():
-    stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 25.0, 22.0)})
-    assert plugins.Ac(stub).state(SimpleNamespace(value="clip-1")) == AcState.COOL
+@pytest.mark.parametrize(
+    ("held", "command"),
+    [
+        ({"power": "off"}, OFF),
+        ({"mode": "dry", "power": "on"}, ON),
+        ({"mode": "cool", "fan_mode": "low", "temperature": 25, "power": "on"}, AcCommand(AcMode.COOL, "low", 77)),
+    ],
+)
+def test_encode_skips_a_state_already_held(adapter, held, command):
+    _provision(adapter)
+    adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame(held)})
+    assert adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), command) == ()
 
 
-def test_ac_state_stale_id_is_none():
-    assert plugins.Ac(stub).state(SimpleNamespace(value="clip-stale")) is None  # unknown id → empty state
+def test_encode_sends_a_setpoint_that_differs(adapter):
+    _provision(adapter)
+    adapter.decode(
+        "clip/message/devices/clip-1",
+        {"cmd": "device_packet", "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 25, "power": "on"})},
+    )
+    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcCommand(AcMode.COOL, "low", 75))
+    assert _data(msg) == api.build_command(FM, {"mode": "cool", "fan_mode": "low", "temperature": 23.9})
 
 
-def test_ac_temperature_reports_the_running_setpoint():
-    stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 72, 77.4)})
-    assert plugins.Ac(stub).temperature(SimpleNamespace(value="clip-1")) == 77
+def test_encode_stale_id_commands_nothing(adapter):
+    _provision(adapter)
+    assert adapter.encode(SimpleNamespace(value="clip-stale", name="X"), OFF) == ()
 
 
-def test_ac_temperature_is_none_when_the_unit_is_off():
-    stub.reset(states={"clip-1": m.ACState("OFF", "cool", "low", 72, 77)})
-    assert plugins.Ac(stub).temperature(SimpleNamespace(value="clip-1")) is None
+def test_encode_without_a_field_map_fails_loudly(adapter):
+    adapter.decode("clip/provisioning/devices/clip-1", {"cmd": "preDeploy", "kind": "UNKNOWN"})
+    with pytest.raises(RuntimeError):
+        adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), OFF)
 
 
 def test_ac_status_rows_decode_per_device():
-    stub.reset(states={"clip-1": m.ACState("ON", "cool", "low", 77, 72)}, devices=["clip-1"])
+    stub.reset(states={"clip-1": m.ACState("on", "cool", "low", 77, 72)}, devices=["clip-1"])
     ctx = SimpleNamespace(
         config=SimpleNamespace(
             devices=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),))
@@ -341,7 +491,7 @@ def test_ac_status_rows_decode_per_device():
         DeviceStatus(
             name="LIVING_ROOM_AC",
             label="Living Room AC",
-            details={"connected": True, "power": "ON", "mode": "cool", "fan": "low", "target": 72, "current": 77},
+            details={"connected": True, "power": "on", "mode": "cool", "fan": "low", "target": 72, "current": 77},
         )
     ]
 
@@ -360,14 +510,7 @@ def test_ac_status_disconnected_device_is_blank():
 
 
 def test_capture_endpoint_dumps_recorded_frames(client):
-    client.application.orc.plugin_state[lg_ac].capture.record("clip/topic", b"\x01\x02")
+    client.application.orc.plugin_state[lg_ac].capture.record("clip/topic", {"cmd": "device_packet", "data": "0102"})
     frames = client.get("/capture").get_json()
     assert frames[-1]["topic"] == "clip/topic"
-    assert frames[-1]["payload"] == "0102"
-
-
-def test_thinq_handler_failure_is_logged_not_raised(monkeypatch, caplog):
-    monkeypatch.setattr(thinq, "_receive_message", lambda topic, payload: 1 / 0)
-    thinq._on_message(None, None, SimpleNamespace(topic=thinq._MESSAGE_PREFIX + DEVICE_ID, payload=b"{}"))
-    (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
-    assert record.exc_info[0] is ZeroDivisionError
+    assert frames[-1]["payload"] == {"cmd": "device_packet", "data": "0102"}
