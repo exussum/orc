@@ -228,7 +228,7 @@ def reset_stub():
 @pytest.fixture
 def client():
     app = Flask(__name__)
-    settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtt_port=1883, mqtts_advertise=8883)
+    settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtts_advertise=8883)
     units = (SimpleNamespace(value=DEVICE_ID, name="LIVING", label="Living AC"),)
     app.orc = SimpleNamespace(  # type: ignore[attr-defined]
         plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())},

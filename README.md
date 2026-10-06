@@ -39,13 +39,10 @@ for the reboot button). Everything else is optional; a device that isn't in
    pip install ./data . --extra-index-url "$ORC_REGISTRY_URL"
    ```
 
-   The plugins are a separate package, `./extras`. Install it to get all of
-   them, or add the extra for the one that needs more than orc already
-   ships (only `lg_ac`, for its embedded broker):
+   The plugins are a separate package, `./extras`, installed as one:
 
    ```sh
-   pip install ./extras              # every plugin
-   pip install './extras[lg_ac]'     # plus the LG AC's broker
+   pip install ./extras
    ```
 
    Each plugin's README covers its config, secrets and `plugin` line; a
