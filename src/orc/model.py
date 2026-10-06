@@ -240,6 +240,30 @@ class DeviceState:
     last_activity: str | None
 
 
+class SourceEnum(StrEnum): ...
+
+
+class Source(SourceEnum):
+    ORC = "orc"
+    EXTERNAL = "external"
+
+
+@dataclass(frozen=True)
+class Status:
+    device: Device
+    attribute: str
+    old: Any
+    new: Any
+    source: SourceEnum
+
+
+@dataclass(frozen=True)
+class Message:
+    topic: str
+    payload: dict[str, Any] | str | None
+    retain: bool = False
+
+
 class BatteryLevel(str, Enum):
     CRITICAL = "CRITICAL"
     LOW = "LOW"

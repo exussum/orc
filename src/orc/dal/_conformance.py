@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     _holiday_real: interfaces.HolidayService = polygon
     _holiday_stub: interfaces.HolidayService = holiday_stub
     _mqtt_real: interfaces.MqttService = hubitat
+    _hubitat_codec: interfaces.Codec = hubitat.Hubitat()
     _mqtt_stub: interfaces.MqttService = mqtt_stub
     _chromecast_real: interfaces.ChromecastService = pychromecast
     _chromecast_stub: interfaces.ChromecastService = chromecast_stub
