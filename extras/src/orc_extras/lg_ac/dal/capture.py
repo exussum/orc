@@ -1,4 +1,5 @@
 import time
+from typing import Any
 
 from orc.collections import LockedDeque
 
@@ -9,8 +10,8 @@ class Capture:
     def __init__(self) -> None:
         self._buffer: LockedDeque[dict[str, object]] = LockedDeque(maxlen=_MAX)
 
-    def record(self, topic: str, payload: bytes) -> None:
-        self._buffer.append({"ts": time.time(), "topic": topic, "payload": payload.hex()})
+    def record(self, topic: str, doc: dict[str, Any]) -> None:
+        self._buffer.append({"ts": time.time(), "topic": topic, "payload": doc})
 
     def dump(self) -> list[dict[str, object]]:
         return self._buffer.snapshot()

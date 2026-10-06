@@ -1,30 +1,20 @@
 import pytest
 from orc_engine import model as em
 from orc_extras import react
-from orc_extras.lg_ac import plugins as lg_ac_plugins
-from orc_extras.lg_ac.model import ACState
 
 import orc
 from orc import model as m
-
-AC_ID = "clip-1"
-
-
-def _ac_reports(house, power, mode=None, fan=None, temperature=None):
-    state = ACState(power=power, mode=mode, fan_mode=fan, temperature=temperature)
-    report = " ".join(str(part) for part in (power, mode, fan, temperature) if part is not None)
-    lg_ac_plugins._on_event(house.ctx, AC_ID, f"AC {AC_ID}: {report}", state)
 
 
 @pytest.mark.plugins(react)
 def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
     house.entrance_sensor("active")
     house.tick(seconds=1)
-    _ac_reports(house, "ON", mode="cool", fan="low", temperature=75)
+    house.ac("on", mode="cool", fan_mode="low", temperature=75)
     house.tick(seconds=1)
     house.entrance_sensor("inactive")
     house.tick(seconds=1)
-    _ac_reports(house, "OFF")
+    house.ac("off")
     house.tick(seconds=11)
     house.entrance_sensor("active")
 
@@ -35,9 +25,8 @@ def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
             "`ENTRANCE_SENSOR` active → set `Living room AC` cool:low:75",
             [
                 "`ENTRANCE_SENSOR` active → set `LIVING_ROOM` on",
-                "AC clip-1: ON cool low 75",
                 "`ENTRANCE_SENSOR` inactive → set `Living room AC` off",
-                "AC clip-1: OFF",
+                "AC clip-1: power on → off",
             ],
         ),
         (

@@ -2,11 +2,13 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import create_autospec, patch
+from unittest.mock import patch
 
 import pytest
 from flask import Flask
 from freezegun import freeze_time
+from orc_extras.lg_ac import plugins as lg_ac_plugins
+from orc_extras.lg_ac.model import ACState
 
 import orc
 from orc import api, config, security
@@ -83,6 +85,12 @@ class House:
     def entrance_sensor(self, event):
         self.report(orc.Sensor.ENTRANCE_SENSOR, "motion", event)
 
+    def ac(self, power, **fields):
+        unit = orc.AC.LIVING
+        old = self.reported.get(str(unit.value), ACState())
+        self.reported[str(unit.value)] = new = old._replace(power=power, **fields)
+        lg_ac_plugins._on_change(self.ctx, m.Device(str(unit.value), unit.label, "lg_ac"), "state", old, new)
+
     def advertise(self, name):
         now = api.local_now()
         key = config.ble_tags.setdefault(name, m.BleKey(name.encode().ljust(32, b"\0"), int(now.timestamp()) - 5000))
@@ -137,10 +145,6 @@ def house(request, monkeypatch, tmp_path):
         net.presence.__init__()
         net.presence._tz = config.settings.tz
         api.start_ble_listener()
-        ac = create_autospec(m.AcService, instance=True)
-        ac.state.return_value = None
-        ac.temperature.return_value = None
-        api.set_ac(ac)
 
         scheduler = FakeScheduler()
         ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())

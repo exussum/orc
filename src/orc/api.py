@@ -201,6 +201,22 @@ def capture_acs() -> tuple[m.AcStatus, ...]:
     return tuple(m.AcStatus(w, ac_state(w), _ac_temperature(w)) for w in config.devices.AC)
 
 
+def ac_state(device: m.DeviceEnum) -> m.AcState | None:
+    found = device_state(str(device.value))
+    if found is None or found.attributes.get("power") is None:
+        return None
+    elif found.attributes["power"] == m.OFF:
+        return m.AcState.OFF
+    return m.AcState.__members__.get(str(found.attributes.get("mode") or "").upper(), m.AcState.ON)
+
+
+def _ac_temperature(device: m.DeviceEnum) -> int | None:
+    found = device_state(str(device.value))
+    if found is None or found.attributes.get("power") == m.OFF or found.attributes.get("temperature") is None:
+        return None
+    return round(found.attributes["temperature"])
+
+
 def capture_sensors() -> list[m.DeviceStatus]:
     found = {s.device.id: s for s in device_states()}
     return [
@@ -378,24 +394,6 @@ def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
 
 def tv_toggle(bl_device: m.DeviceEnum) -> None:
     config.providers.blaster.tv_toggle(bl_device, config.settings.broadlink_codes)
-
-
-def set_ac(backend: m.AcService) -> None:
-    config.registry.ac = backend
-
-
-def _ac_command(device: m.DeviceEnum, state: str | None, mode: str | None = None, fan: str | None = None, temp: int | None = None) -> None:
-    if config.registry.ac is None:
-        raise RuntimeError("no AC backend registered; enable an AC plugin (e.g. orc_extras.lg_ac)")
-    config.registry.ac.command(device, state, mode, fan, temp)
-
-
-def ac_state(device: m.DeviceEnum) -> m.AcState | None:
-    return config.registry.ac.state(device) if config.registry.ac else None
-
-
-def _ac_temperature(device: m.DeviceEnum) -> int | None:
-    return config.registry.ac.temperature(device) if config.registry.ac else None
 
 
 def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
@@ -745,12 +743,9 @@ def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], 
 
 
 def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
-    if isinstance(command.value, m.AcCommand):
-        _ac_command(w, m.ON, command.value.mode, command.value.fan, command.value.temp)
-    elif command.value in (m.ON, m.OFF):
-        _ac_command(w, command.value)
-    else:
+    if not isinstance(command.value, m.AcCommand) and command.value not in (m.ON, m.OFF):
         raise ValueError(f"AC devices don't support state {command.value!r}")
+    mqtt.command(w, command.value)
 
 
 def _schedule_push(

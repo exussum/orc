@@ -206,29 +206,33 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx, dispatched):
     dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
 
 
-def test_dispatch_routes_ac_commands(entry, ac):
-    api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcCommand(m.AcMode.COOL, "low", 75)),), force=True, entry=entry)
-    api.dispatch((em.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=entry)
-    api.dispatch((em.Command(m.Devices(orc.AC.unit), m.OFF),), force=True, entry=entry)
-
-    assert ac.command.call_args_list == [
-        call(orc.AC.unit, m.ON, m.AcMode.COOL, "low", 75),
-        call(orc.AC.unit, m.ON, None, None, None),
-        call(orc.AC.unit, m.OFF, None, None, None),
+def test_dispatch_routes_ac_commands_to_the_broker(entry):
+    with patch.object(mqtt, "command") as command:
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcCommand(m.AcMode.COOL, "low", 75)),), force=True, entry=entry)
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=entry)
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.OFF),), force=True, entry=entry)
+    assert command.call_args_list == [
+        call(orc.AC.unit, m.AcCommand(m.AcMode.COOL, "low", 75)),
+        call(orc.AC.unit, m.ON),
+        call(orc.AC.unit, m.OFF),
     ]
 
 
-def test_capture_acs_reads_each_device_through_the_handler(ac):
-    ac.state.return_value = m.AcState.COOL
-    assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL),)
-    api.set_ac(None)
+def _ac(**attributes):
+    return patch.object(mqtt, "snapshot", return_value=[m.DeviceState(m.Device("clip-1", "unit", "lg_ac"), attributes, None)])
+
+
+def test_capture_acs_reads_the_device_cache():
     assert api.capture_acs() == (m.AcStatus(orc.AC.unit, None),)
+    with _ac(power="on", mode="cool", temperature=72.4):
+        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
+    with _ac(power="on", mode="heat", temperature=72):
+        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.ON, 72),)
 
 
-def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one(ac):
-    ac.state.return_value = m.AcState.COOL
-    ac.temperature.return_value = 72
-    assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
+def test_capture_acs_off_unit_has_no_setpoint():
+    with _ac(power="off", mode="cool", temperature=72):
+        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.OFF),)
 
 
 @pytest.mark.parametrize(
@@ -285,17 +289,6 @@ class TestLog:
         api.log(m.LogSource.PLUGIN, "report", m.Broker(id=str(orc.USB.speaker.value), source="usb", value=3))
         assert [c.action for c in requester.children] == ["report"]
         assert [e.action for e in api.log_entries()] == ["react"]
-        assert requester.requests == ()
-
-    def test_a_bare_on_is_answered_by_any_powered_state(self, ac):
-        requester = api.log(m.LogSource.PLUGIN, "react", m.Integration("sensor"))
-        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=requester)
-        api.log(
-            m.LogSource.PLUGIN,
-            "report",
-            m.Broker(id=str(orc.AC.unit.value), source="lg_ac", value=m.AcCommand(m.AcMode.COOL, "low", 72)),
-        )
-        assert [c.action for c in requester.children] == ["report"]
         assert requester.requests == ()
 
     def test_a_device_report_that_differs_from_the_request_starts_its_own_entry(self):
