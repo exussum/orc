@@ -1,4 +1,4 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any, NamedTuple, Protocol
 
@@ -10,16 +10,17 @@ from orc.dal.push import webpush as _push_default
 from orc.dal.secrets import bws as _secrets_default
 from orc.model import (
     Capability,
-    Commands,
     DeviceEnum,
     DeviceState,
     Listener,
     MediaUrl,
+    Message,
     Notification,
     PushSubscription,
     RetryStats,
     Secrets,
     SoundState,
+    Status,
     WeatherCondition,
 )
 
@@ -41,10 +42,20 @@ class HolidayService(Backend, Protocol):
     def market_holiday(self, today: date) -> bool: ...
 
 
+class Codec(Protocol):
+    namespaces: tuple[str, ...]
+    device_types: tuple[str, ...]
+
+    def attach(self, publish: Callable[[Message], None]) -> None: ...
+    def decode(self, topic: str, doc: dict[str, Any]) -> tuple[Status, ...]: ...
+    def encode(self, device: DeviceEnum, command: Any) -> tuple[Message, ...]: ...
+    def snapshot(self) -> tuple[DeviceState, ...]: ...
+    def start(self) -> None: ...
+
+
 class MqttService(Backend, Protocol):
     def start(self) -> None: ...
     def fetch_hubitat_config(self, secrets: Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[Capability]]]: ...
-    def fetch_light_states(self, lights: Sequence[DeviceEnum]) -> Commands: ...
     def publish_light(self, light: DeviceEnum, on: bool | None = None, brightness: int | None = None) -> None: ...
     def snapshot(self) -> list[DeviceState]: ...
     def add_listener(self, fn: Listener) -> None: ...
