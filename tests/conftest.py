@@ -110,19 +110,6 @@ def dispatched():
 
 
 @pytest.fixture
-def ac():
-    from unittest.mock import create_autospec, patch
-
-    from orc import config
-
-    backend = create_autospec(m.AcService, instance=True)
-    backend.state.return_value = None
-    backend.temperature.return_value = None
-    with patch.object(config.registry, "ac", backend):
-        yield backend
-
-
-@pytest.fixture
 def push_provider():
     from unittest.mock import create_autospec, patch
 

@@ -21,7 +21,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from orc_engine import cast
 
 from orc import security
-from orc.model import CA, Certificate
+from orc.model import CA, OFF, ON, Certificate
 from orc_extras.lg_ac import model as m
 
 # --- Module constants ---
@@ -91,7 +91,7 @@ def dissect(raw: bytes) -> m.DissectedPacket:
 def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> m.ACState:
     values: dict[str, object] = {}
     if fm.power in raw:
-        values["power"] = "ON" if raw[fm.power] else "OFF"
+        values["power"] = ON if raw[fm.power] else OFF
     if fm.mode in raw:
         mode_by_code = {code: name for name, code in fm.mode_to_code.items()}
         values["mode"] = mode_by_code.get(raw[fm.mode])

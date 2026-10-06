@@ -1,7 +1,8 @@
 """LG window-AC local control (ThinQ2 "clip" protocol).
 
-Replaces LG's cloud: serves the device's enrollment over HTTP, runs the embedded
-MQTT broker it connects to, decodes its TLV state, and exposes control. The
+Replaces LG's cloud: serves the device's enrollment over HTTP, speaks its MQTT
+dialect as a adapter on orc's broker connection, decodes its TLV state, and exposes
+control. The
 enrollment routes live on the ``web`` blueprint (mounted at ``/api/lg_ac/enroll``);
 nginx presents the LG cert on :443 and rewrites the device's root paths to it.
 """
@@ -18,8 +19,8 @@ from orc.model import AppContext, Secrets
 from orc_extras.lg_ac import api, plugins, web
 from orc_extras.lg_ac.dal.broker import amqtt as broker
 from orc_extras.lg_ac.dal.capture import Capture
-from orc_extras.lg_ac.dal.mqtt import thinq
 from orc_extras.lg_ac.dal.mqtt.interfaces import Transport
+from orc_extras.lg_ac.dal.mqtt.thinq import Thinq
 from orc_extras.lg_ac.model import Settings
 
 CONFIG = "orc_extras/lg_ac"
@@ -63,16 +64,16 @@ def setup(ctx: AppContext) -> None:
     if s.fqdn.endswith(".example"):
         raise RuntimeError("lg_ac: set 'fqdn' in lg_ac.orc to this server's real FQDN (still the .example placeholder)")
     capture = Capture()
-    ctx.plugin_state[orc_extras.lg_ac] = State(s, thinq, capture)
+    adapter = Thinq(
+        {str(device.value): device.label or device.name for device in ctx.config.devices.AC}, capture.record if s.capture else None
+    )
+    ctx.plugin_state[orc_extras.lg_ac] = State(s, adapter, capture)
     secrets: Secrets = ctx.config.secrets
     api.configure(secrets.other[_SECRET_CA_CERT].encode(), secrets.other[_SECRET_CA_KEY].encode())
     broker.start(s.mqtts_advertise, secrets.other[_SECRET_SERVER_CERT].encode(), secrets.other[_SECRET_SERVER_KEY].encode(), s.mqtt_port)
-    if s.capture:
-        thinq.add_raw_listener(capture.record)  # buffer recent wire frames in memory
-    thinq.set_event_listener(partial(plugins._on_event, ctx))
-    thinq.start("127.0.0.1", s.mqtt_port, clip_ids=[str(device.value) for device in ctx.config.devices.AC])
-    ctx.api.set_ac(plugins.Ac(thinq))
-    ctx.api.add_state_provider("AC", partial(plugins._ac_status, thinq, ctx))
+    ctx.api.register_adapter(adapter)
+    ctx.api.add_listener(partial(plugins._on_change, ctx))
+    ctx.api.add_state_provider("AC", partial(plugins._ac_status, adapter, ctx))
 
 
 def declare(declarations: Any) -> None:
