@@ -152,7 +152,7 @@ class TestPresence:
     def test_a_rotation_reports_the_exact_clock(self):
         first = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
         second = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[1]
-        presence = self._hear([first, first], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._hear([first], {"Alice": BleKey(self.EIK, self.ANCHOR)})
         presence._on_clock = MagicMock()
         with patch.object(net.Presence, "_now", return_value=self.NOW):
             presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
@@ -191,14 +191,19 @@ class TestPresence:
         presence.resume(TRIGGER)
         assert self._present(presence) == {"Alice"}
 
+    def _forgotten(self):
+        """Heard once, so the tag's address is known, then forgotten: only a probe can mark it again."""
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence.forget(["Alice"], TRIGGER)
+        return presence
+
     def _probe(self, presence, client):
         with patch.object(net, "BleakClient", client), patch.object(net.Presence, "_now", return_value=self.NOW):
             presence.probe(["Alice"], TRIGGER)
 
     def test_probe_marks_reachable_tag(self):
-        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        presence.forget(["Alice"], TRIGGER)
+        presence = self._forgotten()
         connections = []
 
         @asynccontextmanager
@@ -211,9 +216,7 @@ class TestPresence:
         assert self._present(presence) == {"Alice"}
 
     def test_probe_failure_marks_nothing(self):
-        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
-        presence.forget(["Alice"], TRIGGER)
+        presence = self._forgotten()
 
         def client(address, timeout):
             raise TimeoutError
