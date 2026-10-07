@@ -316,7 +316,7 @@ orc runs happily on a laptop with nothing attached: the sample config's
 every device and secret integration is faked in memory and the whole UI
 works. A real installation's config names the real backends instead
 (for example, `provider mqtt orc.dal.mqtt.paho`) — though `secrets`,
-`hubitat`, `mqtt`, `chromecast`, `audio`, and `push` default to their real
+`hubitat`, `mqtt`, `adapter`, `chromecast`, `audio`, and `push` default to their real
 backend when the `provider` line is omitted entirely, so a production config
 only needs to name `weather`, `holiday`, and `blaster` explicitly. An
 explicit `provider` line, stub or real, always overrides the default.

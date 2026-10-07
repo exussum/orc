@@ -18,11 +18,11 @@ def start() -> None:
     pass
 
 
-def fetch_hubitat_config(secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[m.Capability]]]:
+def discover(adapter: Any, secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[m.Capability]]]:
     return {}
 
 
-def register(codec: Any) -> None:
+def register(adapter: Any) -> None:
     pass
 
 
