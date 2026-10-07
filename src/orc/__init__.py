@@ -8,6 +8,7 @@ from command_cfg import ConfigError
 
 from orc import model as m
 from orc.collections import of_type
+from orc.dal.mqtt import paho as mqtt
 from orc.dal.secrets import stub as secrets_stub
 from orc.kernel.declarations import collect_declarations
 from orc.kernel.loader import ble_keys, check_secrets, parse_config, secret_needs, validate
@@ -39,7 +40,7 @@ class Config:
             secrets = self.providers.secrets.fetch_secrets()
             self._check_secrets(secrets)
         if zigbee_config is None:
-            zigbee_config = self.providers.mqtt.discover(self.providers.adapter, secrets)
+            zigbee_config = mqtt.discover(self.providers.adapter, secrets)
         self._load(secrets, zigbee_config)
 
     def _load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:

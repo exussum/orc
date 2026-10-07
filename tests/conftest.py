@@ -68,9 +68,10 @@ def reset_presence():
 def reset_stubs():
     from orc.dal.audio import stub as audio_stub
     from orc.dal.chromecast import stub as chromecast_stub
-    from orc.dal.mqtt import stub as mqtt_stub
+    from orc.dal.mqtt import paho as mqtt
 
-    mqtt_stub.reset()
+    for name in ("_adapters", "_listeners", "_external_listeners"):
+        getattr(mqtt, name).clear()
     chromecast_stub.reset()
     audio_stub.reset()
     yield

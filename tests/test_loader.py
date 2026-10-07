@@ -11,7 +11,6 @@ from orc import model as m
 from orc.dal.audio import pyaudio
 from orc.dal.chromecast import pychromecast
 from orc.dal.hubitat import http as hubitat_http
-from orc.dal.mqtt import paho as mqtt_paho
 from orc.dal.push import webpush
 from orc.dal.secrets import bws
 from orc.dal.secrets import stub as secrets_stub
@@ -335,7 +334,6 @@ def test_provider_imports_backends():
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.holiday import stub as holiday_stub
     from orc.dal.hubitat import stub as hubitat_stub
-    from orc.dal.mqtt import stub as mqtt_stub
     from orc.dal.secrets import stub as secrets_stub
     from orc.dal.weather import stub as weather_stub
 
@@ -343,7 +341,6 @@ def test_provider_imports_backends():
     assert providers.secrets is secrets_stub
     assert providers.weather is weather_stub
     assert providers.holiday is holiday_stub
-    assert providers.mqtt is mqtt_stub
     assert providers.chromecast is chromecast_stub
     assert providers.blaster is blaster_stub
     assert providers.hubitat is hubitat_stub
@@ -352,9 +349,8 @@ def test_provider_imports_backends():
 
 def test_unnamed_providers_default_to_the_real_backend_or_nothing():
     provider = parse("core").provider
-    assert (provider.secrets, provider.mqtt, provider.chromecast, provider.hubitat, provider.audio, provider.push) == (
+    assert (provider.secrets, provider.chromecast, provider.hubitat, provider.audio, provider.push) == (
         bws,
-        mqtt_paho,
         pychromecast,
         hubitat_http,
         pyaudio,

@@ -19,8 +19,7 @@ if TYPE_CHECKING:
     from orc.dal.holiday import stub as holiday_stub
     from orc.dal.hubitat import http as hubitat_http
     from orc.dal.hubitat import stub as hubitat_stub
-    from orc.dal.mqtt import hubitat, paho
-    from orc.dal.mqtt import stub as mqtt_stub
+    from orc.dal.mqtt import hubitat
     from orc.dal.push import stub as push_stub
     from orc.dal.push import webpush
     from orc.dal.secrets import bws
@@ -34,9 +33,7 @@ if TYPE_CHECKING:
     _weather_stub: interfaces.WeatherService = weather_stub
     _holiday_real: interfaces.HolidayService = polygon
     _holiday_stub: interfaces.HolidayService = holiday_stub
-    _mqtt_real: interfaces.MqttService = paho
     _adapter: interfaces.Adapter = hubitat
-    _mqtt_stub: interfaces.MqttService = mqtt_stub
     _chromecast_real: interfaces.ChromecastService = pychromecast
     _chromecast_stub: interfaces.ChromecastService = chromecast_stub
     _blaster_real: interfaces.BlasterService = broadlink
