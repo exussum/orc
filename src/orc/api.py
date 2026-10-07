@@ -35,7 +35,7 @@ from orc.kernel.declarations import Declarations
 from orc.locale import Log
 
 if TYPE_CHECKING:
-    from orc.dal.interfaces import Codec
+    from orc.dal.interfaces import Adapter
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
@@ -150,8 +150,8 @@ def add_listener(fn: m.Listener) -> None:
     config.providers.mqtt.add_listener(fn)
 
 
-def register_codec(codec: "Codec") -> None:
-    config.providers.mqtt.register(codec)
+def register_adapter(adapter: "Adapter") -> None:
+    config.providers.mqtt.register(adapter)
 
 
 def add_external_listener(fn: m.Listener) -> None:

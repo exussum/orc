@@ -1,10 +1,11 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date, datetime
 from typing import Any, NamedTuple, Protocol
 
 from orc.dal.audio import pyaudio as _audio_default
 from orc.dal.chromecast import pychromecast as _chromecast_default
 from orc.dal.hubitat import http as _hubitat_default
+from orc.dal.mqtt import hubitat as _adapter_default
 from orc.dal.mqtt import paho as _mqtt_default
 from orc.dal.push import webpush as _push_default
 from orc.dal.secrets import bws as _secrets_default
@@ -42,7 +43,7 @@ class HolidayService(Backend, Protocol):
     def market_holiday(self, today: date) -> bool: ...
 
 
-class Codec(Protocol):
+class Adapter(Backend, Protocol):
     namespaces: tuple[str, ...]
     device_types: tuple[str, ...]
 
@@ -51,16 +52,17 @@ class Codec(Protocol):
     def encode(self, device: DeviceEnum, command: Any) -> tuple[Message, ...]: ...
     def snapshot(self) -> tuple[DeviceState, ...]: ...
     def start(self) -> None: ...
+    def discover(self, messages: Sequence[Message]) -> dict[str, tuple[str, frozenset[Capability]]]: ...
 
 
 class MqttService(Backend, Protocol):
     def start(self) -> None: ...
-    def register(self, codec: Codec) -> None: ...
+    def register(self, adapter: Adapter) -> None: ...
     def add_listener(self, fn: Listener) -> None: ...
     def add_external_listener(self, fn: Listener) -> None: ...
     def snapshot(self) -> list[DeviceState]: ...
     def command(self, device: DeviceEnum, value: Any) -> None: ...
-    def fetch_hubitat_config(self, secrets: Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[Capability]]]: ...
+    def discover(self, adapter: Adapter, secrets: Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[Capability]]]: ...
 
 
 class AudioService(Backend, Protocol):
@@ -100,6 +102,7 @@ class Provider(NamedTuple):
     weather: WeatherService | None = None
     holiday: HolidayService | None = None
     mqtt: MqttService | None = _mqtt_default
+    adapter: Adapter | None = _adapter_default
     chromecast: ChromecastService | None = _chromecast_default
     blaster: BlasterService | None = None
     hubitat: HubitatService | None = _hubitat_default

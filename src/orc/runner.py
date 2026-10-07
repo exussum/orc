@@ -115,6 +115,7 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
         with step(hook.__module__):
             hook(ctx)
     with step("mqtt"):
+        api.register_adapter(config.config.providers.adapter)
         config.config.providers.mqtt.start()
     with step("ble"):
         api.start_ble_listener()
