@@ -79,7 +79,7 @@ def ctx(ctx, frozen, monkeypatch):
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState(power=m.OFF)),)
     ctx.config.settings.tz = _UTC
     ctx.config.registry = orc.config.registry
-    ctx.plugin_state = {react: model.State((), {}, {})}
+    ctx.plugin_state = {react: model.State((), {}, {}, {"dewpoint": api.dewpoint})}
     return ctx
 
 

@@ -80,6 +80,9 @@ plugin 'Pair LG TV'       orc_extras.lg_tv           pair_tv     --section devic
 plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device --backend orc_extras.yolink.dal.stub
 plugin 'Entrance Sensor'  orc_extras.entrance_sensor
 plugin Calendar           orc_extras.calendar
+plugin 'LG AC'            orc_extras.lg_ac
+plugin React              orc_extras.react --section system
+plugin Travel             orc_extras.travel --section scene
 
 highlight Silence 21:00 23:59
 

@@ -291,6 +291,13 @@ def test_log_page_bells_a_notifying_line_and_its_parent(client):
     assert html.count("🔔") == 2
 
 
+def test_system_page_adds_dewpoint_to_sensors(client):
+    status = m.DeviceStatus(name="living room sensor", details={"temperature": 77, "humidity": "60"})
+    with patch.object(api, "capture_sensors", return_value=[status]):
+        html = client.get("/system/").get_data(as_text=True)
+    assert "dewpoint" in html and "62.0" in html
+
+
 def test_system_page_lists_each_light(client):
     response = client.get("/system/")
     assert response.status_code == 200
