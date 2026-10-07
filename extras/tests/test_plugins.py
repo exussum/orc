@@ -258,7 +258,7 @@ def test_people_home_win_over_the_listener(sensor, plugin_ctx):
     assert [c.action for c in entry.children] == [sensor.message.log_present]
 
 
-def test_empty_quiet_house_shuts_down_and_snapshots(sensor, plugin_ctx):
+def test_empty_house_shuts_down_snapshots_and_pushes(sensor, plugin_ctx):
     entry = _cleanup(sensor, plugin_ctx)
     plugin_ctx.api.override_scene.assert_called_once_with(
         plugins.SNAPSHOT_NAME,
@@ -322,7 +322,7 @@ def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx, sensor):
     ]
 
 
-def test_setup_registers_listener_and_bound_provider(plugin_ctx, raw_sensor):
+def test_setup_compiles_windows_and_registers_hooks(plugin_ctx, raw_sensor):
     raw_sensor.rules = {trigger: [name] for trigger, name in raw_sensor.rules._asdict().items()}
     plugin_ctx.config.people = {"rex": []}
     plugin_ctx.config.ble_tags = {}

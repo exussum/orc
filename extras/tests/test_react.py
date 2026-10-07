@@ -161,7 +161,7 @@ def deferred_run(ctx):
 
 # The fixture's first line (`react Light ...`) fans out to lamp + desk, so the
 # compiled rules are: 0 lamp/on, 1 desk/on, 2..7 the single-device lines 2..7.
-def test_config_registers_listener(ctx, configured):
+def test_config_compiles_rules(ctx, configured):
     rules = configured
     assert len(rules) == 8  # line 1 fans out to lamp + desk; lines 2..7 are single-device
     assert rules[0].condition == model.Transition(model.MqttDeviceSubject(Light.lamp, "switch"), m.ON)
@@ -290,7 +290,7 @@ def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
     assert rules[7].rule.steps[0].command == em.Command(m.Devices(Light.lamp), m.ON)
 
 
-def test_when_gates_immediate_rule_on_ac_state(ctx, ruleset, dispatches, ac_report):
+def test_if_ac_state_gates_immediate_rule(ctx, ruleset, dispatches, ac_report):
     cond = model.AcIs(model.AcSubject(Ac.living), m.AcState.ON)
     rule = _make(m.Devices(Light.lamp), "contact", "open", m.AcCommand(m.AcMode.FAN_ONLY, "low", 75), target=m.Devices(Ac), cond=cond)
     ruleset(rule, {"1": Light.lamp})
@@ -420,7 +420,7 @@ def _past_cooldown(steps):
     return _NOW + timedelta(seconds=steps * (model.COOLDOWN.total_seconds() + 1))
 
 
-def test_readings_inside_the_range_do_not_refire(ctx, ruleset, dispatches, range_event):
+def test_range_fires_only_on_entry(ctx, ruleset, dispatches, range_event):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
     ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
     range_event(Sensor.living, {"temperature": 70})

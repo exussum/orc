@@ -37,23 +37,23 @@ def entry():
 
 
 @patch("orc.api.dispatch")
-class TestManagingConfig:
-    def test_resume_with_snapshot(self, dispatch, snapshot_config, entry):
+class TestRestoreScene:
+    def test_restore_with_snapshot(self, dispatch, snapshot_config, entry):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         api.restore_scene("test", (), entry)
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
 
-    def test_resume_without_snapshot(self, dispatch, snapshot_config, entry):
+    def test_restore_without_snapshot(self, dispatch, snapshot_config, entry):
         api.restore_scene("test", snapshot_config, entry)
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
 
-    def test_resume_with_old_snapshot(self, dispatch, snapshot_config, entry):
+    def test_restore_drops_expired_snapshot(self, dispatch, snapshot_config, entry):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=PAST), PAST)
         api.restore_scene("test", snapshot_config, entry)
         assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
         assert not api._ctx.engine.snapshots()
 
-    def test_get_pops_the_snapshot_once(self, dispatch, snapshot_config):
+    def test_pop_snapshot_once_and_never_expired(self, dispatch, snapshot_config):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
         assert api._ctx.engine.pop_snapshot("test").routine is snapshot_config
         assert api._ctx.engine.pop_snapshot("test") is None
@@ -64,7 +64,7 @@ class TestManagingConfig:
 
 @patch("orc.dal.mqtt.stub.command")
 class TestIntercepts:
-    def test_snapshot_update_overwrite_set(self, update_light, snapshot_config, entry):
+    def test_system_command_overwrites_snapshot(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM)
 
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
@@ -90,7 +90,7 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
-    def test_rule_ignored(self, update_light, snapshot_config, entry):
+    def test_untagged_command_suppressed(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
@@ -102,7 +102,7 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == []
 
-    def test_rule_old_snapshot(self, update_light, snapshot_config, entry):
+    def test_expired_snapshot_drops(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
         api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=PAST), PAST)
@@ -240,7 +240,7 @@ def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one(ac):
         (None, "off"),
     ],
 )
-def test_capture_lights_reads_level_switch_or_off(attributes, expected):
+def test_capture_lights_lists_every_light(attributes, expected):
     states = [m.DeviceState(m.Device(orc.Light.a.value, "lamp", "hubitat"), attributes, None)] if attributes else []
     with patch.object(mqtt_stub, "snapshot", return_value=states):
         captured = {m.Devices(c.subject).one(): c.value for c in api.capture_lights()}
@@ -258,7 +258,7 @@ def test_capture_sensors_lists_sensors_missing_from_the_cache():
     assert api.capture_sensors() == [m.DeviceStatus(name=orc.Sensor.living.name, details={})]
 
 
-def test_dispatch_usb_rejects_on_off_state(entry):
+def test_dispatch_usb_speaks_state_error(entry):
     from orc.dal.audio import stub as audio_stub
 
     api.dispatch((em.Command(m.Devices(orc.USB.speaker), m.ON),), force=True, entry=entry)
@@ -507,7 +507,7 @@ class TestPresence:
         api.expire_presence(["Alice"], TRIGGER)
         assert api.present_names() == set()
 
-    def test_stale_entry_outside_12h_window(self):
+    def test_stale_mark_expires(self):
         api.mark_present(["Alice"], datetime(2026, 1, 4, 23, 30, tzinfo=config.settings.tz), TRIGGER)
         assert api.present_names() == set()
 
@@ -543,7 +543,7 @@ class TestPresence:
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatched.assert_not_called()
 
-    def test_run_iot_job_skip_log_blames_absence_not_weather(self, dispatched):
+    def test_skip_log_blames_absence(self, dispatched):
         rule = self._routine("sunny-r", "SUNNY")
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
         dispatched.assert_not_called()
@@ -671,7 +671,7 @@ class TestPresence:
         probe.assert_called_once_with({"Alice", "Carol"}, TRIGGER)
 
 
-def test_context_executor_copies_closure_job():
+def test_executor_injects_ctx():
     """_do_submit_job must not raise for closure callables (Job uses __slots__, not __dict__)."""
     ctx = object()
     executor = scheduler.ContextThreadPoolExecutor(ctx)

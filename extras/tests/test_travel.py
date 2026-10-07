@@ -156,7 +156,7 @@ def _boom(msg):
     return raiser
 
 
-def test_evaluate_destination_success(ctx):
+def test_evaluate_destination_schedules(ctx):
     job = m.TravelJob("Home", "Home", ARRIVE, set())
     arrival, sched = plugins.evaluate(_with_runtime(ctx, _runtime([])), job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
     assert arrival == m.Arrival(ARRIVE, "Home", None)

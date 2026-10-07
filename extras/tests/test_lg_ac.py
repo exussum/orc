@@ -285,7 +285,7 @@ def test_event_logs_the_state_as_the_command_it_answers(ctx, state, value):
     ctx.api.log.assert_called_once_with(m.LogSource.LG_AC, "AC clip-123: changed", Broker(id=DEVICE_ID, source="lg_ac", value=value))
 
 
-def test_handle_ac_commands_the_bound_device():
+def test_ac_command_targets_bound_device():
     stub.reset(devices=["clip-1", "clip-2"])
     plugins.Ac(stub).command(SimpleNamespace(value="clip-2"), "off", None, None, None)
     assert stub.published == [("clip-2", {"mode": "off"})]
@@ -299,13 +299,13 @@ def test_handle_ac_commands_the_bound_device():
         (m.ACState(), "cool"),
     ],
 )
-def test_handle_ac_on_resumes_the_remembered_mode(state, mode):
+def test_ac_on_resumes_remembered_mode(state, mode):
     stub.reset(states={"clip-1": state}, devices=["clip-1"])
     plugins.Ac(stub).command(SimpleNamespace(value="clip-1"), "on", None, None, None)
     assert stub.published == [("clip-1", {"mode": mode})]
 
 
-def test_handle_ac_stale_id_commands_nothing():
+def test_ac_stale_id_commands_nothing():
     stub.reset(devices=["clip-1", "clip-2"])
     plugins.Ac(stub).command(SimpleNamespace(value="clip-stale"), "off", None, None, None)
     assert stub.published == []
