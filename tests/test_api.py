@@ -12,7 +12,7 @@ import orc
 from orc import api, config, plugins
 from orc import model as m
 from orc.dal import net, push, scheduler, sqlite
-from orc.dal.mqtt import stub as mqtt_stub
+from orc.dal.mqtt import paho as mqtt
 from orc.kernel import loader
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
@@ -62,7 +62,7 @@ class TestRestoreScene:
         dispatch.assert_not_called()
 
 
-@patch("orc.dal.mqtt.stub.command")
+@patch("orc.dal.mqtt.paho.command")
 class TestIntercepts:
     def test_system_command_overwrites_snapshot(self, update_light, snapshot_config, entry):
         command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM)
@@ -242,7 +242,7 @@ def test_capture_acs_carries_the_setpoint_when_a_handler_supplies_one(ac):
 )
 def test_capture_lights_lists_every_light(attributes, expected):
     states = [m.DeviceState(m.Device(orc.Light.a.value, "lamp", "hubitat"), attributes, None)] if attributes else []
-    with patch.object(mqtt_stub, "snapshot", return_value=states):
+    with patch.object(mqtt, "snapshot", return_value=states):
         captured = {m.Devices(c.subject).one(): c.value for c in api.capture_lights()}
     assert captured[orc.Light.a] == expected
     assert set(captured) == set(orc.Light)
@@ -250,7 +250,7 @@ def test_capture_lights_lists_every_light(attributes, expected):
 
 def test_capture_sensors_reads_the_device_cache():
     device = m.DeviceState(m.Device(orc.Sensor.living.value, "living room sensor", "hubitat"), {"temperature": 70}, None)
-    with patch.object(mqtt_stub, "snapshot", return_value=[device]):
+    with patch.object(mqtt, "snapshot", return_value=[device]):
         assert api.capture_sensors() == [m.DeviceStatus(name="living room sensor", details={"temperature": 70})]
 
 
