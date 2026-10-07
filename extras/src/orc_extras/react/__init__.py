@@ -24,7 +24,6 @@ from orc.model import (
 )
 from orc_extras.react import model, plugins
 from orc_extras.react.model import (
-    FUNCTIONS,
     TRIGGERS,
     AcIs,
     AcSubject,
@@ -83,7 +82,7 @@ class _Names(dict[str, Any]):
         self._source = source
 
     def __missing__(self, name: str) -> Any:
-        if name in FUNCTIONS:
+        if name in plugins.FUNCTIONS:
             return _formula(self._source, name)
         return MqttDeviceSubject(self._source, name)
 
@@ -102,7 +101,7 @@ def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
     watches = tuple(reaction.watch for reaction in cfg.react)
     groups = _group(cfg.react)
     ctx.plugin_state[orc_extras.react] = model.State(
-        watches, groups, {watch: name for name, group in groups.items() for watch in group.watches}
+        watches, groups, {watch: name for name, group in groups.items() for watch in group.watches}, plugins.functions(ctx)
     )
     sources = {reaction.source.value: reaction.source for reaction in cfg.react}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -6,9 +7,10 @@ from orc_engine import model as em
 import orc_extras.react
 from orc import model as m
 from orc.plugins import requires_ctx
-from orc_extras.react.model import FUNCTIONS, AcSubject, CastSubject, Device, FormulaSubject, Log, MqttDeviceSubject, State, Transition
+from orc_extras.react.model import AcSubject, CastSubject, Device, FormulaSubject, Log, MqttDeviceSubject, State, Transition
 
 JOB_ID = "react"
+FUNCTIONS = ("dewpoint",)  # names a formula may call; each is an api function of that name
 
 
 def sleep(ctx: m.AppContext, name: str) -> datetime:
@@ -55,6 +57,10 @@ def _changes(changed: MqttDeviceSubject, old: Any, new: Any) -> em.Changes:
     return changes
 
 
+def functions(ctx: m.AppContext) -> dict[str, Callable[..., float]]:
+    return {name: getattr(ctx.api, name) for name in FUNCTIONS}
+
+
 def _reader(ctx: m.AppContext) -> em.Read:
     world_read = ctx.api.reader()
 
@@ -73,7 +79,10 @@ def _reader(ctx: m.AppContext) -> em.Read:
                 found = ctx.api.device_state(str(device.value))
                 if found is None:
                     return None
-                ns: dict[str, Any] = {**FUNCTIONS, **{name: _num(value) for name, value in found.attributes.items()}}
+                ns: dict[str, Any] = {
+                    **ctx.plugin_state[orc_extras.react].functions,
+                    **{name: _num(value) for name, value in found.attributes.items()},
+                }
                 try:
                     return eval(expr, ns)  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
                 except Exception as exc:

@@ -1,4 +1,4 @@
-import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, NamedTuple
@@ -11,16 +11,6 @@ DEFAULT_PAUSE = timedelta(minutes=10)
 COOLDOWN = timedelta(seconds=10)  # a (rule, device) won't re-fire within this window — breaks flapping loops
 
 TRIGGERS = {"on": "switch", "off": "switch", "open": "contact", "closed": "contact", "active": "motion", "inactive": "motion"}
-
-
-def _dewpoint(temp_f: float, humidity: float) -> float:
-    temp_c = (temp_f - 32) * 5 / 9
-    gamma = math.log(humidity / 100.0) + (17.62 * temp_c) / (243.12 + temp_c)
-    dewpoint_c = (243.12 * gamma) / (17.62 - gamma)
-    return dewpoint_c * 9 / 5 + 32
-
-
-FUNCTIONS = {"dewpoint": _dewpoint}
 
 
 class Log(m.LogSourceEnum):
@@ -78,6 +68,7 @@ class State:
     watches: tuple[em.Watch[m.Devices], ...]
     groups: dict[str, Group]
     name_of: dict[em.Watch[Any], str]
+    functions: dict[str, Callable[..., float]] = field(default_factory=dict)  # a formula's vocabulary, bound at setup
     disabled: dict[str, datetime] = field(default_factory=dict)
 
 

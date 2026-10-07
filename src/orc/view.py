@@ -1,4 +1,5 @@
 import re
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from functools import cache
 from itertools import chain, groupby
@@ -124,7 +125,7 @@ def cfg() -> str:
         theme_override=api.current_theme_override(),
         lights=api.capture_lights(),
         sounds=api.capture_sounds(),
-        sensors=api.capture_sensors(),
+        sensors=[replace(s, details=_with_dewpoint(s.details)) for s in api.capture_sensors()],
         retry_stats={s.id: s for s in api.fetch_retry_stats()},
         durations=api.fetch_durations(mapper=dict),
         plugin_states=states,
@@ -355,6 +356,14 @@ def durations() -> tuple[dict[str, Any], int]:
 
 def _states_by_name(commands: m.Commands) -> dict[str, Any]:
     return {c.subject.one().name: c.value for c in commands}
+
+
+def _with_dewpoint(attributes: dict[str, Any]) -> dict[str, Any]:
+    try:
+        value = api.dewpoint(float(attributes["temperature"]), float(attributes["humidity"]))
+    except KeyError, TypeError, ValueError:
+        return attributes
+    return {**attributes, "dewpoint": round(value, 1)}
 
 
 def _volumes_by_name(sounds: tuple[m.SoundState, ...]) -> dict[str, int]:
