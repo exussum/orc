@@ -30,7 +30,7 @@ def test_condition_anyone():
     assert loader._condition("ANYONE") == m.Anyone()
 
 
-def test_condition_weather_is_membership():
+def test_condition_weather():
     assert loader._condition("SUNNY") == m.Weather(m.WeatherCondition.SUNNY)
 
 

@@ -42,17 +42,17 @@ def test_squish_just_on():
     assert m._squish(cfg) == (_cmd(Light.a, m.ON),)
 
 
-def test_theme_squish_everything_off_start():
+def test_squish_expands_everything_off_start():
     commands = (_cmd(Light, m.OFF), _cmd(Light.a, m.ON))
     assert m.squish(commands) == (_cmd(Light.a, m.ON), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF))
 
 
-def test_theme_squish_double_on():
+def test_squish_expands_double_on():
     commands = (_cmd(Light, m.ON), _cmd(Light.a, m.ON))
     assert m.squish(commands) == (_cmd(Light.a, m.ON), _cmd(Light.b, m.ON), _cmd(Light.c, m.ON))
 
 
-def test_theme_squish_dim_then_off():
+def test_squish_expands_dim_then_off():
     commands = (_cmd(Light, m.OFF), _cmd(Light.a, 10), _cmd(Light, m.OFF))
     assert m.squish(commands) == (_cmd(Light.a, 10), _cmd(Light.a, m.OFF), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF))
 
