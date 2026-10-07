@@ -16,7 +16,7 @@ def test_a_tag_heard_for_the_first_time_is_logged_once(house):
 
 @pytest.mark.plugins()
 def test_manual_rescan_clears_and_refinds_everyone(house):
-    api._presence_cron_job(ctx=house.ctx)
+    house.scan()
     house.advertise("Rex")
     house.tick(minutes=1)
 
