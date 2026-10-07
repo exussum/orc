@@ -127,7 +127,7 @@ def test_room_on(client, rooms, dispatched):
     dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
 
 
-def test_room_off_replaces_state(client, rooms, dispatched):
+def test_room_off_turns_all_off(client, rooms, dispatched):
     rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
     client.get("/api/room/Living Room?state=off")
     (cmds,), _ = dispatched.call_args
@@ -195,7 +195,7 @@ def test_set_theme_rejects_unknown_theme(client, ctx):
 # --- /api/durations ---
 
 
-def test_durations_returns_config(client):
+def test_durations_returns_stats(client):
     with patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}):
         response = client.get("/api/durations")
     assert response.status_code == 200

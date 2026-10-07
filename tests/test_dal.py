@@ -51,7 +51,7 @@ class TestWebPush:
         assert webpush.public_key() == VAPID_PUBLIC_KEY
 
     @pytest.mark.parametrize("status", [401, 403, 404, 410])
-    def test_a_gone_response_drops_the_subscription(self, status):
+    def test_a_gone_response_raises_gone(self, status):
         response = SimpleNamespace(status_code=status)
         with patch("orc.dal.push.webpush.webpush", side_effect=WebPushException("gone", response=response)):
             with pytest.raises(push.Gone):
