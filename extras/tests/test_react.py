@@ -127,6 +127,12 @@ def switch_report(ctx):
 
 
 @pytest.fixture
+def pending(ctx, configured, switch_report):
+    switch_report("1", m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
+    ctx.scheduler.reset_mock()
+
+
+@pytest.fixture
 def ac_report(ctx):
     def ac_report(state):
         ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, state),)
@@ -178,9 +184,7 @@ def test_switch_already_on_schedules_nothing(ctx, configured, switch_report):
     ctx.scheduler.once.assert_not_called()
 
 
-def test_switch_off_cancels_pending_jobs(ctx, configured, switch_report):
-    switch_report("1", m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
-    ctx.scheduler.reset_mock()
+def test_switch_off_cancels_pending_jobs(ctx, pending, switch_report):
     switch_report("1", m.ON, m.OFF)  # reverse edge cancels the pending
     assert ctx.scheduler.cancel.called
 
@@ -191,9 +195,7 @@ def test_sleeping_rule_schedules_nothing(ctx, configured, switch_report):
     ctx.scheduler.once.assert_not_called()
 
 
-def test_sleep_cancels_a_pending_job(ctx, configured, switch_report):
-    switch_report("1", m.OFF, m.ON)
-    ctx.scheduler.reset_mock()
+def test_sleep_cancels_a_pending_job(ctx, pending):
     plugins.sleep(ctx, "Lights off")
     assert ctx.scheduler.cancel.called
 
@@ -418,13 +420,12 @@ def _past_cooldown(steps):
     return _NOW + timedelta(seconds=steps * (model.COOLDOWN.total_seconds() + 1))
 
 
-def test_readings_inside_the_range_do_not_refire(ctx, ruleset, dispatches, range_event, ac_report):
+def test_readings_inside_the_range_do_not_refire(ctx, ruleset, dispatches, range_event):
     ac = m.AcCommand(m.AcMode.COOL, "low", 72)
     ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
     range_event(Sensor.living, {"temperature": 70})
     assert dispatches() == [(Ac.living, ac)]  # AC comes on
 
-    ac_report(m.AcState.OFF)
     ctx.api.dispatch.reset_mock()
     ctx.frozen.move_to(_past_cooldown(1))
     range_event(Sensor.living, {"temperature": 71})

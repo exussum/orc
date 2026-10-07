@@ -95,6 +95,9 @@ class House:
     def leave(self, name):
         FakeBleakClient.reachable.discard(f"{name}-tag")
 
+    def scan(self):
+        api.check_presence(m.Query("lan"))
+
     def report(self, device, attribute, new):
         old = self.reported.get((device, attribute))
         state = m.DeviceState(m.Device(device.value, device.label, "hubitat"), {attribute: new}, None)

@@ -43,6 +43,11 @@ def _receive(docs):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/{doc['id']}", doc))
 
 
+def _seen(id, name="entrance bulb 1", **attributes):
+    """A device's first document only caches it: nothing fires until the next one."""
+    _receive([_doc(id=id, name=name, attributes=attributes)])
+
+
 class TestOnMessage:
     def test_device_document_is_cached(self):
         doc = _doc()
@@ -90,8 +95,8 @@ class TestListeners:
     def test_fires_per_attribute_including_unchanged(self):
         events = []
         mqtt.add_listener(lambda d, a, old, new: events.append((d.id, a, old, new)))
-        _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed", "battery": "100"})])
-        assert events == []  # first sighting (retained flood): state only, no events
+        _seen(56, name="balcony door", contact="closed", battery="100")
+        assert events == []
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open", "battery": "100"})])
         assert ("56", "contact", "closed", "open") in events
         assert ("56", "battery", "100", "100") in events  # republished unchanged, still delivered
@@ -100,7 +105,7 @@ class TestListeners:
         events = []
         mqtt.add_listener(lambda d, a, old, new: 1 / 0)
         mqtt.add_listener(lambda d, a, old, new: events.append(a))
-        _receive([_doc(id=56, name="balcony door", attributes={"contact": "closed"})])
+        _seen(56, name="balcony door", contact="closed")
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"})])
         assert events == ["contact"]
         assert mqtt.snapshot()[0].attributes == {"contact": "open"}
@@ -116,7 +121,7 @@ class TestListeners:
     def test_document_differing_only_in_last_activity_fires(self):
         events = []
         mqtt.add_listener(lambda d, a, old, new: events.append((a, old, new)))
-        _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2026-07-29T00:00:00+0000")])
+        _seen(56, name="balcony door", contact="open")
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2026-07-29T00:00:05+0000")])
         assert events == [("contact", "open", "open")]
 
@@ -130,7 +135,7 @@ class TestButtonEvents:
     def test_fires_listener_as_a_change_with_no_before(self):
         events = []
         mqtt.add_listener(lambda d, a, old, new: events.append((d.id, d.name, a, old, new)))
-        _receive([_doc(id=10, name="remote", attributes={"pushed": "1"})])
+        _seen(10, name="remote", pushed="1")
         mqtt._on_message(None, None, _button_msg("held"))
         assert events == [("10", "remote", "held", None, 1)]
 
@@ -163,7 +168,7 @@ class TestButtonEvents:
         events = []
         mqtt.add_listener(lambda d, a, old, new: 1 / 0)
         mqtt.add_listener(lambda d, a, old, new: events.append(a))
-        _receive([_doc(id=10, name="remote", attributes={"pushed": "1"})])
+        _seen(10, name="remote", pushed="1")
         mqtt._on_message(None, None, _button_msg("pushed"))
         assert events == ["pushed"]
 
@@ -306,24 +311,23 @@ class TestStatusSource:
         monkeypatch.setattr(mqtt, "_client", SimpleNamespace(publish=lambda topic, payload=None, retain=False: None))
         mqtt._hubitat.hub_id = HUB
 
-    def _sources(self, doc):
-        return {s.attribute: s.source for s in mqtt._hubitat.decode(f"hubitat/{HUB}/devices/1", doc)}
+    def sources(self, **attributes):
+        return {s.attribute: s.source for s in mqtt._hubitat.decode(f"hubitat/{HUB}/devices/1", _doc(id=1, attributes=attributes))}
 
-    def test_a_commanded_switch_is_orc_and_the_rest_is_the_device(self):
+    def test_a_commanded_switch_is_orc(self):
+        _seen(1, switch="off", level="20")
         mqtt.command(orc.Light.a, m.ON)
-        self._sources(_doc(id=1, attributes={"switch": "off", "level": "20", "battery": "90"}))
-        assert self._sources(_doc(id=1, attributes={"switch": "on", "level": "20", "battery": "90"})) == {
-            "switch": m.Source.ORC,
-            "level": hubitat.HubitatSource.HUBITAT,
-            "battery": hubitat.HubitatSource.HUBITAT,
-        }
+        assert self.sources(switch="on", level="20")["switch"] is m.Source.ORC
+
+    def test_unmoved_attributes_are_the_device(self):
+        _seen(1, switch="off", level="20", battery="90")
+        mqtt.command(orc.Light.a, m.ON)
+        sources = self.sources(switch="on", level="20", battery="90")
+        assert sources["level"] is sources["battery"] is hubitat.HubitatSource.HUBITAT
 
     def test_an_uncommanded_move_is_external(self):
-        self._sources(_doc(id=1, attributes={"switch": "off", "level": "20"}))
-        assert self._sources(_doc(id=1, attributes={"switch": "on", "level": "20"})) == {
-            "switch": m.Source.EXTERNAL,
-            "level": hubitat.HubitatSource.HUBITAT,
-        }
+        _seen(1, switch="off", level="20")
+        assert self.sources(switch="on", level="20")["switch"] is m.Source.EXTERNAL
 
 
 class TestExternalChanges:
@@ -337,24 +341,24 @@ class TestExternalChanges:
 
     def test_a_commanded_change_is_not_external(self):
         mqtt.command(orc.Light.a, 42)
-        _receive([_doc(id=1, attributes={"switch": "off", "level": "20"})])
+        _seen(1, switch="off", level="20")
         _receive([_doc(id=1, attributes={"switch": "on", "level": "43"})])  # drivers round through 0-254, one off is a match
         assert self.external == []
 
     def test_a_value_nobody_asked_for_is_external(self):
         mqtt.command(orc.Light.a, 42)
-        _receive([_doc(id=1, attributes={"switch": "off", "level": "20"})])
+        _seen(1, switch="on", level="20")
         _receive([_doc(id=1, attributes={"switch": "on", "level": "80"})])
         assert self.external == [("level", "20", "80")]
 
     def test_an_unchanged_attribute_is_never_external(self):
-        _receive([_doc(id=1, attributes={"switch": "on", "level": "20"})])
+        _seen(1, switch="on", level="20")
         _receive([_doc(id=1, attributes={"switch": "on", "level": "20"}, last_activity="2026-07-29T00:00:05+0000")])
         assert self.external == []
 
     def test_a_matching_document_consumes_the_command(self):
         mqtt.command(orc.Light.a, m.ON)
-        _receive([_doc(id=1, attributes={"switch": "off"})])
+        _seen(1, switch="off")
         _receive([_doc(id=1, attributes={"switch": "on"})])
         _receive([_doc(id=1, attributes={"switch": "off"})])
         _receive([_doc(id=1, attributes={"switch": "on"})])
