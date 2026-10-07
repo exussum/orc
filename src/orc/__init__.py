@@ -39,7 +39,7 @@ class Config:
             secrets = self.providers.secrets.fetch_secrets()
             self._check_secrets(secrets)
         if zigbee_config is None:
-            zigbee_config = self.providers.mqtt.fetch_hubitat_config(secrets)
+            zigbee_config = self.providers.mqtt.discover(self.providers.adapter, secrets)
         self._load(secrets, zigbee_config)
 
     def _load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
