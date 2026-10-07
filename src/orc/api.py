@@ -22,6 +22,7 @@ from orc import config, plugins
 from orc import model as m
 from orc.collections import LockedDeque, of_type
 from orc.dal import net, push, sqlite
+from orc.dal.mqtt import paho as mqtt
 from orc.dal.sqlite import (
     connection,  # noqa: F401
     init_db,  # noqa: F401
@@ -147,19 +148,19 @@ def log_entries() -> list[m.LogEntry]:
 
 
 def add_listener(fn: m.Listener) -> None:
-    config.providers.mqtt.add_listener(fn)
+    mqtt.add_listener(fn)
 
 
 def register_adapter(adapter: "Adapter") -> None:
-    config.providers.mqtt.register(adapter)
+    mqtt.register(adapter)
 
 
 def add_external_listener(fn: m.Listener) -> None:
-    config.providers.mqtt.add_external_listener(fn)
+    mqtt.add_external_listener(fn)
 
 
 def device_states() -> list[m.DeviceState]:
-    return config.providers.mqtt.snapshot()
+    return mqtt.snapshot()
 
 
 def device_state(target: str) -> m.DeviceState | None:
@@ -170,7 +171,7 @@ def device_state(target: str) -> m.DeviceState | None:
 # never described (virtual, not exported, cache still empty) reads as off.
 @mappable
 def capture_lights() -> m.Commands:
-    found = {state.device.id: state.attributes for state in config.providers.mqtt.snapshot()}
+    found = {state.device.id: state.attributes for state in mqtt.snapshot()}
 
     def state(light: m.DeviceEnum) -> int | str:
         attrs = found.get(light.value)
@@ -707,7 +708,7 @@ def _scheduler() -> m.Scheduler:
 
 
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
-    config.providers.mqtt.command(w, command.value)
+    mqtt.command(w, command.value)
 
 
 def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:

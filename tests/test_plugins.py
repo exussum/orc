@@ -7,13 +7,13 @@ from freezegun import freeze_time
 import orc
 from orc import api, config
 from orc import model as m
-from orc.dal.mqtt import stub as mqtt_stub
+from orc.dal.mqtt import paho as mqtt
 from orc.plugins import battery, buttons, external
 
 
 def _capture(name, fn):
     captured = {}
-    with patch.object(mqtt_stub, name, side_effect=lambda listener: captured.setdefault("fn", listener)):
+    with patch.object(mqtt, name, side_effect=lambda listener: captured.setdefault("fn", listener)):
         fn()
     return captured["fn"]
 

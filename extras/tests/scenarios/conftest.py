@@ -12,7 +12,7 @@ import orc
 from orc import api, config, security
 from orc import model as m
 from orc.dal import net, sqlite
-from orc.dal.mqtt import stub as mqtt_stub
+from orc.dal.mqtt import paho as mqtt
 from orc.plugins import battery, buttons, external
 from orc.view import bp
 
@@ -132,7 +132,8 @@ def house(request, monkeypatch, tmp_path):
         monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
         sqlite.init_db()
         api._ACTIVITY_LOG.clear()
-        mqtt_stub.reset()
+        for name in ("_adapters", "_listeners", "_external_listeners"):
+            getattr(mqtt, name).clear()
         net.presence.__init__()
         net.presence._tz = config.settings.tz
         api.start_ble_listener()
@@ -161,7 +162,8 @@ def house(request, monkeypatch, tmp_path):
             return dispatch(commands, *args, **kwargs)
 
         with (
-            patch.object(mqtt_stub, "add_listener", side_effect=listeners.append),
+            patch.object(mqtt, "add_listener", side_effect=listeners.append),
+            patch.object(mqtt, "command"),
             patch.object(api, "dispatch", side_effect=record),
             patch.object(net, "scan_presence", side_effect=lambda pairs: (set(lan), [])),
             patch.object(net, "BleakClient", FakeBleakClient),
