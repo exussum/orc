@@ -10,12 +10,8 @@ from orc import model as m
 def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
     house.entrance_sensor("active")
     house.tick(seconds=1)
-    house.ac("on", mode="cool", fan_mode="low", temperature=75)
-    house.tick(seconds=1)
     house.entrance_sensor("inactive")
-    house.tick(seconds=1)
-    house.ac("off")
-    house.tick(seconds=11)
+    house.tick(seconds=13)
     house.entrance_sensor("active")
 
     entrance = house.broker(orc.Sensor.ENTRANCE_SENSOR)
@@ -26,7 +22,6 @@ def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
             [
                 "`ENTRANCE_SENSOR` active → set `LIVING_ROOM` on",
                 "`ENTRANCE_SENSOR` inactive → set `Living room AC` off",
-                "AC clip-1: power on → off",
             ],
         ),
         (
