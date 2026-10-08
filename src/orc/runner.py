@@ -16,7 +16,6 @@ from gunicorn.app.base import BaseApplication
 import orc as config
 from orc import _build, api
 from orc import model as m
-from orc.dal.mqtt import paho as mqtt
 from orc.dal.scheduler import Scheduler
 from orc.kernel.loader import check_secrets
 from orc.locale import Log
@@ -116,8 +115,7 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
         with step(hook.__module__):
             hook(ctx)
     with step("mqtt"):
-        api.register_adapter(config.config.providers.adapter)
-        mqtt.start()
+        api.start_mqtt()
     with step("ble"):
         api.start_ble_listener()
     with step("scheduler resume"):
