@@ -148,15 +148,17 @@ def log_entries() -> list[m.LogEntry]:
 
 
 def add_listener(fn: m.Listener) -> None:
-    mqtt.add_listener(fn)
+    mqtt.add_status_listener(fn)
 
 
 def register_adapter(adapter: "Adapter") -> None:
     mqtt.register(adapter)
 
 
-def add_external_listener(fn: m.Listener) -> None:
-    mqtt.add_external_listener(fn)
+def start_mqtt() -> None:
+    mqtt.register(config.providers.adapter)
+    mqtt.add_status_listener(_log_external)
+    mqtt.start()
 
 
 def device_states() -> list[m.DeviceState]:
@@ -778,6 +780,12 @@ def _push_job(
             sqlite.delete_push_subscription(subscription.endpoint)
         except Exception as exc:
             log(m.LogSource.SYSTEM, Log.PUSH_FAILED.format(endpoint=subscription.endpoint[-8:], exc=exc), trigger)
+
+
+def _log_external(status: m.Status) -> None:
+    if status.source is m.Source.EXTERNAL:
+        line = Log.EXTERNAL_CHANGE.format(device=status.device.name, attribute=status.attribute, old=status.old, new=status.new)
+        log(m.LogSource.EXTERNAL, line, m.Broker(id="external", source=status.device.source))
 
 
 def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:

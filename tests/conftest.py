@@ -70,7 +70,7 @@ def reset_stubs():
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.mqtt import paho as mqtt
 
-    for name in ("_adapters", "_listeners", "_external_listeners"):
+    for name in ("_adapters", "_status_listeners"):
         getattr(mqtt, name).clear()
     chromecast_stub.reset()
     audio_stub.reset()

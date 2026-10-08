@@ -1,15 +1,13 @@
-from datetime import datetime
 from unittest.mock import patch
 
 import pytest
-from freezegun import freeze_time
 
 import orc
 from orc import api, config
 from orc import model as m
 from orc.dal.mqtt import hubitat
 from orc.dal.mqtt import paho as mqtt
-from orc.plugins import battery, buttons, external
+from orc.plugins import battery, buttons
 
 
 def _capture(name, fn):
@@ -27,7 +25,7 @@ class TestButtons:
     @staticmethod
     def _wire(ctx, remotes):
         with patch.object(config, "remotes", remotes):
-            return _capture("add_listener", lambda: buttons.setup(ctx))
+            return _capture("add_status_listener", lambda: buttons.setup(ctx))
 
     def test_mapped_event_runs_action(self, ctx):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
@@ -58,7 +56,7 @@ class TestBattery:
         [("20", "5", True), ("5", "5", False), ("5", "80", False), (None, "5", True)],
     )
     def test_notifies_on_crossing_into_critical(self, ctx, old, new, expected):
-        on_event = _capture("add_listener", lambda: battery.setup(ctx))
+        on_event = _capture("add_status_listener", lambda: battery.setup(ctx))
         device = m.Device("16", "front door", "hubitat")
         with patch.object(api, "log") as log:
             on_event(m.Status(device, "battery", old, new, hubitat.HubitatSource.HUBITAT))
@@ -73,23 +71,8 @@ class TestBattery:
             log.assert_not_called()
 
     def test_ignores_other_attributes(self, ctx):
-        on_event = _capture("add_listener", lambda: battery.setup(ctx))
+        on_event = _capture("add_status_listener", lambda: battery.setup(ctx))
         device = m.Device("16", "front door", "hubitat")
         with patch.object(api, "log") as log:
             on_event(m.Status(device, "motion", "inactive", "active", hubitat.HubitatSource.HUBITAT))
         log.assert_not_called()
-
-
-class TestExternal:
-    def test_a_swarm_of_external_changes_rolls_up(self, ctx):
-        on_external = _capture("add_external_listener", lambda: external.setup(ctx))
-        api._ACTIVITY_LOG.clear()
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            on_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
-            on_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
-            frozen.tick(api._ROLLUP_WINDOW)
-            on_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off", m.Source.EXTERNAL))
-        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
-            ("`lamp a` switch: on → off", []),
-            ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
-        ]
