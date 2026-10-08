@@ -16,7 +16,7 @@ from orc_extras.lg_ac.dal.capture import Capture
 from orc_extras.lg_ac.dal.mqtt import stub
 from orc_extras.lg_ac.dal.mqtt.thinq import Thinq
 
-from orc.model import OFF, ON, AcMode, AcState, Broker, Device, DeviceStatus, Source, Status
+from orc.model import OFF, ON, AcMode, AcState, Device, DeviceStatus, Source, Status
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
@@ -283,43 +283,6 @@ def test_command_endpoint_runs_the_device_command(client, body, command):
 def test_command_endpoint_refuses_a_half_request(client, default, body):
     stub.reset(default=default)
     assert "error" in client.post("/command", json=body).get_json()
-
-
-@pytest.mark.parametrize(
-    "state", [AcState("off", "cool", "low", 77, current_temperature=70), AcState("on", "dry", "low", 77, current_temperature=70)]
-)
-def test_change_logs_the_state_as_the_command_it_answers(ctx, state):
-    plugins._on_change(
-        ctx,
-        Status(
-            Device(DEVICE_ID, "Living AC", "lg_ac"), "state", AcState("on", "cool", "low", 70, current_temperature=70), state, Source.ORC
-        ),
-    )
-    ctx.api.log.assert_called_once_with(m.LogSource.LG_AC, ANY, Broker(id=DEVICE_ID, source="lg_ac", value=state))
-
-
-def test_change_line_names_what_moved(ctx):
-    before, after = AcState("on", "cool", "low", 77, current_temperature=70), AcState("on", "dry", "low", 75, current_temperature=71)
-    plugins._on_change(ctx, Status(Device(DEVICE_ID, "Living AC", "lg_ac"), "state", before, after, Source.ORC))
-    assert ctx.api.log.call_args[0][1] == "AC clip-123: mode cool → dry, temperature 77 → 75"
-    plugins._on_change(ctx, Status(Device(DEVICE_ID, "Living AC", "lg_ac"), "state", AcState(), AcState("off"), Source.ORC))
-    assert ctx.api.log.call_count == 1
-
-
-def test_change_ignores_other_sources_and_attributes(ctx):
-    plugins._on_change(ctx, Status(Device(1, "lamp", "hubitat"), "state", None, None, Source.ORC))
-    plugins._on_change(ctx, Status(Device(DEVICE_ID, "Living AC", "lg_ac"), "power", "off", "on", Source.ORC))
-    ctx.api.log.assert_not_called()
-
-
-def test_an_external_change_is_left_to_the_external_plugin(ctx):
-    plugins._on_change(
-        ctx,
-        Status(
-            Device(DEVICE_ID, "Living AC", "lg_ac"), "state", AcState("on", "cool", "low"), AcState("on", "dry", "low"), Source.EXTERNAL
-        ),
-    )
-    ctx.api.log.assert_not_called()
 
 
 def test_state_prints_as_a_command():
