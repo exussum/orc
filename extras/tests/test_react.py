@@ -257,8 +257,8 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
 
 def test_if_clause_parses_device_and_condition(ctx, configured):
     rules = configured
-    assert rules[2].rule.steps[0].condition == em.And(model.AcIs(model.AcSubject(Ac.living), "on"))
-    assert rules[3].rule.steps[0].condition == em.And(model.AcIs(model.AcSubject(Ac.living), "cool"))
+    assert rules[2].rule.steps[0].condition == em.And(model.AcIs(model.AcSubject(Ac.living), m.AcState(power=m.ON)))
+    assert rules[3].rule.steps[0].condition == em.And(model.AcIs(model.AcSubject(Ac.living), m.AcState(m.ON, "cool")))
 
 
 def test_set_clause_parses_explicit_target(ctx, configured):
@@ -292,7 +292,7 @@ def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
 
 
 def test_if_ac_state_gates_immediate_rule(ctx, ruleset, dispatches, ac_report):
-    cond = model.AcIs(model.AcSubject(Ac.living), "on")
+    cond = model.AcIs(model.AcSubject(Ac.living), m.AcState(power=m.ON))
     rule = _make(
         m.Devices(Light.lamp), "contact", "open", m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=75), target=m.Devices(Ac), cond=cond
     )
@@ -309,10 +309,10 @@ def test_if_ac_state_gates_immediate_rule(ctx, ruleset, dispatches, ac_report):
 
 
 @pytest.mark.parametrize(
-    "ac_state, fires", [(m.AcState(m.ON, "cool"), True), (m.AcState(m.ON, "fan_only"), False), (m.AcState(power=m.ON), False)]
+    "ac_state, fires", [(m.AcState(m.ON, "cool"), True), (m.AcState(m.ON, "fan_only"), False), (m.AcState(power=m.ON), True)]
 )
 def test_if_ac_is_cool_gates_the_delayed_rule(ctx, ac_state, fires, ruleset, deferred_run, switch_report, ac_report):
-    cond = model.AcIs(model.AcSubject(Ac.living), "cool")
+    cond = model.AcIs(model.AcSubject(Ac.living), m.AcState(m.ON, "cool"))
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ac_report(ac_state)
     switch_report("1", m.OFF, m.ON)
@@ -364,10 +364,36 @@ def test_range_is_half_open(value, inside):
     assert model.Range(m.OutsideTemperatureSubject(), 66, 120).holds(engine.Runtime(UTC).world(lambda subject: value)) is inside
 
 
-def test_ac_is_bitmask_respects_flag_membership():
-    assert not model.AcIs(model.AcSubject(Ac.living), "cool").holds(engine.Runtime(UTC).world(lambda subject: m.AcState(power=m.ON)))
-    assert model.AcIs(model.AcSubject(Ac.living), "on").holds(engine.Runtime(UTC).world(lambda subject: m.AcState(m.ON, "cool")))
-    assert not model.AcIs(model.AcSubject(Ac.living), "cool").holds(engine.Runtime(UTC).world(lambda subject: None))
+def test_ac_is():
+    cool = model.AcIs(model.AcSubject(Ac.living), m.AcState(m.ON, "cool"))
+    assert cool.holds(engine.Runtime(UTC).world(lambda subject: m.AcState(m.ON, "cool", "low", 72)))
+    assert not cool.holds(engine.Runtime(UTC).world(lambda subject: m.AcState(m.ON, "fan_only", "low", 72)))
+    assert not cool.holds(engine.Runtime(UTC).world(lambda subject: None))
+
+
+def test_ac_turns_parses(ctx):
+    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_ac.orc").read_text()}
+    rules = react.setup(ctx)
+    state = model.MqttDeviceSubject(Ac.living, "state")
+    assert rules[0].condition == model.Transition(state, m.AcState(power=m.ON))
+    assert rules[0].cancel == em.Changed(state)
+    assert rules[0].rule.steps[0].condition == em.And(em.Eq(model.MqttDeviceSubject(Sensor.living, "contact"), "open"))
+    assert rules[0].rule.steps[0].command == em.Command(m.Devices(Ac), m.AcState(m.ON, m.AcMode.FAN_ONLY, "low"))
+    assert rules[1].condition == model.Transition(state, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low"))
+    assert rules[1].rule.steps[0].condition == em.And(model.AcIs(model.AcSubject(Ac.living), m.AcState(m.ON, "cool", "low", 72)))
+
+
+def test_ac_turns_on_fires_once(ctx, ruleset, dispatches):
+    rule = _make(m.Devices(Ac.living), "state", m.AcState(power=m.ON), m.AcState(m.ON, m.AcMode.FAN_ONLY, "low"), target=m.Devices(Ac))
+    ruleset(rule, {"clip-1": Ac.living})
+    device = m.Device("clip-1", "living", "lg_ac")
+    plugins._on_event(ctx, ctx.sources, m.Status(device, "state", m.AcState(power=m.OFF), m.AcState(m.ON, "cool", "low", 72), "lg_ac"))
+    assert dispatches() == [(Ac.living, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low"))]
+    ctx.api.dispatch.reset_mock()
+    plugins._on_event(
+        ctx, ctx.sources, m.Status(device, "state", m.AcState(m.ON, "cool", "low", 72), m.AcState(m.ON, "cool", "low", 74), "lg_ac")
+    )
+    ctx.api.dispatch.assert_not_called()
 
 
 def _make_range(sensor, expression, low, high, target, action, people=None):
@@ -406,7 +432,7 @@ def test_range_rule_parses_expressions(ctx):
     assert rules[1].rule.steps[0].condition == em.And(em.And(model.Present(("alice", "bob")), model.Range(dewpoint, 50, 60, edge=True)))
     assert rules[2].rule.steps[0].condition == em.And(em.And(em.Eq(m.AnyoneSubject(), True), model.Range(dewpoint, 59, 104, edge=True)))
     assert rules[3].rule.steps[0].condition == em.And(
-        em.And(model.AcIs(model.AcSubject(Ac.living), "on"), model.Range(dewpoint, 0, 55, edge=True))
+        em.And(model.AcIs(model.AcSubject(Ac.living), m.AcState(power=m.ON)), model.Range(dewpoint, 0, 55, edge=True))
     )
     assert rules[4].rule.steps[0].condition == em.And(
         em.And(model.Range(temp, 75, 100, edge=True), model.Range(m.OutsideTemperatureSubject(), 66, 120))

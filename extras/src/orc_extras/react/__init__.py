@@ -14,7 +14,6 @@ from orc.kernel.loader import ac_state, load_plugin_config
 from orc.model import (
     OFF,
     ON,
-    AcMode,
     AcState,
     AnyoneSubject,
     AppContext,
@@ -47,8 +46,6 @@ react <name> <devices> if <condition>... set <target> <action> {_OPTIONS}
 """
 _ERR_BUILD = "react condition {!r}: {}"
 _ERR_CONDITION = "react condition {!r} is not a condition"
-_ERR_STATE = "react condition {!r}: unknown state {!r}, expected one of {}"
-_AC_STATES = (ON, OFF, *(mode.value for mode in AcMode))
 _WHOLE_DEVICE: Mapping[str, Any] = {"Chromecast": CastSubject, "AC": AcSubject}
 
 
@@ -150,8 +147,11 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
         else:
             # A pending command is dropped the moment that attribute changes again, so a light
             # switched off by hand is not switched off again when the delay elapses.
-            subject = MqttDeviceSubject(source, _attribute(args.to))
-            trigger = model.Transition(subject, args.to)
+            if isinstance(source, types.get("AC", ())):
+                subject, to = MqttDeviceSubject(source, "state"), _ac_state(args.to)
+            else:
+                subject, to = MqttDeviceSubject(source, _attribute(args.to)), args.to
+            trigger = model.Transition(subject, to)
             cancel = em.Changed(subject)
         command = em.Command(target or Devices(source), action)
         rule = em.Rule((em.Step(em.And(*guards), command),))
@@ -176,6 +176,13 @@ def _attribute(to: str) -> str:
     return attribute
 
 
+def _ac_state(value: str) -> AcState:
+    state = AcState(power=value) if value in (ON, OFF) else cast.state(value)
+    if not isinstance(state, AcState):
+        raise ValueError(f"Invalid AC state {value!r}: expected on, off, or mode[:fan[:temp]]")
+    return state
+
+
 def _build(source: DeviceEnum, text: str, types: Mapping[str, type[DeviceEnum]]) -> em.Condition:
     """Build the condition `text` describes for a rule whose device is `source`."""
     try:
@@ -195,9 +202,7 @@ def _formula(source: DeviceEnum, name: str) -> Callable[..., FormulaSubject]:
 
 
 def _ac_is(subject: AcSubject, state: str) -> AcIs:
-    if state not in _AC_STATES:
-        raise ValueError(_ERR_STATE.format("AcIs", state, sorted(_AC_STATES)))
-    return AcIs(subject, state)
+    return AcIs(subject, _ac_state(state))
 
 
 def _became(*args: Any) -> Transition:
@@ -212,6 +217,7 @@ def _became(*args: Any) -> Transition:
 VOCABULARY: Mapping[str, Any] = {
     "And": em.And,
     "Or": em.Or,
+    "Not": em.Not,
     "Eq": em.Eq,
     "Has": em.Has,
     "In": em.In,
