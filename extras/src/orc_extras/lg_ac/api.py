@@ -21,7 +21,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from orc_engine import cast
 
 from orc import security
-from orc.model import CA, OFF, ON, Certificate
+from orc.model import CA, OFF, ON, AcState, Certificate
 from orc_extras.lg_ac import model as m
 
 # --- Module constants ---
@@ -88,7 +88,7 @@ def dissect(raw: bytes) -> m.DissectedPacket:
     return m.DissectedPacket(fields=fields, remainder=raw[offset:])
 
 
-def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> m.ACState:
+def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> AcState:
     values: dict[str, object] = {}
     if fm.power in raw:
         values["power"] = ON if raw[fm.power] else OFF
@@ -98,12 +98,12 @@ def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> m.ACState:
     if fm.fan in raw:
         fan_by_code = {code: name for name, code in fm.fan_to_code.items()}
         values["fan_mode"] = fan_by_code.get(raw[fm.fan])
-    # The wire is °C; ACState carries °F so nothing downstream handles Celsius.
+    # The wire is °C; AcState carries °F so nothing downstream handles Celsius.
     if fm.current_temp in raw:
         values["current_temperature"] = _fahrenheit(raw[fm.current_temp] / fm.temp_div)
     if fm.target_temp in raw:
         values["temperature"] = _fahrenheit(raw[fm.target_temp] / fm.temp_div)
-    return m.ACState(**values)  # type: ignore[arg-type]
+    return AcState(**values)  # type: ignore[arg-type]
 
 
 def _fahrenheit(celsius: float) -> int:

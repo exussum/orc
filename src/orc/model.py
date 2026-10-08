@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Callable, ItemsView, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from enum import Enum, EnumType, Flag, StrEnum, auto
+from enum import Enum, EnumType, StrEnum, auto
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self
@@ -200,20 +200,6 @@ class Alarm(str, Enum):
     EMERGENCY = "EMERGENCY"
 
 
-class AcState(Flag):
-    """An AC's live state: OFF, a powered mode, or bare ON when the mode is unknown.
-
-    ON is the union of the modes, so matching is bitwise containment: ``COOL in ON``
-    holds for any powered state, ``ON in COOL`` does not."""
-
-    OFF = auto()
-    COOL = auto()
-    FAN_ONLY = auto()
-    ECON = auto()
-    DRY = auto()
-    ON = COOL | FAN_ONLY | ECON | DRY
-
-
 @dataclass(frozen=True)
 class CA:
     cert: x509.Certificate
@@ -329,8 +315,6 @@ class Request(Trigger):
     def answered_by(self, response: Broker) -> bool:
         if self.id != response.id:
             return False
-        elif self.command == ON:
-            return response.value != OFF
         return self.command == response.value
 
 
@@ -403,13 +387,21 @@ class AcMode(StrEnum):
 
 
 @dataclass(frozen=True)
-class AcCommand:
-    mode: AcMode
-    fan: str
-    temp: int
+class AcState:
+    """What an AC is doing, or what a command asks of it: a field left None is unsaid."""
+
+    power: str | None = None
+    mode: str | None = None
+    fan_mode: str | None = None
+    current_temperature: float | None = field(default=None, compare=False, kw_only=True)  # the room's; moves on its own
+    temperature: float | None = None
 
     def __str__(self) -> str:
-        return f"{self.mode}:{self.fan}:{self.temp}"
+        if self.power == OFF:
+            return OFF
+        elif self.mode and self.fan_mode and self.temperature is not None:
+            return f"{self.mode}:{self.fan_mode}:{round(self.temperature)}"
+        return self.power or "?"
 
 
 class Playback(StrEnum):
@@ -430,7 +422,6 @@ class SoundState:
 class AcStatus:
     what: DeviceEnum
     state: AcState | None
-    temperature: int | None = None
 
 
 @dataclass

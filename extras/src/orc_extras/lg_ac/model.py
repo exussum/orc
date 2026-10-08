@@ -19,14 +19,6 @@ class Settings(NamedTuple):
     capture: bool = False
 
 
-class ACState(NamedTuple):
-    power: str | None = None
-    mode: str | None = None
-    fan_mode: str | None = None
-    current_temperature: float | None = None
-    temperature: float | None = None
-
-
 class Fieldmap(NamedTuple):
     """One model's TLV vocabulary, loaded from fieldmap/<model>.json."""
 

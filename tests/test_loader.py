@@ -240,14 +240,12 @@ def test_ad_hoc_delay():
     assert dog.reset is True
 
 
-def test_ac_state_covers_every_ac_mode():
-    assert {mode.name for mode in m.AcMode} <= set(m.AcState.__members__)
-    assert all(m.AcState[mode.name] in m.AcState.ON for mode in m.AcMode)
-
-
 def test_routines_accept_ac_commands():
     parsed = parse("ac_routine")
-    assert [c.value for c in parsed.routine["R_AC"].commands] == [m.AcCommand(m.AcMode.COOL, "low", 75), m.OFF]
+    assert [c.value for c in parsed.routine["R_AC"].commands] == [
+        m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75),
+        m.AcState(power=m.OFF),
+    ]
 
 
 def test_state_youtube_ids_stay_strings():

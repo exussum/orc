@@ -84,11 +84,15 @@ class State:
 @dataclass(frozen=True)
 class AcIs(em.Condition):
     subject: AcSubject
-    allowed: m.AcState
+    state: str  # on, off, or a mode
 
     def holds(self, world: em.World) -> bool:
         current = world.read(self.subject)
-        return isinstance(current, m.AcState) and current in self.allowed
+        if not isinstance(current, m.AcState):
+            return False
+        elif self.state in (m.ON, m.OFF):
+            return current.power == self.state
+        return current.power == m.ON and current.mode == self.state
 
 
 @dataclass(frozen=True)

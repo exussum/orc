@@ -1,4 +1,5 @@
 import socket
+from dataclasses import asdict
 from typing import TYPE_CHECKING, cast
 
 from flask import Blueprint, current_app, jsonify, request
@@ -55,7 +56,7 @@ def state() -> Response:
     device_id = request.args.get("device") or transport.default_device()
     if device_id is None:
         return jsonify({"error": "no device"})
-    return jsonify(transport.fetch_state(device_id)._asdict())
+    return jsonify(asdict(transport.fetch_state(device_id)))
 
 
 @enroll.post("/command")
@@ -68,12 +69,16 @@ def command() -> Response:
         return jsonify({"error": "no device"})
     current = transport.fetch_state(device_id)
     if body.get("mode") == "off":
-        command = "off"
+        asked = m.AcState(power=m.OFF)
     else:
-        fan, temperature = body.get("fan_mode") or current.fan_mode, body.get("temperature") or current.temperature
-        if fan is None or temperature is None:
+        asked = m.AcState(
+            m.ON,
+            body.get("mode") or current.mode or "cool",
+            body.get("fan_mode") or current.fan_mode,
+            body.get("temperature") or current.temperature,
+        )
+        if asked.fan_mode is None or asked.temperature is None:
             return jsonify({"error": "a setpoint needs fan_mode and temperature"})
-        command = f"{body.get('mode') or current.mode or 'cool'}:{fan}:{round(temperature)}"
-    entry = app.orc.api.log(LogSource.LG_AC, f"AC {device_id[:8]}: {command}", m.Manual("lg_ac"))
-    app.orc.api.device_command(unit.name, command, entry)
-    return jsonify({"status": "sent", "device": device_id, "command": command})
+    entry = app.orc.api.log(LogSource.LG_AC, f"AC {device_id[:8]}: {asked}", m.Manual("lg_ac"))
+    app.orc.api.device_command(unit.name, str(asked), entry)
+    return jsonify({"status": "sent", "device": device_id, "command": str(asked)})

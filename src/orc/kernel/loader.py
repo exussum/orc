@@ -173,19 +173,22 @@ def check_secrets(secrets: m.Secrets, needs: Mapping[str, Callable[[str], Any]])
     return problems
 
 
-def validate_ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, type[m.DeviceEnum]], *, source: str) -> None:
+# An AC is always commanded with an AcState; a bare on/off aimed at one becomes one here.
+def ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, type[m.DeviceEnum]], *, source: str) -> Any:
     ac_cls = enums.get("AC")
     acs = tuple(of_type(members, ac_cls)) if ac_cls else ()
-    if isinstance(state, m.AcCommand) and len(acs) != len(members):
+    if isinstance(state, m.AcState) and len(acs) != len(members):
         raise ValueError(f"AC command {state} applies only to AC devices, got {source!r}")
-    elif not isinstance(state, m.AcCommand) and acs and state not in (m.ON, m.OFF):
+    elif not isinstance(state, m.AcState) and acs and state not in (m.ON, m.OFF):
         raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {state!r}")
+    elif acs and state in (m.ON, m.OFF):
+        return m.AcState(power=state)
+    return state
 
 
 def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> em.Command[str, m.Devices]:
     devices = cast.devices(args.devices, objects)
-    state = cast.state(args.state)
-    validate_ac_state(devices.all(), state, objects["device"].enums, source=args.devices)
+    state = ac_state(devices.all(), cast.state(args.state), objects["device"].enums, source=args.devices)
     return em.Command[str, m.Devices](devices, state, tag=trigger)
 
 
