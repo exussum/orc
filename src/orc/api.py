@@ -128,8 +128,7 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, notificatio
     recent = [e for e in entries if now - (e.children or [e])[-1].timestamp < _ROLLUP_WINDOW]
     # is: a continuation of the event that started the entry, however late (the caller holds entry.trigger).
     # ==: a separate event with an equal trigger, rolled up only within the window.
-    matching = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
-    parent = matching or next((e for e in recent if e.answer(trigger)), None)
+    parent = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
     if parent:
         parent.add(source, action, notified=bool(notification))
         parent.notified = parent.notified or bool(notification)
@@ -351,7 +350,6 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
                 command = replace(command, value=ac_command(w, command.value))
             todo.append((dispatch_handler, w, command))
 
-    entry.requests += tuple(m.Request(str(w.value), command.value) for _, w, command in todo)
     with Pool(max_workers=max(1, len(todo))) as ex:
         list(ex.map(partial(_dispatch_one, stream=stream, entry=entry), todo))
 
@@ -421,7 +419,6 @@ def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
             value = m.AcState(power=parsed) if name == "AC" and parsed in (m.ON, m.OFF) else parsed
             if isinstance(value, m.AcState):
                 value = ac_command(member, value)
-            entry.requests += (m.Request(str(member.value), value),)
             dispatch_handler(_ctx, member, em.Command(m.Devices(member), value), {})
             return True
     return False

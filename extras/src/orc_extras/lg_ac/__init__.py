@@ -67,7 +67,6 @@ def setup(ctx: AppContext) -> None:
     secrets: Secrets = ctx.config.secrets
     api.configure(secrets.other[_SECRET_CA_CERT].encode(), secrets.other[_SECRET_CA_KEY].encode())
     ctx.api.register_adapter(adapter)
-    ctx.api.add_listener(partial(plugins._on_change, ctx))
     ctx.api.add_state_provider("AC", partial(plugins._ac_status, adapter, ctx))
 
 

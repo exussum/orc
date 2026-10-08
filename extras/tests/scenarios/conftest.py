@@ -1,5 +1,4 @@
 import os
-from dataclasses import asdict, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,7 +7,6 @@ from unittest.mock import patch
 import pytest
 from flask import Flask
 from freezegun import freeze_time
-from orc_extras.lg_ac import plugins as lg_ac_plugins
 
 import orc
 from orc import api, config, security
@@ -68,7 +66,7 @@ class FakeBleakClient:
 
 
 class House:
-    def __init__(self, ctx, client, frozen, listeners, dispatched, lan, probed, pushed, acs):
+    def __init__(self, ctx, client, frozen, listeners, dispatched, lan, probed, pushed):
         self.ctx = ctx
         self.client = client
         self.frozen = frozen
@@ -78,7 +76,6 @@ class House:
         self.probed = probed
         self.pushed = pushed
         self.reported = {}
-        self.acs = acs
 
     def tick(self, **delta):
         self.frozen.tick(timedelta(**delta))
@@ -86,12 +83,6 @@ class House:
 
     def entrance_sensor(self, event):
         self.report(orc.Sensor.ENTRANCE_SENSOR, "motion", event)
-
-    def ac(self, power, **fields):
-        unit = orc.AC.LIVING
-        old = self.acs.get(str(unit.value), m.AcState())
-        self.acs[str(unit.value)] = new = replace(old, power=power, **fields)
-        lg_ac_plugins._on_change(self.ctx, m.Status(m.Device(str(unit.value), unit.label, "lg_ac"), "state", old, new, m.Source.ORC))
 
     def advertise(self, name):
         now = api.local_now()
@@ -167,13 +158,12 @@ def house(request, monkeypatch, tmp_path):
             dispatched.append(commands)
             return dispatch(commands, *args, **kwargs)
 
-        acs: dict[str, m.AcState] = {}
         mqtt.register(
             SimpleNamespace(
                 namespaces=(),
                 device_types=("AC",),
                 attach=lambda publish: None,
-                snapshot=lambda: [m.DeviceState(m.Device(id, "AC", "lg_ac"), asdict(s), None) for id, s in acs.items()],
+                snapshot=lambda: [],
             )
         )
         with (
@@ -189,6 +179,6 @@ def house(request, monkeypatch, tmp_path):
                 plugin.setup(ctx)
             for listener in (buttons, battery, external):
                 listener.setup(ctx)
-            yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed, acs)
+            yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed)
     finally:
         _load(sample, {})
