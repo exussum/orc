@@ -292,6 +292,18 @@ class TestLog:
         assert [e.action for e in entries] == ["first"]
         assert [c.action for c in entries[0].children] == ["second"]
 
+    def test_a_swarm_of_external_changes_rolls_up(self):
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+            api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
+            api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
+            api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "on", "off", m.Source.ORC))
+            frozen.tick(api._ROLLUP_WINDOW)
+            api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off", m.Source.EXTERNAL))
+        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
+            ("`lamp a` switch: on → off", []),
+            ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
+        ]
+
     def test_a_different_trigger_starts_its_own_entry(self):
         api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
         api.log(m.LogSource.PLUGIN, "other", m.Integration("y"))

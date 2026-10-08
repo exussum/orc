@@ -14,7 +14,7 @@ from orc import model as m
 from orc.dal import net, sqlite
 from orc.dal.mqtt import hubitat
 from orc.dal.mqtt import paho as mqtt
-from orc.plugins import battery, buttons, external
+from orc.plugins import battery, buttons
 from orc.view import bp
 
 MONDAY_AFTERNOON = datetime(2026, 1, 5, 15, tzinfo=config.settings.tz)
@@ -133,7 +133,7 @@ def house(request, monkeypatch, tmp_path):
         monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
         sqlite.init_db()
         api._ACTIVITY_LOG.clear()
-        for name in ("_adapters", "_listeners", "_external_listeners"):
+        for name in ("_adapters", "_status_listeners"):
             getattr(mqtt, name).clear()
         net.presence.__init__()
         net.presence._tz = config.settings.tz
@@ -167,7 +167,7 @@ def house(request, monkeypatch, tmp_path):
             )
         )
         with (
-            patch.object(mqtt, "add_listener", side_effect=listeners.append),
+            patch.object(mqtt, "add_status_listener", side_effect=listeners.append),
             patch.object(mqtt, "command"),
             patch.object(api, "dispatch", side_effect=record),
             patch.object(net, "scan_presence", side_effect=lambda pairs: (set(lan), [])),
@@ -177,8 +177,9 @@ def house(request, monkeypatch, tmp_path):
         ):
             for plugin in request.node.get_closest_marker("plugins").args:
                 plugin.setup(ctx)
-            for listener in (buttons, battery, external):
+            for listener in (buttons, battery):
                 listener.setup(ctx)
+            listeners.append(api._log_external)
             yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed)
     finally:
         _load(sample, {})

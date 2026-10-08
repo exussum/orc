@@ -1,8 +1,7 @@
 """The broker connection: one paho client shared by every adapter.
 
 Inbound messages are routed by their first topic segment to the adapter that
-declared that namespace; the statuses it decodes fan out to the listeners, the
-external ones to the external listeners as well. Commands route by device type to
+declared that namespace; the statuses it decodes fan out to the listeners. Commands route by device type to
 the adapter's ``encode``, and a adapter answers its own protocol through the publisher
 attached at registration. The ``adapter`` provider is registered at boot; plugins register theirs during setup.
 """
@@ -31,8 +30,7 @@ _MQTT_PORT = 1883
 
 _adapters: list["Adapter"] = []
 _client: mqtt.Client | None = None  # the standing client, retained for publishing commands
-_listeners: list[m.Listener] = []  # run on the mqtt thread; keep them fast and don't block
-_external_listeners: list[m.Listener] = []
+_status_listeners: list[m.Listener] = []  # run on the mqtt thread; keep them fast and don't block
 
 
 def register(adapter: "Adapter") -> None:
@@ -43,12 +41,8 @@ def register(adapter: "Adapter") -> None:
     adapter.attach(partial(_publish, adapter))
 
 
-def add_listener(fn: m.Listener) -> None:
-    _listeners.append(fn)
-
-
-def add_external_listener(fn: m.Listener) -> None:
-    _external_listeners.append(fn)
+def add_status_listener(fn: m.Listener) -> None:
+    _status_listeners.append(fn)
 
 
 def start() -> None:
@@ -157,10 +151,7 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
         _log.exception("mqtt: message handling failed for %s", msg.topic)
         return
     for status in statuses:
-        if status.source == m.Source.EXTERNAL:
-            _fire(_external_listeners, msg.topic, status)
-    for status in statuses:
-        _fire(_listeners, msg.topic, status)
+        _fire(_status_listeners, msg.topic, status)
 
 
 # The adapter always sees a dict: the parsed object, or {} for an empty payload (the

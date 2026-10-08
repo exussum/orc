@@ -164,14 +164,13 @@ Two config surfaces:
 
 ## Built-in plugins
 
-Three listeners on the Hubitat MQTT feed ship inside `orc` and are turned
+Two listeners on the Hubitat MQTT feed ship inside `orc` and are turned
 on the same way as any plugin, by a `plugin` line. The sample config
-carries all three; drop a line and that listener is off.
+carries both; drop a line and that listener is off.
 
 ```
 plugin Buttons  orc.plugins.buttons
 plugin Battery  orc.plugins.battery
-plugin External orc.plugins.external
 ```
 
 - **Buttons** runs an ad hoc routine when a remote is pressed. Each
@@ -189,10 +188,11 @@ plugin External orc.plugins.external
   ``Low battery on `<device>` (CRITICAL)`` with a phone notification once,
   when the level first drops to 10% or below.
 
-- **External** logs every device change orc didn't command, as
-  ``<device> <attribute>: <old> → <new>`` under the External source. A wall
-  switch or the Hubitat app flipping a light shows up here; nothing is
-  reverted.
+
+Separately from these, orc itself logs every device change it didn't
+command, as ``<device> <attribute>: <old> → <new>`` under the External
+source. A wall switch or the Hubitat app flipping a light shows up here;
+nothing is reverted.
 
 ## Secrets (Bitwarden)
 
