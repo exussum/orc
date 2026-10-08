@@ -376,12 +376,22 @@ class AcState:
     current_temperature: float | None = field(default=None, compare=False, kw_only=True)  # the room's; moves on its own
     temperature: float | None = None
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AcState):
+            return NotImplemented
+        elif self.power is None or other.power is None:
+            return False
+        elif self.power == OFF and other.power == OFF:
+            return True
+        pairs = ((self.power, other.power), (self.mode, other.mode), (self.fan_mode, other.fan_mode), (self.temperature, other.temperature))
+        return all(a is None or b is None or a == b for a, b in pairs)
+
     def __str__(self) -> str:
         if self.power == OFF:
             return OFF
         elif self.mode and self.fan_mode and self.temperature is not None:
             return f"{self.mode}:{self.fan_mode}:{round(self.temperature)}"
-        return self.power or "?"
+        return self.mode or self.power or "?"
 
 
 class Playback(StrEnum):
