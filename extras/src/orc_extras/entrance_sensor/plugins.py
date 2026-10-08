@@ -25,7 +25,8 @@ class Log(m.LogSourceEnum):
     ENTRANCE = "entrance"
 
 
-def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, device: m.Device, attribute: str, old: Any, new: Any) -> None:
+def _on_sensor_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> None:
+    device, attribute, old, new = status.device, status.attribute, status.old, status.new
     if device.id not in (sensor.setting.entrance.value, sensor.setting.patio_door.value):
         return
     if _entrance_motion_changed(sensor, device, attribute, old, new):

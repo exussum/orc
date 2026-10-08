@@ -44,7 +44,7 @@ class TagClock(NamedTuple):
     eid: bytes | None = None
 
 
-type Listener = Callable[[Device, str, Any, Any], None]
+type Listener = Callable[[Status], None]
 type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
 

@@ -1,5 +1,4 @@
 from dataclasses import fields
-from typing import Any
 
 from orc import model as m
 from orc.model import AppContext, DeviceStatus
@@ -32,9 +31,10 @@ def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
 
 
 # an external move is logged by the external plugin; this line is orc's own answer
-def _on_change(ctx: AppContext, device: m.Device, attribute: str, old: Any, new: Any) -> None:
-    if device.source != SOURCE or attribute != "state":
+def _on_change(ctx: AppContext, status: m.Status) -> None:
+    if status.device.source != SOURCE or status.attribute != "state" or status.source is m.Source.EXTERNAL:
         return
+    device, old, new = status.device, status.old, status.new
     changes = [
         f"{f.name} {b} → {a}"
         for f in fields(new)
