@@ -386,6 +386,13 @@ def test_first_packet_updates_state_without_a_change(adapter):
     assert state.attributes["mode"] == "cool"
 
 
+def test_packet_learns_the_model_without_provisioning(adapter):
+    doc = {"cmd": "device_packet", "kind": MODEL, "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 22})}
+    assert adapter.decode("clip/message/devices/clip-1", doc) == ()
+    assert adapter.devices() == ["clip-1"]
+    assert adapter.fetch_state("clip-1") == AcState("on", "cool", "low", temperature=72)
+
+
 def test_later_packet_merges_and_reports_one_state_change(adapter):
     _provision(adapter)
     adapter.decode(
