@@ -16,6 +16,7 @@ import base64
 import logging
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import asdict
 from typing import Any
 
 from orc import model as om
@@ -76,23 +77,14 @@ class Thinq:
         if fm is None:
             raise RuntimeError(f"no field map for {device.name}; calibrate its model first")
         state = self.fetch_state(device_id)
-        values: dict[str, object]
-        if value == om.OFF:
-            held, values = state.power == om.OFF, {"mode": "off"}
-        elif value == om.ON:
-            # a setpoint frame must carry mode, so a bare on keeps the device's current one
-            held, values = state.power == om.ON, {"mode": state.mode or "cool"}
-        elif isinstance(value, om.AcCommand):
-            held = state == state._replace(power=om.ON, mode=value.mode, fan_mode=value.fan, temperature=value.temp)
-            values = {"mode": value.mode, "fan_mode": value.fan, "temperature": api.celsius(value.temp)}
-        else:
+        if not isinstance(value, om.AcState):
             raise ValueError(f"AC devices don't support state {value!r}")
-        if held:
+        if value == state:
             return ()
-        return (self._packet(device_id, api.build_command(fm, values)),)
+        return (self._packet(device_id, api.build_command(fm, _wire(value))),)
 
     def snapshot(self) -> tuple[om.DeviceState, ...]:
-        return tuple(om.DeviceState(self._device(device_id), self.fetch_state(device_id)._asdict(), None) for device_id in self._raw.copy())
+        return tuple(om.DeviceState(self._device(device_id), asdict(self.fetch_state(device_id)), None) for device_id in self._raw.copy())
 
     # Retained so a unit that reconnects after an orc restart is prompted on its next
     # subscribe, instead of sitting idle (invisible to devices()/commands) until a manual
@@ -105,10 +97,10 @@ class Thinq:
         for device_id in self._names:
             self._send(self._packet(device_id, api.build_query(api.Query.VALUES), retain=True))
 
-    def fetch_state(self, device_id: str) -> m.ACState:
+    def fetch_state(self, device_id: str) -> om.AcState:
         fm = self._fieldmap(device_id)
         if fm is None:
-            return m.ACState()
+            return om.AcState()
         return api.state_from_raw(fm, self._raw.get(device_id) or {})
 
     def devices(self) -> list[str]:
@@ -134,22 +126,14 @@ class Thinq:
             self._send(self._packet(device_id, api.build_query(api.Query.CAPABILITIES)))
             self._send(self._packet(device_id, api.build_query(api.Query.VALUES)))
         elif cmd == "device_packet":
-            fm = self._fieldmap(device_id)
-            if fm is None:
-                return ()  # unknown model: skip decode (enable capture to log raw frames for calibration)
-            pkt = api.frame_tlv(bytes.fromhex(doc.get("data", "")))
-            if pkt is None:
-                return ()
+            fm, pkt = self._fieldmap(device_id), api.frame_tlv(bytes.fromhex(doc.get("data", "")))
+            if fm is None or pkt is None:
+                return ()  # an unknown model (enable capture to log its raw frames for calibration) or not a TLV frame
             values = {f.type_id: f.value for f in pkt.fields}
             old = self._raw.get(device_id) or {}
             self._raw.update(device_id, lambda cur: {**(cur or {}), **values})
             before, after = api.state_from_raw(fm, old), api.state_from_raw(fm, {**old, **values})
-            # current_temperature is deliberately excluded: it drifts constantly and would flood the log
-            if any(
-                b is not None and b != a
-                for field, b, a in zip(before._fields, before, after, strict=True)
-                if field != "current_temperature"
-            ):
+            if old and before != after:
                 return (om.Status(self._device(device_id), "state", before, after, ThinqSource.LG_AC),)
         elif cmd == "req_timesync":
             now = time.gmtime()
@@ -175,6 +159,14 @@ class Thinq:
 
     def _packet(self, device_id: str, frame: bytes, retain: bool = False) -> om.Message:
         return om.Message(_DOWNSTREAM_PREFIX + device_id, _envelope(device_id, "packet", 1, frame.hex()), retain=retain)
+
+
+# A setpoint frame must carry mode, so a bare on sends whatever else is known with it.
+def _wire(state: om.AcState) -> dict[str, object]:
+    if state.power == om.OFF:
+        return {"mode": "off"}
+    values = {"mode": state.mode, "fan_mode": state.fan_mode, "temperature": state.temperature and api.celsius(state.temperature)}
+    return {name: v for name, v in values.items() if v is not None}
 
 
 def _envelope(device_id: str, cmd: str, type_: int, data: str) -> dict[str, Any]:

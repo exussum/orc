@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock
@@ -15,7 +16,7 @@ from orc_extras.lg_ac.dal.capture import Capture
 from orc_extras.lg_ac.dal.mqtt import stub
 from orc_extras.lg_ac.dal.mqtt.thinq import Thinq, ThinqSource
 
-from orc.model import OFF, ON, AcCommand, AcMode, Broker, Device, DeviceStatus, Status
+from orc.model import OFF, ON, AcMode, AcState, Broker, Device, DeviceStatus, Status
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
@@ -123,10 +124,13 @@ def test_load_fieldmap_handles_unknown_models():
 @pytest.mark.parametrize(
     ("raw", "state"),
     [
-        ({FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44}, m.ACState("on", "cool", "low", 77, 72)),
-        ({FM.power: 0, FM.mode: 0}, m.ACState("off", "cool")),
-        ({FM.power: 1, FM.mode: 99, FM.fan: 99}, m.ACState("on", None, None)),
-        ({}, m.ACState()),
+        (
+            {FM.power: 1, FM.mode: 0, FM.fan: 2, FM.current_temp: 50, FM.target_temp: 44},
+            AcState("on", "cool", "low", 72, current_temperature=77),
+        ),
+        ({FM.power: 0, FM.mode: 0}, AcState("off", "cool")),
+        ({FM.power: 1, FM.mode: 99, FM.fan: 99}, AcState("on", None, None)),
+        ({}, AcState()),
     ],
 )
 def test_state_from_raw(raw, state):
@@ -165,7 +169,7 @@ def test_build_command_round_trips_through_the_codec():
     assert frame[:2] == b"\x01\x01"
     assert body[:9] == bytes([0x04, 0x00, 0x00, 0x00, 0x65, 2, 1, 1, len(body) - 9])
     raw = {f.type_id: f.value for f in api.dissect(body[9:]).fields}
-    assert api.state_from_raw(FM, raw) == m.ACState("on", "cool", "low", temperature=72)
+    assert api.state_from_raw(FM, raw) == AcState("on", "cool", "low", temperature=72)
 
 
 # --- Provisioning responses ---
@@ -257,8 +261,8 @@ def test_device_certificate_signs_the_posted_csr(client, ca_pem, device_csr):
 
 
 def test_state_endpoint_reports_the_default_device(client):
-    stub.reset(states={DEVICE_ID: m.ACState("on", "cool", "low", 25.0, 22.0)}, default=DEVICE_ID)
-    assert client.get("/state").get_json() == m.ACState("on", "cool", "low", 25.0, 22.0)._asdict()
+    stub.reset(states={DEVICE_ID: AcState("on", "cool", "low", 22.0, current_temperature=25.0)}, default=DEVICE_ID)
+    assert client.get("/state").get_json() == asdict(AcState("on", "cool", "low", 22.0, current_temperature=25.0))
 
 
 def test_state_endpoint_errors_with_no_device(client):
@@ -266,7 +270,7 @@ def test_state_endpoint_errors_with_no_device(client):
 
 
 def test_command_endpoint_runs_the_device_command(client):
-    stub.reset(states={DEVICE_ID: m.ACState("on", "dry", "low", 25.0, 22.0)}, devices=[DEVICE_ID])
+    stub.reset(states={DEVICE_ID: AcState("on", "dry", "low", 22.0, current_temperature=25.0)}, devices=[DEVICE_ID])
     body = client.post("/command", json={"device": DEVICE_ID, "mode": "cool", "temperature": 72}).get_json()
     client.application.orc.api.device_command.assert_called_once_with("LIVING", "cool:low:72", ANY)
     assert body == {"status": "sent", "device": DEVICE_ID, "command": "cool:low:72"}
@@ -285,25 +289,20 @@ def test_command_endpoint_errors_with_no_device_or_half_a_setpoint(client):
 
 
 @pytest.mark.parametrize(
-    ("state", "value"),
-    [
-        (m.ACState(), None),
-        (m.ACState("off", "cool", "low", 70, 77), OFF),
-        (m.ACState("on", "cool", "low", 70, 77), AcCommand(AcMode.COOL, "low", 77)),
-        (m.ACState("on", "heat", "low", 70, 77), None),
-        (m.ACState("on", "cool", None, 70, 77), None),
-    ],
+    "state", [AcState("off", "cool", "low", 77, current_temperature=70), AcState("on", "dry", "low", 77, current_temperature=70)]
 )
-def test_change_logs_the_state_as_the_command_it_answers(ctx, state, value):
-    plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", m.ACState("on", "cool", "low", 70, 70), state)
-    ctx.api.log.assert_called_once_with(m.LogSource.LG_AC, ANY, Broker(id=DEVICE_ID, source="lg_ac", value=value))
+def test_change_logs_the_state_as_the_command_it_answers(ctx, state):
+    plugins._on_change(
+        ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", AcState("on", "cool", "low", 70, current_temperature=70), state
+    )
+    ctx.api.log.assert_called_once_with(m.LogSource.LG_AC, ANY, Broker(id=DEVICE_ID, source="lg_ac", value=state))
 
 
 def test_change_line_names_what_moved(ctx):
-    before, after = m.ACState("on", "cool", "low", 70, 77), m.ACState("on", "dry", "low", 71, 75)
+    before, after = AcState("on", "cool", "low", 77, current_temperature=70), AcState("on", "dry", "low", 75, current_temperature=71)
     plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", before, after)
     assert ctx.api.log.call_args[0][1] == "AC clip-123: mode cool → dry, temperature 77 → 75"
-    plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", m.ACState(), m.ACState("off"))
+    plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "state", AcState(), AcState("off"))
     assert ctx.api.log.call_count == 1
 
 
@@ -311,6 +310,12 @@ def test_change_ignores_other_sources_and_attributes(ctx):
     plugins._on_change(ctx, Device(1, "lamp", "hubitat"), "state", None, None)
     plugins._on_change(ctx, Device(DEVICE_ID, "Living AC", "lg_ac"), "power", "off", "on")
     ctx.api.log.assert_not_called()
+
+
+def test_state_prints_as_a_command():
+    assert str(AcState("on", "cool", "low", 77, current_temperature=70)) == "cool:low:77"
+    assert str(AcState(power="off", mode="cool")) == "off"
+    assert str(AcState(power="on")) == "on"
 
 
 # --- The adapter ---
@@ -361,7 +366,7 @@ def test_first_packet_updates_state_without_a_change(adapter):
         "clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 22})}
     )
     assert decoded == ()
-    assert adapter.fetch_state("clip-1") == m.ACState("on", "cool", "low", temperature=72)
+    assert adapter.fetch_state("clip-1") == AcState("on", "cool", "low", temperature=72)
     (state,) = adapter.snapshot()
     assert state.device == Device("clip-1", "Living AC", "lg_ac")
     assert state.attributes["mode"] == "cool"
@@ -377,8 +382,8 @@ def test_later_packet_merges_and_reports_one_state_change(adapter):
         Status(
             Device("clip-1", "Living AC", "lg_ac"),
             "state",
-            m.ACState("on", "cool", "low", temperature=72),
-            m.ACState("on", "dry", "low", temperature=72),
+            AcState("on", "cool", "low", temperature=72),
+            AcState("on", "dry", "low", temperature=72),
             ThinqSource.LG_AC,
         ),
     )
@@ -418,39 +423,22 @@ def test_tap_sees_every_message():
 
 def test_encode_off(adapter):
     _provision(adapter, "clip-2")
-    (msg,) = adapter.encode(SimpleNamespace(value="clip-2", name="BEDROOM"), OFF)
+    (msg,) = adapter.encode(SimpleNamespace(value="clip-2", name="BEDROOM"), AcState(power=OFF))
     assert (msg.topic, _data(msg)) == ("lime/devices/clip-2", api.build_command(FM, {"mode": "off"}))
-
-
-@pytest.mark.parametrize(
-    ("state", "mode"),
-    [
-        (m.ACState("off", "dry", "low", 70, 77), "dry"),
-        (m.ACState(), "cool"),
-    ],
-)
-def test_encode_on_resumes_remembered_mode(adapter, state, mode):
-    _provision(adapter)
-    if state.mode:
-        adapter.decode(
-            "clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": state.mode, "power": state.power.lower()})}
-        )
-    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), ON)
-    assert _data(msg) == api.build_command(FM, {"mode": mode})
 
 
 def test_encode_setpoint_in_celsius(adapter):
     _provision(adapter)
-    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcCommand(AcMode.COOL, "low", 72))
+    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcState(ON, AcMode.COOL, "low", temperature=72))
     assert _data(msg) == api.build_command(FM, {"mode": "cool", "fan_mode": "low", "temperature": 22.2})
 
 
 @pytest.mark.parametrize(
     ("held", "command"),
     [
-        ({"power": "off"}, OFF),
-        ({"mode": "dry", "power": "on"}, ON),
-        ({"mode": "cool", "fan_mode": "low", "temperature": 25, "power": "on"}, AcCommand(AcMode.COOL, "low", 77)),
+        ({"power": "off"}, AcState(power=OFF)),
+        ({"mode": "dry", "power": "on"}, AcState(ON, "dry")),
+        ({"mode": "cool", "fan_mode": "low", "temperature": 25, "power": "on"}, AcState(ON, AcMode.COOL, "low", temperature=77)),
     ],
 )
 def test_encode_skips_a_state_already_held(adapter, held, command):
@@ -465,23 +453,23 @@ def test_encode_sends_a_setpoint_that_differs(adapter):
         "clip/message/devices/clip-1",
         {"cmd": "device_packet", "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 25, "power": "on"})},
     )
-    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcCommand(AcMode.COOL, "low", 75))
+    (msg,) = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcState(ON, AcMode.COOL, "low", temperature=75))
     assert _data(msg) == api.build_command(FM, {"mode": "cool", "fan_mode": "low", "temperature": 23.9})
 
 
 def test_encode_stale_id_commands_nothing(adapter):
     _provision(adapter)
-    assert adapter.encode(SimpleNamespace(value="clip-stale", name="X"), OFF) == ()
+    assert adapter.encode(SimpleNamespace(value="clip-stale", name="X"), AcState(power=OFF)) == ()
 
 
 def test_encode_without_a_field_map_fails_loudly(adapter):
     adapter.decode("clip/provisioning/devices/clip-1", {"cmd": "preDeploy", "kind": "UNKNOWN"})
     with pytest.raises(RuntimeError):
-        adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), OFF)
+        adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcState(power=OFF))
 
 
 def test_ac_status_rows_decode_per_device():
-    stub.reset(states={"clip-1": m.ACState("on", "cool", "low", 77, 72)}, devices=["clip-1"])
+    stub.reset(states={"clip-1": AcState("on", "cool", "low", 72, current_temperature=77)}, devices=["clip-1"])
     ctx = SimpleNamespace(
         config=SimpleNamespace(
             devices=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),))

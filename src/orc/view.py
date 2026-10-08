@@ -139,7 +139,7 @@ def cfg() -> str:
 def device() -> str:
     light_states = api.capture_lights(mapper=_states_by_name)
     sound_states = api.capture_sounds(mapper=_volumes_by_name)
-    ac_temperatures = {s.what.name: s.temperature for s in api.capture_acs()}
+    ac_temperatures = {s.what.name: round(s.state.temperature) for s in api.capture_acs() if s.state and s.state.temperature is not None}
     all_devices = list(chain.from_iterable(cls for name, cls in config.devices.items() if name in config.registry.controllable_devices))
 
     def make_device(d: Any) -> DeviceRow:
