@@ -1,10 +1,11 @@
+from dataclasses import fields
 from typing import Any
 
 from orc import model as m
-from orc.model import AcCommand, AcMode, AppContext, DeviceStatus
+from orc.model import AppContext, DeviceStatus
 from orc_extras.lg_ac.dal.mqtt.interfaces import Transport
 from orc_extras.lg_ac.dal.mqtt.thinq import SOURCE
-from orc_extras.lg_ac.model import ACState, LogSource
+from orc_extras.lg_ac.model import LogSource
 
 
 def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
@@ -30,24 +31,15 @@ def _ac_status(transport: Transport, ctx: AppContext) -> list[DeviceStatus]:
     return rows
 
 
+# an external move is logged by the external plugin; this line is orc's own answer
 def _on_change(ctx: AppContext, device: m.Device, attribute: str, old: Any, new: Any) -> None:
     if device.source != SOURCE or attribute != "state":
         return
     changes = [
-        f"{field} {b} → {a}"
-        for field, b, a in zip(new._fields, old, new, strict=True)
-        if field != "current_temperature" and b is not None and b != a
+        f"{f.name} {b} → {a}"
+        for f in fields(new)
+        if f.compare and (b := getattr(old, f.name)) is not None and b != (a := getattr(new, f.name))
     ]
     if not changes:
         return
-    ctx.api.log(
-        LogSource.LG_AC, f"AC {str(device.id)[:8]}: {', '.join(changes)}", m.Broker(id=str(device.id), source=SOURCE, value=_value(new))
-    )
-
-
-def _value(state: ACState) -> str | AcCommand | None:
-    if state.power == m.OFF:
-        return m.OFF
-    elif state.mode and state.mode in AcMode and state.fan_mode and state.temperature is not None:
-        return AcCommand(AcMode(state.mode), state.fan_mode, round(state.temperature))
-    return None
+    ctx.api.log(LogSource.LG_AC, f"AC {str(device.id)[:8]}: {', '.join(changes)}", m.Broker(id=str(device.id), source=SOURCE, value=new))

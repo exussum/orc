@@ -10,9 +10,11 @@ from orc_engine import model as em
 
 import orc_extras.react
 from orc.kernel import cast
-from orc.kernel.loader import load_plugin_config, validate_ac_state
+from orc.kernel.loader import ac_state, load_plugin_config
 from orc.model import (
-    AcCommand,
+    OFF,
+    ON,
+    AcMode,
     AcState,
     AnyoneSubject,
     AppContext,
@@ -47,7 +49,7 @@ react <name> <devices> if <condition>... set <target> <action> {_OPTIONS}
 _ERR_BUILD = "react condition {!r}: {}"
 _ERR_CONDITION = "react condition {!r} is not a condition"
 _ERR_STATE = "react condition {!r}: unknown state {!r}, expected one of {}"
-_AC_STATES: Mapping[str, AcState] = {name.lower(): state for name, state in AcState.__members__.items()}
+_AC_STATES = (ON, OFF, *(mode.value for mode in AcMode))
 _WHOLE_DEVICE: Mapping[str, Any] = {"Chromecast": CastSubject, "AC": AcSubject}
 
 
@@ -135,8 +137,7 @@ def _pause(minutes: int | None) -> timedelta:
 
 
 def _rule(objects: dict[str, Any], args: Any) -> None:
-    action = cast.state(args.action)
-    target = _parse_target(args.target, action, objects)
+    target, action = _parse_target(args.target, cast.state(args.action), objects)
     types = objects["device"].enums
     delay = timedelta(minutes=args.delay) if args.delay else timedelta()
     pause = _pause(args.pause)
@@ -159,16 +160,15 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
         objects["react"].append(model.Reaction(watch, pause, args.name, source))
 
 
-def _parse_target(target: str | None, action: Any, objects: dict[str, Any]) -> Devices | None:
+def _parse_target(target: str | None, action: Any, objects: dict[str, Any]) -> tuple[Devices | None, Any]:
     if target is None:
-        if not isinstance(action, AcCommand):
-            return None
+        if not isinstance(action, AcState):
+            return None, action
         elif (ac_cls := objects["device"].enums.get("AC")) is None:  # a defined-but-empty AC enum is falsy yet still a valid target
             raise ValueError(f"AC command {action} requires an AC device type")
-        return Devices(ac_cls)
+        return Devices(ac_cls), action
     devices = cast.devices(target, objects)
-    validate_ac_state(devices.all(), action, objects["device"].enums, source=target)
-    return devices
+    return devices, ac_state(devices.all(), action, objects["device"].enums, source=target)
 
 
 def _attribute(to: str) -> str:
@@ -196,9 +196,9 @@ def _formula(source: DeviceEnum, name: str) -> Callable[..., FormulaSubject]:
 
 
 def _ac_is(subject: AcSubject, state: str) -> AcIs:
-    if (allowed := _AC_STATES.get(state)) is None:
+    if state not in _AC_STATES:
         raise ValueError(_ERR_STATE.format("AcIs", state, sorted(_AC_STATES)))
-    return AcIs(subject, allowed)
+    return AcIs(subject, state)
 
 
 def _became(*args: Any) -> Transition:

@@ -208,13 +208,13 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx, dispatched):
 
 def test_dispatch_routes_ac_commands_to_the_broker(entry):
     with patch.object(mqtt, "command") as command:
-        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcCommand(m.AcMode.COOL, "low", 75)),), force=True, entry=entry)
-        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.ON),), force=True, entry=entry)
-        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.OFF),), force=True, entry=entry)
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75)),), force=True, entry=entry)
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(power=m.ON)),), force=True, entry=entry)
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(power=m.OFF)),), force=True, entry=entry)
     assert command.call_args_list == [
-        call(orc.AC.unit, m.AcCommand(m.AcMode.COOL, "low", 75)),
-        call(orc.AC.unit, m.ON),
-        call(orc.AC.unit, m.OFF),
+        call(orc.AC.unit, m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75)),
+        call(orc.AC.unit, m.AcState(power=m.ON, mode="cool")),
+        call(orc.AC.unit, m.AcState(power=m.OFF)),
     ]
 
 
@@ -225,14 +225,23 @@ def _ac(**attributes):
 def test_capture_acs_reads_the_device_cache():
     assert api.capture_acs() == (m.AcStatus(orc.AC.unit, None),)
     with _ac(power="on", mode="cool", temperature=72.4):
-        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.COOL, 72),)
+        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState(power="on", mode="cool", temperature=72.4)),)
     with _ac(power="on", mode="heat", temperature=72):
-        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.ON, 72),)
+        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState(power="on", mode="heat", temperature=72)),)
 
 
-def test_capture_acs_off_unit_has_no_setpoint():
+def test_ac_on_keeps_the_remembered_mode():
+    with _ac(power="off", mode="dry", fan_mode="low", temperature=77):
+        assert api.ac_command(orc.AC.unit, m.AcState(power=m.ON)) == m.AcState(m.ON, "dry", "low", temperature=77)
+
+
+def test_ac_on_with_no_mode_cools():
+    assert api.ac_command(orc.AC.unit, m.AcState(power=m.ON)) == m.AcState(m.ON, "cool")
+
+
+def test_capture_acs_reads_an_off_unit():
     with _ac(power="off", mode="cool", temperature=72):
-        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState.OFF),)
+        assert api.capture_acs() == (m.AcStatus(orc.AC.unit, m.AcState(power="off", mode="cool", temperature=72)),)
 
 
 @pytest.mark.parametrize(

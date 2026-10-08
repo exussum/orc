@@ -38,7 +38,7 @@ def state(value: str) -> Any:
     elif ":" in value:
         try:
             mode, fan, temp = value.split(":")
-            return m.AcCommand(m.AcMode(mode), fan, builtins.int(temp))
+            return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan, temperature=builtins.int(temp))
         except ValueError:
             raise ValueError(_ERR_AC_COMMAND.format(value)) from None
     elif _YOUTUBE_ID.fullmatch(value):

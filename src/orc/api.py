@@ -3,6 +3,7 @@ import math
 import time
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor as Pool
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from datetime import time as dt_time
 from functools import cache, lru_cache, partial
@@ -198,23 +199,20 @@ def capture_sounds() -> tuple[m.SoundState, ...]:
 
 
 def capture_acs() -> tuple[m.AcStatus, ...]:
-    return tuple(m.AcStatus(w, ac_state(w), _ac_temperature(w)) for w in config.devices.AC)
+    return tuple(m.AcStatus(w, ac_state(w)) for w in config.devices.AC)
+
+
+# the whole state a command asks for: what it sets, over what the unit holds now
+def ac_command(device: m.DeviceEnum, asked: m.AcState) -> m.AcState:
+    whole = replace(ac_state(device) or m.AcState(), **{name: v for name, v in vars(asked).items() if v is not None})
+    return replace(whole, mode="cool") if whole.power == m.ON and whole.mode is None else whole
 
 
 def ac_state(device: m.DeviceEnum) -> m.AcState | None:
     found = device_state(str(device.value))
     if found is None or found.attributes.get("power") is None:
         return None
-    elif found.attributes["power"] == m.OFF:
-        return m.AcState.OFF
-    return m.AcState.__members__.get(str(found.attributes.get("mode") or "").upper(), m.AcState.ON)
-
-
-def _ac_temperature(device: m.DeviceEnum) -> int | None:
-    found = device_state(str(device.value))
-    if found is None or found.attributes.get("power") == m.OFF or found.attributes.get("temperature") is None:
-        return None
-    return round(found.attributes["temperature"])
+    return m.AcState(**found.attributes)
 
 
 def capture_sensors() -> list[m.DeviceStatus]:
@@ -342,6 +340,8 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
         elif (dispatch_handler := config.registry.dispatch_handlers.get(w.kind)) is None:
             raise LookupError(f"no dispatch handler for `{w.kind}`")
         else:
+            if isinstance(command.value, m.AcState):
+                command = replace(command, value=ac_command(w, command.value))
             todo.append((dispatch_handler, w, command))
 
     entry.requests += tuple(m.Request(str(w.value), command.value) for _, w, command in todo)
@@ -411,8 +411,11 @@ def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
         dispatch_handler = config.registry.dispatch_handlers.get(name)
         if dispatch_handler is not None and id in cls.__members__:
             member = cls[id]
-            entry.requests += (m.Request(str(member.value), parsed),)
-            dispatch_handler(_ctx, member, em.Command(m.Devices(member), parsed), {})
+            value = m.AcState(power=parsed) if name == "AC" and parsed in (m.ON, m.OFF) else parsed
+            if isinstance(value, m.AcState):
+                value = ac_command(member, value)
+            entry.requests += (m.Request(str(member.value), value),)
+            dispatch_handler(_ctx, member, em.Command(m.Devices(member), value), {})
             return True
     return False
 
@@ -743,7 +746,7 @@ def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], 
 
 
 def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
-    if not isinstance(command.value, m.AcCommand) and command.value not in (m.ON, m.OFF):
+    if not isinstance(command.value, m.AcState):
         raise ValueError(f"AC devices don't support state {command.value!r}")
     mqtt.command(w, command.value)
 
