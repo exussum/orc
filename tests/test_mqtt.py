@@ -97,7 +97,7 @@ class TestOnMessage:
 class TestListeners:
     def test_fires_per_attribute_including_unchanged(self):
         events = []
-        mqtt.add_listener(lambda d, a, old, new: events.append((d.id, a, old, new)))
+        mqtt.add_listener(lambda s: events.append((s.device.id, s.attribute, s.old, s.new)))
         _seen(56, name="balcony door", contact="closed", battery="100")
         assert events == []
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open", "battery": "100"})])
@@ -106,8 +106,8 @@ class TestListeners:
 
     def test_failing_listener_does_not_break_cache_or_others(self):
         events = []
-        mqtt.add_listener(lambda d, a, old, new: 1 / 0)
-        mqtt.add_listener(lambda d, a, old, new: events.append(a))
+        mqtt.add_listener(lambda s: 1 / 0)
+        mqtt.add_listener(lambda s: events.append(s.attribute))
         _seen(56, name="balcony door", contact="closed")
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"})])
         assert events == ["contact"]
@@ -115,7 +115,7 @@ class TestListeners:
 
     def test_replayed_document_updates_cache_without_events(self):
         events = []
-        mqtt.add_listener(lambda d, a, old, new: events.append(a))
+        mqtt.add_listener(lambda s: events.append(s.attribute))
         doc = _doc(id=56, name="balcony door", attributes={"contact": "open"})
         _receive([doc, doc])  # first sighting, then a replay (reconnect flood, hub republish)
         assert events == []
@@ -123,7 +123,7 @@ class TestListeners:
 
     def test_document_differing_only_in_last_activity_fires(self):
         events = []
-        mqtt.add_listener(lambda d, a, old, new: events.append((a, old, new)))
+        mqtt.add_listener(lambda s: events.append((s.attribute, s.old, s.new)))
         _seen(56, name="balcony door", contact="open")
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2026-07-29T00:00:05+0000")])
         assert events == [("contact", "open", "open")]
@@ -137,7 +137,7 @@ def _button_msg(event_type, device_id=10, button=1):
 class TestButtonEvents:
     def test_fires_listener_as_a_change_with_no_before(self):
         events = []
-        mqtt.add_listener(lambda d, a, old, new: events.append((d.id, d.name, a, old, new)))
+        mqtt.add_listener(lambda s: events.append((s.device.id, s.device.name, s.attribute, s.old, s.new)))
         _seen(10, name="remote", pushed="1")
         mqtt._on_message(None, None, _button_msg("held"))
         assert events == [("10", "remote", "held", None, 1)]
@@ -169,8 +169,8 @@ class TestButtonEvents:
 
     def test_failing_listener_does_not_break_others(self):
         events = []
-        mqtt.add_listener(lambda d, a, old, new: 1 / 0)
-        mqtt.add_listener(lambda d, a, old, new: events.append(a))
+        mqtt.add_listener(lambda s: 1 / 0)
+        mqtt.add_listener(lambda s: events.append(s.attribute))
         _seen(10, name="remote", pushed="1")
         mqtt._on_message(None, None, _button_msg("pushed"))
         assert events == ["pushed"]
@@ -340,7 +340,7 @@ class TestExternalChanges:
         monkeypatch.setattr(mqtt, "_external_listeners", [])
         hubitat.hub_id = HUB
         self.external = []
-        mqtt.add_external_listener(lambda d, a, old, new: self.external.append((a, old, new)))
+        mqtt.add_external_listener(lambda s: self.external.append((s.attribute, s.old, s.new)))
 
     def test_a_commanded_change_is_not_external(self):
         mqtt.command(orc.Light.a, 42)

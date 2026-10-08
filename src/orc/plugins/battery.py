@@ -13,7 +13,8 @@ def setup(ctx: m.AppContext) -> None:
     ctx.api.add_listener(partial(_on_event, ctx))
 
 
-def _on_event(ctx: m.AppContext, device: m.Device, attribute: str, old: Any, new: Any) -> None:
+def _on_event(ctx: m.AppContext, status: m.Status) -> None:
+    device, attribute, old, new = status.device, status.attribute, status.old, status.new
     if attribute != "battery":
         return
     level = m.BatteryLevel.from_fraction(new, 100)

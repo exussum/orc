@@ -158,9 +158,9 @@ def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> No
         return
     for status in statuses:
         if status.source == m.Source.EXTERNAL:
-            _fire(_external_listeners, msg.topic, status.device, status.attribute, status.old, status.new)
+            _fire(_external_listeners, msg.topic, status)
     for status in statuses:
-        _fire(_listeners, msg.topic, status.device, status.attribute, status.old, status.new)
+        _fire(_listeners, msg.topic, status)
 
 
 # The adapter always sees a dict: the parsed object, or {} for an empty payload (the

@@ -13,6 +13,7 @@ from orc_extras.entrance_sensor import plugins
 import orc
 from orc import api
 from orc import model as m
+from orc.dal.mqtt import hubitat
 from orc.model import DeviceEnum
 
 _UTC = ZoneInfo("UTC")
@@ -135,7 +136,9 @@ def _cleanup(sensor, plugin_ctx, present_before=()):
 def _trigger_sensor(ctx, sensor, device_id, event):
     old = "inactive" if event == "active" else "active"
     name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
-    plugins._on_sensor_event(ctx, sensor, m.Device(device_id, name, "hubitat"), "motion", old, event)
+    plugins._on_sensor_event(
+        ctx, sensor, m.Status(m.Device(device_id, name, "hubitat"), "motion", old, event, hubitat.HubitatSource.HUBITAT)
+    )
     queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.now.reset_mock()
     for call in queued:

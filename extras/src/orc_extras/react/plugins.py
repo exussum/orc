@@ -91,7 +91,8 @@ def _num(value: Any) -> Any:
         return value
 
 
-def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], device: m.Device, attribute: str, old: Any, new: Any) -> None:
+def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status) -> None:
+    device, attribute, old, new = status.device, status.attribute, status.old, status.new
     source = sources.get(device.id)
     if source is None:
         return

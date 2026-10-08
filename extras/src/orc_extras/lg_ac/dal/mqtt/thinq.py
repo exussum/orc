@@ -28,11 +28,6 @@ _log = logging.getLogger(__name__)
 
 SOURCE = "lg_ac"
 
-
-class ThinqSource(om.SourceEnum):
-    LG_AC = SOURCE
-
-
 # The device publishes upstream to clip/message and clip/provisioning, but it
 # subscribes to a firmware-baked-in downstream topic (lime/devices/<did>) and
 # ignores the topics we advertise. All server->device traffic goes there, as a
@@ -56,6 +51,7 @@ class Thinq:
         # mutation. Keys are in first-seen order, so default_device() is the last key.
         self._raw: LockedDict[str, dict[int, int]] = LockedDict()  # merged latest TLV values per device
         self._models: LockedDict[str, str] = LockedDict()  # device id -> model kind from its preDeploy payload
+        self._asked: LockedDict[str, om.AcState] = LockedDict()  # the state the last command asked for, until a report shows it
 
     def attach(self, publish: Callable[[om.Message], None]) -> None:
         self._publish = publish
@@ -81,6 +77,7 @@ class Thinq:
             raise ValueError(f"AC devices don't support state {value!r}")
         if value == state:
             return ()
+        self._asked[device_id] = value
         return (self._packet(device_id, api.build_command(fm, _wire(value))),)
 
     def snapshot(self) -> tuple[om.DeviceState, ...]:
@@ -134,7 +131,11 @@ class Thinq:
             self._raw.update(device_id, lambda cur: {**(cur or {}), **values})
             before, after = api.state_from_raw(fm, old), api.state_from_raw(fm, {**old, **values})
             if old and before != after:
-                return (om.Status(self._device(device_id), "state", before, after, ThinqSource.LG_AC),)
+                source = om.Source.EXTERNAL
+                if (asked := self._asked.get(device_id)) and after == asked:
+                    source = om.Source.ORC
+                    self._asked.pop(device_id)
+                return (om.Status(self._device(device_id), "state", before, after, source),)
         elif cmd == "req_timesync":
             now = time.gmtime()
             buf = bytes([now.tm_year % 100, now.tm_mon - 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec, (now.tm_wday + 1) % 7])
