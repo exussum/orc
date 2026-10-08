@@ -59,6 +59,11 @@ class Thinq:
     def decode(self, topic: str, doc: dict[str, Any]) -> tuple[om.Status, ...]:
         if self._tap is not None:
             self._tap(topic, doc)
+        model = doc.get("kind")
+        if model and model != self._models.get(device_id := topic.rsplit("/", 1)[-1]):
+            self._models.update(device_id, lambda cur: model)
+            if api.load_fieldmap(model) is None:
+                _log.warning("no field map for model %s; capture-only until one exists", model)
         if topic.startswith(_MESSAGE_PREFIX):
             return self._message(topic[len(_MESSAGE_PREFIX) :], doc)
         elif topic.startswith(_PROVISIONING_PREFIX):
@@ -146,11 +151,6 @@ class Thinq:
         device_cmd = doc.get("cmd")
         if device_cmd not in ("preDeploy", "deploy"):
             return  # ignore our own completeProvisioning response echoed back
-        model = doc.get("kind")
-        if model and model != self._models.get(device_id):
-            self._models.update(device_id, lambda cur: model)
-            if api.load_fieldmap(model) is None:
-                _log.warning("no field map for model %s; capture-only until one exists", model)
         self._seen(device_id)
         self._send(om.Message(_DOWNSTREAM_PREFIX + device_id, api.deploy(device_id, int(time.time() * 1000), device_cmd)))
 
