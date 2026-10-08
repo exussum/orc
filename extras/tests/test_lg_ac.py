@@ -134,7 +134,7 @@ def test_load_fieldmap_handles_unknown_models():
     ],
 )
 def test_state_from_raw(raw, state):
-    assert api.state_from_raw(FM, raw) == state
+    assert vars(api.state_from_raw(FM, raw)) == vars(state)
 
 
 # --- Command encoding ---

@@ -35,12 +35,18 @@ def device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> m.DeviceEnum
 def state(value: str) -> Any:
     if value in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
         return value
+    elif value in m.AcMode:
+        return m.AcState(power=m.ON, mode=m.AcMode(value))
     elif ":" in value:
         try:
-            mode, fan, temp = value.split(":")
-            return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan, temperature=builtins.int(temp))
+            match value.split(":"):
+                case [mode, fan]:
+                    return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan)
+                case [mode, fan, temp]:
+                    return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan, temperature=builtins.int(temp))
         except ValueError:
             raise ValueError(_ERR_AC_COMMAND.format(value)) from None
+        raise ValueError(_ERR_AC_COMMAND.format(value))
     elif _YOUTUBE_ID.fullmatch(value):
         return m.YouTubeId(value)
     elif value.isdigit():
