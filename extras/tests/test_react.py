@@ -15,6 +15,7 @@ from orc_extras.react import model, plugins, web
 import orc
 from orc import api
 from orc import model as m
+from orc.dal.mqtt import hubitat
 from orc.model import DeviceEnum
 
 FIXTURE = Path(__file__).parent / "fixture"
@@ -121,7 +122,7 @@ def switch_report(ctx):
         known = ctx.api.device_states.return_value
         others = [s for s in known if s.device.id != device_id] if isinstance(known, list) else []
         ctx.api.device_states.return_value = [*others, state]
-        plugins._on_event(ctx, ctx.sources, state.device, "switch", old, new)
+        plugins._on_event(ctx, ctx.sources, m.Status(state.device, "switch", old, new, hubitat.HubitatSource.HUBITAT))
 
     return switch_report
 
@@ -250,7 +251,7 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
     ruleset(rule, {"1": Light.lamp})
     state = m.DeviceState(m.Device("1", "balcony door", "hubitat"), {"contact": "open"}, None)
     ctx.api.device_states.return_value = [state]
-    plugins._on_event(ctx, ctx.sources, state.device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
     assert dispatches() == [(Ac.living, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=75))]
 
 
@@ -299,11 +300,11 @@ def test_if_ac_state_gates_immediate_rule(ctx, ruleset, dispatches, ac_report):
     state = m.DeviceState(m.Device("1", "balcony door", "hubitat"), {"contact": "open"}, None)
     ctx.api.device_states.return_value = [state]
     ac_report(m.AcState(power=m.OFF))
-    plugins._on_event(ctx, ctx.sources, state.device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
     ctx.api.dispatch.assert_not_called()
     ctx.api.log.assert_not_called()
     ac_report(m.AcState(m.ON, "cool"))
-    plugins._on_event(ctx, ctx.sources, state.device, "contact", "closed", "open")
+    plugins._on_event(ctx, ctx.sources, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
     assert dispatches() == [(Ac.living, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=75))]
 
 
@@ -388,7 +389,7 @@ def range_event(ctx):
         state = m.DeviceState(m.Device(sensor.value, "sensor", "hubitat"), attributes, None)
         ctx.api.device_states.return_value = [state]
         changed = next(iter(attributes))
-        plugins._on_event(ctx, ctx.sources, state.device, changed, None, attributes[changed])
+        plugins._on_event(ctx, ctx.sources, m.Status(state.device, changed, None, attributes[changed], hubitat.HubitatSource.HUBITAT))
 
     return range_event
 

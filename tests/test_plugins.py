@@ -7,6 +7,7 @@ from freezegun import freeze_time
 import orc
 from orc import api, config
 from orc import model as m
+from orc.dal.mqtt import hubitat
 from orc.dal.mqtt import paho as mqtt
 from orc.plugins import battery, buttons, external
 
@@ -31,22 +32,22 @@ class TestButtons:
     def test_mapped_event_runs_action(self, ctx):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action", return_value=True) as run:
-            on_button(_remote(orc.Light.a.value), "held", None, 1)
+            on_button(m.Status(_remote(orc.Light.a.value), "held", None, 1, hubitat.HubitatSource.HUBITAT))
         run.assert_called_once_with(ctx, "TV Lights", m.Button(str(orc.Light.a.value)), source=m.LogSource.EXTERNAL)
 
     def test_unmapped_event_is_ignored(self, ctx):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(api, "run_action") as run:
-            on_button(_remote("99"), "held", None, 1)
-            on_button(_remote(orc.Light.a.value), "held", None, 2)
-            on_button(_remote(orc.Light.a.value), "pushed", None, 1)
-            on_button(_remote(orc.Light.a.value), "switch", "off", "on")
+            on_button(m.Status(_remote("99"), "held", None, 1, hubitat.HubitatSource.HUBITAT))
+            on_button(m.Status(_remote(orc.Light.a.value), "held", None, 2, hubitat.HubitatSource.HUBITAT))
+            on_button(m.Status(_remote(orc.Light.a.value), "pushed", None, 1, hubitat.HubitatSource.HUBITAT))
+            on_button(m.Status(_remote(orc.Light.a.value), "switch", "off", "on", hubitat.HubitatSource.HUBITAT))
         run.assert_not_called()
 
     def test_unknown_action_logs(self, ctx):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "No Such Routine"),))
         with patch.object(api, "run_action", return_value=False), patch.object(api, "log") as log, patch.object(api, "alert"):
-            on_button(_remote(orc.Light.a.value), "held", None, 1)
+            on_button(m.Status(_remote(orc.Light.a.value), "held", None, 1, hubitat.HubitatSource.HUBITAT))
         log.assert_called_once()
         assert "No Such Routine" in log.call_args[0][1]
 
@@ -60,7 +61,7 @@ class TestBattery:
         on_event = _capture("add_listener", lambda: battery.setup(ctx))
         device = m.Device("16", "front door", "hubitat")
         with patch.object(api, "log") as log:
-            on_event(device, "battery", old, new)
+            on_event(m.Status(device, "battery", old, new, hubitat.HubitatSource.HUBITAT))
         if expected:
             log.assert_called_once_with(
                 m.LogSource.SYSTEM,
@@ -75,7 +76,7 @@ class TestBattery:
         on_event = _capture("add_listener", lambda: battery.setup(ctx))
         device = m.Device("16", "front door", "hubitat")
         with patch.object(api, "log") as log:
-            on_event(device, "motion", "inactive", "active")
+            on_event(m.Status(device, "motion", "inactive", "active", hubitat.HubitatSource.HUBITAT))
         log.assert_not_called()
 
 
@@ -84,10 +85,10 @@ class TestExternal:
         on_external = _capture("add_external_listener", lambda: external.setup(ctx))
         api._ACTIVITY_LOG.clear()
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            on_external(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on")
-            on_external(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on")
+            on_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
+            on_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
             frozen.tick(api._ROLLUP_WINDOW)
-            on_external(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off")
+            on_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off", m.Source.EXTERNAL))
         assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
             ("`lamp a` switch: on → off", []),
             ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),

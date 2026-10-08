@@ -13,7 +13,8 @@ def setup(ctx: m.AppContext) -> None:
     ctx.api.add_external_listener(partial(_on_external, ctx))
 
 
-def _on_external(ctx: m.AppContext, device: m.Device, attribute: str, old: Any, new: Any) -> None:
+def _on_external(ctx: m.AppContext, status: m.Status) -> None:
+    device, attribute, old, new = status.device, status.attribute, status.old, status.new
     ctx.api.log(
         m.LogSource.EXTERNAL,
         Log.EXTERNAL_CHANGE.format(device=device.name, attribute=attribute, old=old, new=new),
