@@ -24,6 +24,7 @@ async function enroll(registration, greet) {
         const key = toBytes((await get("/api/push/key")).key);
         let subscription = await registration.pushManager.getSubscription();
         if (subscription && !sameKey(subscription, key)) {
+            await send("DELETE", { endpoint: subscription.endpoint });
             await subscription.unsubscribe();
             subscription = null;
         }
