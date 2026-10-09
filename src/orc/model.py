@@ -63,7 +63,7 @@ class PushSubscription(NamedTuple):
 
 class Notification(NamedTuple):
     tag: tuple[str, ...]
-    url: str = ""
+    url: str = "/log/"
 
 
 class Remote(NamedTuple):

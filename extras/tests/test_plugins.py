@@ -273,7 +273,7 @@ def test_empty_house_shuts_down_snapshots_and_pushes(sensor, plugin_ctx):
     plugin_ctx.api.run_action.assert_not_called()
     assert [c.action for c in entry.children] == [sensor.message.log_shutdown]
     plugin_ctx.api.log.assert_called_once_with(
-        plugins.Log.ENTRANCE, sensor.message.log_nobody, entry.trigger, notification=m.Notification(("entrance",))
+        plugins.Log.ENTRANCE, sensor.message.log_nobody, entry.trigger, notification=m.Notification(("entrance",), "/presence/")
     )
 
 

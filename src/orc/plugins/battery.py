@@ -25,5 +25,5 @@ def _on_event(ctx: m.AppContext, status: m.Status) -> None:
             m.LogSource.SYSTEM,
             msg,
             m.Broker(id=device.id, source=device.source),
-            notification=m.Notification(("battery", device.name)),
+            notification=m.Notification(("battery", device.name), "/device/"),
         )

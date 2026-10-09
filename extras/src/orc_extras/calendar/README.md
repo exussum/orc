@@ -61,4 +61,5 @@ Recurring events are expanded; all-day events are skipped.
 - The warning job plays the default alert sound at `ATTENTION` severity.
   The alarm job logs the title under the `calendar` source, speaks it at
   the same severity, and pushes a notification whose click opens the
-  event's Google Meet, Zoom or Teams link when one is found in the event.
+  event's Google Meet, Zoom or Teams link when one is found in the event,
+  and that day in Google Calendar otherwise.
