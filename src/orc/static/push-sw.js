@@ -1,3 +1,7 @@
+self.addEventListener("install", () => self.skipWaiting());
+
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+
 self.addEventListener("push", (event) => {
     const { title, body, tag, url } = event.data.json();
     const options = { body, tag, icon: "/static/icons/android-launchericon-192-192.png", data: { url } };
