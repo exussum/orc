@@ -1,6 +1,13 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import icalendar
 import pytest
 from orc_extras.calendar.plugins import link
+
+TZ = ZoneInfo("America/New_York")
+START = datetime(2026, 1, 6, 1, tzinfo=ZoneInfo("UTC"))
+DAY = "https://calendar.google.com/calendar/r/day/2026/01/05"
 
 
 def _event(**fields):
@@ -30,10 +37,10 @@ def _event(**fields):
             _event(x_microsoft_skypeteamsmeetingurl="https://teams.microsoft.com/l/meetup-join/2", description="https://aka.ms/x"),
             "https://teams.microsoft.com/l/meetup-join/2",
         ),
-        (_event(description="Agenda: https://docs.example/notes"), ""),
+        (_event(dtstart=START, description="Agenda: https://docs.example/notes"), DAY),
         (_event(description="https://[bad then https://zoom.us/j/5"), "https://zoom.us/j/5"),
-        (_event(description="No link here"), ""),
-        (_event(), ""),
+        (_event(dtstart=START, description="No link here"), DAY),
+        (_event(dtstart=START), DAY),
     ],
     ids=[
         "meet-first",
@@ -48,4 +55,4 @@ def _event(**fields):
     ],
 )
 def test_link_prefers_a_meeting_host(event, expected):
-    assert link(event) == expected
+    assert link(event, TZ) == expected

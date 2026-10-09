@@ -520,7 +520,7 @@ def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYS
     present, errors = net.scan_presence(pairs)
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
-        entry = log(source, msg, trigger, notification=m.Notification(("presence",)))
+        entry = log(source, msg, trigger, notification=m.Notification(("presence",), "/presence/"))
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
     mark_present(present, local_now(), trigger)
     return present_names()

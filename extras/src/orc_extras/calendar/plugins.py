@@ -34,7 +34,7 @@ class CalendarEvent:
             cal.summary.to_ical().decode("utf-8"),
             cal.start.astimezone(tz) + offset,
             type,
-            link(cal),
+            link(cal, tz),
         )
 
 
@@ -45,10 +45,12 @@ class CalendarJob:
     url: str
 
 
-def link(cal: Any) -> str:
+def link(cal: Any, tz: Any) -> str:
     hits = (_LINK.search(str(cal.get(field, ""))) for field in _LINK_FIELDS)
     found = next((hit for hit in hits if hit), None)
-    return found.group() if found else ""
+    if found:
+        return found.group()
+    return f"https://calendar.google.com/calendar/r/day/{cal.start.astimezone(tz):%Y/%m/%d}"
 
 
 def schedule_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:

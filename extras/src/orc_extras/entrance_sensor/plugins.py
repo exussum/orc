@@ -102,7 +102,9 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         ctx.api.override_scene(SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry)
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
         if not visit.present_before and not present:
-            ctx.api.log(Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification=m.Notification(("entrance",)))
+            ctx.api.log(
+                Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification=m.Notification(("entrance",), "/presence/")
+            )
 
 
 def battery_state(ctx: m.AppContext, sensor: SimpleNamespace) -> list[m.DeviceStatus]:
