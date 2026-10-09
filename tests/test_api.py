@@ -344,6 +344,12 @@ class TestLog:
             None,
         )
 
+    def test_a_link_rides_the_push_as_given(self):
+        notification = m.Notification(("calendar",), "https://meet.google.com/abc?x=1")
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
+            api.log(m.LogSource.PLUGIN, "standup", m.Integration("x"), notification=notification)
+        assert api._ctx.scheduler.now.call_args.args[3] == notification
+
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider):
         subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
         api.subscribe_push(subscriptions[0])

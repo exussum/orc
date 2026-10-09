@@ -48,6 +48,7 @@ class GunicornApp(BaseApplication):
 
 def flask() -> None:
     subprocess.run(["tailwindcss", "-i", "src/css/tailwind.src.css", "-o", "src/orc/static/tailwind.min.css", "--minify"], check=True)
+    subprocess.run([sys.executable, "scripts/build_mac.py"], check=True)
     boot = Boot()
     app = _build_app(boot)
     _start_services(app.orc, boot)

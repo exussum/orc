@@ -2,6 +2,7 @@ import { get } from "./orc.js";
 
 const enableButton = document.getElementById("orc-push-subscribe");
 const disableButton = document.getElementById("orc-push-unsubscribe");
+const meetDialog = document.getElementById("orc-meet-dialog");
 
 function toBytes(base64url) {
     const padded = base64url.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(base64url.length / 4) * 4, "=");
@@ -36,6 +37,7 @@ async function enroll(registration, greet) {
 async function subscribe() {
     if ((await Notification.requestPermission()) !== "granted") return;
     await enroll(await navigator.serviceWorker.register("/static/push-sw.js"), true);
+    if (navigator.userAgent.includes("Macintosh")) meetDialog.showModal();
 }
 
 async function unsubscribe() {

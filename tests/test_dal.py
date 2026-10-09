@@ -1,3 +1,4 @@
+import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -56,6 +57,11 @@ class TestWebPush:
         with patch("orc.dal.push.webpush.webpush", side_effect=WebPushException("gone", response=response)):
             with pytest.raises(push.Gone):
                 webpush.send(SUBSCRIPTION, "[Plugin 01/05]", "hi", m.Notification(("leak",)))
+
+    def test_the_payload_carries_the_link_as_given(self):
+        with patch("orc.dal.push.webpush.webpush") as send:
+            webpush.send(SUBSCRIPTION, "[Calendar 01/05]", "standup", m.Notification(("calendar",), "https://meet.google.com/abc?x=1"))
+        assert json.loads(send.call_args.kwargs["data"])["url"] == "https://meet.google.com/abc?x=1"
 
 
 _HOLIDAYS = [

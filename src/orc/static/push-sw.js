@@ -6,6 +6,8 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();
-    const url = event.notification.data.url || "/log/";
-    event.waitUntil(self.clients.openWindow(url).catch(() => self.clients.openWindow("/log/")));
+    const link = event.notification.data.url;
+    const mac = /Macintosh/.test(navigator.userAgent) && link.startsWith("https://meet.google.com/");
+    const url = !link ? "/log/" : mac ? `/api/push/open?url=${encodeURIComponent(link)}` : link;
+    event.waitUntil(self.clients.openWindow(url).catch((error) => self.clients.openWindow(`/log/?link=${encodeURIComponent(url)}&error=${encodeURIComponent(error.message)}`)));
 });
