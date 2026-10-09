@@ -1,17 +1,20 @@
 import re
+import sys
 from dataclasses import replace
 from datetime import date, datetime, timedelta
 from functools import cache
 from itertools import chain, groupby
 from pathlib import Path
 from typing import Any, NamedTuple, cast
+from urllib.parse import urlsplit, urlunsplit
 
 from apscheduler.job import Job
-from flask import Blueprint, Flask, abort, render_template, request
+from flask import Blueprint, Flask, abort, redirect, render_template, request
 from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
 from werkzeug.exceptions import HTTPException
+from werkzeug.wrappers import Response as BaseResponse
 
 from orc import alerts, api, config
 from orc import model as m
@@ -133,6 +136,7 @@ def cfg() -> str:
         device_plugins=device_plugins,
         registry=config.registry,
         scheduled_jobs=app.orc.scheduler.stores(),
+        base_url=config.settings.base_url or request.url_root.rstrip("/"),
     )
 
 
@@ -343,6 +347,22 @@ def push_subscribe() -> dict[str, Any]:
         subscription = m.PushSubscription(body["endpoint"], body["keys"]["p256dh"], body["keys"]["auth"])
         api.subscribe_push(subscription, greet=bool(body.get("greet")))
     return {}
+
+
+_LINK_HOSTS = ("meet.google.com", "zoom.us", "teams.microsoft.com")
+
+
+@bp.route("/api/push/open")
+def push_open() -> BaseResponse:
+    url = request.args.get("url", "")  # nosemgrep: python.flask.security.open-redirect.open-redirect
+    print(f"push open: {request.remote_addr} {request.user_agent.string} {url}", file=sys.stderr, flush=True)
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if not any(host == h or host.endswith(f".{h}") for h in _LINK_HOSTS):
+        abort(400)
+    if host == "meet.google.com" and "Macintosh" in request.user_agent.string:
+        return redirect(urlunsplit(("orc-chrome", "meet.google.com", parts.path, parts.query, parts.fragment)))
+    return redirect(url)
 
 
 @bp.route("/api/durations")

@@ -303,3 +303,46 @@ def test_system_page_lists_each_light(client):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert all(f">{light.name}</td>" in html for light in config.devices.Light)
+
+
+# --- /api/push/open ---
+
+MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
+ANDROID = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/128.0 Mobile Safari/537.36"}
+
+
+def test_push_open_from_a_mac_hands_a_meet_link_to_chrome(client):
+    response = client.get("/api/push/open", query_string={"url": "https://meet.google.com/abc?x=1"}, headers=MAC)
+    assert response.status_code == 302
+    assert response.headers["Location"] == "orc-chrome://meet.google.com/abc?x=1"
+
+
+def test_push_open_elsewhere_redirects_to_the_meet_link(client):
+    response = client.get("/api/push/open", query_string={"url": "https://meet.google.com/abc"}, headers=ANDROID)
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://meet.google.com/abc"
+
+
+@pytest.mark.parametrize("url", ["https://us02web.zoom.us/j/123", "https://teams.microsoft.com/l/meetup-join/abc"])
+@pytest.mark.parametrize("headers", [MAC, ANDROID])
+def test_push_open_redirects_zoom_and_teams_everywhere(client, url, headers):
+    response = client.get("/api/push/open", query_string={"url": url}, headers=headers)
+    assert response.status_code == 302
+    assert response.headers["Location"] == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "",
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "https://evil.example/",
+        "https://meet.google.com.evil.example/abc",
+        "https://evilzoom.us/j/1",
+        "https://evil.example/?u=https://meet.google.com/abc",
+    ],
+)
+def test_push_open_rejects_anything_but_meeting_links(client, url):
+    response = client.get("/api/push/open", query_string={"url": url}, headers=MAC)
+    assert response.status_code == 400

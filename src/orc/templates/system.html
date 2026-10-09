@@ -29,6 +29,15 @@
                     </button>
                 </div>
             </div>
+            <dialog id="orc-meet-dialog" class="orc-dialog w-96">
+                <form method="dialog" class="flex flex-col gap-3">
+                    <p>To open Google Meet links from a push in Chrome, run this once in Terminal:</p>
+                    <code>curl -fsSL {{ base_url }}/static/meet-in-chrome.sh | sh</code>
+                    <div class="flex justify-end">
+                        <button class="orc-btn" value="ok">OK</button>
+                    </div>
+                </form>
+            </dialog>
         </div>
         <div class="orc-card mb-2">
             <details>
