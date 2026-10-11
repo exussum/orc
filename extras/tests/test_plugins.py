@@ -94,7 +94,7 @@ def _cleanup(config_sensor, nobody_home_ctx, present_before=()):
 def _trigger_sensor(ctx, config_sensor, device_id, event):
     old = "inactive" if event == "active" else "active"
     name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
-    plugins._on_sensor_event(
+    plugins._on_event(
         ctx, config_sensor, m.Status(m.Device(device_id, name, "hubitat"), "motion", old, event, hubitat.HubitatSource.HUBITAT)
     )
     queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
