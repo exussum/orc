@@ -117,4 +117,4 @@ def setup(ctx: AppContext) -> None:
     if ctx.config.ble_tags and sensor.setting.cleanup_delay_minutes < MIN_BLE_CLEANUP_MINUTES:
         raise ValueError(f"cleanup_delay_minutes {sensor.setting.cleanup_delay_minutes} — BLE tags need at least {MIN_BLE_CLEANUP_MINUTES}")
     ctx.plugin_state[orc_extras.entrance_sensor] = None
-    ctx.api.add_listener(partial(plugins._on_sensor_event, ctx, sensor))
+    ctx.api.add_listener(partial(plugins._on_event, ctx, sensor))
