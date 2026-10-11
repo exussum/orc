@@ -33,7 +33,7 @@
 {% endmacro %}
 
 {% macro headed_table(title, heading_class="font-semibold mb-1", wrapper_class="mb-3 overflow-x-auto") %}
-<div class="{{ heading_class }}">{{ title }}</div>
+{% if title %}<div class="{{ heading_class }}">{{ title }}</div>{% endif %}
 <div class="{{ wrapper_class }}">
     <table class="text-left">
         {{ caller() }}
@@ -42,12 +42,12 @@
 {% endmacro %}
 
 {% macro status_list(title, rows) %}
-<div class="font-semibold mb-1">{{ title }}</div>
-<ul class="list-disc list-inside mb-3">
+{% if title %}<div class="font-semibold mb-1">{{ title }}</div>{% endif %}
+<ul class="list-disc pl-5 mb-3">
     {% for row in rows %}
         <li>
             {{ row.name }}
-            <ul class="list-disc list-inside ml-4">
+            <ul class="list-disc pl-5">
                 {% for k, v in row.details.items() %}
                     <li>{{ k }}: {{ v if v is not none else '—' }}</li>
                 {% endfor %}

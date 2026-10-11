@@ -13,7 +13,7 @@ battery, weak signal, going offline) is an `ATTENTION` alert.
    target.
 3. Add the plugin line:
    `plugin 'Test Leak Sensor' orc_extras.yolink test_sensor --section device --backend orc_extras.yolink.dal.yosmart`.
-4. Restart orc. The state page gains a **Leak Sensors** section with each
+4. Restart orc. The state page gains a **YoLink Sensor** section with each
    sensor's state, battery, signal, report interval and last change.
 
 ## Devices
@@ -43,7 +43,7 @@ The label is the name used in every log line and notification. With no
 - Notifications carry the tag `leak:<name>` for water and `yolink:<name>`
   for the rest, so a phone shows one current line per sensor and the dry
   line replaces the wet one.
-- Pressing a sensor's row in **Leak Sensors** runs the full wet path for
+- Pressing a sensor's row in **YoLink Sensor** runs the full wet path for
   that sensor and clears it five seconds later: a drill for the alert
   devices. `--backend orc_extras.yolink.dal.stub` leaves the cloud out for
   a dev server.

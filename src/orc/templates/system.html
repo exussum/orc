@@ -45,44 +45,56 @@
                     Devices
                 </summary>
                 <div class="p-4">
-                    {% call headed_table("Lights") %}
+                    <details>
+                        <summary class="orc-accordion-summary">Lights</summary>
+                        {% call headed_table("", wrapper_class="mb-3 px-4 overflow-x-auto") %}
                             <tr>
                                 <th class="orc-th">Name</th>
                                 <th class="orc-th">State</th>
-                                <th class="orc-th">Failed</th>
                                 <th class="orc-th">OK</th>
                                 <th class="orc-th">Retried</th>
+                                <th class="orc-th">Failed</th>
                             </tr>
                             {% for c in lights %}
                                 {% set s = retry_stats.get(c.subject.one().value) %}
                                 <tr>
                                     <td class="orc-td">{{ c.subject.one().name }}</td>
                                     <td class="orc-td">{{ c.value }}</td>
-                                    <td class="orc-td">{{ s.failed if s else '—' }}</td>
                                     <td class="orc-td">{{ s.clean if s else '—' }}</td>
                                     <td class="orc-td">{{ s.retried if s else '—' }}</td>
+                                    <td class="orc-td">{{ s.failed if s else '—' }}</td>
                                 </tr>
                             {% endfor %}
-                    {% endcall %}
-                    {% call headed_table("Sounds") %}
+                        {% endcall %}
+                    </details>
+                    <details>
+                        <summary class="orc-accordion-summary">Sounds</summary>
+                        {% call headed_table("", wrapper_class="mb-3 px-4 overflow-x-auto") %}
                             <tr>
                                 <th class="orc-th">Name</th>
                                 <th class="orc-th">Status</th>
-                                <th class="orc-th">Content</th>
                                 <th class="orc-th">Volume</th>
+                                <th class="orc-th">Content</th>
                             </tr>
                             {% for c in sounds %}
                                 <tr>
                                     <td class="orc-td">{{ c.what.name }}</td>
                                     <td class="orc-td">{{ c.playback.value }}</td>
-                                    <td class="orc-td">{{ c.content or '—' }}</td>
                                     <td class="orc-td">{{ c.volume }}%</td>
+                                    <td class="orc-td">{{ c.content or '—' }}</td>
                                 </tr>
                             {% endfor %}
-                    {% endcall %}
-                    {{ status_list("Sensors", sensors) }}
+                        {% endcall %}
+                    </details>
+                    <details>
+                        <summary class="orc-accordion-summary">Sensors</summary>
+                        <div class="px-4">{{ status_list("", sensors) }}</div>
+                    </details>
                     {% for title, rows in plugin_states %}
-                        {{ status_list(title, rows) }}
+                        <details>
+                            <summary class="orc-accordion-summary">{{ title }}</summary>
+                            <div class="px-4">{{ status_list("", rows) }}</div>
+                        </details>
                     {% endfor %}
                 </div>
             </details>
@@ -93,46 +105,53 @@
                     Internals
                 </summary>
                 <div class="p-4">
-                <div class="font-semibold mb-1">Status</div>
-                <ul class="list-disc list-inside">
-                    <li>Snapshot State:
-                        {% if ctx.engine.snapshots() %}
-                            <ul class="list-disc list-inside ml-4">
-                                {% for name, snap in ctx.engine.snapshots().items() %}
-                                    <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
-                                        <ul class="list-disc list-inside ml-4">
-                                            {% for c in snap.routine if c.value != "off" %}
-                                                <li>{{ c.subject.one().name }}={{ c.value }}</li>
-                                            {% else %}
-                                                <li>all off</li>
-                                            {% endfor %}
-                                        </ul>
-                                    </li>
+                <details>
+                    <summary class="orc-accordion-summary">Status</summary>
+                    <div class="px-4">
+                        <ul class="list-disc pl-5 mb-3">
+                            <li>Snapshot State:
+                                {% if ctx.engine.snapshots() %}
+                                    <ul class="list-disc pl-5">
+                                        {% for name, snap in ctx.engine.snapshots().items() %}
+                                            <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
+                                                <ul class="list-disc pl-5">
+                                                    {% for c in snap.routine if c.value != "off" %}
+                                                        <li>{{ c.subject.one().name }}={{ c.value }}</li>
+                                                    {% else %}
+                                                        <li>all off</li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    None
+                                {% endif %}
+                            </li>
+                            <li>Theme Override: {{ theme_override }}</li>
+                            <li>Today's theme: {{ today_theme }}</li>
+                            <li>Tomorrow's theme: {{ tomorrow_theme }}</li>
+                        </ul>
+                    </div>
+                </details>
+                <details>
+                    <summary class="orc-accordion-summary">Scheduled Jobs</summary>
+                    {% call headed_table("", wrapper_class="mb-3 px-4 overflow-x-auto") %}
+                            <tr>
+                                <th class="orc-th">Name</th>
+                                <th class="orc-th">Next Run</th>
+                            </tr>
+                            {% for store, jobs in scheduled_jobs %}
+                                <tr><td class="orc-td font-semibold" colspan="2">{{ store }}</td></tr>
+                                {% for job in jobs %}
+                                    <tr>
+                                        <td class="orc-td">{{ job.name }}</td>
+                                        <td class="orc-td">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else 'paused' }}</td>
+                                    </tr>
                                 {% endfor %}
-                            </ul>
-                        {% else %}
-                            None
-                        {% endif %}
-                    </li>
-                    <li>Theme Override: {{ theme_override }}</li>
-                    <li>Today's theme: {{ today_theme }}</li>
-                    <li>Tomorrow's theme: {{ tomorrow_theme }}</li>
-                </ul>
-                {% call headed_table("Scheduled Jobs", heading_class="font-semibold mt-3 mb-1", wrapper_class="overflow-x-auto") %}
-                        <tr>
-                            <th class="orc-th">Name</th>
-                            <th class="orc-th">Next Run</th>
-                        </tr>
-                        {% for store, jobs in scheduled_jobs %}
-                            <tr><td class="orc-td font-semibold" colspan="2">{{ store }}</td></tr>
-                            {% for job in jobs %}
-                                <tr>
-                                    <td class="orc-td">{{ job.name }}</td>
-                                    <td class="orc-td">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else 'paused' }}</td>
-                                </tr>
                             {% endfor %}
-                        {% endfor %}
-                {% endcall %}
+                    {% endcall %}
+                </details>
                 </div>
             </details>
         </div>
