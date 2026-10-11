@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 from gunicorn.app.base import BaseApplication
 
@@ -145,8 +145,7 @@ def _build_flask(ctx: m.AppContext) -> OrcFlask:
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
     app.orc = ctx
-    internal_host = urlparse(config.config.settings.base_url).hostname if config.config.settings.base_url else None
-    app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME, internal_host=internal_host)
+    app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
     for plugin, namespace, plugin_bp in config.config.registry.blueprints:
         app.register_blueprint(plugin_bp, url_prefix=f"/api/{plugin}/{namespace}")

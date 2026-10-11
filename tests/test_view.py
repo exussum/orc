@@ -49,6 +49,16 @@ def _fake_job(name="job", next_run_time=True):
     return job
 
 
+@pytest.mark.parametrize(
+    ("host", "title"),
+    [("orc.internal.example", "Orc"), ("orc.internal.example:8000", "Orc"), ("orc.example", "Orc Remote")],
+    ids=["internal", "internal-port", "remote"],
+)
+def test_manifest_titles_the_remote_host(client, host, title):
+    manifest = client.get("/manifest.json", headers={"Host": host}).json
+    assert (manifest["name"], manifest["short_name"]) == (title, title)
+
+
 # --- /api/run: 4-way branch ---
 
 

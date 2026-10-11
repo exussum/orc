@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 from dataclasses import replace
@@ -6,7 +7,7 @@ from functools import cache
 from itertools import chain, groupby
 from pathlib import Path
 from typing import Any, NamedTuple, cast
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 from apscheduler.job import Job
 from flask import Blueprint, Flask, abort, redirect, render_template, request
@@ -82,6 +83,25 @@ def http_error(exc: HTTPException) -> tuple[dict[str, str], int]:
 def cache_control(response: Response) -> Response:
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@bp.app_context_processor
+def app_name() -> dict[str, str]:
+    return {"app_name": _app_name()}
+
+
+@bp.route("/manifest.json")
+def manifest() -> dict[str, Any]:
+    title = _app_name()
+    return {**_MANIFEST, "name": title, "short_name": title}
+
+
+_MANIFEST = json.loads((Path(__file__).parent / "static" / "manifest.json").read_text())
+
+
+def _app_name() -> str:
+    internal = urlparse(config.settings.base_url).hostname if config.settings.base_url else None
+    return "Orc Remote" if internal and request.host.split(":")[0] != internal else "Orc"
 
 
 @cache
