@@ -273,6 +273,12 @@ def test_capture_sensors_lists_sensors_missing_from_the_cache():
     assert api.capture_sensors() == [m.DeviceStatus(name=orc.Sensor.living.name, details={})]
 
 
+def test_device_command_failure_nests_under_the_entry(entry):
+    with patch.object(mqtt, "command", side_effect=RuntimeError("boom")):
+        assert api.device_command(orc.Light.a.name, m.ON, entry)
+    assert entry.children[-1].action == "Dispatch failed for `a`: boom"
+
+
 def test_dispatch_usb_speaks_state_error(entry):
     from orc.dal.audio import stub as audio_stub
 
