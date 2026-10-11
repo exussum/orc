@@ -305,26 +305,6 @@ def test_door_state_drives_cleanup(sensor, plugin_ctx, contact, expected):
     assert [c.action for c in entry.children] == [getattr(sensor.message, expected)]
 
 
-def _device(id="16", name="front door motion sensor", battery="100", attributes=None):
-    return m.DeviceState(m.Device(id, name, "hubitat"), attributes or {"battery": battery}, None)
-
-
-def test_battery_state_reads_the_device_cache(plugin_ctx, sensor):
-    _seed_devices(plugin_ctx, _device(battery="80"))
-    assert plugins.battery_state(plugin_ctx, sensor) == [
-        m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None}),
-        m.DeviceStatus(name="patio", details={"battery": None, "last_activity": None}),
-    ]
-
-
-def test_battery_state_lists_sensors_missing_from_the_cache(plugin_ctx, sensor):
-    _seed_devices(plugin_ctx)
-    assert plugins.battery_state(plugin_ctx, sensor) == [
-        m.DeviceStatus(name="entrance", details={"battery": None, "last_activity": None}),
-        m.DeviceStatus(name="patio", details={"battery": None, "last_activity": None}),
-    ]
-
-
 def test_setup_compiles_windows_and_registers_hooks(plugin_ctx, raw_sensor):
     raw_sensor.rules = {trigger: [name] for trigger, name in raw_sensor.rules._asdict().items()}
     plugin_ctx.config.people = {"rex": []}
@@ -336,13 +316,6 @@ def test_setup_compiles_windows_and_registers_hooks(plugin_ctx, raw_sensor):
         _window("Night", time(22), time(8), _cmd(Light.night_bulb, 1), _cmd(Chromecast.cc, m.STOP)),
     )
     plugin_ctx.api.add_listener.assert_called_once()
-    title, provider = plugin_ctx.api.add_state_provider.call_args[0]
-    assert title == "Entrance Sensors"
-    _seed_devices(plugin_ctx, _device(battery="80"))
-    assert provider() == [
-        m.DeviceStatus(name="front door motion sensor", details={"battery": "HIGH", "last_activity": None}),
-        m.DeviceStatus(name="patio", details={"battery": None, "last_activity": None}),
-    ]
 
 
 def test_cleanup_checks_presence_then_resumes(sensor, plugin_ctx):

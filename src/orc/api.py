@@ -221,7 +221,7 @@ def capture_sensors() -> list[m.DeviceStatus]:
     return [
         m.DeviceStatus(
             name=found[sensor.value].device.name if sensor.value in found else sensor.label or sensor.name,
-            details=found[sensor.value].attributes if sensor.value in found else {},
+            details={**found[sensor.value].attributes, "last_activity": found[sensor.value].last_activity} if sensor.value in found else {},
         )
         for sensor in config.devices.Sensor
     ]

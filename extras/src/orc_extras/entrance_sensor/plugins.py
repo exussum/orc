@@ -107,23 +107,6 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
             )
 
 
-def battery_state(ctx: m.AppContext, sensor: SimpleNamespace) -> list[m.DeviceStatus]:
-    devices = ctx.api.device_states()
-    statuses = [
-        m.DeviceStatus(
-            name=d.device.name if d else (member.label or member.name),
-            details={
-                "battery": m.BatteryLevel.from_fraction(battery, 100).value if battery is not None else None,
-                "last_activity": d.last_activity if d else None,
-            },
-        )
-        for member in (sensor.setting.entrance, sensor.setting.patio_door)
-        for d in (_sensor(devices, member.value),)
-        for battery in (d.attributes.get("battery") if d else None,)
-    ]
-    return sorted(statuses, key=lambda status: status.name)
-
-
 def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:
     # An open entrance door means someone is around even if presence hasn't seen them.
     # A door never seen over MQTT reads as closed, falling back to the presence-only

@@ -262,9 +262,11 @@ def test_capture_lights_lists_every_light(attributes, expected):
 
 
 def test_capture_sensors_reads_the_device_cache():
-    device = m.DeviceState(m.Device(orc.Sensor.living.value, "living room sensor", "hubitat"), {"temperature": 70}, None)
+    device = m.DeviceState(m.Device(orc.Sensor.living.value, "living room sensor", "hubitat"), {"temperature": 70}, "2026-01-05 12:00:00")
     with patch.object(mqtt, "snapshot", return_value=[device]):
-        assert api.capture_sensors() == [m.DeviceStatus(name="living room sensor", details={"temperature": 70})]
+        assert api.capture_sensors() == [
+            m.DeviceStatus(name="living room sensor", details={"temperature": 70, "last_activity": "2026-01-05 12:00:00"})
+        ]
 
 
 def test_capture_sensors_lists_sensors_missing_from_the_cache():
