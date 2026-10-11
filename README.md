@@ -324,9 +324,11 @@ works. A real installation's config names the real backends instead
 `hubitat`, `adapter`, `chromecast`, `audio`, and `push` default to their real
 backend when the `provider` line is omitted entirely, so a production config
 only needs to name `weather`, `holiday`, and `blaster` explicitly. An
-explicit `provider` line, stub or real, always overrides the default. The
-MQTT broker connection itself is not a provider: it is always
-`orc.dal.mqtt.paho`, and tests patch its functions directly.
+explicit `provider` line, stub or real, always overrides the default. A
+house with no hub names `provider adapter orc.dal.mqtt.none`: it claims no
+devices, so every `Light`, `Button` and `Sensor` is virtual and dispatch
+skips them. The MQTT broker connection itself is not a provider: it is
+always `orc.dal.mqtt.paho`, and tests patch its functions directly.
 
 You'll need:
 
