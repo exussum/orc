@@ -11,8 +11,7 @@ now empty, and runs the matching routine.
    `config.orc`, and the ad hoc routines the plugin will run.
 2. Add `plugin 'Entrance Sensor' orc_extras.entrance_sensor` to `config.orc`.
 3. Create `plugins/orc_extras/entrance_sensor.orc` (below).
-4. Restart orc. The state page gains an **Entrance Sensors** section with
-   both sensors' battery and last activity.
+4. Restart orc.
 
 ## Grammar
 
