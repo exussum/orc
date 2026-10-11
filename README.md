@@ -91,7 +91,7 @@ Two config surfaces:
    and weather providers. One command per
    line with shell-style quoting and `#` comments; a `.` repeats the token in
    the same position on the line above. The grammar lives in
-   `orc.loader.GRAMMAR` and is parsed by the `command-cfg` package:
+   `orc.kernel.loader.GRAMMAR` and is parsed by the `command-cfg` package:
 
    ```
    setting base_url http://orc.internal.example

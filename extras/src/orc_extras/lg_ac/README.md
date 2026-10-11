@@ -46,8 +46,9 @@ setting <key> <value>
 | `mqtts_advertise` | The broker's TLS port the AC is told to connect to.                                               |
 | `capture`         | Buffer recent wire frames in memory for `/api/lg_ac/enroll/capture`; only for calibration.        |
 
-Every key is required. Startup refuses an `fqdn` still ending in
-`.example`, and so does `gen_certs`.
+Every key except `capture`, which defaults to `False`, is required.
+Startup refuses an `fqdn` still ending in `.example`, and so does
+`gen_certs`.
 
 ## Example
 
@@ -78,7 +79,8 @@ without ever writing them out.
 | `LG_THINQ_CA_KEY`  | `ca.key` | CA private key | signs each AC's enrollment certificate.                                   |
 
 The server pair, `server-ca.crt` and `server-ca.key`, is not a secret orc
-reads. Install it on disk for the two services that present it to the AC:
+reads. Install it on disk as `/etc/orc/lg_ac/server.crt` and
+`/etc/orc/lg_ac/server.key` for the two services that present it to the AC:
 
 - the broker's TLS listener on `mqtts_advertise` ([The broker](#the-broker));
 - the nginx `:443` server block for enrollment ([DNS + nginx](#dns--nginx)).
@@ -90,14 +92,16 @@ The plugin is an adapter on orc's single MQTT connection, the broker that
 answers on `lime/` topics through that connection. The same broker needs a
 TLS listener for the AC on `mqtts_advertise` presenting the server cert.
 The AC sends no username or password and speaks MQTT 3.1; it offers its
-enrollment certificate as a client cert. With mosquitto:
+enrollment certificate as a client cert. The plain `1883` listener binds
+every interface so the Hubitat MQTT export can reach the broker too. With
+mosquitto:
 
 ```
-listener 1883 127.0.0.1
+listener 1883 0.0.0.0
 
 listener 8883 0.0.0.0
-certfile /etc/mosquitto/certs/lg_ac.crt
-keyfile /etc/mosquitto/certs/lg_ac.key
+certfile /etc/orc/lg_ac/server.crt
+keyfile /etc/orc/lg_ac/server.key
 
 allow_anonymous true
 ```
@@ -114,8 +118,8 @@ cert and rewrites the three paths:
 server {
     listen 443 ssl;
     server_name common.lgthinq.com;
-    ssl_certificate     certs/lg_ac/server-ca.crt;
-    ssl_certificate_key certs/lg_ac/server-ca.key;
+    ssl_certificate     /etc/orc/lg_ac/server.crt;
+    ssl_certificate_key /etc/orc/lg_ac/server.key;
     location = /route                     { proxy_pass http://127.0.0.1:8000/api/lg_ac/enroll/route; }
     location = /route/certificate         { proxy_pass http://127.0.0.1:8000/api/lg_ac/enroll/route/certificate$is_args$args; }
     location ~ ^/device/(.+)/certificate$ { proxy_pass http://127.0.0.1:8000/api/lg_ac/enroll/device/$1/certificate; }
