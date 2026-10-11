@@ -1,30 +1,23 @@
-from pathlib import Path
-
 import example
 import pytest
 from example import model as m
 from orc_engine import cast
 
 from orc.kernel.declarations import Declarations
-
-FIXTURE = Path(__file__).parent / "fixture"
-
-
-def _setup_runtime(ctx):
-    ctx.plugin_state = {}
-    ctx.config.plugin_configs = {example.CONFIG: (FIXTURE / "example.orc").read_text()}
-    example.setup(ctx)
-    return ctx.plugin_state[example]
+from tests.conftest import plugin_config
 
 
 def test_example_declares_its_configured_keys():
-    builder = Declarations(plugin_configs={example.CONFIG: (FIXTURE / "example.orc").read_text()})
+    builder = Declarations(plugin_configs=plugin_config(example, "example"))
     example.declare(builder)
     assert builder.secrets == {"FOO_KEY": cast.nonblank, "BAR_KEY": cast.nonblank}
 
 
 def test_example_config_loads(ctx):
-    rt = _setup_runtime(ctx)
+    ctx.plugin_state = {}
+    ctx.config.plugin_configs = plugin_config(example, "example")
+    example.setup(ctx)
+    rt = ctx.plugin_state[example]
     assert rt.settings == m.Settings(
         foo_backend="example.dal.foo.stub",
         bar_backend="example.dal.bar.stub",

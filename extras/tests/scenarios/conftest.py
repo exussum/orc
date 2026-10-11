@@ -84,6 +84,17 @@ class House:
     def entrance_sensor(self, event):
         self.report(orc.Sensor.ENTRANCE_SENSOR, "motion", event)
 
+    def walk_in(self, **after):
+        self.entrance_sensor("active")
+        self.tick(seconds=30)
+        self.entrance_sensor("inactive")
+        self.tick(**(after or {"minutes": 2}))
+
+    def come_home(self, name):
+        self.lan.clear()
+        self.advertise(name)
+        self.tick(hours=1)
+
     def advertise(self, name):
         now = api.local_now()
         key = config.ble_tags.setdefault(name, m.BleKey(name.encode().ljust(32, b"\0"), int(now.timestamp()) - 5000))

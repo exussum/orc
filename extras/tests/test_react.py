@@ -1,12 +1,9 @@
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from datetime import UTC, timedelta
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
 
 import pytest
 from command_cfg import ConfigError
 from flask import Flask
-from freezegun import freeze_time
 from orc_engine import engine
 from orc_engine import model as em
 from orc_extras import react
@@ -17,10 +14,7 @@ from orc import api
 from orc import model as m
 from orc.dal.mqtt import hubitat
 from orc.model import DeviceEnum
-
-FIXTURE = Path(__file__).parent / "fixture"
-_UTC = ZoneInfo("UTC")
-_NOW = datetime(2024, 1, 1, 15, tzinfo=_UTC)
+from tests.conftest import NOW, plugin_config
 
 
 class Light(DeviceEnum):
@@ -40,13 +34,7 @@ class Sensor(DeviceEnum):
     living = "5"
 
 
-@pytest.fixture(autouse=True)
-def _device_enums(monkeypatch):
-    from orc.kernel import declarations
-
-    monkeypatch.setattr(
-        orc.config, "registry", declarations.Declarations().build({"Light": Light, "AC": Ac, "Chromecast": Chromecast, "Sensor": Sensor})
-    )
+DEVICE_ENUMS = {"Light": Light, "AC": Ac, "Chromecast": Chromecast, "Sensor": Sensor}
 
 
 def _world_read(mock):
@@ -63,29 +51,19 @@ def _world_read(mock):
 
 
 @pytest.fixture
-def frozen():
-    with freeze_time(_NOW) as frozen:
-        yield frozen
-
-
-@pytest.fixture
-def ctx(ctx, frozen, monkeypatch):
-    monkeypatch.setattr(orc.config, "settings", orc.config.settings._replace(tz=_UTC))
-    ctx.frozen = frozen
+def ctx(ctx, freezegun_clock):
     ctx.engine = engine.Runtime(UTC)
-    ctx.api.local_now = api.local_now
     ctx.api.reader.return_value = _world_read(ctx)
     ctx.api.squish.side_effect = lambda commands, entry: m.squish(commands)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState(power=m.OFF)),)
-    ctx.config.settings.tz = _UTC
     ctx.config.registry = orc.config.registry
     ctx.plugin_state = {react: model.State((), {}, {}, {"dewpoint": api.dewpoint})}
     return ctx
 
 
 @pytest.fixture
-def configured(ctx):
-    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react.orc").read_text()}
+def react_rules(ctx):
+    ctx.config.plugin_configs = plugin_config(react, "react")
     rules = react.setup(ctx)
     ctx.sources = ctx.api.add_listener.call_args.args[0].args[1]
     return rules
@@ -116,20 +94,22 @@ def ruleset(ctx):
 
 
 @pytest.fixture
-def switch_report(ctx):
-    def switch_report(device_id, old, new):
-        state = m.DeviceState(m.Device(device_id, "lamp", "hubitat"), {"switch": new}, None)
+def device_report(ctx):
+    def device_report(device_id, attributes, old=None):
+        name = next((e.name for cls in DEVICE_ENUMS.values() for e in cls if e.value == device_id), device_id)
+        state = m.DeviceState(m.Device(device_id, name, "hubitat"), attributes, None)
         known = ctx.api.device_states.return_value
         others = [s for s in known if s.device.id != device_id] if isinstance(known, list) else []
         ctx.api.device_states.return_value = [*others, state]
-        plugins._on_event(ctx, ctx.sources, m.Status(state.device, "switch", old, new, hubitat.HubitatSource.HUBITAT))
+        attribute = next(iter(attributes))
+        plugins._on_event(ctx, ctx.sources, m.Status(state.device, attribute, old, attributes[attribute], hubitat.HubitatSource.HUBITAT))
 
-    return switch_report
+    return device_report
 
 
 @pytest.fixture
-def pending(ctx, configured, switch_report):
-    switch_report("1", m.OFF, m.ON)  # rule 0 has --delay, so it goes pending
+def pending_jobs(ctx, react_rules, device_report):
+    device_report("1", {"switch": m.ON}, m.OFF)  # rule 0 has --delay, so it goes pending
     ctx.scheduler.reset_mock()
 
 
@@ -162,8 +142,8 @@ def deferred_run(ctx):
 
 # The fixture's first line (`react Light ...`) fans out to lamp + desk, so the
 # compiled rules are: 0 lamp/on, 1 desk/on, 2..7 the single-device lines 2..7.
-def test_config_compiles_rules(ctx, configured):
-    rules = configured
+def test_config_compiles_rules(ctx, react_rules):
+    rules = react_rules
     assert len(rules) == 8  # line 1 fans out to lamp + desk; lines 2..7 are single-device
     assert rules[0].condition == model.Transition(model.MqttDeviceSubject(Light.lamp, "switch"), m.ON)
     assert rules[1].condition == model.Transition(model.MqttDeviceSubject(Light.desk, "switch"), m.ON)
@@ -172,57 +152,57 @@ def test_config_compiles_rules(ctx, configured):
     assert ctx.api.add_listener.call_args.args[0].args[1] == {"1": Light.lamp, "2": Light.desk, "5": Sensor.living}
 
 
-def test_switch_on_schedules_reaction(ctx, configured, switch_report):
-    switch_report("1", m.OFF, m.ON)
+def test_switch_on_schedules_reaction(ctx, react_rules, device_report):
+    device_report("1", {"switch": m.ON}, m.OFF)
     call = ctx.scheduler.once.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"].startswith("react-")
     assert _payload(call)[1] == m.Device("1", "lamp", "hubitat")
 
 
-def test_switch_already_on_schedules_nothing(ctx, configured, switch_report):
-    switch_report("1", m.ON, m.ON)
+def test_switch_already_on_schedules_nothing(ctx, react_rules, device_report):
+    device_report("1", {"switch": m.ON}, m.ON)
     ctx.scheduler.once.assert_not_called()
 
 
-def test_switch_off_cancels_pending_jobs(ctx, pending, switch_report):
-    switch_report("1", m.ON, m.OFF)  # reverse edge cancels the pending
+def test_switch_off_cancels_pending_jobs(ctx, pending_jobs, device_report):
+    device_report("1", {"switch": m.OFF}, m.ON)  # reverse edge cancels the pending
     assert ctx.scheduler.cancel.called
 
 
-def test_sleeping_rule_schedules_nothing(ctx, configured, switch_report):
+def test_sleeping_rule_schedules_nothing(ctx, react_rules, device_report):
     plugins.sleep(ctx, "Lights off")
-    switch_report("1", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
     ctx.scheduler.once.assert_not_called()
 
 
-def test_sleep_cancels_a_pending_job(ctx, pending):
+def test_sleep_cancels_a_pending_job(ctx, pending_jobs):
     plugins.sleep(ctx, "Lights off")
     assert ctx.scheduler.cancel.called
 
 
-def test_unwatched_device_is_ignored(ctx, configured, switch_report):
-    switch_report("99", m.OFF, m.ON)
+def test_unwatched_device_is_ignored(ctx, react_rules, device_report):
+    device_report("99", {"switch": m.ON}, m.OFF)
     ctx.scheduler.once.assert_not_called()
     ctx.api.dispatch.assert_not_called()
 
 
-def test_run_react_dispatches_the_action(ctx, ruleset, dispatches, deferred_run, switch_report):
+def test_run_react_dispatches_the_action(ctx, ruleset, dispatches, deferred_run, device_report):
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10), {"1": Light.lamp})
-    switch_report("1", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
     deferred_run()
     assert dispatches() == [(Light.lamp, m.OFF)]
 
 
-def test_consecutive_fires_log_the_same_trigger_id(ctx, ruleset, switch_report):
+def test_consecutive_fires_log_the_same_trigger_id(ctx, ruleset, device_report):
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {"1": Light.lamp})
-    switch_report("1", m.OFF, m.ON)
-    ctx.frozen.move_to(_NOW + timedelta(seconds=model.COOLDOWN.total_seconds() + 1))
-    switch_report("1", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
+    ctx.frozen.move_to(NOW + timedelta(seconds=model.COOLDOWN.total_seconds() + 1))
+    device_report("1", {"switch": m.ON}, m.OFF)
     assert [call.args[2] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("1")]
 
 
-def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, switch_report):
+def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, device_report):
     ruleset(
         [
             *_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF),
@@ -230,19 +210,19 @@ def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, switch_rep
         ],
         {"1": Light.lamp, "2": Light.desk},
     )
-    switch_report("1", m.OFF, m.ON)
-    switch_report("2", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
+    device_report("2", {"switch": m.ON}, m.OFF)
     assert [call.args[2] for call in ctx.api.log.call_args_list] == [_hub("1"), _hub("2")]
 
 
-def test_untargeted_ac_command_targets_the_ac_set(ctx, configured):
-    rules = configured
+def test_untargeted_ac_command_targets_the_ac_set(ctx, react_rules):
+    rules = react_rules
     assert rules[4].rule.steps[0].command.subject == m.Devices(Ac)
 
 
-def test_targeted_action_goes_to_the_target(ctx, ruleset, dispatches, switch_report):
+def test_targeted_action_goes_to_the_target(ctx, ruleset, dispatches, device_report):
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, target=m.Devices(Light.desk)), {"1": Light.lamp})
-    switch_report("1", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
     assert dispatches() == [(Light.desk, m.OFF)]
 
 
@@ -255,14 +235,14 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
     assert dispatches() == [(Ac.living, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=75))]
 
 
-def test_if_clause_parses_device_and_condition(ctx, configured):
-    rules = configured
+def test_if_clause_parses_device_and_condition(ctx, react_rules):
+    rules = react_rules
     assert rules[2].rule.steps[0].condition == em.And(model.AcIs(model.AcSubject(Ac.living), m.AcState(power=m.ON)))
     assert rules[3].rule.steps[0].condition == em.And(model.AcIs(model.AcSubject(Ac.living), m.AcState(m.ON, "cool")))
 
 
-def test_set_clause_parses_explicit_target(ctx, configured):
-    rules = configured
+def test_set_clause_parses_explicit_target(ctx, react_rules):
+    rules = react_rules
     assert rules[0].rule.steps[0].command.subject == m.Devices(Light.lamp)
     assert rules[2].rule.steps[0].command.subject == m.Devices(Ac.living)
 
@@ -275,17 +255,17 @@ def test_target_must_match_action_kind():
         react._parse_target("AC", m.STOP, objects)
 
 
-def test_if_clause_covers_lights_and_chromecasts(ctx, configured):
-    rules = configured
+def test_if_clause_covers_lights_and_chromecasts(ctx, react_rules):
+    rules = react_rules
     assert rules[5].rule.steps[0].condition == em.And(em.Eq(model.MqttDeviceSubject(Light.desk, "switch"), m.ON))
     assert rules[6].rule.steps[0].condition == em.And(em.Eq(model.CastSubject(Chromecast.tv), "playing"))
 
 
-def test_motion_trigger_with_target_and_no_if_clause(ctx, configured):
+def test_motion_trigger_with_target_and_no_if_clause(ctx, react_rules):
     # regression: docopt's optional-group matching lets the bracketed `if <device> is
     # <condition>` absorb a stray token even without the literal if/is present, which
     # made a bare `set <target> <action>` (no if step) misparse as `set <action>`
-    rules = configured
+    rules = react_rules
     assert rules[7].condition == model.Transition(model.MqttDeviceSubject(Sensor.living, "motion"), "active")
     assert rules[7].rule.steps[0].condition == em.And()
     assert rules[7].rule.steps[0].command == em.Command(m.Devices(Light.lamp), m.ON)
@@ -311,31 +291,31 @@ def test_if_ac_state_gates_immediate_rule(ctx, ruleset, dispatches, ac_report):
 @pytest.mark.parametrize(
     "ac_state, fires", [(m.AcState(m.ON, "cool"), True), (m.AcState(m.ON, "fan_only"), False), (m.AcState(power=m.ON), True)]
 )
-def test_if_ac_is_cool_gates_the_delayed_rule(ctx, ac_state, fires, ruleset, deferred_run, switch_report, ac_report):
+def test_if_ac_is_cool_gates_the_delayed_rule(ctx, ac_state, fires, ruleset, deferred_run, device_report, ac_report):
     cond = model.AcIs(model.AcSubject(Ac.living), m.AcState(m.ON, "cool"))
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ac_report(ac_state)
-    switch_report("1", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
 
 @pytest.mark.parametrize("playback, fires", [(m.Playback.PLAYING, True), (m.Playback.STOPPED, False)])
-def test_if_chromecast_is_playing_gates_the_delayed_rule(ctx, playback, fires, ruleset, deferred_run, switch_report):
+def test_if_chromecast_is_playing_gates_the_delayed_rule(ctx, playback, fires, ruleset, deferred_run, device_report):
     cond = em.Eq(model.CastSubject(Chromecast.tv), "playing")
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, None, 30, playback),)
-    switch_report("1", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
 
 @pytest.mark.parametrize("desk, fires", [(m.ON, True), (m.OFF, False)])
-def test_if_light_is_on_gates_the_delayed_rule(ctx, desk, fires, ruleset, deferred_run, switch_report):
+def test_if_light_is_on_gates_the_delayed_rule(ctx, desk, fires, ruleset, deferred_run, device_report):
     cond = em.Eq(model.MqttDeviceSubject(Light.desk, "switch"), m.ON)
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ctx.api.device_states.return_value = [m.DeviceState(m.Device("2", "desk", "hubitat"), {"switch": desk}, None)]
-    switch_report("1", m.OFF, m.ON)
+    device_report("1", {"switch": m.ON}, m.OFF)
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
@@ -372,7 +352,7 @@ def test_ac_is():
 
 
 def test_ac_turns_parses(ctx):
-    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_ac.orc").read_text()}
+    ctx.config.plugin_configs = plugin_config(react, "react_ac")
     rules = react.setup(ctx)
     state = model.MqttDeviceSubject(Ac.living, "state")
     assert rules[0].condition == model.Transition(state, m.AcState(power=m.ON))
@@ -409,19 +389,8 @@ def _make_range(sensor, expression, low, high, target, action, people=None):
     return [em.Watch(em.Changed(model.Device(sensor)), rule, cooldown=model.COOLDOWN)]
 
 
-@pytest.fixture
-def range_event(ctx):
-    def range_event(sensor, attributes):
-        state = m.DeviceState(m.Device(sensor.value, "sensor", "hubitat"), attributes, None)
-        ctx.api.device_states.return_value = [state]
-        changed = next(iter(attributes))
-        plugins._on_event(ctx, ctx.sources, m.Status(state.device, changed, None, attributes[changed], hubitat.HubitatSource.HUBITAT))
-
-    return range_event
-
-
 def test_range_rule_parses_expressions(ctx):
-    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_range.orc").read_text()}
+    ctx.config.plugin_configs = plugin_config(react, "react_range")
     rules = react.setup(ctx)
     # A bare attribute reads the device directly; only a named formula needs evaluating.
     temp = model.MqttDeviceSubject(Sensor.living, "temperature")
@@ -440,42 +409,42 @@ def test_range_rule_parses_expressions(ctx):
 
 
 @pytest.mark.parametrize("temperature, fires", [(70, True), (80, False)])
-def test_temperature_entering_range_sets_the_ac(ctx, temperature, fires, ruleset, range_event):
+def test_temperature_entering_range_sets_the_ac(ctx, temperature, fires, ruleset, device_report):
     ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
     ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
-    range_event(Sensor.living, {"temperature": temperature})
+    device_report(Sensor.living.value, {"temperature": temperature})
     assert ctx.api.dispatch.called is fires
 
 
 def _past_cooldown(steps):
-    return _NOW + timedelta(seconds=steps * (model.COOLDOWN.total_seconds() + 1))
+    return NOW + timedelta(seconds=steps * (model.COOLDOWN.total_seconds() + 1))
 
 
-def test_range_fires_only_on_entry(ctx, ruleset, dispatches, range_event):
+def test_range_fires_only_on_entry(ctx, ruleset, dispatches, device_report):
     ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
     ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
-    range_event(Sensor.living, {"temperature": 70})
+    device_report(Sensor.living.value, {"temperature": 70})
     assert dispatches() == [(Ac.living, ac)]  # AC comes on
 
     ctx.api.dispatch.reset_mock()
     ctx.frozen.move_to(_past_cooldown(1))
-    range_event(Sensor.living, {"temperature": 71})
+    device_report(Sensor.living.value, {"temperature": 71})
     ctx.api.dispatch.assert_not_called()
 
     ctx.frozen.move_to(_past_cooldown(2))
-    range_event(Sensor.living, {"temperature": 80})  # genuinely leaves the range
+    device_report(Sensor.living.value, {"temperature": 80})  # genuinely leaves the range
     ctx.api.dispatch.assert_not_called()
 
     ctx.frozen.move_to(_past_cooldown(3))
-    range_event(Sensor.living, {"temperature": 71})  # and re-enters
+    device_report(Sensor.living.value, {"temperature": 71})  # and re-enters
     assert dispatches() == [(Ac.living, ac)]
 
 
 @pytest.mark.parametrize("humidity, fires", [(60, True), (20, False)])
-def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, range_event):
+def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, device_report):
     ac = m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=70)
     ruleset(_make_range(Sensor.living, "dewpoint(temperature,humidity)", 59, 64, m.Devices(Ac), ac), {"5": Sensor.living})
-    range_event(Sensor.living, {"temperature": 77, "humidity": humidity})
+    device_report(Sensor.living.value, {"temperature": 77, "humidity": humidity})
     assert ctx.api.dispatch.called is fires
 
 
@@ -483,54 +452,54 @@ def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, ra
     "people, home, fires",
     [(("alice", "bob"), set(), False), (("alice", "bob"), {"alice"}, True), (m.Tag.ANYONE, set(), False), (m.Tag.ANYONE, {"bob"}, True)],
 )
-def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, range_event):
+def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, device_report):
     ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
     ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac, people=people), {"5": Sensor.living})
     ctx.api.present_names.return_value = home
-    range_event(Sensor.living, {"temperature": 70})
+    device_report(Sensor.living.value, {"temperature": 70})
     assert ctx.api.dispatch.called is fires
 
 
-def test_each_line_keeps_its_pause(ctx, configured):
+def test_each_line_keeps_its_pause(ctx, react_rules):
     groups = ctx.plugin_state[react].groups
-    assert groups["Lights off"] == model.Group((configured[0], configured[1]), timedelta(minutes=10))
+    assert groups["Lights off"] == model.Group((react_rules[0], react_rules[1]), timedelta(minutes=10))
     assert groups["Desk cools"].pause == timedelta(minutes=30)
 
 
-def test_disabled_rule_expires_after_its_pause(configured):
-    state = model.State((), {"Lights off": model.Group((configured[0],), timedelta(minutes=10))}, {configured[0]: "Lights off"})
-    state.disabled["Lights off"] = _NOW + timedelta(minutes=10)
-    assert plugins.is_disabled(state, configured[0], _NOW + timedelta(minutes=9))
-    assert not plugins.is_disabled(state, configured[0], _NOW + timedelta(minutes=10))
+def test_disabled_rule_expires_after_its_pause(react_rules):
+    state = model.State((), {"Lights off": model.Group((react_rules[0],), timedelta(minutes=10))}, {react_rules[0]: "Lights off"})
+    state.disabled["Lights off"] = NOW + timedelta(minutes=10)
+    assert plugins.is_disabled(state, react_rules[0], NOW + timedelta(minutes=9))
+    assert not plugins.is_disabled(state, react_rules[0], NOW + timedelta(minutes=10))
     assert not state.disabled
 
 
-def test_disabled_rule_does_not_fire(ctx, configured, switch_report):
+def test_disabled_rule_does_not_fire(ctx, react_rules, device_report):
     plugins.sleep(ctx, "Lights off")
-    switch_report(configured[0].condition.subject.device.value, m.OFF, m.ON)
+    device_report(react_rules[0].condition.subject.device.value, {"switch": m.ON}, m.OFF)
     ctx.api.dispatch.assert_not_called()
 
 
-def test_wake_clears_a_sleeping_rule(ctx, configured):
+def test_wake_clears_a_sleeping_rule(ctx, react_rules):
     state = ctx.plugin_state[react]
     until = plugins.sleep(ctx, "Lights off")
-    assert until == _NOW + timedelta(minutes=10)
-    assert plugins.disabled_until(state, "Lights off", _NOW) == until
+    assert until == NOW + timedelta(minutes=10)
+    assert plugins.disabled_until(state, "Lights off", NOW) == until
     plugins.wake(ctx, "Lights off")
-    assert not plugins.is_disabled(state, configured[0], _NOW)
-    assert plugins.disabled_until(state, "Lights off", _NOW) is None
+    assert not plugins.is_disabled(state, react_rules[0], NOW)
+    assert plugins.disabled_until(state, "Lights off", NOW) is None
 
 
 @pytest.fixture
-def client(ctx, configured):
+def flask_client(ctx, react_rules):
     app = Flask(__name__)
     app.orc = ctx  # type: ignore[attr-defined]
     app.register_blueprint(web.react_bp)
     return app.test_client()
 
 
-def test_rules_endpoint_groups_rules_by_name(client, configured):
-    body = client.get("/").get_json()
+def test_rules_endpoint_groups_rules_by_name(flask_client, react_rules):
+    body = flask_client.get("/").get_json()
     assert [r["name"] for r in body["rules"]] == [
         "Lights off",
         "Desk cools",
@@ -543,35 +512,36 @@ def test_rules_endpoint_groups_rules_by_name(client, configured):
     assert all(r["sleeping_until"] is None for r in body["rules"])
 
 
-def test_sleep_endpoint_disables_every_rule_of_the_name_and_logs(client, ctx, configured):
-    response = client.get("/Lights%20off/sleep?sleeping=1")
-    until = _NOW + timedelta(minutes=10)
+def test_sleep_endpoint_disables_every_rule_of_the_name_and_logs(flask_client, ctx, react_rules):
+    response = flask_client.get("/Lights%20off/sleep?sleeping=1")
+    until = NOW + timedelta(minutes=10)
     assert (response.status_code, response.get_json()) == (200, {"sleeping_until": until.isoformat()})
     state = ctx.plugin_state[react]
-    assert plugins.is_disabled(state, configured[0], _NOW) and plugins.is_disabled(state, configured[1], _NOW)
-    assert not plugins.is_disabled(state, configured[2], _NOW)
-    assert client.get("/").get_json()["rules"][0]["sleeping_until"] == until.isoformat()
+    assert plugins.is_disabled(state, react_rules[0], NOW) and plugins.is_disabled(state, react_rules[1], NOW)
+    assert not plugins.is_disabled(state, react_rules[2], NOW)
+    assert flask_client.get("/").get_json()["rules"][0]["sleeping_until"] == until.isoformat()
     assert ctx.api.log.call_args.args[1] == "`Lights off` sleeping until 15:10"
 
 
-def test_wake_endpoint_enables_the_rule_and_logs(client, ctx, configured):
-    ctx.plugin_state[react].disabled["Desk stops AC"] = _NOW + timedelta(minutes=10)
-    assert client.get("/Desk%20stops%20AC/sleep?sleeping=0").get_json() == {"sleeping_until": None}
-    assert not plugins.is_disabled(ctx.plugin_state[react], configured[3], _NOW)
+def test_wake_endpoint_enables_the_rule_and_logs(flask_client, ctx, react_rules):
+    ctx.plugin_state[react].disabled["Desk stops AC"] = NOW + timedelta(minutes=10)
+    assert flask_client.get("/Desk%20stops%20AC/sleep?sleeping=0").get_json() == {"sleeping_until": None}
+    assert not plugins.is_disabled(ctx.plugin_state[react], react_rules[3], NOW)
     assert ctx.api.log.call_args.args[1] == "`Desk stops AC` awake"
 
 
-def test_unknown_rule_is_a_404(client):
-    assert client.get("/Nope/sleep?sleeping=1").status_code == 404
+def test_unknown_rule_is_a_404(flask_client):
+    assert flask_client.get("/Nope/sleep?sleeping=1").status_code == 404
 
 
-def test_zero_pause_is_rejected(ctx):
-    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_pause_zero.orc").read_text()}
-    with pytest.raises(ConfigError, match="Invalid --pause 0"):
-        react.setup(ctx)
+_PAUSE_ERRORS = [
+    ("react_pause_zero", ConfigError, "Invalid --pause 0"),
+    ("react_pause_mismatch", ValueError, "same --pause"),
+]
 
 
-def test_a_name_shared_with_a_different_pause_is_rejected(ctx):
-    ctx.config.plugin_configs = {react.CONFIG: (FIXTURE / "react_pause_mismatch.orc").read_text()}
-    with pytest.raises(ValueError, match="same --pause"):
+@pytest.mark.parametrize("case, error, message", _PAUSE_ERRORS, ids=[case for case, _, _ in _PAUSE_ERRORS])
+def test_bad_pause_is_rejected(ctx, case, error, message):
+    ctx.config.plugin_configs = plugin_config(react, case)
+    with pytest.raises(error, match=message):
         react.setup(ctx)

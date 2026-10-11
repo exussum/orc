@@ -132,9 +132,12 @@ class TestPresence:
     def _present(self, presence):
         return presence.present(self.NOW - timedelta(hours=1))
 
-    def test_heard_tag_names_person(self):
+    def _heard(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        return self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+
+    def test_heard_tag_names_person(self):
+        presence = self._heard()
         assert self._present(presence) == {"Alice"}
 
     def test_neighbour_window_still_matches(self):
@@ -159,9 +162,8 @@ class TestPresence:
         assert len(net._eid_index(tags, clocks, self.NOW)) == 3 * (2 * net._BLE_SEARCH_WINDOWS + 1)
 
     def test_a_rotation_reports_the_exact_clock(self):
-        first = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
         second = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[1]
-        presence = self._hear([first], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._heard()
         presence._on_clock = MagicMock()
         with patch.object(net.Presence, "_now", return_value=self.NOW):
             presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
@@ -182,19 +184,16 @@ class TestPresence:
         assert self._present(presence) == set()
 
     def test_forget_clears_the_hearing(self):
-        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._heard()
         presence.forget(["Alice"], TRIGGER)
         assert self._present(presence) == set()
 
     def test_hearing_outside_the_window_expires(self):
-        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._heard()
         assert presence.present(self.NOW + timedelta(seconds=1)) == set()
 
     def test_pause_hides_prior_hearing_until_resume(self):
-        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._heard()
         presence.pause(self.NOW)
         assert self._present(presence) == set()
         presence.resume(TRIGGER)
@@ -202,8 +201,7 @@ class TestPresence:
 
     def _forgotten(self):
         """Heard once, so the tag's address is known, then forgotten: only a probe can mark it again."""
-        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._heard()
         presence.forget(["Alice"], TRIGGER)
         return presence
 
@@ -254,7 +252,7 @@ def test_missed_job_is_logged(caplog):
 
 class TestKeepass:
     @pytest.fixture
-    def database(self, tmp_path):
+    def keepass_db(self, tmp_path):
         kp = create_database(tmp_path / "secrets.kdbx", password="open sesame")
         kp.add_entry(kp.root_group, "HUBITAT_ACCESS_TOKEN", "", "tok")
         kp.add_entry(kp.root_group, "FEED_URL", "", "https://x")
@@ -262,11 +260,11 @@ class TestKeepass:
         with patch.object(config, "config_dir", str(tmp_path)):
             yield
 
-    def test_the_typed_password_opens_the_database(self, database):
+    def test_the_typed_password_opens_the_database(self, keepass_db):
         with patch("orc.dal.secrets.keepass.getpass", return_value="open sesame"):
             assert keepass.fetch_secrets() == m.Secrets(hubitat_access_token="tok", other={"FEED_URL": "https://x"})
 
-    def test_a_wrong_password_is_a_config_error(self, database):
+    def test_a_wrong_password_is_a_config_error(self, keepass_db):
         with patch("orc.dal.secrets.keepass.getpass", return_value="nope"):
             with pytest.raises(ConfigError):
                 keepass.fetch_secrets()
