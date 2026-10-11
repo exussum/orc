@@ -421,7 +421,7 @@ def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
             value = m.AcState(power=parsed) if name == "AC" and parsed in (m.ON, m.OFF) else parsed
             if isinstance(value, m.AcState):
                 value = ac_command(member, value)
-            dispatch_handler(_ctx, member, em.Command(m.Devices(member), value), {})
+            _dispatch_one((dispatch_handler, member, em.Command(m.Devices(member), value)), stream={}, entry=entry)
             return True
     return False
 
