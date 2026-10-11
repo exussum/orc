@@ -32,6 +32,7 @@ dependencies = [
     "requests==2.34.2",
     "yt-dlp==2026.8.19",
     "command-cfg==1.1.0",
+    "pykeepass==4.2.0",
 ]
 name = "orc"
 version = "0.0.1"

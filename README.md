@@ -216,6 +216,14 @@ value counts as missing wherever a secret is read.
 | a `tag` line's secret  | the `tag` line            | 32-byte hex EIK                       |
 | plugin secrets         | the plugin's `declare`    | see the plugin's README               |
 
+### Secrets in a KeePass database (`orc.dal.secrets.keepass`)
+
+`provider secrets orc.dal.secrets.keepass` reads the same names from
+`secrets.kdbx` beside `config.orc` instead of Bitwarden: one entry per
+secret, the name as the entry title and the value as its password. Any
+KeePass app edits the file. Startup reads the master password from the
+terminal with echo off, so orc has to be started by hand.
+
 ## Phone notifications (Web Push)
 
 Log lines that orc flags as worth a notification — a failed dispatch, a

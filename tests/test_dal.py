@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from command_cfg import ConfigError
+from pykeepass import create_database
 from pywebpush import WebPushException
 
 from orc import config, security
@@ -13,6 +15,7 @@ from orc.dal import net, push, sqlite
 from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.holiday import polygon
 from orc.dal.push import webpush
+from orc.dal.secrets import keepass
 from orc.model import BleKey, Query
 
 TRIGGER = Query("test")
@@ -247,3 +250,23 @@ def test_missed_job_is_logged(caplog):
     scheduler._log_missed(JobExecutionEvent(EVENT_JOB_MISSED, "iot-Sunrise", "memory", datetime(2026, 1, 1, tzinfo=config.settings.tz)))
     (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
     assert "iot-Sunrise" in record.getMessage()
+
+
+class TestKeepass:
+    @pytest.fixture
+    def database(self, tmp_path):
+        kp = create_database(tmp_path / "secrets.kdbx", password="open sesame")
+        kp.add_entry(kp.root_group, "HUBITAT_ACCESS_TOKEN", "", "tok")
+        kp.add_entry(kp.root_group, "FEED_URL", "", "https://x")
+        kp.save()
+        with patch.object(config, "config_dir", str(tmp_path)):
+            yield
+
+    def test_the_typed_password_opens_the_database(self, database):
+        with patch("orc.dal.secrets.keepass.getpass", return_value="open sesame"):
+            assert keepass.fetch_secrets() == m.Secrets(hubitat_access_token="tok", other={"FEED_URL": "https://x"})
+
+    def test_a_wrong_password_is_a_config_error(self, database):
+        with patch("orc.dal.secrets.keepass.getpass", return_value="nope"):
+            with pytest.raises(ConfigError):
+                keepass.fetch_secrets()
