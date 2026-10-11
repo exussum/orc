@@ -7,7 +7,7 @@ from orc.dal import warn_stub
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
-namespaces: tuple[str, ...] = ("stub",)
+namespaces: tuple[str, ...] = ()
 device_types: tuple[str, ...] = ("Light", "Button", "Sensor")
 
 warn_stub("adapter")
