@@ -17,7 +17,6 @@ extras/
 │   └── orc_extras/
 │       └── entrance_sensor/
 │           ├── __init__.py           # grammar, declare(), setup()
-│           ├── model.py              # types shared by two modules
 │           ├── plugins.py            # everything that runs after boot
 │           └── web.py                # Flask blueprint, if any
 └── tests/
@@ -77,18 +76,17 @@ as the travel and calendar plugins do.
 plugin everything it may touch, so plugins never import orc internals
 directly:
 
-| Field                  | What it is              | What it provides                                                                                                           |
-| ---------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `ctx.api`              | `orc.api` module        | The verbs of the system. Everything a plugin does to the outside world goes through this module.                           |
-| `ctx.model`            | `orc.model` module      | The vocabulary. The data types and constants that the api functions accept and return.                                     |
-| `ctx.config`           | runtime configuration   | What the operator decided. The parsed `config.orc` plus environment settings.                                              |
-| `ctx.snapshot_manager` | snapshot manager        | Undo for device state. Records what devices looked like before a plugin changes them, so that state can be restored later. |
-| `ctx.scheduler`        | APScheduler instance    | Deferred work. Lets a plugin queue a follow-up job to run at a later time instead of acting immediately.                   |
-| `ctx.orc`              | top-level `orc` package | The devices themselves. The enums used to say which device a config applies to.                                            |
-| `ctx.plugin_state`     | per-plugin state dict   | Shared live state, keyed by the plugin's module and stored once by `setup()`. Wiring travels as arguments instead.         |
+| Field              | What it is              | What it provides                                                                                                                                                              |
+| ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.api`          | `orc.api` module        | The verbs of the system. Everything a plugin does to the outside world goes through this module.                                                                              |
+| `ctx.config`       | runtime configuration   | What the operator decided. The parsed `config.orc` plus environment settings.                                                                                                 |
+| `ctx.engine`       | `orc_engine` `Runtime`  | The rule evaluator. `ctx.engine.evaluate(...)` answers rules and watches against live reads; scene snapshots go through `ctx.api.override_scene` and `ctx.api.restore_scene`. |
+| `ctx.scheduler`    | `Scheduler` protocol    | Deferred work. `once`, `now`, `cron`, and `cancel` let a plugin queue a follow-up job to run at a later time instead of acting immediately.                                   |
+| `ctx.orc`          | top-level `orc` package | The devices themselves. The enums used to say which device a config applies to.                                                                                               |
+| `ctx.plugin_state` | per-plugin state dict   | Shared live state, keyed by the plugin's module and stored once by `setup()`. Wiring travels as arguments instead.                                                            |
 
 For work scheduled to run later (this plugin queues a follow-up job with
-`ctx.scheduler.add_job`), decorate the job function with `@requires_ctx` —
+`ctx.scheduler.once`), decorate the job function with `@requires_ctx` —
 the scheduler injects the context as a `ctx` keyword argument at run time.
 
 ## 2. Register it in config.orc
@@ -97,7 +95,8 @@ Add a `plugin` line to `$ORC_CONFIG_DIR/config.orc`: a display name, the
 plugin's package, an optional function name (imported from the package
 itself, so it must be re-exported there — for example
 `from orc_extras.lg_tv.plugins import pair_tv` makes the bare name `pair_tv`
-resolve), section (defaults to `scene`), icon, and delay:
+resolve), `--section` (required when a function is named), `--icon`, and
+`--backend`:
 
 ```
 plugin 'Pair LG TV' orc_extras.lg_tv pair_tv --section device --icon tv
@@ -141,7 +140,7 @@ timed <name> <start> <stop> <routine>
 
 
 class Settings(NamedTuple):
-    entrance_id: int
+    entrance: DeviceEnum
     snapshot: int
 
 
@@ -156,7 +155,7 @@ def setup(ctx):
         ctx.config,
         GRAMMAR,
         serializers={
-            "setting": scalar(Settings, types={"entrance_id": int, "snapshot": int}),
+            "setting": scalar(Settings, types={"entrance": cast.device, "snapshot": engine_cast.int}),
             "message": scalar(Messages),
             "rules": group(partial(_rule, ctx)),
             "timed": group(partial(_timed, ctx)),
@@ -171,16 +170,17 @@ for the full plugin.)
 
 The grammar is one docopt-shaped usage pattern per line, parsed by command-cfg; the first word is the command.
 Values arrive as strings; a serializer's `types=` mapping (field name to
-callable) coerces the ones that need it — here `entrance_id`/`snapshot`
-become `int`. Anything not listed in `types=` stays a string, so a factory
-that needs a non-primitive value (`<routine>` resolved to commands against
-the main config's ad_hoc routines and routine ids, `<start>`/`<stop>` parsed
-into times) does that conversion itself, as `_rule`/`_timed` do above:
+callable) coerces the ones that need it — here `entrance` becomes a device
+enum member and `snapshot` an `int`. Anything not listed in `types=` stays
+a string, so a factory that needs a non-primitive value (`<routine>`
+resolved to commands against the main config's ad_hoc routines and routine
+ids, `<start>`/`<stop>` parsed into times) does that conversion itself, as
+`_rule`/`_timed` do above:
 
 - **`scalar(...)` commands** (`setting`, `message`) take exactly two
   placeholders. Their key/value pairs accumulate across the file (a repeated
   key is an error) and the factory is called once at the end with them as
-  keyword arguments: `sensor.setting.entrance_id`. A `NamedTuple` factory
+  keyword arguments: `sensor.setting.entrance`. A `NamedTuple` factory
   makes every field required, so a missing setting fails at load.
 - **`group(...)` commands** (`rules`, `timed`) call their factory once per
   line with the line's fields as keyword arguments; rows collect in dicts of
@@ -218,8 +218,8 @@ For example:
 
 ```
 setting cleanup_delay_minutes 2
-setting entrance_id           1
-setting patio_door_id         56
+setting entrance              Sensor.ENTRANCE_SENSOR
+setting patio_door            Sensor.PATIO_DOOR
 setting active_event          active
 setting inactive_event        inactive
 setting snapshot              45
@@ -240,9 +240,9 @@ timed Day   8:00  22:00 'All Lights On'
 timed Night 22:00 8:00  Silence
 ```
 
-The config loads once at startup in `setup()`; if the file is missing or
-malformed, the error is logged and the plugin becomes a no-op instead of
-crashing orc.
+The config loads once at startup in `setup()`. Boot is strict: if the file
+is missing or malformed, `setup()` raises, and orc exits instead of running
+without the plugin.
 
 ## Tests
 
