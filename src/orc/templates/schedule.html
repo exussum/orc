@@ -18,9 +18,9 @@
                         <div class="relative inline-block">
                             <button class="orc-btn{% if meta.absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ job.name }}" data-duration="{{ durations.get(job.name, 0) }}">&nbsp;</button>
                             <span class="orc-job-badges">
-                                {%- if meta.skip_replay %}<span class="orc-skip-replay-badge">⏩</span>{% endif -%}
-                                {%- if meta.weather %}<span class="orc-weather-badge">🌤</span>{% endif -%}
-                                {%- if meta.presence %}<span class="orc-presence-badge">👤</span>{% endif -%}
+                                {%- if meta.skip_replay %}<span>⏩</span>{% endif -%}
+                                {%- if meta.weather %}<span>🌤</span>{% endif -%}
+                                {%- if meta.presence %}<span>👤</span>{% endif -%}
                             </span>
                         </div>
                     </td>
@@ -45,7 +45,7 @@
                     <label for="orc-theme-select">Theme:</label>
                 </div>
                 <div>
-                    <select name="theme" class="orc-input orc-theme-changer h-8" id="orc-theme-select">
+                    <select name="theme" class="orc-input h-8" id="orc-theme-select">
                         <option value="">default</option>
                         {% for name in themes %}
                             <option value="{{ name }}">{{ name }}</option>
@@ -59,13 +59,13 @@
                     <label>Start</label>
                 </div>
                 <div class="orc-theme-schedule orc-theme-form-date-input">
-                    <input type="text" value="{{ theme.start }}" name="start" class="orc-input orc-theme-changer h-8" id="orc-theme-select-start" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
+                    <input type="text" value="{{ theme.start }}" name="start" class="orc-input h-8" id="orc-theme-select-start" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
                 </div>
                 <div class="orc-theme-schedule">
                     <label>End</label>
                 </div>
                 <div class="orc-theme-schedule orc-theme-form-date-input">
-                    <input type="text" value="{{ theme.end }}" name="end" class="orc-input orc-theme-changer h-8" id="orc-theme-select-end" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
+                    <input type="text" value="{{ theme.end }}" name="end" class="orc-input h-8" id="orc-theme-select-end" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
                 </div>
             </div>
         </form>

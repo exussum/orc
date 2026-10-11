@@ -1,8 +1,9 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 
-@source "../templates";
-@source "./*.js";
-@source "../../extras/src/orc_extras";
+@source "../orc/templates";
+@source "../orc/static/*.js";
+@source "../orc/static/hooks/*.js";
+@source "../../extras/src/orc_extras/*/static/*.js";
 
 @theme {
     --color-orc-bg: #1a1a1a;

@@ -142,7 +142,7 @@ def cfg() -> str:
         plugin_htmls=plugin_htmls,
         plugins=config.plugins_in("system"),
         ad_hoc_routines=where(config.ad_hoc_routines, section="system"),
-        ctx=app.orc,
+        snapshots=app.orc.engine.snapshots(),
         today_theme=api.calculate_theme(today),
         tomorrow_theme=api.calculate_theme(tomorrow),
         theme_override=api.current_theme_override(),
@@ -188,7 +188,7 @@ def device() -> str:
 
     rooms = sorted({d.room for d in all_devices})
     devices_grouped = {room: [make_device(d) for d in sorted((d for d in all_devices if d.room == room), key=sort_key)] for room in rooms}
-    return render_template("device.html", ctx=app.orc, devices_grouped=devices_grouped)
+    return render_template("device.html", devices_grouped=devices_grouped)
 
 
 @bp.route("/api/run/<id>")

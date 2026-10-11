@@ -41,14 +41,6 @@ def client(ctx):
         yield c
 
 
-def _fake_job(name="job", next_run_time=True):
-    job = create_autospec(Job, instance=True)
-    job.id = name
-    job.name = name
-    job.next_run_time = next_run_time
-    return job
-
-
 @pytest.mark.parametrize(
     ("host", "title"),
     [("orc.internal.example", "Orc"), ("orc.internal.example:8000", "Orc"), ("orc.example", "Orc Remote")],
@@ -275,13 +267,13 @@ def _get_schedule(client, jobs, present_names=()):
 @pytest.mark.parametrize(
     "kwargs, present, present_badges, absent_badges",
     [
-        ({"trigger": m.Tag.SYSTEM}, (), (), (b"orc-btn-absent", b"orc-presence-badge", b"orc-skip-replay-badge")),
-        ({"trigger": "me"}, (), (b"orc-btn-absent", b"orc-presence-badge"), ()),
+        ({"trigger": m.Tag.SYSTEM}, (), (), (b"orc-btn-absent", "👤".encode(), "⏩".encode())),
+        ({"trigger": "me"}, (), (b"orc-btn-absent", "👤".encode()), ()),
         ({"trigger": "me"}, ("me",), (), (b"orc-btn-absent",)),
         ({"trigger": m.Tag.ANYONE}, ("me",), (), (b"orc-btn-absent",)),
         ({"trigger": m.Tag.ANYONE}, (), (b"orc-btn-absent",), ()),
-        ({"trigger": m.WeatherCondition.SUNNY}, (), (b"orc-weather-badge",), ()),
-        ({"skip_replay": True}, (), (b"orc-skip-replay-badge",), ()),
+        ({"trigger": m.WeatherCondition.SUNNY}, (), ("🌤".encode(),), ()),
+        ({"skip_replay": True}, (), ("⏩".encode(),), ()),
     ],
     ids=["system", "me_absent", "me_present", "anyone_present", "anyone_absent", "weather", "skip_replay"],
 )

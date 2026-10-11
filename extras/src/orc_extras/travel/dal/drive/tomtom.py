@@ -21,10 +21,6 @@ def _lookup(connection: Connection, key: str, address: str, timeout: int) -> tup
     return pos["lat"], pos["lon"]
 
 
-def geocode(connection: Connection, key: str, address: str, timeout: int) -> bool:
-    return _lookup(connection, key, address, timeout) is not None
-
-
 def drive_minutes(connection: Connection, key: str, origin: str, dest: str, timeout: int) -> int:
     d = _lookup(connection, key, dest, timeout)
     if d is None:

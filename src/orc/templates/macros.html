@@ -32,17 +32,15 @@
 </div>
 {% endmacro %}
 
-{% macro headed_table(title, heading_class="font-semibold mb-1", wrapper_class="mb-3 overflow-x-auto") %}
-{% if title %}<div class="{{ heading_class }}">{{ title }}</div>{% endif %}
-<div class="{{ wrapper_class }}">
+{% macro headed_table() %}
+<div class="mb-3 px-4 overflow-x-auto">
     <table class="text-left">
         {{ caller() }}
     </table>
 </div>
 {% endmacro %}
 
-{% macro status_list(title, rows) %}
-{% if title %}<div class="font-semibold mb-1">{{ title }}</div>{% endif %}
+{% macro status_list(rows) %}
 <ul class="list-disc pl-5 mb-3">
     {% for row in rows %}
         <li>

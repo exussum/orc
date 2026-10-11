@@ -59,7 +59,7 @@ export async function get(url, el, onFailure = () => {}) {
 }
 
 
-export async function runAction(el) {
+async function runAction(el) {
     if (!(await orcHooks.onPress(el.dataset.id, el))) return;
     if ("noFunc" in el.dataset) {
         alert(

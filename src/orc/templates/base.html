@@ -45,34 +45,31 @@
                 </div>
             </form>
         </dialog>
-        {% block page_body %}
-            <div class="mx-auto w-full max-w-screen-xl px-4 min-h-screen">
-                <nav class="orc-navbar" role="navigation">
-                    <div class="text-xl font-semibold mr-4">{% if app_name == "Orc" %}🏠 {% else %}📡 {% endif %}ORChestration</div>
-                    <button id="orc-navbar-toggle" class="lg:hidden ml-auto p-1.5 border border-white/20 rounded" type="button" aria-controls="admin-navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
-                        {{ icon_svg("bars-3", "h-6 w-6") }}
-                    </button>
-                    <div id="admin-navbar-collapse" class="hidden lg:flex w-full lg:w-auto items-end lg:flex-1 mt-2 lg:mt-0">
-                        {% set nav_links = [
-                            ("controls.index", "/", "Scene"),
-                            ("controls.device", "/device/", "Device"),
-                            ("controls.schedule", "/schedule/", "Schedule"),
-                            ("controls.presence", "/presence/", "Presence"),
-                            ("controls.cfg", "/system/", "System"),
-                            ("controls.log", "/log/", "Log"),
-                        ] %}
-                        <ul class="flex flex-col lg:flex-row gap-1 lg:gap-4 mr-auto list-none p-0">
-                            {% for endpoint, href, label in nav_links %}
-                                <li><a class="orc-nav-link {% if request.url_rule.endpoint == endpoint %}active{% endif %}" href="{{ href }}">{{ label }}</a></li>
-                            {% endfor %}
-                        </ul>
-                        {% block menu_links %}{% endblock %}
-                    </div>
-                </nav>
-                {% block body %}{% endblock %}
-                <div class="text-xs text-gray-400 text-center py-3">{{ build_sha }} &middot; {{ build_time }}</div>
-            </div>
-        {% endblock %}
-        {% block tail %}{% endblock %}
+        <div class="mx-auto w-full max-w-screen-xl px-4 min-h-screen">
+            <nav class="orc-navbar" role="navigation">
+                <div class="text-xl font-semibold mr-4">{% if app_name == "Orc" %}🏠 {% else %}📡 {% endif %}ORChestration</div>
+                <button id="orc-navbar-toggle" class="lg:hidden ml-auto p-1.5 border border-white/20 rounded" type="button" aria-controls="admin-navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
+                    {{ icon_svg("bars-3", "h-6 w-6") }}
+                </button>
+                <div id="admin-navbar-collapse" class="hidden lg:flex w-full lg:w-auto items-end lg:flex-1 mt-2 lg:mt-0">
+                    {% set nav_links = [
+                        ("controls.index", "/", "Scene"),
+                        ("controls.device", "/device/", "Device"),
+                        ("controls.schedule", "/schedule/", "Schedule"),
+                        ("controls.presence", "/presence/", "Presence"),
+                        ("controls.cfg", "/system/", "System"),
+                        ("controls.log", "/log/", "Log"),
+                    ] %}
+                    <ul class="flex flex-col lg:flex-row gap-1 lg:gap-4 mr-auto list-none p-0">
+                        {% for endpoint, href, label in nav_links %}
+                            <li><a class="orc-nav-link {% if request.url_rule.endpoint == endpoint %}active{% endif %}" href="{{ href }}">{{ label }}</a></li>
+                        {% endfor %}
+                    </ul>
+                    {% block menu_links %}{% endblock %}
+                </div>
+            </nav>
+            {% block body %}{% endblock %}
+            <div class="text-xs text-gray-400 text-center py-3">{{ build_sha }} &middot; {{ build_time }}</div>
+        </div>
     </body>
 </html>

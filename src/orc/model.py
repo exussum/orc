@@ -209,7 +209,6 @@ class CA:
 @dataclass(frozen=True)
 class Certificate:
     cert_pem: bytes
-    key_pem: bytes
 
 
 @dataclass(frozen=True)
@@ -686,9 +685,6 @@ def _op_cmp(k: DeviceCommand) -> tuple[float, int]:
 
 
 def _squish(items: list[DeviceCommand]) -> tuple[DeviceCommand, ...]:
-    if not items:
-        return ()
-
     last = items[-1]
     # a level (int) is preceded by the last STOP; a non-level is preceded by the last level
     preceding = (lambda c: c.value == STOP) if isinstance(last.value, int) else (lambda c: isinstance(c.value, int))

@@ -56,15 +56,8 @@ def sign(
     return builder.sign(ca.key, hashes.SHA256())
 
 
-def pem(cert: x509.Certificate, key: rsa.RSAPrivateKey) -> Certificate:
-    return Certificate(
-        cert.public_bytes(serialization.Encoding.PEM),
-        key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.TraditionalOpenSSL,
-            serialization.NoEncryption(),
-        ),
-    )
+def pem(cert: x509.Certificate) -> Certificate:
+    return Certificate(cert.public_bytes(serialization.Encoding.PEM))
 
 
 def pem_to_der(data: bytes) -> bytes:

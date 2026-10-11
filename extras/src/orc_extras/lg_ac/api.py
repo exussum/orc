@@ -242,7 +242,7 @@ def _require_ca() -> CA:
 
 def ca() -> Certificate:
     loaded = _require_ca()
-    return security.pem(loaded.cert, loaded.key)
+    return security.pem(loaded.cert)
 
 
 def _tlv(data: bytes, i: int) -> tuple[int, int]:
