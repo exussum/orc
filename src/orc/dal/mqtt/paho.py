@@ -47,7 +47,8 @@ def add_status_listener(fn: m.Listener) -> None:
 
 def start() -> None:
     global _client
-    _client = _new_client(orc.config.secrets, partial(_on_connect, _adapters), _on_message, 3.0)
+    if any(adapter.namespaces for adapter in _adapters):
+        _client = _new_client(orc.config.secrets, partial(_on_connect, _adapters), _on_message, 3.0)
     for adapter in _adapters:
         adapter.start()
 
@@ -76,6 +77,8 @@ def command(device: m.DeviceEnum, value: Any) -> None:
 
 
 def discover(adapter: "Adapter", secrets: m.Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[m.Capability]]]:
+    if not adapter.namespaces:
+        return adapter.discover(())
     messages: list[m.Message] = []
 
     def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:

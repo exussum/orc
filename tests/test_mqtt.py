@@ -7,7 +7,7 @@ import pytest
 import orc
 from orc import model as m
 from orc.collections import LockedDict
-from orc.dal.mqtt import hubitat
+from orc.dal.mqtt import hubitat, none
 from orc.dal.mqtt import paho as mqtt
 
 
@@ -258,6 +258,16 @@ class TestRouting:
         mqtt.register(adapter)
         mqtt.start()
         assert published == [("clip/hello", '{"q": 1}', True)]
+
+    def test_start_builds_no_client_without_a_namespace(self, monkeypatch):
+        monkeypatch.setattr(mqtt, "_adapters", [none])
+        monkeypatch.setattr(mqtt, "_new_client", lambda *a: pytest.fail("client built"))
+        mqtt.start()
+        assert mqtt._client is None
+
+    def test_discover_skips_the_broker_without_a_namespace(self, monkeypatch):
+        monkeypatch.setattr(mqtt, "_new_client", lambda *a: pytest.fail("client built"))
+        assert mqtt.discover(none, m.Secrets()) == {}
 
     def test_command_routes_by_device_type(self, monkeypatch):
         published = []
