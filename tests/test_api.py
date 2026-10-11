@@ -27,49 +27,61 @@ def _routine(name, when, *commands, skip_replay=False):
 
 
 @pytest.fixture
-def snapshot_config():
+def snapshot_commands():
     return (em.Command(m.Devices(orc.Light.a), m.ON), em.Command(m.Devices(orc.Light.b), m.OFF))
 
 
 @pytest.fixture
-def entry():
+def system_snapshot(snapshot_commands):
+    api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+
+
+@pytest.fixture
+def log_entry():
     return m.LogEntry(FUTURE, m.LogSource.MANUAL, "test", TRIGGER)
+
+
+@pytest.fixture
+def push_subscriptions():
+    def build(names):
+        return [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in names]
+
+    return build
 
 
 @patch("orc.api.dispatch")
 class TestRestoreScene:
-    def test_restore_with_snapshot(self, dispatch, snapshot_config, entry):
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        api.restore_scene("test", (), entry)
-        assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
+    def test_restore_with_snapshot(self, dispatch, snapshot_commands, log_entry):
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+        api.restore_scene("test", (), log_entry)
+        assert dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
 
-    def test_restore_without_snapshot(self, dispatch, snapshot_config, entry):
-        api.restore_scene("test", snapshot_config, entry)
-        assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
+    def test_restore_without_snapshot(self, dispatch, snapshot_commands, log_entry):
+        api.restore_scene("test", snapshot_commands, log_entry)
+        assert dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
 
-    def test_restore_drops_expired_snapshot(self, dispatch, snapshot_config, entry):
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=PAST), PAST)
-        api.restore_scene("test", snapshot_config, entry)
-        assert dispatch.call_args_list == [call(snapshot_config, force=True, entry=entry)]
+    def test_restore_drops_expired_snapshot(self, dispatch, snapshot_commands, log_entry):
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
+        api.restore_scene("test", snapshot_commands, log_entry)
+        assert dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
         assert not api._ctx.engine.snapshots()
 
-    def test_pop_snapshot_once_and_never_expired(self, dispatch, snapshot_config):
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        assert api._ctx.engine.pop_snapshot("test").routine is snapshot_config
+    def test_pop_snapshot_once_and_never_expired(self, dispatch, snapshot_commands):
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+        assert api._ctx.engine.pop_snapshot("test").routine is snapshot_commands
         assert api._ctx.engine.pop_snapshot("test") is None
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_config, end=PAST), PAST)
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
         assert api._ctx.engine.pop_snapshot("test") is None
         dispatch.assert_not_called()
 
 
 @patch("orc.dal.mqtt.paho.command")
 class TestIntercepts:
-    def test_system_command_overwrites_snapshot(self, update_light, snapshot_config, entry):
+    def test_system_command_overwrites_snapshot(self, update_light, system_snapshot, log_entry):
         command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM)
 
-        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        api.dispatch((command,), entry=entry)
-        api.dispatch((command,), entry=entry)
+        api.dispatch((command,), entry=log_entry)
+        api.dispatch((command,), entry=log_entry)
 
         assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             em.Command(m.Devices(orc.Light.a), m.ON),
@@ -77,11 +89,10 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == [call(orc.Light.b, m.ON), call(orc.Light.b, m.ON)]
 
-    def test_snapshot_update_add(self, update_light, snapshot_config, entry):
+    def test_snapshot_update_add(self, update_light, system_snapshot, log_entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON, tag=m.Tag.SYSTEM)
 
-        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        api.dispatch((command,), entry=entry)
+        api.dispatch((command,), entry=log_entry)
 
         assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             em.Command(m.Devices(orc.Light.a), m.ON),
@@ -90,11 +101,10 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
-    def test_untagged_command_suppressed(self, update_light, snapshot_config, entry):
+    def test_untagged_command_suppressed(self, update_light, system_snapshot, log_entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
-        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        api.dispatch((command,), entry=entry)
+        api.dispatch((command,), entry=log_entry)
 
         assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             em.Command(m.Devices(orc.Light.a), m.ON),
@@ -102,29 +112,27 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == []
 
-    def test_expired_snapshot_drops(self, update_light, snapshot_config, entry):
+    def test_expired_snapshot_drops(self, update_light, snapshot_commands, log_entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
-        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=PAST), PAST)
-        api.dispatch((command,), entry=entry)
+        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
+        api.dispatch((command,), entry=log_entry)
 
         assert not api._ctx.engine.snapshots()
         assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
-    def test_unrelated_plugin_snapshot_does_not_suppress(self, update_light, snapshot_config, entry):
+    def test_unrelated_plugin_snapshot_does_not_suppress(self, update_light, snapshot_commands, log_entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
-        api._ctx.engine.save_snapshot("entrance_sensor", m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-        api.dispatch((command,), entry=entry)
+        api._ctx.engine.save_snapshot("entrance_sensor", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+        api.dispatch((command,), entry=log_entry)
 
         assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
-    def test_snapshot_bypassed(self, update_light, snapshot_config, entry):
+    def test_snapshot_bypassed(self, update_light, system_snapshot, log_entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
-        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-
-        api.dispatch((command,), force=True, entry=entry)
+        api.dispatch((command,), force=True, entry=log_entry)
 
         assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             em.Command(m.Devices(orc.Light.a), m.ON),
@@ -132,17 +140,15 @@ class TestIntercepts:
         )
         assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
 
-    def test_force_off_is_not_recorded_and_resume_relights(self, update_light, snapshot_config, entry):
-        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_config, end=FUTURE), FUTURE)
-
-        api.dispatch((em.Command(m.Devices(orc.Light.a), m.OFF),), force=True, entry=entry)  # room control during the scene
+    def test_force_off_is_not_recorded_and_resume_relights(self, update_light, system_snapshot, log_entry):
+        api.dispatch((em.Command(m.Devices(orc.Light.a), m.OFF),), force=True, entry=log_entry)  # room control during the scene
 
         assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             em.Command(m.Devices(orc.Light.a), m.ON),
             em.Command(m.Devices(orc.Light.b), m.OFF),
         )
 
-        api.restore_scene(api.ORC_SYSTEM_SNAPSHOT, (), entry)
+        api.restore_scene(api.ORC_SYSTEM_SNAPSHOT, (), log_entry)
 
         assert update_light.call_args_list == [
             call(orc.Light.a, m.OFF),  # the deliberate off
@@ -151,66 +157,62 @@ class TestIntercepts:
         ]
 
 
-def test_dispatch_usb_sets_volume(entry):
+def test_dispatch_usb_sets_volume(log_entry):
     from orc.dal.audio import stub as audio_stub
 
-    api.dispatch((em.Command(m.Devices(orc.USB.speaker), 50),), force=True, entry=entry)
+    api.dispatch((em.Command(m.Devices(orc.USB.speaker), 50),), force=True, entry=log_entry)
 
     assert audio_stub._volumes == {orc.USB.speaker: 50}
 
 
-def test_dispatch_usb_plays_alert_path(entry):
+def test_dispatch_usb_plays_alert_path(log_entry):
     from orc.dal.audio import stub as audio_stub
 
-    api.dispatch((em.Command(m.Devices(orc.USB.speaker), "/tmp/alert.wav"),), force=True, entry=entry)
+    api.dispatch((em.Command(m.Devices(orc.USB.speaker), "/tmp/alert.wav"),), force=True, entry=log_entry)
 
     assert audio_stub._alerted == ["/tmp/alert.wav"]
 
 
-def test_back_on_schedule_checks_presence_then_replays(entry):
+def test_back_on_schedule_checks_presence_then_replays(log_entry):
     ctx = MagicMock()
     ctx.api = create_autospec(api)
-    plugins.back_on_schedule(ctx, None, entry=entry)
-    ctx.api.check_presence.assert_called_once_with(entry.trigger)
-    ctx.api.replay_day.assert_called_once_with(ctx.api.local_now.return_value, entry)
+    plugins.back_on_schedule(ctx, None, entry=log_entry)
+    ctx.api.check_presence.assert_called_once_with(log_entry.trigger)
+    ctx.api.replay_day.assert_called_once_with(ctx.api.local_now.return_value, log_entry)
 
 
-def test_button_ad_hoc_snapshot(ctx, dispatched):
-    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
+def test_button_ad_hoc_snapshot(ctx, config_ad_hoc, command_dispatch):
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     captured = (em.Command(m.Devices(orc.Light.a), m.ON),)
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
-        patch.object(api, "capture_lights", return_value=captured),
-    ):
+    with config_ad_hoc({"r": action}), patch.object(api, "capture_lights", return_value=captured):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     snap = ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine is captured
     assert snap.end > api.local_now()
-    dispatched.assert_called_once_with(routine.commands, force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(action.commands, force=True, entry=ANY)
 
 
-def test_button_ad_hoc_snapshot_does_not_stack(ctx, dispatched):
-    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
+def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispatch):
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
     existing = (em.Command(m.Devices(orc.Light.a), m.ON),)
     snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
     ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap, snap.end)
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
-        patch.object(api, "capture_lights") as capture,
-    ):
+    with config_ad_hoc({"r": action}, reset_config=reset), patch.object(api, "capture_lights") as capture:
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     capture.assert_not_called()
-    dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
 
 
-def test_dispatch_routes_ac_commands_to_the_broker(entry):
+def test_dispatch_routes_ac_commands_to_the_broker(log_entry):
     with patch.object(mqtt, "command") as command:
-        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75)),), force=True, entry=entry)
-        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(power=m.ON)),), force=True, entry=entry)
-        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(power=m.OFF)),), force=True, entry=entry)
+        api.dispatch(
+            (em.Command(m.Devices(orc.AC.unit), m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75)),), force=True, entry=log_entry
+        )
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(power=m.ON)),), force=True, entry=log_entry)
+        api.dispatch((em.Command(m.Devices(orc.AC.unit), m.AcState(power=m.OFF)),), force=True, entry=log_entry)
     assert command.call_args_list == [
         call(orc.AC.unit, m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75)),
         call(orc.AC.unit, m.AcState(power=m.ON, mode="cool")),
@@ -273,16 +275,16 @@ def test_capture_sensors_lists_sensors_missing_from_the_cache():
     assert api.capture_sensors() == [m.DeviceStatus(name=orc.Sensor.living.name, details={})]
 
 
-def test_device_command_failure_nests_under_the_entry(entry):
+def test_device_command_failure_nests_under_the_entry(log_entry):
     with patch.object(mqtt, "command", side_effect=RuntimeError("boom")):
-        assert api.device_command(orc.Light.a.name, m.ON, entry)
-    assert entry.children[-1].action == "Dispatch failed for `a`: boom"
+        assert api.device_command(orc.Light.a.name, m.ON, log_entry)
+    assert log_entry.children[-1].action == "Dispatch failed for `a`: boom"
 
 
-def test_dispatch_usb_speaks_state_error(entry):
+def test_dispatch_usb_speaks_state_error(log_entry):
     from orc.dal.audio import stub as audio_stub
 
-    api.dispatch((em.Command(m.Devices(orc.USB.speaker), m.ON),), force=True, entry=entry)
+    api.dispatch((em.Command(m.Devices(orc.USB.speaker), m.ON),), force=True, entry=log_entry)
 
     assert len(audio_stub._spoken) == 1
     assert "USB devices don't support state" in audio_stub._spoken[0]
@@ -290,7 +292,7 @@ def test_dispatch_usb_speaks_state_error(entry):
 
 class TestLog:
     @pytest.fixture(autouse=True)
-    def _clear(self):
+    def reset_log(self):
         api._ACTIVITY_LOG.clear()
 
     def test_a_burst_from_one_trigger_nests_under_the_entry_it_opened(self):
@@ -358,11 +360,11 @@ class TestLog:
             api.log(m.LogSource.PLUGIN, "standup", m.Integration("x"), notification=notification)
         assert api._ctx.scheduler.now.call_args.args[3] == notification
 
-    def test_a_greeted_subscription_is_pushed_alone(self, push_provider):
-        subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
-        api.subscribe_push(subscriptions[0])
+    def test_a_greeted_subscription_is_pushed_alone(self, push_provider, push_subscriptions):
+        push_subscriptions = push_subscriptions("ab")
+        api.subscribe_push(push_subscriptions[0])
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
-            api.subscribe_push(subscriptions[1], greet=True)
+            api.subscribe_push(push_subscriptions[1], greet=True)
         now = api._ctx.scheduler.now
         assert now.call_args.args[0] is api._push_job
         assert now.call_args.args[1:] == (
@@ -370,26 +372,26 @@ class TestLog:
             "Notifications enabled on this device",
             m.Notification(("greeting",)),
             m.Manual("notify"),
-            (subscriptions[1],),
+            (push_subscriptions[1],),
         )
-        assert set(sqlite.fetch_push_subscriptions()) == set(subscriptions)
+        assert set(sqlite.fetch_push_subscriptions()) == set(push_subscriptions)
 
-    def test_unsubscribing_drops_only_that_endpoint(self):
-        subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "ab"]
-        for subscription in subscriptions:
+    def test_unsubscribing_drops_only_that_endpoint(self, push_subscriptions):
+        push_subscriptions = push_subscriptions("ab")
+        for subscription in push_subscriptions:
             api.subscribe_push(subscription)
-        api.unsubscribe_push(subscriptions[0].endpoint)
-        assert sqlite.fetch_push_subscriptions() == [subscriptions[1]]
+        api.unsubscribe_push(push_subscriptions[0].endpoint)
+        assert sqlite.fetch_push_subscriptions() == [push_subscriptions[1]]
 
-    def test_a_push_reaches_every_subscription_and_drops_gone_ones(self, push_provider):
-        subscriptions = [m.PushSubscription(f"https://push.example/{name}", "public-key", "auth-secret") for name in "abc"]
-        for subscription in subscriptions:
+    def test_a_push_reaches_every_subscription_and_drops_gone_ones(self, push_provider, push_subscriptions):
+        push_subscriptions = push_subscriptions("abc")
+        for subscription in push_subscriptions:
             api.subscribe_push(subscription)
         push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
         entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification=m.Notification(("leak",)))
         api._push_job("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None, ctx=api._ctx)
-        assert push_provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in subscriptions]
-        assert set(sqlite.fetch_push_subscriptions()) == {subscriptions[0], subscriptions[2]}
+        assert push_provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in push_subscriptions]
+        assert set(sqlite.fetch_push_subscriptions()) == {push_subscriptions[0], push_subscriptions[2]}
         assert [c.action for c in entry.children] == ["Push failed for `…xample/c`: boom"]
 
 
@@ -398,7 +400,7 @@ class TestActiveOverride:
     OVERRIDE = m.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))
 
     @pytest.fixture(autouse=True)
-    def _setup(self):
+    def theme_override(self):
         api.set_theme_override(*self.OVERRIDE)
 
     def test_no_override(self):
@@ -446,7 +448,7 @@ class TestGetSchedule:
         return m.Theme(name, tuple(m.ThemeEntry(time(8, 0), _routine(n, time(8, 0))) for n in routine_names))
 
     @pytest.fixture(autouse=True)
-    def _setup(self):
+    def themes(self):
         self.themes = {
             "saturday": self._theme("saturday", "sat-r"),
             "sunday": self._theme("sunday", "sun-r"),
@@ -506,96 +508,92 @@ class TestPresence:
         api.mark_present(["Alice"], datetime(2026, 1, 4, 23, 30, tzinfo=config.settings.tz), TRIGGER)
         assert api.present_names() == set()
 
-    def test_run_iot_job_skips_when_presence_absent(self, dispatched):
+    def test_run_iot_job_skips_when_presence_absent(self, command_dispatch):
         rule = self._routine("partner-r", "Alice")
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_not_called()
+        command_dispatch.assert_not_called()
 
-    def test_run_iot_job_runs_when_presence_present(self, dispatched):
+    def test_run_iot_job_runs_when_presence_present(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("partner-r", "Alice")
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag="Alice"),)), force=False, entry=ANY)
+        command_dispatch.assert_called_once_with(
+            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag="Alice"),)), force=False, entry=ANY
+        )
 
-    def test_run_iot_job_runs_when_no_presence_required(self, dispatched):
+    def test_run_iot_job_runs_when_no_presence_required(self, command_dispatch):
         rule = _routine("r", time(8, 0), em.Command(m.Devices(orc.Light.a), m.OFF))
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
+        command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
-    def test_run_iot_job_system_trigger_bypasses_presence(self, dispatched):
+    def test_run_iot_job_system_trigger_bypasses_presence(self, command_dispatch):
         rule = self._routine("reset-r", m.Tag.SYSTEM)
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=False, entry=ANY)
+        command_dispatch.assert_called_once_with(
+            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=False, entry=ANY
+        )
 
-    def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, dispatched):
+    def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
         rule = self._routine("anyone-r", m.Tag.ANYONE)
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.ANYONE),)), force=False, entry=ANY)
+        command_dispatch.assert_called_once_with(
+            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.ANYONE),)), force=False, entry=ANY
+        )
 
-    def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, dispatched):
+    def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, command_dispatch):
         rule = self._routine("anyone-r", m.Tag.ANYONE)
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_not_called()
+        command_dispatch.assert_not_called()
 
-    def test_skip_log_blames_absence(self, dispatched):
+    def test_skip_log_blames_absence(self, command_dispatch):
         rule = self._routine("sunny-r", "SUNNY")
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_not_called()
+        command_dispatch.assert_not_called()
         assert "nobody home" in api.log_entries()[0].action
 
-    def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, dispatched):
+    def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("cloudy-r", "CLOUDY")
         api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
-        dispatched.assert_not_called()
+        command_dispatch.assert_not_called()
         assert "CLOUDY" in api.log_entries()[0].action
 
-    def test_replay_day_skips_routines_for_absent_people(self, entry, dispatched):
+    def test_replay_day_skips_routines_for_absent_people(self, log_entry, command_dispatch):
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]):
-            api.replay_day(api.local_now(), entry)
-        dispatched.assert_called_once_with((), force=True, entry=entry)
+            api.replay_day(api.local_now(), log_entry)
+        command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
 
-    def test_replay_day_runs_routines_for_present_people(self, entry, dispatched):
+    def test_replay_day_runs_routines_for_present_people(self, log_entry, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
         with patch.object(api, "get_schedule", return_value=[(past, partner)]):
-            api.replay_day(api.local_now(), entry)
-        squished = dispatched.call_args.args[0]
+            api.replay_day(api.local_now(), log_entry)
+        squished = command_dispatch.call_args.args[0]
         assert [(c.subject.one(), c.value) for c in squished] == [(orc.Light.a, m.OFF)]
 
-    def test_replay_day_skips_skip_replay_routines(self, entry, dispatched):
+    def test_replay_day_skips_skip_replay_routines(self, log_entry, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         meeting = replace(self._routine("meeting-r", "Alice"), tags=frozenset({m.SKIP_REPLAY_TAG}))
         with patch.object(api, "get_schedule", return_value=[(past, meeting)]):
-            api.replay_day(api.local_now(), entry)
-        dispatched.assert_called_once_with((), force=True, entry=entry)
+            api.replay_day(api.local_now(), log_entry)
+        command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
 
-    def test_check_presence_continues_when_one_host_fails_to_resolve(self):
-        with patch.object(config, "people", {"Alice": {("alice.local", "aa:aa:aa:aa:aa:aa")}, "Bob": {("bob.local", "bb:bb:bb:bb:bb:bb")}}):
+    def test_check_presence_continues_when_one_host_fails_to_resolve(self, fake_lan):
+        def resolve(host):
+            if host == "alice.local":
+                raise RuntimeError("dns boom")
+            return "10.0.0.2"
 
-            def resolve(host):
-                if host == "alice.local":
-                    raise RuntimeError("dns boom")
-                return "10.0.0.2"
-
-            class FakeSniffer:
-                def __init__(self, *a, **k):
-                    self.results = [net.Ether() / net.ARP(op=2, psrc="10.0.0.2")]
-
-                def start(self): ...
-                def join(self, *a, **k): ...
-
-            with (
-                patch.object(net.socket, "gethostbyname", side_effect=resolve),
-                patch.object(net, "AsyncSniffer", FakeSniffer),
-                patch.object(net, "sendp"),
-            ):
-                api.check_presence(TRIGGER)
+        with (
+            patch.object(config, "people", {"Alice": {("alice.local", "aa:aa:aa:aa:aa:aa")}, "Bob": {("bob.local", "bb:bb:bb:bb:bb:bb")}}),
+            patch.object(net.socket, "gethostbyname", side_effect=resolve),
+        ):
+            api.check_presence(TRIGGER)
         assert api.present_names() == {"Bob"}
 
     def test_check_presence_with_only_tags_reads_memory(self):
@@ -627,8 +625,8 @@ class TestPresence:
         assert api.present_names() == set()
 
     @staticmethod
-    def _reported(entry):
-        return [entry.action, *(c.action for c in entry.children)]
+    def _reported(log_entry):
+        return [log_entry.action, *(c.action for c in log_entry.children)]
 
     def test_mark_reports_detected_once(self):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)

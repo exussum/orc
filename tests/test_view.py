@@ -25,7 +25,7 @@ def _room(*commands):
 
 
 @pytest.fixture
-def rooms(monkeypatch):
+def config_rooms(monkeypatch):
     def install(payload):
         monkeypatch.setattr(config, "rooms", payload)
 
@@ -33,7 +33,7 @@ def rooms(monkeypatch):
 
 
 @pytest.fixture
-def client(ctx):
+def flask_client(ctx):
     app = Flask(__name__, template_folder="../src/orc/templates")
     app.register_blueprint(bp)
     app.orc = ctx
@@ -46,147 +46,143 @@ def client(ctx):
     [("orc.internal.example", "Orc"), ("orc.internal.example:8000", "Orc"), ("orc.example", "Orc Remote")],
     ids=["internal", "internal-port", "remote"],
 )
-def test_manifest_titles_the_remote_host(client, host, title):
-    manifest = client.get("/manifest.json", headers={"Host": host}).json
+def test_manifest_titles_the_remote_host(flask_client, host, title):
+    manifest = flask_client.get("/manifest.json", headers={"Host": host}).json
     assert (manifest["name"], manifest["short_name"]) == (title, title)
 
 
 # --- /api/run: 4-way branch ---
 
 
-def test_console_plugin(client, ctx):
+def test_console_plugin(flask_client, ctx):
     plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device, entry: None)
     with (
         patch.object(config, "plugins", (plugin,)),
         patch("orc.plugins.execute_plugin") as exec_plugin,
     ):
-        response = client.get("/api/run/do-thing")
+        response = flask_client.get("/api/run/do-thing")
     assert response.status_code == 200
     exec_plugin.assert_called_once_with(ctx, plugin, None, entry=ANY)
 
 
-def test_console_schedule_routine(client, dispatched):
-    routine = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM))
-    with patch.object(config, "schedule_routines", {"r": routine}), patch.object(config, "plugins", {}):
-        client.get("/api/run/r")
-    dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY)
+def test_console_schedule_routine(flask_client, command_dispatch):
+    rule = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM))
+    with patch.object(config, "schedule_routines", {"r": rule}), patch.object(config, "plugins", {}):
+        flask_client.get("/api/run/r")
+    command_dispatch.assert_called_once_with(
+        m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY
+    )
 
 
-def test_console_ad_hoc(client, dispatched):
+def test_console_ad_hoc(flask_client, config_ad_hoc, command_dispatch):
     reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
-    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),))
-    with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset):
-        client.get("/api/run/r")
-    dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),))
+    with config_ad_hoc({"r": action}, reset_config=reset):
+        flask_client.get("/api/run/r")
+    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
 
 
-def test_console_ad_hoc_no_reset(client, dispatched):
-    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
-    with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}):
-        client.get("/api/run/r")
-    dispatched.assert_called_once_with(m.squish(routine.commands), force=True, entry=ANY)
+def test_console_ad_hoc_no_reset(flask_client, config_ad_hoc, command_dispatch):
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
+    with config_ad_hoc({"r": action}):
+        flask_client.get("/api/run/r")
+    command_dispatch.assert_called_once_with(m.squish(action.commands), force=True, entry=ANY)
 
 
-def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(client, ctx, dispatched):
-    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False, delay=timedelta(minutes=7))
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}),
-        freeze_time(api.local_now()) as frozen,
-    ):
-        client.get("/api/run/r")
+def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, config_ad_hoc, command_dispatch):
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False, delay=timedelta(minutes=7))
+    with config_ad_hoc({"r": action}), freeze_time(api.local_now()) as frozen:
+        flask_client.get("/api/run/r")
         frozen.tick(timedelta(minutes=7))
         ctx.scheduler.once.call_args.args[0](ctx=ctx)
     (queued,) = api.log_entries()
     assert [c.action for c in queued.children] == ["`r`"]
-    dispatched.assert_called_once_with(routine.commands, force=True, entry=queued)
+    command_dispatch.assert_called_once_with(action.commands, force=True, entry=queued)
 
 
-def test_console_ad_hoc_snapshot_skipped_for_web_callers(client, ctx, dispatched):
-    routine = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
+def test_console_ad_hoc_snapshot_skipped_for_web_callers(flask_client, ctx, config_ad_hoc, command_dispatch):
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
-    with (
-        patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={"r": routine}, reset_config=reset),
-        patch.object(api, "capture_lights") as capture,
-    ):
-        client.get("/api/run/r")
+    with config_ad_hoc({"r": action}, reset_config=reset), patch.object(api, "capture_lights") as capture:
+        flask_client.get("/api/run/r")
     assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots()
     capture.assert_not_called()
-    dispatched.assert_called_once_with((*reset.commands, *routine.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
 
 
-def test_console_unknown_returns_404(client):
-    with patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines={}):
-        response = client.get("/api/run/nope")
+def test_console_unknown_returns_404(flask_client, config_ad_hoc):
+    with config_ad_hoc({}):
+        response = flask_client.get("/api/run/nope")
     assert response.status_code == 404
 
 
 # --- /api/room: 4-way branch on state ---
 
 
-def test_room_on(client, rooms, dispatched):
-    rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
-    client.get("/api/room/Living Room?state=on")
-    dispatched.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
+def test_room_on(flask_client, config_rooms, command_dispatch):
+    config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
+    flask_client.get("/api/room/Living Room?state=on")
+    command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
 
 
-def test_room_off_turns_all_off(client, rooms, dispatched):
-    rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
-    client.get("/api/room/Living Room?state=off")
-    (cmds,), _ = dispatched.call_args
+def test_room_off_turns_all_off(flask_client, config_rooms, command_dispatch):
+    config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
+    flask_client.get("/api/room/Living Room?state=off")
+    (cmds,), _ = command_dispatch.call_args
     assert all(c.value == m.OFF for c in cmds)
 
 
-def test_room_follow(client, rooms, dispatched):
-    rooms(
+def test_room_follow(flask_client, config_rooms, command_dispatch):
+    config_rooms(
         {
             "Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON)),
             "Bedroom": _room(em.Command(m.Devices(orc.Light.b), m.ON)),
         }
     )
-    client.get("/api/room/Living Room?state=follow")
+    flask_client.get("/api/room/Living Room?state=follow")
     expected = (
         em.Command(m.Devices(orc.Light.a), m.OFF),
         em.Command(m.Devices(orc.Light.b), m.OFF),
         em.Command(m.Devices(orc.Light.a), m.ON),
     )
-    dispatched.assert_called_once_with(expected, force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(expected, force=True, entry=ANY)
 
 
-def test_room_unknown_state_returns_400(client, rooms):
-    rooms({"Living Room": ()})
-    response = client.get("/api/room/Living Room?state=bogus")
+def test_room_unknown_state_returns_400(flask_client, config_rooms):
+    config_rooms({"Living Room": ()})
+    response = flask_client.get("/api/room/Living Room?state=bogus")
     assert (response.status_code, response.get_json()) == (400, {"error": "Unknown room state: bogus"})
 
 
-def test_room_unknown_id_returns_404(client, rooms, dispatched):
-    rooms({})
-    response = client.get("/api/room/nope?state=on")
+def test_room_unknown_id_returns_404(flask_client, config_rooms, command_dispatch):
+    config_rooms({})
+    response = flask_client.get("/api/room/nope?state=on")
     assert response.status_code == 404
-    dispatched.assert_not_called()
+    command_dispatch.assert_not_called()
 
 
 # --- /api/schedule/theme: form parsing + conditional date.fromisoformat ---
 
 
-def test_set_theme_clear_passes_none_dates(client, ctx):
+def test_set_theme_clear_passes_none_dates(flask_client, ctx):
     with patch.object(api, "apply_theme_change") as apply_change:
-        client.post("/api/schedule/theme", data={"theme": ""})
+        flask_client.post("/api/schedule/theme", data={"theme": ""})
     apply_change.assert_called_once_with(ctx, "", None, None, m.Manual("theme"))
 
 
-def test_set_theme_set_parses_dates(client, ctx):
+def test_set_theme_set_parses_dates(flask_client, ctx):
     theme = next(iter(orc.config.themes))
     with patch.object(api, "apply_theme_change") as apply_change:
-        client.post(
+        flask_client.post(
             "/api/schedule/theme",
             data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"},
         )
     apply_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
 
 
-def test_set_theme_rejects_unknown_theme(client, ctx):
+def test_set_theme_rejects_unknown_theme(flask_client, ctx):
     with patch.object(api, "apply_theme_change") as apply_change:
-        response = client.post(
+        response = flask_client.post(
             "/api/schedule/theme",
             data={"theme": "vacation", "start": "2100-01-01", "end": "2100-01-10"},
         )
@@ -197,9 +193,9 @@ def test_set_theme_rejects_unknown_theme(client, ctx):
 # --- /api/durations ---
 
 
-def test_durations_returns_stats(client):
+def test_durations_returns_stats(flask_client):
     with patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}):
-        response = client.get("/api/durations")
+        response = flask_client.get("/api/durations")
     assert response.status_code == 200
     assert response.get_json() == {
         "TV Lights": {"avg": 3.0, "samples": 4, "delay": "0:00:00"},
@@ -211,30 +207,30 @@ def test_durations_returns_stats(client):
 
 
 @pytest.mark.parametrize("paused", [True, False])
-def test_pause_sets_the_absolute_state(client, ctx, paused):
+def test_pause_sets_the_absolute_state(flask_client, ctx, paused):
     ctx.scheduler.set_paused.return_value = True
-    client.get(f"/api/schedule/iot-x/pause?paused={int(paused)}")
+    flask_client.get(f"/api/schedule/iot-x/pause?paused={int(paused)}")
     ctx.scheduler.set_paused.assert_called_once_with("iot-x", paused)
 
 
-def test_pause_unknown_job_returns_404(client, ctx):
+def test_pause_unknown_job_returns_404(flask_client, ctx):
     ctx.scheduler.set_paused.return_value = False
-    response = client.get("/api/schedule/nope/pause?paused=1")
+    response = flask_client.get("/api/schedule/nope/pause?paused=1")
     assert response.status_code == 404
 
 
-def test_device_missing_state_returns_400(client):
-    response = client.get("/api/device/nope")
+def test_device_missing_state_returns_400(flask_client):
+    response = flask_client.get("/api/device/nope")
     assert (response.status_code, response.get_json()) == (400, {"error": "Missing state"})
 
 
-def test_checkin_unknown_person_returns_404(client):
-    response = client.get("/api/presence/nobody/checkin")
+def test_checkin_unknown_person_returns_404(flask_client):
+    response = flask_client.get("/api/presence/nobody/checkin")
     assert (response.status_code, response.get_json()) == (404, {"error": "Unknown person: nobody"})
 
 
-def test_device_unknown_returns_404(client):
-    response = client.get("/api/device/nope?state=on")
+def test_device_unknown_returns_404(flask_client):
+    response = flask_client.get("/api/device/nope?state=on")
     assert response.status_code == 404
 
 
@@ -253,7 +249,7 @@ def _fake_iot_job(name="job", trigger=m.Tag.SYSTEM, run_date=None, skip_replay=F
     return job
 
 
-def _get_schedule(client, jobs, present_names=()):
+def _get_schedule(flask_client, jobs, present_names=()):
     with patch.multiple(
         api,
         fetch_jobs_by_type=MagicMock(return_value=jobs),
@@ -261,7 +257,7 @@ def _get_schedule(client, jobs, present_names=()):
         present_names=MagicMock(return_value=set(present_names)),
         fetch_durations=MagicMock(side_effect=lambda mapper=None: mapper([]) if mapper else []),
     ):
-        return client.get("/schedule/")
+        return flask_client.get("/schedule/")
 
 
 @pytest.mark.parametrize(
@@ -277,31 +273,31 @@ def _get_schedule(client, jobs, present_names=()):
     ],
     ids=["system", "me_absent", "me_present", "anyone_present", "anyone_absent", "weather", "skip_replay"],
 )
-def test_schedule_badges(client, kwargs, present, present_badges, absent_badges):
-    response = _get_schedule(client, [_fake_iot_job(**kwargs)], present_names=present)
+def test_schedule_badges(flask_client, kwargs, present, present_badges, absent_badges):
+    response = _get_schedule(flask_client, [_fake_iot_job(**kwargs)], present_names=present)
     for badge in present_badges:
         assert badge in response.data
     for badge in absent_badges:
         assert badge not in response.data
 
 
-def test_log_page_bells_a_notifying_line_and_its_parent(client):
+def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
     trigger = m.Manual("bell")
     api.log(m.LogSource.SYSTEM, "Walk in", trigger)
     api.log(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
-    html = client.get("/log/").get_data(as_text=True)
+    html = flask_client.get("/log/").get_data(as_text=True)
     assert html.count("🔔") == 2
 
 
-def test_system_page_adds_dewpoint_to_sensors(client):
+def test_system_page_adds_dewpoint_to_sensors(flask_client):
     status = m.DeviceStatus(name="living room sensor", details={"temperature": 77, "humidity": "60"})
     with patch.object(api, "capture_sensors", return_value=[status]):
-        html = client.get("/system/").get_data(as_text=True)
+        html = flask_client.get("/system/").get_data(as_text=True)
     assert "dewpoint" in html and "62.0" in html
 
 
-def test_system_page_lists_each_light(client):
-    response = client.get("/system/")
+def test_system_page_lists_each_light(flask_client):
+    response = flask_client.get("/system/")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert all(f">{light.name}</td>" in html for light in config.devices.Light)
@@ -313,22 +309,22 @@ MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gec
 ANDROID = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/128.0 Mobile Safari/537.36"}
 
 
-def test_push_open_from_a_mac_hands_a_meet_link_to_chrome(client):
-    response = client.get("/api/push/open", query_string={"url": "https://meet.google.com/abc?x=1"}, headers=MAC)
+def test_push_open_from_a_mac_hands_a_meet_link_to_chrome(flask_client):
+    response = flask_client.get("/api/push/open", query_string={"url": "https://meet.google.com/abc?x=1"}, headers=MAC)
     assert response.status_code == 302
     assert response.headers["Location"] == "orc-chrome://meet.google.com/abc?x=1"
 
 
-def test_push_open_elsewhere_redirects_to_the_meet_link(client):
-    response = client.get("/api/push/open", query_string={"url": "https://meet.google.com/abc"}, headers=ANDROID)
+def test_push_open_elsewhere_redirects_to_the_meet_link(flask_client):
+    response = flask_client.get("/api/push/open", query_string={"url": "https://meet.google.com/abc"}, headers=ANDROID)
     assert response.status_code == 302
     assert response.headers["Location"] == "https://meet.google.com/abc"
 
 
 @pytest.mark.parametrize("url", ["https://us02web.zoom.us/j/123", "https://teams.microsoft.com/l/meetup-join/abc"])
 @pytest.mark.parametrize("headers", [MAC, ANDROID])
-def test_push_open_redirects_zoom_and_teams_everywhere(client, url, headers):
-    response = client.get("/api/push/open", query_string={"url": url}, headers=headers)
+def test_push_open_redirects_zoom_and_teams_everywhere(flask_client, url, headers):
+    response = flask_client.get("/api/push/open", query_string={"url": url}, headers=headers)
     assert response.status_code == 302
     assert response.headers["Location"] == url
 
@@ -345,6 +341,6 @@ def test_push_open_redirects_zoom_and_teams_everywhere(client, url, headers):
         "https://evil.example/?u=https://meet.google.com/abc",
     ],
 )
-def test_push_open_rejects_anything_but_meeting_links(client, url):
-    response = client.get("/api/push/open", query_string={"url": url}, headers=MAC)
+def test_push_open_rejects_anything_but_meeting_links(flask_client, url):
+    response = flask_client.get("/api/push/open", query_string={"url": url}, headers=MAC)
     assert response.status_code == 400

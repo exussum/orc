@@ -1,6 +1,5 @@
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -16,20 +15,31 @@ from orc_extras.travel.dal.drive import tomtom
 from orc_extras.travel.dal.flight import stub as flight_stub
 
 from orc.kernel.declarations import Declarations
+from tests.conftest import plugin_config
 
-FIXTURE = Path(__file__).parent / "fixture"
 ARRIVE = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
 
 
-def _setup_runtime(ctx):
-    ctx.plugin_state = {}
-    ctx.config.plugin_configs = {travel.CONFIG: (FIXTURE / "travel.orc").read_text()}
-    travel.setup(ctx)
-    return ctx.plugin_state[travel]
+@pytest.fixture
+def home_travel_job():
+    return m.TravelJob("Home", "Home", ARRIVE, set())
+
+
+@pytest.fixture
+def flight_travel_job():
+    return m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
+
+
+@pytest.fixture
+def travel_db():
+    conn = sqlite3.connect(":memory:")
+    connection = lambda: conn  # noqa: E731
+    travel_sqlite.init_db(connection)
+    return connection
 
 
 def test_travel_declares_its_configured_keys():
-    builder = Declarations(plugin_configs={travel.CONFIG: (FIXTURE / "travel.orc").read_text()})
+    builder = Declarations(plugin_configs=plugin_config(travel, "travel"))
     travel.declare(builder)
     assert builder.secrets == {"TOMTOM_KEY": cast.nonblank, "AERODATABOX_KEY": cast.nonblank}
 
@@ -53,7 +63,10 @@ def _runtime(extras, buffer=0):
 
 
 def test_travel_config_loads(ctx):
-    rt = _setup_runtime(ctx)
+    ctx.plugin_state = {}
+    ctx.config.plugin_configs = plugin_config(travel, "travel")
+    travel.setup(ctx)
+    rt = ctx.plugin_state[travel]
     assert rt.settings == m.Settings(
         drive_backend="orc_extras.travel.dal.drive.stub",
         flight_backend="orc_extras.travel.dal.flight.stub",
@@ -82,31 +95,25 @@ def test_backends_resolve(path, func):
 
 
 @pytest.mark.parametrize(("status", "kept"), [(400, False), (429, True), (503, True)])
-def test_drive_minutes_evicts_the_geocode_only_on_a_bad_request(monkeypatch, status, kept):
-    conn = sqlite3.connect(":memory:")
-    connection = lambda: conn  # noqa: E731
-    travel_sqlite.init_db(connection)
-    travel_sqlite.insert_geocode(connection, "Dest", 1.0, 2.0)
+def test_drive_minutes_evicts_the_geocode_only_on_a_bad_request(monkeypatch, travel_db, status, kept):
+    travel_sqlite.insert_geocode(travel_db, "Dest", 1.0, 2.0)
     response = requests.Response()
     response.status_code = status
     monkeypatch.setattr(tomtom.requests, "get", lambda *a, **k: response)
 
     with pytest.raises(requests.HTTPError):
-        tomtom.drive_minutes(connection, "key", "origin", "Dest", 5)
+        tomtom.drive_minutes(travel_db, "key", "origin", "Dest", 5)
 
-    assert (travel_sqlite.fetch_geocode(connection, "Dest") is not None) == kept
+    assert (travel_sqlite.fetch_geocode(travel_db, "Dest") is not None) == kept
 
 
-def test_lookup_geocodes_again_after_an_eviction(monkeypatch):
-    conn = sqlite3.connect(":memory:")
-    connection = lambda: conn  # noqa: E731
-    travel_sqlite.init_db(connection)
-    travel_sqlite.insert_geocode(connection, "Dest", 0.0, 0.0)
-    travel_sqlite.delete_geocode(connection, "Dest")
+def test_lookup_geocodes_again_after_an_eviction(monkeypatch, travel_db):
+    travel_sqlite.insert_geocode(travel_db, "Dest", 0.0, 0.0)
+    travel_sqlite.delete_geocode(travel_db, "Dest")
     get = MagicMock(return_value=MagicMock(**{"json.return_value": {"results": [{"position": {"lat": 40.7, "lon": -74.0}}]}}))
     monkeypatch.setattr(tomtom.requests, "get", get)
 
-    assert tomtom._lookup(connection, "key", "Dest", 5) == (40.7, -74.0)
+    assert tomtom._lookup(travel_db, "key", "Dest", 5) == (40.7, -74.0)
     get.assert_called_once()
 
 
@@ -144,9 +151,8 @@ def test_from_submission_requires_destination_or_flight():
         m.TravelJob.from_submission(m.Submission(destination=None, arrive=ARRIVE, flight=None, extras=[]))
 
 
-def test_arrival_flight_uses_backend():
-    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
-    assert plugins._arrival(_runtime([]), job, timezone.utc) == m.Arrival(ARRIVE, "JFK", "1")
+def test_arrival_flight_uses_backend(flight_travel_job):
+    assert plugins._arrival(_runtime([]), flight_travel_job, timezone.utc) == m.Arrival(ARRIVE, "JFK", "1")
 
 
 def _boom(msg):
@@ -156,9 +162,10 @@ def _boom(msg):
     return raiser
 
 
-def test_evaluate_destination_schedules(ctx):
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
-    arrival, sched = plugins.evaluate(_with_runtime(ctx, _runtime([])), job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
+def test_evaluate_destination_schedules(ctx, home_travel_job):
+    arrival, sched = plugins.evaluate(
+        _with_runtime(ctx, _runtime([])), home_travel_job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None
+    )
     assert arrival == m.Arrival(ARRIVE, "Home", None)
     assert sched.leave_at is not None
 
@@ -170,31 +177,27 @@ def test_evaluate_destination_failure_bubbles_reason(ctx):
         plugins.evaluate(ctx, job, timezone.utc, ARRIVE - timedelta(hours=1), lambda: None)
 
 
-def test_evaluate_flight_same_day_checks_aviation(ctx):
+def test_evaluate_flight_same_day_checks_aviation(ctx, flight_travel_job):
     _with_runtime(ctx, _runtime([])._replace(flight=SimpleNamespace(arrival=_boom("no such flight"))))
-    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
     with pytest.raises(ValueError, match="no such flight"):
-        plugins.evaluate(ctx, job, timezone.utc, ARRIVE, lambda: None)
+        plugins.evaluate(ctx, flight_travel_job, timezone.utc, ARRIVE, lambda: None)
 
 
-def test_evaluate_flight_future_date_skips_check(ctx):
+def test_evaluate_flight_future_date_skips_check(ctx, flight_travel_job):
     _with_runtime(ctx, _runtime([])._replace(flight=SimpleNamespace(arrival=_boom("should not be called"))))
-    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
-    arrival, sched = plugins.evaluate(ctx, job, timezone.utc, ARRIVE - timedelta(days=5), lambda: None)
+    arrival, sched = plugins.evaluate(ctx, flight_travel_job, timezone.utc, ARRIVE - timedelta(days=5), lambda: None)
     assert arrival is None
     assert sched.leave_at is None
 
 
-def test_next_run_signals_leave_now_within_ten_minutes():
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
+def test_next_run_signals_leave_now_within_ten_minutes(home_travel_job):
     now = ARRIVE - timedelta(minutes=35)
-    sched = plugins.next_run(_runtime([]), job, now, m.Arrival(ARRIVE, "Home", None), lambda: None)
+    sched = plugins.next_run(_runtime([]), home_travel_job, now, m.Arrival(ARRIVE, "Home", None), lambda: None)
     assert sched == m.Schedule(ARRIVE - timedelta(minutes=30), None)
 
 
-def test_next_run_marks_late_and_computes_eta_if_leaving_now():
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
-    sched = plugins.next_run(_runtime([]), job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
+def test_next_run_marks_late_and_computes_eta_if_leaving_now(home_travel_job):
+    sched = plugins.next_run(_runtime([]), home_travel_job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
     assert sched.late is True
     assert sched.leave_at == ARRIVE - timedelta(minutes=30)
     assert sched.eta == ARRIVE + timedelta(minutes=30)
@@ -208,38 +211,33 @@ def test_next_run_leave_time_includes_selected_extras():
     assert sched.leave_at == ARRIVE - timedelta(minutes=40)
 
 
-def test_next_run_leave_time_includes_buffer():
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
-    sched = plugins.next_run(_runtime([], buffer=10), job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
+def test_next_run_leave_time_includes_buffer(home_travel_job):
+    sched = plugins.next_run(_runtime([], buffer=10), home_travel_job, ARRIVE, m.Arrival(ARRIVE, "Home", None), lambda: None)
     assert sched.leave_at == ARRIVE - timedelta(minutes=40)
 
 
-def test_next_run_waits_for_midnight_when_no_arrival():
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
-    sched = plugins.next_run(_runtime([]), job, ARRIVE - timedelta(days=1), None, lambda: None)
+def test_next_run_waits_for_midnight_when_no_arrival(home_travel_job):
+    sched = plugins.next_run(_runtime([]), home_travel_job, ARRIVE - timedelta(days=1), None, lambda: None)
     assert sched == m.Schedule(None, datetime(2026, 1, 1, tzinfo=timezone.utc))
 
 
-def test_next_run_steps_to_two_hours_before_leave():
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
-    sched = plugins.next_run(_runtime([]), job, ARRIVE - timedelta(hours=3), m.Arrival(ARRIVE, "Home", None), lambda: None)
+def test_next_run_steps_to_two_hours_before_leave(home_travel_job):
+    sched = plugins.next_run(_runtime([]), home_travel_job, ARRIVE - timedelta(hours=3), m.Arrival(ARRIVE, "Home", None), lambda: None)
     assert sched.next_fire == ARRIVE - timedelta(minutes=30) - timedelta(hours=2)
 
 
-def test_next_run_rechecks_every_ten_minutes_within_two_hours():
-    job = m.TravelJob("Home", "Home", ARRIVE, set())
+def test_next_run_rechecks_every_ten_minutes_within_two_hours(home_travel_job):
     now = ARRIVE - timedelta(hours=1)
-    sched = plugins.next_run(_runtime([]), job, now, m.Arrival(ARRIVE, "Home", None), lambda: None)
+    sched = plugins.next_run(_runtime([]), home_travel_job, now, m.Arrival(ARRIVE, "Home", None), lambda: None)
     assert sched.next_fire == now + timedelta(minutes=10)
 
 
-def test_run_job_syncs_arrive_to_live_verified_time(ctx, monkeypatch):
+def test_run_job_syncs_arrive_to_live_verified_time(ctx, monkeypatch, flight_travel_job):
     verified = ARRIVE + timedelta(hours=10)
     rt = _runtime([])._replace(flight=SimpleNamespace(arrival=lambda *a, **k: (verified, "JFK", None)))
     monkeypatch.setattr(plugins, "_reschedule", lambda *a, **k: None)
-    job = m.TravelJob("AA1", "", ARRIVE, set(), iata="AA1", airport="JFK")
     _with_runtime(ctx, rt)
     ctx.config.settings.tz = timezone.utc
     ctx.api.local_now.return_value = ARRIVE - timedelta(hours=3)
-    plugins.run_job(job, ctx=ctx)
-    assert job.arrive == verified
+    plugins.run_job(flight_travel_job, ctx=ctx)
+    assert flight_travel_job.arrive == verified

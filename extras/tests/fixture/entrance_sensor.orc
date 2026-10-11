@@ -15,7 +15,7 @@ message log_nobody    'Entrance motion with nobody tracked before or after'
 rules inside   'Lights Off'
 rules present  Silence
 rules absent   Dog
-rules shutdown 'Lights Off'
+rules shutdown 'Lamp Off'
 
 timed Day   8:00  22:00 'Day Scene'
 timed Night 22:00 8:00  'Night Scene'

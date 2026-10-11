@@ -20,6 +20,7 @@ from orc.model import OFF, ON, AcMode, AcState, Device, DeviceStatus, Source, St
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
+UNIT = SimpleNamespace(value="clip-1", name="LIVING")
 FM = api.load_fieldmap(MODEL)
 assert FM is not None
 
@@ -221,68 +222,71 @@ def test_sign_device_csr_issues_a_client_cert(ca_pem, device_csr, encoding):
 
 
 @pytest.fixture(autouse=True)
-def reset_stub():
+def reset_thinq_stub():
     stub.reset()
 
 
-@pytest.fixture
-def client():
-    app = Flask(__name__)
+def _orc(*units):
     settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtts_advertise=8883)
-    units = (SimpleNamespace(value=DEVICE_ID, name="LIVING", label="Living AC"),)
-    app.orc = SimpleNamespace(  # type: ignore[attr-defined]
+    return SimpleNamespace(
         plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())},
         api=MagicMock(),
         config=SimpleNamespace(devices=SimpleNamespace(AC=units)),
     )
+
+
+@pytest.fixture
+def flask_client():
+    app = Flask(__name__)
+    app.orc = _orc(SimpleNamespace(value=DEVICE_ID, name="LIVING", label="Living AC"))  # type: ignore[attr-defined]
     app.register_blueprint(web.enroll)
     return app.test_client()
 
 
-def test_route_endpoint_resolves_the_broker_ip(client, monkeypatch):
+def test_route_endpoint_resolves_the_broker_ip(flask_client, monkeypatch):
     monkeypatch.setattr(web.socket, "gethostbyname", lambda fqdn: {"orc.local": "10.0.0.5"}[fqdn])
-    assert client.get("/route").get_json() == api.route("common.lgthinq.com", 443, "10.0.0.5", 8883)
+    assert flask_client.get("/route").get_json() == api.route("common.lgthinq.com", 443, "10.0.0.5", 8883)
 
 
-def test_route_certificate_serves_the_ca(client, ca_pem):
-    body = client.get("/route/certificate?name=common-server").get_json()
+def test_route_certificate_serves_the_ca(flask_client, ca_pem):
+    body = flask_client.get("/route/certificate?name=common-server").get_json()
     assert body["result"]["certificatePem"] == ca_pem.decode()
 
 
-def test_route_certificate_lists_server_names_without_one(client):
-    assert client.get("/route/certificate").get_json() == {"resultCode": "0000", "result": ["common-server", "aws-iot"]}
+def test_route_certificate_lists_server_names_without_one(flask_client):
+    assert flask_client.get("/route/certificate").get_json() == {"resultCode": "0000", "result": ["common-server", "aws-iot"]}
 
 
-def test_device_certificate_signs_the_posted_csr(client, ca_pem, device_csr):
+def test_device_certificate_signs_the_posted_csr(flask_client, ca_pem, device_csr):
     csr_pem = device_csr.public_bytes(serialization.Encoding.PEM).decode()
-    body = client.post(f"/device/{DEVICE_ID}/certificate", json={"csr": csr_pem}).get_json()
+    body = flask_client.post(f"/device/{DEVICE_ID}/certificate", json={"csr": csr_pem}).get_json()
     cert = x509.load_pem_x509_certificate(body["result"]["certificatePem"].encode())
     assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == DEVICE_ID
 
 
-def test_state_endpoint_reports_the_default_device(client):
+def test_state_endpoint_reports_the_default_device(flask_client):
     stub.reset(states={DEVICE_ID: AcState("on", "cool", "low", 22.0, current_temperature=25.0)}, default=DEVICE_ID)
-    assert client.get("/state").get_json() == asdict(AcState("on", "cool", "low", 22.0, current_temperature=25.0))
+    assert flask_client.get("/state").get_json() == asdict(AcState("on", "cool", "low", 22.0, current_temperature=25.0))
 
 
-def test_state_endpoint_errors_with_no_device(client):
-    assert client.get("/state").get_json() == {"error": "no device"}
+def test_state_endpoint_errors_with_no_device(flask_client):
+    assert flask_client.get("/state").get_json() == {"error": "no device"}
 
 
 @pytest.mark.parametrize(
     ("body", "command"),
     [({"device": DEVICE_ID, "mode": "cool", "temperature": 72}, "cool:low:72"), ({"mode": "off"}, "off")],
 )
-def test_command_endpoint_runs_the_device_command(client, body, command):
+def test_command_endpoint_runs_the_device_command(flask_client, body, command):
     stub.reset(states={DEVICE_ID: AcState("on", "dry", "low", 22.0, current_temperature=25.0)}, devices=[DEVICE_ID], default=DEVICE_ID)
-    assert client.post("/command", json=body).get_json() == {"status": "sent", "device": DEVICE_ID, "command": command}
-    client.application.orc.api.device_command.assert_called_once_with("LIVING", command, ANY)
+    assert flask_client.post("/command", json=body).get_json() == {"status": "sent", "device": DEVICE_ID, "command": command}
+    flask_client.application.orc.api.device_command.assert_called_once_with("LIVING", command, ANY)
 
 
 @pytest.mark.parametrize(("default", "body"), [(None, {"mode": "cool"}), (DEVICE_ID, {"mode": "cool"})])
-def test_command_endpoint_refuses_a_half_request(client, default, body):
+def test_command_endpoint_refuses_a_half_request(flask_client, default, body):
     stub.reset(default=default)
-    assert "error" in client.post("/command", json=body).get_json()
+    assert "error" in flask_client.post("/command", json=body).get_json()
 
 
 def test_state_prints_as_a_command():
@@ -304,64 +308,64 @@ def _data(message):
 
 
 @pytest.fixture
-def adapter():
+def mqtt_adapter():
     adapter = Thinq({"clip-1": "Living AC", "clip-2": "Bedroom AC"})
     adapter.sent = []
     adapter.attach(adapter.sent.append)
     return adapter
 
 
-def _provision(adapter, device_id="clip-1"):
-    return adapter.decode(f"clip/provisioning/devices/{device_id}", {"cmd": "preDeploy", "kind": MODEL})
+def _provision(mqtt_adapter, device_id="clip-1"):
+    return mqtt_adapter.decode(f"clip/provisioning/devices/{device_id}", {"cmd": "preDeploy", "kind": MODEL})
 
 
-def _report(adapter, **values):
-    return adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame(values)})
+def _report(mqtt_adapter, **values):
+    return mqtt_adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame(values)})
 
 
-def test_provisioning_learns_the_model_and_answers(adapter):
-    assert _provision(adapter) == ()
-    (reply,) = adapter.sent
+def test_provisioning_learns_the_model_and_answers(mqtt_adapter):
+    assert _provision(mqtt_adapter) == ()
+    (reply,) = mqtt_adapter.sent
     assert (reply.topic, reply.payload["cmd"], reply.payload["data"]["provisioningType"]) == (
         "lime/devices/clip-1",
         "completeProvisioning",
         "preDeploy",
     )
-    assert adapter.devices() == ["clip-1"]
-    assert adapter.decode("clip/provisioning/devices/clip-1", {"cmd": "completeProvisioning"}) == ()
-    assert len(adapter.sent) == 1
+    assert mqtt_adapter.devices() == ["clip-1"]
+    assert mqtt_adapter.decode("clip/provisioning/devices/clip-1", {"cmd": "completeProvisioning"}) == ()
+    assert len(mqtt_adapter.sent) == 1
 
 
-def test_provisioning_ack_polls_the_unit(adapter):
-    assert adapter.decode("clip/message/devices/clip-1", {"cmd": "completeProvisioning_ack"}) == ()
-    assert [_data(r) for r in adapter.sent] == [api.build_query(api.Query.CAPABILITIES), api.build_query(api.Query.VALUES)]
+def test_provisioning_ack_polls_the_unit(mqtt_adapter):
+    assert mqtt_adapter.decode("clip/message/devices/clip-1", {"cmd": "completeProvisioning_ack"}) == ()
+    assert [_data(r) for r in mqtt_adapter.sent] == [api.build_query(api.Query.CAPABILITIES), api.build_query(api.Query.VALUES)]
 
 
-def test_first_packet_updates_state_without_a_change(adapter):
-    _provision(adapter)
-    decoded = adapter.decode(
+def test_first_packet_updates_state_without_a_change(mqtt_adapter):
+    _provision(mqtt_adapter)
+    decoded = mqtt_adapter.decode(
         "clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 22})}
     )
     assert decoded == ()
-    assert adapter.fetch_state("clip-1") == AcState("on", "cool", "low", temperature=72)
-    (state,) = adapter.snapshot()
+    assert mqtt_adapter.fetch_state("clip-1") == AcState("on", "cool", "low", temperature=72)
+    (state,) = mqtt_adapter.snapshot()
     assert state.device == Device("clip-1", "Living AC", "lg_ac")
     assert state.attributes["mode"] == "cool"
 
 
-def test_packet_learns_the_model_without_provisioning(adapter):
+def test_packet_learns_the_model_without_provisioning(mqtt_adapter):
     doc = {"cmd": "device_packet", "kind": MODEL, "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 22})}
-    assert adapter.decode("clip/message/devices/clip-1", doc) == ()
-    assert adapter.devices() == ["clip-1"]
-    assert adapter.fetch_state("clip-1") == AcState("on", "cool", "low", temperature=72)
+    assert mqtt_adapter.decode("clip/message/devices/clip-1", doc) == ()
+    assert mqtt_adapter.devices() == ["clip-1"]
+    assert mqtt_adapter.fetch_state("clip-1") == AcState("on", "cool", "low", temperature=72)
 
 
-def test_later_packet_merges_and_reports_one_state_change(adapter):
-    _provision(adapter)
-    adapter.decode(
+def test_later_packet_merges_and_reports_one_state_change(mqtt_adapter):
+    _provision(mqtt_adapter)
+    mqtt_adapter.decode(
         "clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "cool", "fan_mode": "low", "temperature": 22})}
     )
-    decoded = adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "dry"})})
+    decoded = mqtt_adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame({"mode": "dry"})})
     assert decoded == (
         Status(
             Device("clip-1", "Living AC", "lg_ac"),
@@ -380,23 +384,23 @@ def test_later_packet_merges_and_reports_one_state_change(adapter):
         (True, [{"mode": "cool", "fan_mode": "low", "temperature": 22}, {"mode": "dry"}], {"mode": "dry"}),
     ],
 )
-def test_packets_that_change_nothing_report_nothing(adapter, provisioned, earlier, frame):
+def test_packets_that_change_nothing_report_nothing(mqtt_adapter, provisioned, earlier, frame):
     if provisioned:
-        _provision(adapter)
+        _provision(mqtt_adapter)
     for values in earlier:
-        _report(adapter, **values)
-    assert _report(adapter, **frame) == ()
+        _report(mqtt_adapter, **values)
+    assert _report(mqtt_adapter, **frame) == ()
 
 
-def test_timesync_is_answered(adapter):
-    assert adapter.decode("clip/message/devices/clip-1", {"cmd": "req_timesync"}) == ()
-    (reply,) = adapter.sent
+def test_timesync_is_answered(mqtt_adapter):
+    assert mqtt_adapter.decode("clip/message/devices/clip-1", {"cmd": "req_timesync"}) == ()
+    (reply,) = mqtt_adapter.sent
     assert (reply.topic, reply.payload["cmd"]) == ("lime/devices/clip-1", "resp_timesync")
 
 
-def test_start_nudges_each_configured_unit(adapter):
-    adapter.start()
-    assert [(msg.topic, msg.retain, _data(msg)) for msg in adapter.sent] == [
+def test_start_nudges_each_configured_unit(mqtt_adapter):
+    mqtt_adapter.start()
+    assert [(msg.topic, msg.retain, _data(msg)) for msg in mqtt_adapter.sent] == [
         ("lime/devices/clip-1", True, api.build_query(api.Query.VALUES)),
         ("lime/devices/clip-2", True, api.build_query(api.Query.VALUES)),
     ]
@@ -430,11 +434,11 @@ def test_tap_sees_every_message():
         ({"mode": "cool", "fan_mode": "low", "temperature": 25, "power": "on"}, AcState(ON, AcMode.COOL, "low", temperature=77), None),
     ],
 )
-def test_encode_sends_only_what_the_unit_does_not_hold(adapter, held, command, sent):
-    _provision(adapter)
+def test_encode_sends_only_what_the_unit_does_not_hold(mqtt_adapter, held, command, sent):
+    _provision(mqtt_adapter)
     if held:
-        _report(adapter, **held)
-    messages = adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), command)
+        _report(mqtt_adapter, **held)
+    messages = mqtt_adapter.encode(UNIT, command)
     if sent is None:
         assert messages == ()
     else:
@@ -442,44 +446,40 @@ def test_encode_sends_only_what_the_unit_does_not_hold(adapter, held, command, s
         assert (msg.topic, _data(msg)) == ("lime/devices/clip-1", api.build_command(FM, sent))
 
 
-def _asked_for_high_fan(adapter):
-    _provision(adapter)
-    _report(adapter, mode="cool", fan_mode="low", temperature=22, power="on")
-    adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcState(ON, AcMode.COOL, "high", temperature=72))
+def _asked_for_high_fan(mqtt_adapter):
+    _provision(mqtt_adapter)
+    _report(mqtt_adapter, mode="cool", fan_mode="low", temperature=22, power="on")
+    mqtt_adapter.encode(UNIT, AcState(ON, AcMode.COOL, "high", temperature=72))
 
 
 @pytest.mark.parametrize(("report", "source"), [({"fan_mode": "high"}, Source.ORC), ({"mode": "dry"}, Source.EXTERNAL)])
-def test_a_report_is_orc_only_when_it_shows_what_was_asked(adapter, report, source):
-    _asked_for_high_fan(adapter)
-    (status,) = _report(adapter, **report)
+def test_a_report_is_orc_only_when_it_shows_what_was_asked(mqtt_adapter, report, source):
+    _asked_for_high_fan(mqtt_adapter)
+    (status,) = _report(mqtt_adapter, **report)
     assert status.source is source
 
 
-def test_an_answered_command_is_forgotten(adapter):
-    _asked_for_high_fan(adapter)
-    _report(adapter, fan_mode="high")
-    (status,) = _report(adapter, fan_mode="mid")
+def test_an_answered_command_is_forgotten(mqtt_adapter):
+    _asked_for_high_fan(mqtt_adapter)
+    _report(mqtt_adapter, fan_mode="high")
+    (status,) = _report(mqtt_adapter, fan_mode="mid")
     assert status.source is Source.EXTERNAL
 
 
-def test_encode_stale_id_commands_nothing(adapter):
-    _provision(adapter)
-    assert adapter.encode(SimpleNamespace(value="clip-stale", name="X"), AcState(power=OFF)) == ()
+def test_encode_stale_id_commands_nothing(mqtt_adapter):
+    _provision(mqtt_adapter)
+    assert mqtt_adapter.encode(SimpleNamespace(value="clip-stale", name="X"), AcState(power=OFF)) == ()
 
 
-def test_encode_without_a_field_map_fails_loudly(adapter):
-    adapter.decode("clip/provisioning/devices/clip-1", {"cmd": "preDeploy", "kind": "UNKNOWN"})
+def test_encode_without_a_field_map_fails_loudly(mqtt_adapter):
+    mqtt_adapter.decode("clip/provisioning/devices/clip-1", {"cmd": "preDeploy", "kind": "UNKNOWN"})
     with pytest.raises(RuntimeError):
-        adapter.encode(SimpleNamespace(value="clip-1", name="LIVING"), AcState(power=OFF))
+        mqtt_adapter.encode(UNIT, AcState(power=OFF))
 
 
 def test_ac_status_rows_decode_per_device():
     stub.reset(states={"clip-1": AcState("on", "cool", "low", 72, current_temperature=77)}, devices=["clip-1"])
-    ctx = SimpleNamespace(
-        config=SimpleNamespace(
-            devices=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"),))
-        )
-    )
+    ctx = _orc(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label="Living Room AC"))
     assert plugins._ac_status(stub, ctx) == [
         DeviceStatus(
             name="LIVING_ROOM_AC",
@@ -490,9 +490,7 @@ def test_ac_status_rows_decode_per_device():
 
 
 def test_ac_status_disconnected_device_is_blank():
-    ctx = SimpleNamespace(
-        config=SimpleNamespace(devices=SimpleNamespace(AC=(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label=None),)))
-    )
+    ctx = _orc(SimpleNamespace(value="clip-1", name="LIVING_ROOM_AC", label=None))
     assert plugins._ac_status(stub, ctx) == [
         DeviceStatus(
             name="LIVING_ROOM_AC",
@@ -502,8 +500,8 @@ def test_ac_status_disconnected_device_is_blank():
     ]
 
 
-def test_capture_endpoint_dumps_recorded_frames(client):
-    client.application.orc.plugin_state[lg_ac].capture.record("clip/topic", {"cmd": "device_packet", "data": "0102"})
-    frames = client.get("/capture").get_json()
+def test_capture_endpoint_dumps_recorded_frames(flask_client):
+    flask_client.application.orc.plugin_state[lg_ac].capture.record("clip/topic", {"cmd": "device_packet", "data": "0102"})
+    frames = flask_client.get("/capture").get_json()
     assert frames[-1]["topic"] == "clip/topic"
     assert frames[-1]["payload"] == {"cmd": "device_packet", "data": "0102"}

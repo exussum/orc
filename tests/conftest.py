@@ -78,7 +78,7 @@ def reset_stubs():
 
 
 @pytest.fixture(autouse=True)
-def orc_state_db(tmp_path, monkeypatch):
+def config_jobs_db(tmp_path, monkeypatch):
     from orc import config
     from orc.dal import sqlite
 
@@ -100,13 +100,42 @@ def ctx():
 
 
 @pytest.fixture
-def dispatched():
+def command_dispatch():
     from unittest.mock import patch
 
     from orc import api
 
     with patch.object(api, "dispatch") as dispatch:
         yield dispatch
+
+
+@pytest.fixture
+def config_ad_hoc():
+    from unittest.mock import patch
+
+    from orc import config
+
+    def install(routines, **overrides):
+        return patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines=routines, **overrides)
+
+    return install
+
+
+@pytest.fixture
+def fake_lan():
+    from unittest.mock import patch
+
+    from orc.dal import net
+
+    class FakeSniffer:
+        def __init__(self, *a, **k):
+            self.results = [net.Ether() / net.ARP(op=2, psrc="10.0.0.2")]
+
+        def start(self): ...
+        def join(self, *a, **k): ...
+
+    with patch.object(net, "AsyncSniffer", FakeSniffer), patch.object(net, "sendp"):
+        yield
 
 
 @pytest.fixture
