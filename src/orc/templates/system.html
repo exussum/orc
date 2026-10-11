@@ -47,7 +47,7 @@
                 <div class="p-4">
                     <details>
                         <summary class="orc-accordion-summary">Lights</summary>
-                        {% call headed_table("", wrapper_class="mb-3 px-4 overflow-x-auto") %}
+                        {% call headed_table() %}
                             <tr>
                                 <th class="orc-th">Name</th>
                                 <th class="orc-th">State</th>
@@ -69,7 +69,7 @@
                     </details>
                     <details>
                         <summary class="orc-accordion-summary">Sounds</summary>
-                        {% call headed_table("", wrapper_class="mb-3 px-4 overflow-x-auto") %}
+                        {% call headed_table() %}
                             <tr>
                                 <th class="orc-th">Name</th>
                                 <th class="orc-th">Status</th>
@@ -88,12 +88,12 @@
                     </details>
                     <details>
                         <summary class="orc-accordion-summary">Sensors</summary>
-                        <div class="px-4">{{ status_list("", sensors) }}</div>
+                        <div class="px-4">{{ status_list(sensors) }}</div>
                     </details>
                     {% for title, rows in plugin_states %}
                         <details>
                             <summary class="orc-accordion-summary">{{ title }}</summary>
-                            <div class="px-4">{{ status_list("", rows) }}</div>
+                            <div class="px-4">{{ status_list(rows) }}</div>
                         </details>
                     {% endfor %}
                 </div>
@@ -110,9 +110,9 @@
                     <div class="px-4">
                         <ul class="list-disc pl-5 mb-3">
                             <li>Snapshot State:
-                                {% if ctx.engine.snapshots() %}
+                                {% if snapshots %}
                                     <ul class="list-disc pl-5">
-                                        {% for name, snap in ctx.engine.snapshots().items() %}
+                                        {% for name, snap in snapshots.items() %}
                                             <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
                                                 <ul class="list-disc pl-5">
                                                     {% for c in snap.routine if c.value != "off" %}
@@ -136,7 +136,7 @@
                 </details>
                 <details>
                     <summary class="orc-accordion-summary">Scheduled Jobs</summary>
-                    {% call headed_table("", wrapper_class="mb-3 px-4 overflow-x-auto") %}
+                    {% call headed_table() %}
                             <tr>
                                 <th class="orc-th">Name</th>
                                 <th class="orc-th">Next Run</th>
