@@ -189,10 +189,10 @@ ids, `<start>`/`<stop>` parsed into times) does that conversion itself, as
   `Rules(**sensor.rules)` — so a missing or misspelled trigger also fails at
   load.
 
-Each `rules` line names an ad_hoc from the main `config.orc`, run exactly
+Each `rules` line names an ad_hoc by id from the main `config.orc`, run exactly
 as tapping it in the UI would, `--delay` and reset included; `shutdown` is
 the exception, dispatched under the plugin's own snapshot. Each `timed` line
-names an ad_hoc or a routine id, resolved to commands at load and dispatched
+names an ad_hoc id or a routine id, resolved to commands at load and dispatched
 directly with the reset base composed in. The `timed` windows are scanned in
 file order and the first one containing the current time wins, so an
 overlapping window placed higher up overrides the ones below it. The winning

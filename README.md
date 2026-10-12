@@ -175,7 +175,7 @@ plugin Battery  orc.plugins.battery
 
 - **Buttons** runs an ad hoc routine when a remote is pressed. Each
   `remote <device> <button> <event> <action>` line maps one button and
-  event (`pushed`, `held`, ...) on a `Button` device to an ad hoc name; a
+  event (`pushed`, `held`, ...) on a `Button` device to an ad hoc id; a
   press with no matching line is ignored, and a line naming an unknown
   action logs and alerts. The log attributes the run to the remote.
 

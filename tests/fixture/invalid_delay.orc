@@ -1,1 +1,1 @@
-ad_hoc define X --delay=soon
+ad_hoc define AD_HOC_X X --delay=soon

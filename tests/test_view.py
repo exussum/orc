@@ -90,7 +90,7 @@ def test_console_ad_hoc_no_reset(flask_client, config_ad_hoc, command_dispatch):
 
 
 def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, config_ad_hoc, command_dispatch):
-    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False, delay=timedelta(minutes=7))
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), name="r", reset=False, delay=timedelta(minutes=7))
     with config_ad_hoc({"r": action}), freeze_time(api.local_now()) as frozen:
         flask_client.get("/api/run/r")
         frozen.tick(timedelta(minutes=7))
