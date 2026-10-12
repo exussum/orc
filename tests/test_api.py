@@ -445,7 +445,7 @@ class TestIsWorkingDay:
 class TestGetSchedule:
     @staticmethod
     def _theme(name, *routine_names):
-        return m.Theme(name, tuple(m.ThemeEntry(time(8, 0), _routine(n, time(8, 0))) for n in routine_names))
+        return m.Theme(name, tuple(m.ThemeEntry(time(8, 0), _routine(n, time(8, 0)), n) for n in routine_names))
 
     @pytest.fixture(autouse=True)
     def themes(self):
@@ -460,7 +460,7 @@ class TestGetSchedule:
 
     @staticmethod
     def _names(schedule):
-        return [routine.name for _, routine in schedule]
+        return [entry.routine.name for _, entry in schedule]
 
     def test_override_wins_over_weekday_named_theme(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
@@ -510,25 +510,25 @@ class TestPresence:
 
     def test_run_iot_job_skips_when_presence_absent(self, command_dispatch):
         rule = self._routine("partner-r", "Alice")
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("partner-r", "Alice")
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
             m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag="Alice"),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_runs_when_no_presence_required(self, command_dispatch):
         rule = _routine("r", time(8, 0), em.Command(m.Devices(orc.Light.a), m.OFF))
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self, command_dispatch):
         rule = self._routine("reset-r", m.Tag.SYSTEM)
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
             m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=False, entry=ANY
         )
@@ -536,33 +536,33 @@ class TestPresence:
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
         rule = self._routine("anyone-r", m.Tag.ANYONE)
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
             m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.ANYONE),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, command_dispatch):
         rule = self._routine("anyone-r", m.Tag.ANYONE)
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
 
     def test_skip_log_blames_absence(self, command_dispatch):
         rule = self._routine("sunny-r", "SUNNY")
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
         assert "nobody home" in api.log_entries()[0].action
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("cloudy-r", "CLOUDY")
-        api.run_iot_job(m.IotJob(rule), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
         assert "CLOUDY" in api.log_entries()[0].action
 
     def test_replay_day_skips_routines_for_absent_people(self, log_entry, command_dispatch):
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
-        with patch.object(api, "get_schedule", return_value=[(past, partner)]):
+        with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), partner, "partner-r"))]):
             api.replay_day(api.local_now(), log_entry)
         command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
 
@@ -570,7 +570,7 @@ class TestPresence:
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", "Alice")
-        with patch.object(api, "get_schedule", return_value=[(past, partner)]):
+        with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), partner, "partner-r"))]):
             api.replay_day(api.local_now(), log_entry)
         squished = command_dispatch.call_args.args[0]
         assert [(c.subject.one(), c.value) for c in squished] == [(orc.Light.a, m.OFF)]
@@ -579,7 +579,7 @@ class TestPresence:
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         meeting = replace(self._routine("meeting-r", "Alice"), tags=frozenset({m.SKIP_REPLAY_TAG}))
-        with patch.object(api, "get_schedule", return_value=[(past, meeting)]):
+        with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), meeting, "meeting-r"))]):
             api.replay_day(api.local_now(), log_entry)
         command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
 

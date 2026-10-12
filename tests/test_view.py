@@ -244,7 +244,7 @@ def _fake_iot_job(name="job", trigger=m.Tag.SYSTEM, run_date=None, skip_replay=F
     job.id = name
     job.name = name
     job.next_run_time = run_date
-    job.args = [m.IotJob(rule)]
+    job.args = [m.IotJob(rule, name)]
     job.trigger.run_date = run_date
     return job
 

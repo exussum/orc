@@ -531,8 +531,8 @@ def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYS
     return present_names()
 
 
-def get_schedule() -> list[tuple[datetime, m.Routine]]:
-    result: list[tuple[datetime, m.Routine]] = []
+def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
+    result: list[tuple[datetime, m.ThemeEntry]] = []
     for x in range(2):
         now = local_now() + timedelta(days=x)
         today = now.date()
@@ -540,8 +540,8 @@ def get_schedule() -> list[tuple[datetime, m.Routine]]:
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.settings.tz)
         sunrise, sunset = _sun_times(local_midnight, config.settings.lat, config.settings.long, config.settings.sunset_lead_hours)
 
-        for when, routine in _scheduled_theme(today).entries:
-            result.append((_entry_time(when, sunrise, sunset, now), routine))
+        for entry in _scheduled_theme(today).entries:
+            result.append((_entry_time(entry.when, sunrise, sunset, now), entry))
     return result
 
 
@@ -697,17 +697,20 @@ def _fetch_weather(now: datetime) -> frozenset[m.WeatherCondition]:
 @requires_ctx
 def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
-    for run_at, rule in get_schedule():
+    for run_at, entry in get_schedule():
         if now <= run_at:
+            job = m.IotJob(entry.routine, entry.routine_id)
             ctx.scheduler.once(
-                run_iot_job, run_at, m.IotJob(rule), name=rule.name, id=f"iot-{rule.name}-{run_at.date().isoformat()}", persist=True
+                run_iot_job, run_at, job, name=entry.routine.name, id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}", persist=True
             )
 
 
 def replay_day(now: datetime, entry: m.LogEntry) -> None:
     jobs = sorted(get_schedule(), key=lambda x: x[0])
     present = present_names()
-    matched = [c for (when, cfg) in jobs if when <= now and m.SKIP_REPLAY_TAG not in cfg.tags for c in _matching_items(cfg, now, present)]
+    matched = [
+        c for when, e in jobs if when <= now and m.SKIP_REPLAY_TAG not in e.routine.tags for c in _matching_items(e.routine, now, present)
+    ]
     dispatch(tuple(matched), force=True, entry=entry)
 
 
