@@ -53,7 +53,7 @@ def _runtime(extras, buffer=0):
     return m.Runtime(
         drive=drive_stub,
         flight=flight_stub,
-        settings=m.Settings("d", "f", "0 6 * * *", 6, "T", "A", 120, buffer),
+        settings=m.Settings("d", "f", "T", "A", 120, buffer),
         extras=extras,
         places=[],
         origin="40.7,-74.0",
@@ -70,8 +70,6 @@ def test_travel_config_loads(ctx):
     assert rt.settings == m.Settings(
         drive_backend="orc_extras.travel.dal.drive.stub",
         flight_backend="orc_extras.travel.dal.flight.stub",
-        cron="0 6 * * *",
-        window_hours=6,
         tomtom_secret="TOMTOM_KEY",
         aerodatabox_secret="AERODATABOX_KEY",
         http_timeout=120,

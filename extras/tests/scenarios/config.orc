@@ -38,11 +38,7 @@ device add Chromecast BEDROOM     'Bedroom mini'     --room Bedroom
 device seal Chromecast
 
 device only Button LIVING_ROOM_REMOTE scene --room Living
-device only BroadLink
 device only AC LIVING clip-1 --name 'Living room AC' --sort 2
-device only LGTV
-device only WebOS
-device only Leak
 
 device define Sensor
 device add Sensor ENTRANCE_SENSOR 'front door motion sensor'
@@ -66,8 +62,6 @@ routine define ROUTINE_DEFAULT    Welcome
 routine append ROUTINE_DEFAULT    Light      on   --trigger SYSTEM
 routine append .                  AC         cool:low:75 --trigger SYSTEM
 
-routine define ROUTINE_DAYLIGHT   Daylight --skip-replay
-routine append ROUTINE_DAYLIGHT   Light      off  --trigger SUNNY
 
 routine define ROUTINE_EMERGENCY 'Emergency'
 routine append ROUTINE_EMERGENCY Chromecast.BEDROOM 100
@@ -75,7 +69,6 @@ routine append ROUTINE_EMERGENCY Chromecast.BEDROOM 100
 theme 'work day' ROUTINE_RESET      1:00
 theme 'work day' ROUTINE_LIGHTS_ON  sunset
 theme 'work day' ROUTINE_LIGHTS_OFF sunrise
-theme 'day off'  ROUTINE_DAYLIGHT   10:00
 theme 'day off'  ROUTINE_QUIET      23:00
 
 room 'Living Room' Light.LIVING_ROOM  on

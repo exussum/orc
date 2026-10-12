@@ -1,7 +1,5 @@
 setting drive_backend        ${ORC_TRAVEL_DRIVE-orc_extras.travel.dal.drive.tomtom}
 setting flight_backend       ${ORC_TRAVEL_FLIGHT-orc_extras.travel.dal.flight.aerodatabox}
-setting cron                 '0 6 * * *'
-setting window_hours         6
 setting tomtom_secret        TOMTOM_KEY
 setting aerodatabox_secret   AERODATABOX_KEY
 setting http_timeout         120

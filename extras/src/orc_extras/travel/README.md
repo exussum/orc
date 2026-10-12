@@ -29,15 +29,14 @@ extra <name> <minutes>
 | `place`   | A named address offered as a suggestion in the dialog's destination field.  |
 | `extra`   | A named chunk of minutes you can tick onto a trip (parking, a coffee stop). |
 
-| Setting                | Meaning                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `drive_backend`        | `...dal.drive.tomtom` for live routes; `...dal.drive.stub` for a fixed time.        |
-| `flight_backend`       | `...dal.flight.aerodatabox` for live flights; `...dal.flight.stub` for a fixed one. |
-| `cron`, `window_hours` | Required by the loader; nothing reads them yet.                                     |
-| `tomtom_secret`        | Secret name holding the TomTom key.                                                 |
-| `aerodatabox_secret`   | Secret name holding the AeroDataBox key.                                            |
-| `http_timeout`         | Seconds to wait for either API.                                                     |
-| `buffer_minutes`       | Minutes added to every lead time (default 10).                                      |
+| Setting              | Meaning                                                                             |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `drive_backend`      | `...dal.drive.tomtom` for live routes; `...dal.drive.stub` for a fixed time.        |
+| `flight_backend`     | `...dal.flight.aerodatabox` for live flights; `...dal.flight.stub` for a fixed one. |
+| `tomtom_secret`      | Secret name holding the TomTom key.                                                 |
+| `aerodatabox_secret` | Secret name holding the AeroDataBox key.                                            |
+| `http_timeout`       | Seconds to wait for either API.                                                     |
+| `buffer_minutes`     | Minutes added to every lead time (default 10).                                      |
 
 The drive origin is `config.orc`'s `lat`/`long`.
 
@@ -46,8 +45,6 @@ The drive origin is `config.orc`'s `lat`/`long`.
 ```
 setting drive_backend        orc_extras.travel.dal.drive.tomtom
 setting flight_backend       orc_extras.travel.dal.flight.aerodatabox
-setting cron                 '0 6 * * *'
-setting window_hours         6
 setting tomtom_secret        TOMTOM_KEY
 setting aerodatabox_secret   AERODATABOX_KEY
 setting http_timeout         120
