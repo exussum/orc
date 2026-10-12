@@ -47,12 +47,12 @@ def entrance_ctx(ctx):
     ctx.config.ble_tags = {}
     ctx.config.reset_config = SimpleNamespace(commands=(RESET,))
     ctx.config.ad_hoc_routines = {
-        "Lights Off": m.AdhocAction((LIGHTS_OFF,), reset=False),
-        "Silence": m.AdhocAction((SILENCE,), reset=False),
-        "Dog": m.AdhocAction((DOG,), delay=timedelta(minutes=6)),
-        "Day Scene": m.AdhocAction((DAY,), reset=False),
-        "Night Scene": m.AdhocAction((NIGHT,), reset=False),
-        "Lamp Off": m.AdhocAction((LIGHTS_OFF,), reset=False),
+        "AD_HOC_LIGHTS_OFF": m.AdhocAction((LIGHTS_OFF,), name="Lights Off", reset=False),
+        "AD_HOC_SILENCE": m.AdhocAction((SILENCE,), name="Silence", reset=False),
+        "AD_HOC_DOG": m.AdhocAction((DOG,), name="Dog", delay=timedelta(minutes=6)),
+        "AD_HOC_DAY_SCENE": m.AdhocAction((DAY,), name="Day Scene", reset=False),
+        "AD_HOC_NIGHT_SCENE": m.AdhocAction((NIGHT,), name="Night Scene", reset=False),
+        "AD_HOC_LAMP_OFF": m.AdhocAction((LIGHTS_OFF,), name="Lamp Off", reset=False),
     }
     return ctx
 
@@ -70,8 +70,8 @@ def test_entrance_config_loads(entrance_ctx):
         listener="Rex",
     )
     assert sensor.message.log_shutdown == "Trigger sensor off: applying OFF"
-    assert sensor.rules.shutdown == "Lamp Off"
-    assert sensor.rules.absent == "Dog"
+    assert sensor.rules.shutdown == "AD_HOC_LAMP_OFF"
+    assert sensor.rules.absent == "AD_HOC_DOG"
     night = em.Step(em.During(time(22, 0), time(8, 0)), NIGHT)
     assert em.Rule((night,), name="Night") in sensor.timed
 

@@ -62,12 +62,12 @@ def ctx(ctx, freezegun_clock):
     ctx.config.ble_tags = {}
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
     ctx.config.ad_hoc_routines = {
-        "Lights Off": m.AdhocAction((_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF)), reset=False),
-        "Lamp Off": m.AdhocAction((_cmd(Light.lamp, m.OFF),), reset=False),
-        "Silence": m.AdhocAction((_cmd(Chromecast.cc, m.STOP),), reset=False),
-        "Dog": m.AdhocAction((_cmd(Chromecast.cc, m.RESUME),), reset=False),
-        "Day Scene": m.AdhocAction((_cmd(Light.day_bulb, 20),), reset=False),
-        "Night Scene": m.AdhocAction((_cmd(Light.night_bulb, 1), _cmd(Chromecast.cc, m.STOP)), reset=False),
+        "AD_HOC_LIGHTS_OFF": m.AdhocAction((_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF)), name="Lights Off", reset=False),
+        "AD_HOC_LAMP_OFF": m.AdhocAction((_cmd(Light.lamp, m.OFF),), name="Lamp Off", reset=False),
+        "AD_HOC_SILENCE": m.AdhocAction((_cmd(Chromecast.cc, m.STOP),), name="Silence", reset=False),
+        "AD_HOC_DOG": m.AdhocAction((_cmd(Chromecast.cc, m.RESUME),), name="Dog", reset=False),
+        "AD_HOC_DAY_SCENE": m.AdhocAction((_cmd(Light.day_bulb, 20),), name="Day Scene", reset=False),
+        "AD_HOC_NIGHT_SCENE": m.AdhocAction((_cmd(Light.night_bulb, 1), _cmd(Chromecast.cc, m.STOP)), name="Night Scene", reset=False),
     }
     return ctx
 
@@ -179,7 +179,7 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
 
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with(ctx, "Lights Off", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
+    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
 
 
 def test_cleanup_is_scheduled_for_later(ctx, config_sensor):
@@ -195,14 +195,14 @@ def test_cleanup_is_scheduled_for_later(ctx, config_sensor):
 def test_someone_home_stops_media(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.run_action.assert_called_once_with(nobody_home_ctx, "Silence", entry.trigger, source=plugins.Log.ENTRANCE)
+    nobody_home_ctx.api.run_action.assert_called_once_with(nobody_home_ctx, "AD_HOC_SILENCE", entry.trigger, source=plugins.Log.ENTRANCE)
     assert [c.action for c in entry.children] == [config_sensor.message.log_present]
 
 
 def test_listener_home_alone_keeps_media_playing(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"Rex"}
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.run_action.assert_called_once_with(nobody_home_ctx, "Dog", entry.trigger, source=plugins.Log.ENTRANCE)
+    nobody_home_ctx.api.run_action.assert_called_once_with(nobody_home_ctx, "AD_HOC_DOG", entry.trigger, source=plugins.Log.ENTRANCE)
     assert [c.action for c in entry.children] == [config_sensor.message.log_absent]
 
 

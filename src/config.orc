@@ -77,18 +77,18 @@ theme 'day off'  ROUTINE_QUIET      23:00
 room 'Living Room' Light.LIVING_ROOM  on
 room Bedroom       Light.BEDROOM_LAMP on
 
-ad_hoc define Silence          --section scene --no-reset Chromecast stop
-ad_hoc define Dog              --section scene --delay 7  Chromecast stop
-ad_hoc define 'All Lights On'  --section scene --no-reset Light      100
-ad_hoc define 'All Lights Off' --section scene --no-reset Light      off
+ad_hoc define AD_HOC_SILENCE        Silence          --section scene --no-reset Chromecast stop
+ad_hoc define AD_HOC_DOG            Dog              --section scene --delay 7  Chromecast stop
+ad_hoc define AD_HOC_ALL_LIGHTS_ON  'All Lights On'  --section scene --no-reset Light      100
+ad_hoc define AD_HOC_ALL_LIGHTS_OFF 'All Lights Off' --section scene --no-reset Light      off
 
-remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
-remote     .                         1 held   Silence
+remote     Button.LIVING_ROOM_REMOTE 1 pushed AD_HOC_ALL_LIGHTS_ON
+remote     .                         1 held   AD_HOC_SILENCE
 
 plugin Buttons            orc.plugins.buttons
 plugin Battery            orc.plugins.battery
 plugin 'Pair LG TV'       orc_extras.lg_tv           pair_tv     --section device --backend orc_extras.lg_tv.dal.webos
 plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device --backend orc_extras.yolink.dal.yosmart
 
-highlight Silence 21:00 23:59
+highlight AD_HOC_SILENCE 21:00 23:59
 

@@ -22,8 +22,8 @@ _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 _POLAR_LATITUDE = 65.7
 
 GRAMMAR = """
-ad_hoc define <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<devices> <state>]
-ad_hoc append <name> <devices> <state>
+ad_hoc define <id> <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<devices> <state>]
+ad_hoc append <id> <devices> <state>
 
 remote <device> <button> <event> <action>
 
@@ -32,7 +32,7 @@ device add <type> <id> <target> [--room=<room>] [--name=<name>]
 device only <type> [<id> <target>] [--room=<room>] [--name=<name>] [--sort=<n>]
 device seal <type>
 
-highlight <name> <start> <stop>
+highlight <id> <start> <stop>
 
 person <name> <host> <mac>
 
@@ -257,16 +257,17 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
     ad_hoc_routines = objects["ad_hoc"]
     if args.define:
         config = m.AdhocAction(
+            name=args.name,
             snapshot=timedelta(minutes=args.snapshot) if args.snapshot is not None else None,
             delay=timedelta(minutes=args.delay) if args.delay is not None else timedelta(),
             section=cast.section(args.section),
             reset=not args.no_reset,
         )
-    elif (config := ad_hoc_routines.get(args.name)) is None:
-        raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(ad_hoc_routines)}")
+    elif (config := ad_hoc_routines.get(args.id)) is None:
+        raise ValueError(f"Unknown ad-hoc routine {args.id!r}: expected one of {tuple(ad_hoc_routines)}")
     if args.devices is not None:
         config = replace(config, commands=(*config.commands, _command(objects, args)))
-    ad_hoc_routines[args.name] = config
+    ad_hoc_routines[args.id] = config
 
 
 def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
@@ -276,9 +277,9 @@ def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
 
 
 def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    if args.name not in objects["ad_hoc"]:
-        raise ValueError(f"Unknown ad-hoc routine {args.name!r}: expected one of {tuple(objects['ad_hoc'])}")
-    objects["highlight"] = (*objects["highlight"], m.Highlight(args.name, args.start, args.stop))
+    if args.id not in objects["ad_hoc"]:
+        raise ValueError(f"Unknown ad-hoc routine {args.id!r}: expected one of {tuple(objects['ad_hoc'])}")
+    objects["highlight"] = (*objects["highlight"], m.Highlight(args.id, args.start, args.stop))
 
 
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:

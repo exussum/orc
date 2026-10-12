@@ -64,11 +64,11 @@ room Bedroom       Light.BEDROOM_LAMP on
 person Alice alice.example aa:bb:cc:dd:ee:ff
 tag    Alice EIK_ALICE 2026-01-02T03:04:05+00:00
 
-ad_hoc define Silence          --section scene --no-reset Chromecast stop
-ad_hoc define Dog              --section scene --delay 7  Chromecast stop
-ad_hoc define 'All Lights Off' --section scene --no-reset Light      off
+ad_hoc define AD_HOC_SILENCE        Silence          --section scene --no-reset Chromecast stop
+ad_hoc define AD_HOC_DOG            Dog              --section scene --delay 7  Chromecast stop
+ad_hoc define AD_HOC_ALL_LIGHTS_OFF 'All Lights Off' --section scene --no-reset Light      off
 
-remote     Button.LIVING_ROOM_REMOTE 1 held   Silence
+remote     Button.LIVING_ROOM_REMOTE 1 held   AD_HOC_SILENCE
 
 plugin Buttons            orc.plugins.buttons
 plugin Battery            orc.plugins.battery
@@ -80,5 +80,5 @@ plugin 'LG AC'            orc_extras.lg_ac
 plugin React              orc_extras.react --section system
 plugin Travel             orc_extras.travel --section scene
 
-highlight Silence 21:00 23:59
+highlight AD_HOC_SILENCE 21:00 23:59
 

@@ -1,1 +1,1 @@
-highlight X 10:00 11:00
+highlight AD_HOC_X 10:00 11:00

@@ -228,14 +228,14 @@ def test_secret_casts(shape, value, ok):
 
 def test_ad_hoc_define_with_inline_first_item():
     parsed = parse("core")
-    silence = parsed.ad_hoc["Silence"]
+    silence = parsed.ad_hoc["AD_HOC_SILENCE"]
     assert silence.commands == (em.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),)
     assert silence.reset is False
     assert silence.section is None
 
 
 def test_ad_hoc_delay():
-    dog = parse("core").ad_hoc["Dog"]
+    dog = parse("core").ad_hoc["AD_HOC_DOG"]
     assert dog.delay == timedelta(minutes=7)
     assert dog.reset is True
 
@@ -251,12 +251,12 @@ def test_routines_accept_ac_commands():
 def test_state_youtube_ids_stay_strings():
     parsed = parse("youtube_state")
     states = {name: cfg.commands[0].value for name, cfg in parsed.ad_hoc.items()}
-    assert states == {"Music": "dQw4w9WgXcQ", "Numbers": "12345678901", "Volume": 40}
+    assert states == {"AD_HOC_MUSIC": "dQw4w9WgXcQ", "AD_HOC_NUMBERS": "12345678901", "AD_HOC_VOLUME": 40}
 
 
 def test_ad_hoc_append_extends_items():
     parsed = parse("core")
-    assert parsed.ad_hoc["All Lights Off"].commands == (
+    assert parsed.ad_hoc["AD_HOC_ALL_LIGHTS_OFF"].commands == (
         em.Command(m.Devices(parsed.enums["Light"]), "off"),
         em.Command(m.Devices(parsed.enums["Chromecast"]["CC"]), "stop"),
     )
@@ -266,13 +266,13 @@ def test_remote_repeats_device_with_ditto():
     parsed = parse("core")
     remote = parsed.enums["Button"]["REMOTE"]
     assert parsed.remote == (
-        m.Remote(remote, 1, "pushed", "All Lights Off"),
-        m.Remote(remote, 1, "held", "Silence"),
+        m.Remote(remote, 1, "pushed", "AD_HOC_ALL_LIGHTS_OFF"),
+        m.Remote(remote, 1, "held", "AD_HOC_SILENCE"),
     )
 
 
 def test_highlight_windows_reference_ad_hoc():
-    assert parse("core").highlight == (("Silence", time(21, 0), time(23, 59)),)
+    assert parse("core").highlight == (("AD_HOC_SILENCE", time(21, 0), time(23, 59)),)
 
 
 def test_person_becomes_known_trigger():
@@ -313,8 +313,8 @@ _PARSE_ERRORS = [
     ("theme_unknown_routine", "Unknown routine 'OTHER'"),
     ("append_unknown_routine", "Unknown routine 'R'"),
     ("unknown_trigger", "Unknown trigger 'NOPE'"),
-    ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
-    ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'X'"),
+    ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
+    ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
     ("invalid_button_event", "Invalid button event 'clicked'"),
     ("non_numeric_button", "invalid literal for int() with base 10: 'one'"),
 ]

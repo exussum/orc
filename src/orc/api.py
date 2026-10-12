@@ -268,7 +268,7 @@ def run_action(
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
-            action = RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, id, entry))
+            action = RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, routine.name, entry))
         else:
             base = config.reset_config.commands if routine.reset else ()
             commands = (*base, *routine.commands)
@@ -276,11 +276,13 @@ def run_action(
     else:
         return False
 
-    display = f"`{_RUN_DISPLAY.get(id, id)}`"
+    ad_hoc = config.ad_hoc_routines.get(id)
+    name = _RUN_DISPLAY.get(id) or (ad_hoc.name if ad_hoc else id)
+    display = f"`{name}`"
     with _record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
-            log(source, Log.TASK_QUEUED.format(id=id, when=when), trigger)
+            log(source, Log.TASK_QUEUED.format(id=name, when=when), trigger)
             run = requires_ctx(lambda ctx: action.effect(log(source, display, trigger)))
             _scheduler().once(run, when, id=f"run-{id}")
         else:

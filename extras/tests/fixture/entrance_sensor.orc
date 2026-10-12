@@ -12,10 +12,10 @@ message log_absent    'Trigger sensor off: skip (listener home)'
 message log_shutdown  'Trigger sensor off: applying OFF'
 message log_nobody    'Entrance motion with nobody tracked before or after'
 
-rules inside   'Lights Off'
-rules present  Silence
-rules absent   Dog
-rules shutdown 'Lamp Off'
+rules inside   AD_HOC_LIGHTS_OFF
+rules present  AD_HOC_SILENCE
+rules absent   AD_HOC_DOG
+rules shutdown AD_HOC_LAMP_OFF
 
-timed Day   8:00  22:00 'Day Scene'
-timed Night 22:00 8:00  'Night Scene'
+timed Day   8:00  22:00 AD_HOC_DAY_SCENE
+timed Night 22:00 8:00  AD_HOC_NIGHT_SCENE

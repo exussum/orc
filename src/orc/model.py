@@ -74,7 +74,7 @@ class Remote(NamedTuple):
 
 
 class Highlight(NamedTuple):
-    name: str
+    id: str
     start: time
     stop: time
 
@@ -544,6 +544,7 @@ Routine = em.Rule[Devices]
 
 @dataclass(frozen=True)
 class AdhocAction(em.Action[Devices]):
+    name: str = ""
     delay: timedelta = timedelta()
     snapshot: timedelta | None = None
     section: str | None = None
