@@ -379,7 +379,7 @@ def test_ac_turns_on_fires_once(ctx, ruleset, dispatches):
 def _make_range(sensor, expression, low, high, target, action, people=None):
     formula = model.FormulaSubject(sensor, expression)
     watched = []
-    if people == m.Tag.ANYONE:
+    if isinstance(people, m.Anyone):
         watched.append(em.Eq(m.AnyoneSubject(), True))
     elif people:
         watched.append(model.Present(people))
@@ -450,7 +450,7 @@ def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, de
 
 @pytest.mark.parametrize(
     "people, home, fires",
-    [(("alice", "bob"), set(), False), (("alice", "bob"), {"alice"}, True), (m.Tag.ANYONE, set(), False), (m.Tag.ANYONE, {"bob"}, True)],
+    [(("alice", "bob"), set(), False), (("alice", "bob"), {"alice"}, True), (m.Anyone(), set(), False), (m.Anyone(), {"bob"}, True)],
 )
 def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, device_report):
     ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)

@@ -593,7 +593,7 @@ def next_iot_job(present_names: set[str]) -> Job | None:
             j
             for j in jobs
             if j.next_run_time
-            and not any(step.command.tag == m.Tag.SYSTEM for step in j.args[0].rule.steps)
+            and not any(isinstance(step.command.tag, m.Always) for step in j.args[0].rule.steps)
             and _matching_items(j.args[0].rule, j.next_run_time, present_names)
         ),
         None,
@@ -618,11 +618,11 @@ def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], 
         if not pnames:
             detail = "nobody home"
         else:
-            unmet = sorted({step.command.tag for step in rule.steps if step.command.tag not in (None, m.Tag.SYSTEM, m.Tag.ANYONE)})
+            unmet = sorted({str(step.command.tag) for step in rule.steps if isinstance(step.command.tag, m.Present | m.Weather)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
         entry.action += f" — {Log.RULE_SKIPPED.format(detail=detail)}"
         return
-    elif weather_triggers := {str(c.tag) for c in matched if c.tag in m.WeatherCondition}:
+    elif weather_triggers := {str(c.tag) for c in matched if isinstance(c.tag, m.Weather)}:
         entry.action += f" (weather: {', '.join(sorted(weather_triggers))})"
     dispatch(squish(matched, entry), force=force, entry=entry)
 
@@ -644,7 +644,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
 
 
 def _presence(rule: m.Routine) -> m.Routine:
-    return rule.where(lambda command: command.tag not in (None, m.Tag.SYSTEM) and command.tag not in m.WeatherCondition)
+    return rule.where(lambda command: isinstance(command.tag, m.Present | m.Anyone))
 
 
 def has_presence(rule: m.Routine) -> bool:
@@ -659,7 +659,7 @@ def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
 
 def weather_active(rule: m.Routine, now: datetime) -> bool:
     assert _ctx is not None
-    return rule.where(lambda command: command.tag in m.WeatherCondition).holds(_ctx.engine.world(lambda _subject: _fetch_weather(now)))
+    return rule.where(lambda command: isinstance(command.tag, m.Weather)).holds(_ctx.engine.world(lambda _subject: _fetch_weather(now)))
 
 
 def _matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
@@ -689,7 +689,7 @@ def reader(present: set[str] | None = None, now: datetime | None = None) -> em.R
 
 
 def runtime() -> engine.Runtime:
-    return engine.Runtime(config.settings.tz, bypass=m.Tag.SYSTEM, override_key=ORC_SYSTEM_SNAPSHOT)
+    return engine.Runtime(config.settings.tz, bypass=m.Always(), override_key=ORC_SYSTEM_SNAPSHOT)
 
 
 def _fetch_weather(now: datetime) -> frozenset[m.WeatherCondition]:

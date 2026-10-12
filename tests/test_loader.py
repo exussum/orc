@@ -20,28 +20,29 @@ from orc.kernel.loader import ConfigError, parse_config, validate
 FIXTURE = Path(__file__).parent / "fixture"
 
 
-def test_condition_system_is_unconditional():
-    assert loader._condition(None) == em.And()
-    assert loader._condition("SYSTEM") == em.And()
+def _condition(person=None, weather=None):
+    return loader._condition({"person": {"alice": None, "bob": None}}, SimpleNamespace(trigger_person=person, trigger_weather=weather))
 
 
-def test_condition_anyone():
-    assert loader._condition("ANYONE") == m.Anyone()
-
-
-def test_condition_weather():
-    assert loader._condition("SUNNY") == m.Weather(m.WeatherCondition.SUNNY)
-
-
-def test_condition_person():
-    assert loader._condition("alice") == m.Present("alice")
+@pytest.mark.parametrize(
+    "person, weather, expected",
+    [
+        (None, None, em.And()),
+        ("SYSTEM", None, m.Always()),
+        ("ANYONE", None, m.Anyone()),
+        (None, "SUNNY", m.Weather(m.WeatherCondition.SUNNY)),
+        ("alice", None, m.Present("alice")),
+    ],
+)
+def test_condition(person, weather, expected):
+    assert _condition(person, weather) == expected
 
 
 def test_condition_holds_against_world():
     world = {m.AnyoneSubject(): True, m.PersonSubject("bob"): False}
     seen = engine.Runtime(UTC).world(world.__getitem__)
-    assert loader._condition("ANYONE").holds(seen)
-    assert not loader._condition("bob").holds(seen)
+    assert _condition("ANYONE").holds(seen)
+    assert not _condition("bob").holds(seen)
 
 
 def parse(case, **kwargs):
@@ -80,8 +81,8 @@ def test_routines_append_devices_and_triggers():
     light, cc = parsed.enums["Light"], parsed.enums["Chromecast"]["CC"]
     assert parsed.routine["ROUTINE_RESET"].name == "Reset"
     assert parsed.routine["ROUTINE_RESET"].commands == (
-        em.Command(m.Devices(light), "off", tag="SYSTEM"),
-        em.Command(m.Devices(cc), "stop"),
+        em.Command(m.Devices(light), "off", tag=m.Always()),
+        em.Command(m.Devices(cc), "stop", tag=em.And()),
     )
 
 
@@ -278,7 +279,7 @@ def test_highlight_windows_reference_ad_hoc():
 def test_person_becomes_known_trigger():
     parsed = parse("core")
     assert parsed.person == {"Alice": [m.Person("host9", "aa:bb")]}
-    assert parsed.routine["ROUTINE_DEFAULT"].commands[-1].tag == "Alice"
+    assert parsed.routine["ROUTINE_DEFAULT"].commands[-1].tag == m.Present("Alice")
 
 
 def test_plugin_command_imports_callable():
@@ -312,7 +313,7 @@ _PARSE_ERRORS = [
     ("plugin_import_failure", "Cannot load module 'not.a.module'"),
     ("theme_unknown_routine", "Unknown routine 'OTHER'"),
     ("append_unknown_routine", "Unknown routine 'R'"),
-    ("unknown_trigger", "Unknown trigger 'NOPE'"),
+    ("unknown_trigger", "Unknown person 'NOPE'"),
     ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
     ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
     ("invalid_button_event", "Invalid button event 'clicked'"),

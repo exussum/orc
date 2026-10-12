@@ -10,12 +10,11 @@ from orc_engine import model as em
 import orc
 from orc import api, config
 from orc import model as m
-from orc.kernel import loader
 from orc.view import bp
 
 
 def _routine(name, when, *commands, skip_replay=False):
-    steps = tuple(em.Step(loader._condition(c.tag), c) for c in commands)
+    steps = tuple(em.Step(c.tag or em.And(), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
     return em.Rule(steps, name=name, tags=tags)
 
@@ -66,12 +65,10 @@ def test_console_plugin(flask_client, ctx):
 
 
 def test_console_schedule_routine(flask_client, command_dispatch):
-    rule = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM))
+    rule = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()))
     with patch.object(config, "schedule_routines", {"r": rule}), patch.object(config, "plugins", {}):
         flask_client.get("/api/run/r")
-    command_dispatch.assert_called_once_with(
-        m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=True, entry=ANY
-    )
+    command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=True, entry=ANY)
 
 
 def test_console_ad_hoc(flask_client, config_ad_hoc, command_dispatch):
@@ -247,9 +244,9 @@ def test_device_unknown_returns_404(flask_client):
 # --- /schedule/: button colour and badges ---
 
 
-def _fake_iot_job(name="job", trigger=m.Tag.SYSTEM, run_date=None, skip_replay=False):
+def _fake_iot_job(name="job", trigger=None, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
-    rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger), skip_replay=skip_replay)
+    rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger or m.Always()), skip_replay=skip_replay)
     job = create_autospec(Job, instance=True)
     job.id = name
     job.name = name
@@ -273,12 +270,12 @@ def _get_schedule(flask_client, jobs, present_names=()):
 @pytest.mark.parametrize(
     "kwargs, present, present_badges, absent_badges",
     [
-        ({"trigger": m.Tag.SYSTEM}, (), (), (b"orc-btn-absent", "👤".encode(), "⏩".encode())),
-        ({"trigger": "me"}, (), (b"orc-btn-absent", "👤".encode()), ()),
-        ({"trigger": "me"}, ("me",), (), (b"orc-btn-absent",)),
-        ({"trigger": m.Tag.ANYONE}, ("me",), (), (b"orc-btn-absent",)),
-        ({"trigger": m.Tag.ANYONE}, (), (b"orc-btn-absent",), ()),
-        ({"trigger": m.WeatherCondition.SUNNY}, (), ("🌤".encode(),), ()),
+        ({"trigger": m.Always()}, (), (), (b"orc-btn-absent", "👤".encode(), "⏩".encode())),
+        ({"trigger": m.Present("me")}, (), (b"orc-btn-absent", "👤".encode()), ()),
+        ({"trigger": m.Present("me")}, ("me",), (), (b"orc-btn-absent",)),
+        ({"trigger": m.Anyone()}, ("me",), (), (b"orc-btn-absent",)),
+        ({"trigger": m.Anyone()}, (), (b"orc-btn-absent",), ()),
+        ({"trigger": m.Weather(m.WeatherCondition.SUNNY)}, (), ("🌤".encode(),), ()),
         ({"skip_replay": True}, (), ("⏩".encode(),), ()),
     ],
     ids=["system", "me_absent", "me_present", "anyone_present", "anyone_absent", "weather", "skip_replay"],

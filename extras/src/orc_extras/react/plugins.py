@@ -147,7 +147,7 @@ def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: 
 
 def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
     command = watch.rule.steps[0].command
-    return em.Command(command.subject, command.value, tag=m.Tag.SYSTEM)
+    return em.Command(command.subject, command.value, tag=m.Always())
 
 
 @requires_ctx
