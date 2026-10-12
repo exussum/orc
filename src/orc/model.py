@@ -181,11 +181,6 @@ class LogSource(LogSourceEnum):
     EXTERNAL = "external"
 
 
-class Tag(str, Enum):
-    SYSTEM = "SYSTEM"
-    ANYONE = "ANYONE"
-
-
 ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
 
 
@@ -584,6 +579,15 @@ class Present(em.Condition):
     def holds(self, world: em.World) -> bool:
         return world.read(PersonSubject(self.name)) is True
 
+    def __str__(self) -> str:
+        return self.name
+
+
+@dataclass(frozen=True)
+class Always(em.Condition):
+    def holds(self, world: em.World) -> bool:
+        return True
+
 
 @dataclass(frozen=True)
 class Anyone(em.Condition):
@@ -597,6 +601,9 @@ class Weather(em.Condition):
 
     def holds(self, world: em.World) -> bool:
         return self.condition in cast.instance(world.read(WeatherSubject()), frozenset)
+
+    def __str__(self) -> str:
+        return self.condition.value
 
 
 class DeviceNamespace:

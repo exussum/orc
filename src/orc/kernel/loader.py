@@ -44,7 +44,7 @@ provider <key> <module>
 room <name> <devices> <state>
 
 routine define <id> <name> [--skip-replay]
-routine append <id> <devices> <state> [--trigger=<trigger>]
+routine append <id> <devices> <state> [--trigger-person=<person>] [--trigger-weather=<weather>]
 
 setting <key> <value>
 
@@ -186,25 +186,28 @@ def ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, 
     return state
 
 
-def _command(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None = None) -> em.Command[str, m.Devices]:
+def _command(objects: dict[str, Any], args: SimpleNamespace, tag: em.Condition | None = None) -> em.Command[em.Condition, m.Devices]:
     devices = cast.devices(args.devices, objects)
     state = ac_state(devices.all(), cast.state(args.state), objects["device"].enums, source=args.devices)
-    return em.Command[str, m.Devices](devices, state, tag=trigger)
+    return em.Command[em.Condition, m.Devices](devices, state, tag=tag)
 
 
-def _condition(trigger: str | None) -> em.Condition:
-    if trigger in (None, m.Tag.SYSTEM):
+def _condition(objects: dict[str, Any], args: SimpleNamespace) -> em.Condition:
+    person, weather = args.trigger_person, args.trigger_weather
+    if person and weather:
+        raise ValueError("A routine line takes --trigger-person or --trigger-weather, not both")
+    elif weather:
+        return m.Weather(m.WeatherCondition(weather))
+    elif person is None:
         return em.And()
-    elif trigger in m.WeatherCondition:
-        return m.Weather(m.WeatherCondition(trigger))
-    elif trigger == m.Tag.ANYONE:
+    elif person == "SYSTEM":
+        return m.Always()
+    elif person == "ANYONE":
         return m.Anyone()
+    elif person in objects["person"]:
+        return m.Present(person)
     else:
-        return m.Present(trigger)
-
-
-def _clause(objects: dict[str, Any], args: SimpleNamespace, trigger: str | None) -> em.Step[m.Devices]:
-    return em.Step(_condition(trigger), _command(objects, args, trigger))
+        raise ValueError(f"Unknown person {person!r}: expected one of {('SYSTEM', 'ANYONE', *objects['person'])}")
 
 
 def _build_enum(objects: dict[str, Any], type_name: str, zigbee_config: dict[Any, tuple[Any, ...]]) -> type[m.DeviceEnum]:
@@ -301,10 +304,9 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     elif (routine := routines.get(args.id)) is None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:
-        known = (None, *(t.value for t in m.Tag), *(w.value for w in m.WeatherCondition), *objects["person"])
-        if args.trigger not in known:
-            raise ValueError(f"Unknown trigger {args.trigger!r}: expected one of {known[1:]}")
-        routines[args.id] = replace(routine, steps=(*routine.steps, _clause(objects, args, args.trigger)))
+        condition = _condition(objects, args)
+        step = em.Step(condition, _command(objects, args, condition))
+        routines[args.id] = replace(routine, steps=(*routine.steps, step))
 
 
 def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:

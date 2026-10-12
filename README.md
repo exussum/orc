@@ -101,7 +101,7 @@ Two config surfaces:
    device seal   Light
 
    routine define ROUTINE_RESET Reset
-   routine append ROUTINE_RESET Light off --trigger SYSTEM
+   routine append ROUTINE_RESET Light off --trigger-person SYSTEM
 
    theme 'work day' ROUTINE_RESET 1:00
    ```

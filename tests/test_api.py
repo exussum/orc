@@ -13,7 +13,6 @@ from orc import api, config, plugins
 from orc import model as m
 from orc.dal import net, push, scheduler, sqlite
 from orc.dal.mqtt import paho as mqtt
-from orc.kernel import loader
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
 TRIGGER = m.Query("test")
@@ -21,7 +20,7 @@ PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
 
 
 def _routine(name, when, *commands, skip_replay=False):
-    steps = tuple(em.Step(loader._condition(c.tag), c) for c in commands)
+    steps = tuple(em.Step(c.tag or em.And(), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
     return em.Rule(steps, name=name, tags=tags)
 
@@ -78,19 +77,19 @@ class TestRestoreScene:
 @patch("orc.dal.mqtt.paho.command")
 class TestIntercepts:
     def test_system_command_overwrites_snapshot(self, update_light, system_snapshot, log_entry):
-        command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM)
+        command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Always())
 
         api.dispatch((command,), entry=log_entry)
         api.dispatch((command,), entry=log_entry)
 
         assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             em.Command(m.Devices(orc.Light.a), m.ON),
-            em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Tag.SYSTEM),
+            em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Always()),
         )
         assert update_light.call_args_list == [call(orc.Light.b, m.ON), call(orc.Light.b, m.ON)]
 
     def test_snapshot_update_add(self, update_light, system_snapshot, log_entry):
-        command = em.Command(m.Devices(orc.Light.c), m.ON, tag=m.Tag.SYSTEM)
+        command = em.Command(m.Devices(orc.Light.c), m.ON, tag=m.Always())
 
         api.dispatch((command,), entry=log_entry)
 
@@ -509,16 +508,16 @@ class TestPresence:
         assert api.present_names() == set()
 
     def test_run_iot_job_skips_when_presence_absent(self, command_dispatch):
-        rule = self._routine("partner-r", "Alice")
+        rule = self._routine("partner-r", m.Present("Alice"))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
-        rule = self._routine("partner-r", "Alice")
+        rule = self._routine("partner-r", m.Present("Alice"))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
-            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag="Alice"),)), force=False, entry=ANY
+            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Present("Alice")),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_runs_when_no_presence_required(self, command_dispatch):
@@ -527,41 +526,41 @@ class TestPresence:
         command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self, command_dispatch):
-        rule = self._routine("reset-r", m.Tag.SYSTEM)
+        rule = self._routine("reset-r", m.Always())
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
-            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.SYSTEM),)), force=False, entry=ANY
+            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
-        rule = self._routine("anyone-r", m.Tag.ANYONE)
+        rule = self._routine("anyone-r", m.Anyone())
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
-            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Tag.ANYONE),)), force=False, entry=ANY
+            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Anyone()),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, command_dispatch):
-        rule = self._routine("anyone-r", m.Tag.ANYONE)
+        rule = self._routine("anyone-r", m.Anyone())
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
 
     def test_skip_log_blames_absence(self, command_dispatch):
-        rule = self._routine("sunny-r", "SUNNY")
+        rule = self._routine("sunny-r", m.Weather(m.WeatherCondition.SUNNY))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
         assert "nobody home" in api.log_entries()[0].action
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
-        rule = self._routine("cloudy-r", "CLOUDY")
+        rule = self._routine("cloudy-r", m.Weather(m.WeatherCondition.CLOUDY))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
         assert "CLOUDY" in api.log_entries()[0].action
 
     def test_replay_day_skips_routines_for_absent_people(self, log_entry, command_dispatch):
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
-        partner = self._routine("partner-r", "Alice")
+        partner = self._routine("partner-r", m.Present("Alice"))
         with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), partner, "partner-r"))]):
             api.replay_day(api.local_now(), log_entry)
         command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
@@ -569,7 +568,7 @@ class TestPresence:
     def test_replay_day_runs_routines_for_present_people(self, log_entry, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
-        partner = self._routine("partner-r", "Alice")
+        partner = self._routine("partner-r", m.Present("Alice"))
         with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), partner, "partner-r"))]):
             api.replay_day(api.local_now(), log_entry)
         squished = command_dispatch.call_args.args[0]
@@ -578,7 +577,7 @@ class TestPresence:
     def test_replay_day_skips_skip_replay_routines(self, log_entry, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
-        meeting = replace(self._routine("meeting-r", "Alice"), tags=frozenset({m.SKIP_REPLAY_TAG}))
+        meeting = replace(self._routine("meeting-r", m.Present("Alice")), tags=frozenset({m.SKIP_REPLAY_TAG}))
         with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), meeting, "meeting-r"))]):
             api.replay_day(api.local_now(), log_entry)
         command_dispatch.assert_called_once_with((), force=True, entry=log_entry)

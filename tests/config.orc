@@ -40,15 +40,15 @@ device add Sensor LIVING_ROOM 'living room sensor'
 device seal Sensor
 
 routine define ROUTINE_RESET      Reset
-routine append ROUTINE_RESET      Light      off  --trigger SYSTEM
+routine append ROUTINE_RESET      Light      off  --trigger-person SYSTEM
 routine define ROUTINE_LIGHTS_ON  'Lights On'
-routine append ROUTINE_LIGHTS_ON  Light      on   --trigger SYSTEM
+routine append ROUTINE_LIGHTS_ON  Light      on   --trigger-person SYSTEM
 routine define ROUTINE_LIGHTS_OFF 'Lights Off'
-routine append ROUTINE_LIGHTS_OFF Light      off  --trigger SYSTEM
+routine append ROUTINE_LIGHTS_OFF Light      off  --trigger-person SYSTEM
 routine define ROUTINE_QUIET      Quiet
-routine append ROUTINE_QUIET      Chromecast stop --trigger SYSTEM
+routine append ROUTINE_QUIET      Chromecast stop --trigger-person SYSTEM
 routine define ROUTINE_DEFAULT    Welcome
-routine append ROUTINE_DEFAULT    Light      on   --trigger SYSTEM
+routine append ROUTINE_DEFAULT    Light      on   --trigger-person SYSTEM
 
 routine define ROUTINE_EMERGENCY Emergency
 routine append ROUTINE_EMERGENCY USB.TEST 100

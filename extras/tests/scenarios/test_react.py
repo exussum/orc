@@ -33,7 +33,7 @@ def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
 
 
 def _cmd(device, value):
-    return em.Command(m.Devices(device), value, tag=m.Tag.SYSTEM)
+    return em.Command(m.Devices(device), value, tag=m.Always())
 
 
 @pytest.mark.plugins(react)

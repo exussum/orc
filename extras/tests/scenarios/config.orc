@@ -46,21 +46,21 @@ device add Sensor PATIO_DOOR      'balcony door'
 device seal Sensor
 
 routine define ROUTINE_RESET      Reset
-routine append ROUTINE_RESET      Light      off  --trigger SYSTEM
-routine append .                  AC         off  --trigger SYSTEM
+routine append ROUTINE_RESET      Light      off  --trigger-person SYSTEM
+routine append .                  AC         off  --trigger-person SYSTEM
 
 routine define ROUTINE_LIGHTS_ON  'Lights On'
-routine append ROUTINE_LIGHTS_ON  Light      on   --trigger SYSTEM
+routine append ROUTINE_LIGHTS_ON  Light      on   --trigger-person SYSTEM
 
 routine define ROUTINE_LIGHTS_OFF 'Lights Off'
-routine append ROUTINE_LIGHTS_OFF Light      off  --trigger SYSTEM
+routine append ROUTINE_LIGHTS_OFF Light      off  --trigger-person SYSTEM
 
 routine define ROUTINE_QUIET      Quiet
-routine append ROUTINE_QUIET      Chromecast stop --trigger SYSTEM
+routine append ROUTINE_QUIET      Chromecast stop --trigger-person SYSTEM
 
 routine define ROUTINE_DEFAULT    Welcome
-routine append ROUTINE_DEFAULT    Light      on   --trigger SYSTEM
-routine append .                  AC         cool:low:75 --trigger SYSTEM
+routine append ROUTINE_DEFAULT    Light      on   --trigger-person SYSTEM
+routine append .                  AC         cool:low:75 --trigger-person SYSTEM
 
 
 routine define ROUTINE_EMERGENCY 'Emergency'

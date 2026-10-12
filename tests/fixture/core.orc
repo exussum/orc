@@ -20,7 +20,7 @@ device seal USB
 device only Chromecast CC host3 --room Living
 
 routine define ROUTINE_RESET   Reset
-routine append ROUTINE_RESET   Light         off --trigger SYSTEM
+routine append ROUTINE_RESET   Light         off --trigger-person SYSTEM
 routine append .               Chromecast.CC stop
 routine define ROUTINE_DEFAULT Welcome
 routine define ROUTINE_MEETING Meeting --skip-replay
@@ -37,7 +37,7 @@ person Alice host9 aa:bb
 
 tag Alice EIK_ALICE 2026-01-02T03:04:05+00:00
 
-routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger Alice
+routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger-person Alice
 
 ad_hoc define AD_HOC_SILENCE        Silence          --no-reset Chromecast.CC stop
 ad_hoc define AD_HOC_DOG            Dog              --delay 7  Chromecast.CC stop
