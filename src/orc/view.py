@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, NamedTuple, cast
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
+import psutil
 from apscheduler.job import Job
 from flask import Blueprint, Flask, abort, redirect, render_template, request
 from flask import current_app as _current_app
@@ -89,6 +90,15 @@ def cache_control(response: Response) -> Response:
 @bp.app_context_processor
 def app_name() -> dict[str, str]:
     return {"app_name": _app_name()}
+
+
+@bp.app_context_processor
+def host_stats() -> dict[str, Any]:
+    return {
+        "load": psutil.getloadavg(),
+        "rss_mib": psutil.Process().memory_info().rss // 2**20,
+        "free_mib": psutil.virtual_memory().available // 2**20,
+    }
 
 
 @bp.route("/manifest.json")

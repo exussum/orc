@@ -69,7 +69,7 @@
                 </div>
             </nav>
             {% block body %}{% endblock %}
-            <div class="text-xs text-gray-400 text-center py-3">{{ build_sha }} &middot; {{ build_time }}</div>
+            <div class="text-xs text-gray-400 text-center py-3">{{ build_sha }} &middot; {{ build_time }} &middot; load {{ "%.2f %.2f %.2f"|format(*load) }} &middot; orc {{ rss_mib }} MiB &middot; {{ free_mib }} MiB free</div>
         </div>
     </body>
 </html>
