@@ -53,6 +53,7 @@ class DeviceRow(NamedTuple):
 
 
 class JobMeta(NamedTuple):
+    routine_id: str
     absent: bool
     weather: bool
     presence: bool
@@ -308,12 +309,13 @@ def schedule() -> str:
     present_names = api.present_names()
 
     def meta(job: Job) -> JobMeta:
-        rule = job.args[0].rule
+        iot_job = job.args[0]
         return JobMeta(
-            absent=api.is_absent(rule, present_names),
-            weather=api.weather_active(rule, job.trigger.run_date),
-            presence=api.has_presence(rule),
-            skip_replay=m.SKIP_REPLAY_TAG in rule.tags,
+            routine_id=iot_job.routine_id,
+            absent=api.is_absent(iot_job.rule, present_names),
+            weather=api.weather_active(iot_job.rule, job.trigger.run_date),
+            presence=api.has_presence(iot_job.rule),
+            skip_replay=m.SKIP_REPLAY_TAG in iot_job.rule.tags,
         )
 
     job_meta = {j.id: meta(j) for j in jobs}

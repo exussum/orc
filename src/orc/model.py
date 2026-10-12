@@ -331,6 +331,7 @@ class LogEntry(LogSubEntry):
 @dataclass
 class IotJob:
     rule: Routine
+    routine_id: str
 
 
 class Speak(str):
@@ -436,6 +437,7 @@ class CallablePlugin:
 class ThemeEntry(NamedTuple):
     when: time | str
     routine: Routine
+    routine_id: str
 
 
 @dataclass

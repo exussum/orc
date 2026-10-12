@@ -307,10 +307,10 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
 
 
 def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    if (routine := objects["routine"].get(args.routine)) is None:
+    if (rule := objects["routine"].get(args.routine)) is None:
         raise ValueError(f"Unknown routine {args.routine!r}: expected one of {tuple(objects['routine'])}")
     theme = objects["theme"].setdefault(args.name, m.Theme(args.name))
-    theme.entries = (*theme.entries, m.ThemeEntry(args.time, routine))
+    theme.entries = (*theme.entries, m.ThemeEntry(args.time, rule, args.routine))
 
 
 def load_plugin_config(
