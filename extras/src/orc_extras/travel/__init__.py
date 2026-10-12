@@ -49,5 +49,5 @@ def setup(ctx: AppContext) -> None:
         tomtom_key=ctx.config.secrets.other[s.tomtom_secret],
         aerodatabox_key=ctx.config.secrets.other[s.aerodatabox_secret],
     )
-    sqlite.init_db(ctx.api.connection)
+    sqlite.init_db()
     ctx.plugin_state[orc_extras.travel] = runtime

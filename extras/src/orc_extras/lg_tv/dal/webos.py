@@ -8,15 +8,14 @@ from aiowebostv import WebOsClient
 
 from orc.model import DeviceEnum
 from orc_extras.lg_tv.dal import sqlite
-from orc_extras.lg_tv.dal.sqlite import Connection
 
 
-def pair(connection: Connection, hostname: str) -> str | None:
+def pair(hostname: str) -> str | None:
     key = asyncio.run(_pair(hostname))
     if key is None:
         print(f"LG TV pairing not completed for {hostname}", file=sys.stderr)
         return None
-    sqlite.insert_client_key(connection, hostname, key)
+    sqlite.insert_client_key(hostname, key)
     return key
 
 
@@ -24,8 +23,8 @@ def is_off(tv: DeviceEnum) -> bool:
     return not asyncio.run(_is_port_open(tv.value, 3000, timeout=0.5))
 
 
-def off(connection: Connection, tv: DeviceEnum) -> None:
-    client_key = sqlite.fetch_client_key(connection, tv.value)
+def off(tv: DeviceEnum) -> None:
+    client_key = sqlite.fetch_client_key(tv.value)
     if not client_key:
         raise RuntimeError(f"No client_key for {tv.value} in orc_lg_tv; run the Pair LG TV plugin first")
     asyncio.run(_power_off(tv.value, client_key))

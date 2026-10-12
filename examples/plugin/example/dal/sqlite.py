@@ -1,16 +1,18 @@
-from collections.abc import Callable
-from typing import Any
+import sqlite3
 
-type Connection = Callable[[], Any]
+from orc.plugins import connected
 
 
-def init_db(connection: Connection) -> None:
+@connected
+def init_db(conn: sqlite3.Connection) -> None:
     pass
 
 
-def fetch_thing(connection: Connection, key: str) -> str | None:
+@connected
+def fetch_thing(conn: sqlite3.Connection, key: str) -> str | None:
     pass
 
 
-def insert_thing(connection: Connection, key: str, value: str) -> None:
+@connected
+def insert_thing(conn: sqlite3.Connection, key: str, value: str) -> None:
     pass

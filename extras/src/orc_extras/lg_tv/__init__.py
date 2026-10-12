@@ -16,7 +16,7 @@ from orc_extras.lg_tv.plugins import pair_tv  # noqa: F401
 
 
 def setup(ctx: "m.AppContext") -> None:
-    sqlite.init_db(ctx.api.connection)
+    sqlite.init_db()
     ctx.api.add_state_provider("TV", partial(plugins.tv_state, ctx, plugins.backend(ctx)))
 
 
