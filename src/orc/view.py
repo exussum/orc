@@ -390,9 +390,11 @@ def push_open() -> BaseResponse:
 @bp.route("/api/durations")
 def durations() -> tuple[dict[str, Any], int]:
     delays = api.action_delays()
+    stats = api.duration_stats()
     return {
         name: {"avg": round(avg, 3), "samples": samples, "delay": str(delays.get(name, timedelta()))}
-        for name, (samples, avg) in api.duration_stats().items()
+        for name in stats.keys() | {name for name, delay in delays.items() if delay}
+        for samples, avg in (stats.get(name, (0, 0.0)),)
     }, 200
 
 

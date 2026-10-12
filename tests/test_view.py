@@ -194,13 +194,23 @@ def test_set_theme_rejects_unknown_theme(flask_client, ctx):
 
 
 def test_durations_returns_stats(flask_client):
-    with patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}):
+    with (
+        patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}),
+        patch("orc.api.action_delays", return_value={}),
+    ):
         response = flask_client.get("/api/durations")
     assert response.status_code == 200
     assert response.get_json() == {
         "TV Lights": {"avg": 3.0, "samples": 4, "delay": "0:00:00"},
         "Reset": {"avg": 0.5, "samples": 2, "delay": "0:00:00"},
     }
+
+
+def test_durations_lists_a_delayed_action_that_never_ran(flask_client, config_ad_hoc):
+    dog = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), name="Dog", delay=timedelta(minutes=6))
+    with config_ad_hoc({"AD_HOC_DOG": dog}), patch("orc.api.duration_stats", return_value={}):
+        response = flask_client.get("/api/durations")
+    assert response.get_json() == {"AD_HOC_DOG": {"avg": 0.0, "samples": 0, "delay": "0:06:00"}}
 
 
 # --- /api/schedule/<id>/pause: absolute paused state ---
