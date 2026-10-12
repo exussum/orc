@@ -3,7 +3,6 @@ from typing import Any
 from orc_engine import cast
 
 import example
-from example.dal.sqlite import Connection
 from example.model import ExampleJob, Plan, Runtime
 from orc.model import AppContext, DeviceStatus, Scheduler
 from orc.plugins import requires_ctx
@@ -27,7 +26,7 @@ def resolve_target(target: str | None) -> str | None:
     pass
 
 
-def plan(rt: Runtime, job: ExampleJob, tz: Any, connection: Connection) -> Plan:
+def plan(rt: Runtime, job: ExampleJob, tz: Any) -> Plan:
     raise NotImplementedError
 
 

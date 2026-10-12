@@ -1,29 +1,28 @@
-from collections.abc import Callable
-from typing import Any
+import sqlite3
 
-type Connection = Callable[[], Any]
-
-
-def init_db(connection: Connection) -> None:
-    with connection() as conn:
-        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query -- static DDL literal, no interpolation
-        conn.execute("CREATE TABLE IF NOT EXISTS orc_travel_places (address TEXT PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL)")
+from orc.plugins import connected
 
 
-def fetch_geocode(connection: Connection, address: str) -> tuple[float, float] | None:
-    with connection() as conn:
-        row = conn.execute("SELECT lat, lon FROM orc_travel_places WHERE address = ?", (address,)).fetchone()
+@connected
+def init_db(conn: sqlite3.Connection) -> None:
+    # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query -- static DDL literal, no interpolation
+    conn.execute("CREATE TABLE IF NOT EXISTS orc_travel_places (address TEXT PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL)")
+
+
+@connected
+def fetch_geocode(conn: sqlite3.Connection, address: str) -> tuple[float, float] | None:
+    row = conn.execute("SELECT lat, lon FROM orc_travel_places WHERE address = ?", (address,)).fetchone()
     return (row[0], row[1]) if row else None
 
 
-def insert_geocode(connection: Connection, address: str, lat: float, lon: float) -> None:
-    with connection() as conn:
-        conn.execute(
-            "INSERT INTO orc_travel_places (address, lat, lon) VALUES (?, ?, ?) ON CONFLICT(address) DO NOTHING",
-            (address, lat, lon),
-        )
+@connected
+def insert_geocode(conn: sqlite3.Connection, address: str, lat: float, lon: float) -> None:
+    conn.execute(
+        "INSERT INTO orc_travel_places (address, lat, lon) VALUES (?, ?, ?) ON CONFLICT(address) DO NOTHING",
+        (address, lat, lon),
+    )
 
 
-def delete_geocode(connection: Connection, address: str) -> None:
-    with connection() as conn:
-        conn.execute("DELETE FROM orc_travel_places WHERE address = ?", (address,))
+@connected
+def delete_geocode(conn: sqlite3.Connection, address: str) -> None:
+    conn.execute("DELETE FROM orc_travel_places WHERE address = ?", (address,))

@@ -8,7 +8,6 @@ import orc_extras.travel
 from orc import model as m
 from orc.model import Alarm, AppContext
 from orc.plugins import requires_ctx
-from orc_extras.travel.dal.sqlite import Connection
 from orc_extras.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
 
 _FLIGHT_RE = re.compile(r"^(?=.*[A-Za-z])[A-Za-z0-9]{2,3}\s?\d{1,4}$")
@@ -58,13 +57,13 @@ def schedule(ctx: AppContext, job: TravelJob) -> None:
     _reschedule(ctx, job, ctx.api.local_now() + timedelta(seconds=5))
 
 
-def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None, connection: Connection) -> Schedule:
+def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None) -> Schedule:
     """The leave time (None until the leave day) and when to next fire: midnight of
     the leave day until it arrives, then 2 hours before the leave, then every 10
     minutes, then None once within 10 minutes of the leave."""
     if arrival is None:
         return Schedule(None, datetime.combine(job.arrive.astimezone(now.tzinfo).date(), time.min, tzinfo=now.tzinfo))
-    lead = rt.drive.drive_minutes(connection, rt.tomtom_key, rt.origin, arrival.where, rt.settings.http_timeout)
+    lead = rt.drive.drive_minutes(rt.tomtom_key, rt.origin, arrival.where, rt.settings.http_timeout)
     lead += sum(e.minutes for e in rt.extras if e.name in job.extras)
     lead += rt.settings.buffer_minutes
     leave_at = arrival.when - timedelta(minutes=lead)
@@ -79,7 +78,7 @@ def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None
         return Schedule(leave_at, leave_at - _REFRESH_HORIZON)
 
 
-def evaluate(ctx: AppContext, job: TravelJob, tz: Any, now: datetime, connection: Connection) -> tuple[Arrival | None, Schedule]:
+def evaluate(ctx: AppContext, job: TravelJob, tz: Any, now: datetime) -> tuple[Arrival | None, Schedule]:
     """Run a live aviation or TomTom lookup and compute the resulting Schedule in one pass,
     so a bad flight number or an unroutable destination is caught immediately instead of
     failing invisibly in the background. Flight data isn't available until the day of
@@ -93,7 +92,7 @@ def evaluate(ctx: AppContext, job: TravelJob, tz: Any, now: datetime, connection
         except Exception as exc:
             raise ValueError(f"Couldn't verify flight {job.iata}: {exc}") from exc
     try:
-        sched = next_run(rt, job, now, arrival, connection)
+        sched = next_run(rt, job, now, arrival)
     except Exception as exc:
         raise ValueError(f"Couldn't get a travel time to '{arrival.where if arrival else job.destination}': {exc}") from exc
     return arrival, sched
@@ -102,7 +101,7 @@ def evaluate(ctx: AppContext, job: TravelJob, tz: Any, now: datetime, connection
 @requires_ctx
 def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     tz, now = ctx.config.settings.tz, ctx.api.local_now()
-    arrival, sched = evaluate(ctx, job, tz, now, ctx.api.connection)
+    arrival, sched = evaluate(ctx, job, tz, now)
     if arrival is not None:
         job.arrive = arrival.when
     job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta

@@ -1,8 +1,7 @@
 from orc.model import DeviceEnum
-from orc_extras.lg_tv.dal.sqlite import Connection
 
 
-def pair(connection: Connection, hostname: str) -> str | None:
+def pair(hostname: str) -> str | None:
     return None
 
 
@@ -10,5 +9,5 @@ def is_off(tv: DeviceEnum) -> bool:
     return True
 
 
-def off(connection: Connection, tv: DeviceEnum) -> None:
+def off(tv: DeviceEnum) -> None:
     pass

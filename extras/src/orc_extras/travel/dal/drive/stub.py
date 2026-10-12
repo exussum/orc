@@ -1,5 +1,2 @@
-from orc_extras.travel.dal.sqlite import Connection
-
-
-def drive_minutes(connection: Connection, key: str, origin: str, dest: str, timeout: int) -> int:
+def drive_minutes(key: str, origin: str, dest: str, timeout: int) -> int:
     return 30

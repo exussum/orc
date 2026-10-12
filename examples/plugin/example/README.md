@@ -13,7 +13,7 @@ example/
   static/example.js      scene-button browser hook
   dal/
     interfaces.py        FooService / BarService Protocols
-    sqlite.py            Connection + table access (injected connection)
+    sqlite.py            table access, each function under @connected
     foo/  acme.py stub.py    capability: provider + stub
     bar/  globex.py stub.py
 ```
@@ -53,8 +53,9 @@ Real named after the provider (`acme`, `tomtom`, `ical`, `webos`); fake always
 `stub.py`. One `Protocol` per capability in `dal/interfaces.py`; type the resolved
 module with it, not `ModuleType`.
 
-**DB** — `dal/sqlite.py` owns schema + queries and takes an injected `connection`
-(`ctx.api.connection`); call `sqlite.init_db(...)` from `setup()`. Omit the file
+**DB** — `dal/sqlite.py` owns schema + queries; each function takes `conn` first
+under `@connected` (from `orc.plugins`), which opens the configured `jobs_db`.
+Call `sqlite.init_db()` from `setup()`. Omit the file
 if the plugin persists nothing.
 
 **Configs** — default (`src/plugins/…`) selects the real backend; test

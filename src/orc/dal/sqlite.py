@@ -1,13 +1,9 @@
 import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import date
 from typing import Any
 
-from sqlalchemy.engine.url import make_url
-
-import orc
 from orc import model as m
+from orc.decorators import connected, connection
 
 _ALPHA: float = 0.3
 _CLOCK_MOVED_SECONDS = 512
@@ -48,54 +44,54 @@ _UPDATE_AVG = (
 _durations: list[tuple[str, float]] = []
 
 
-def delete_push_subscription(endpoint: str) -> None:
-    with connection() as conn:
-        conn.execute(_DELETE_PUSH, (endpoint,))
+@connected
+def delete_push_subscription(conn: sqlite3.Connection, endpoint: str) -> None:
+    conn.execute(_DELETE_PUSH, (endpoint,))
 
 
-def delete_theme_override() -> None:
-    with connection() as conn:
-        conn.execute(_DELETE_OVERRIDE)
+@connected
+def delete_theme_override(conn: sqlite3.Connection) -> None:
+    conn.execute(_DELETE_OVERRIDE)
 
 
-def fetch_push_subscriptions() -> list[m.PushSubscription]:
-    with connection() as conn:
-        return [m.PushSubscription(*row) for row in conn.execute(_SELECT_PUSH)]
+@connected
+def fetch_push_subscriptions(conn: sqlite3.Connection) -> list[m.PushSubscription]:
+    return [m.PushSubscription(*row) for row in conn.execute(_SELECT_PUSH)]
 
 
-def fetch_tag_clocks() -> dict[str, m.TagClock]:
-    with connection() as conn:
-        rows = conn.execute(_SELECT_CLOCKS).fetchall()
+@connected
+def fetch_tag_clocks(conn: sqlite3.Connection) -> dict[str, m.TagClock]:
+    rows = conn.execute(_SELECT_CLOCKS).fetchall()
     return {person: m.TagClock(offset, heard) for person, offset, heard in rows}
 
 
-def fetch_theme_override() -> tuple[str, date, date] | None:
-    with connection() as conn:
-        row = conn.execute(_SELECT_OVERRIDE).fetchone()
+@connected
+def fetch_theme_override(conn: sqlite3.Connection) -> tuple[str, date, date] | None:
+    row = conn.execute(_SELECT_OVERRIDE).fetchone()
     if not row:
         return None
     return (row[0], date.fromisoformat(row[1]), date.fromisoformat(row[2]))
 
 
-def init_db() -> None:
-    with connection() as conn:
-        for statement in _SCHEMA:
-            conn.execute(statement)
+@connected
+def init_db(conn: sqlite3.Connection) -> None:
+    for statement in _SCHEMA:
+        conn.execute(statement)
 
 
-def insert_push_subscription(subscription: m.PushSubscription) -> None:
-    with connection() as conn:
-        conn.execute(_UPSERT_PUSH, subscription)
+@connected
+def insert_push_subscription(conn: sqlite3.Connection, subscription: m.PushSubscription) -> None:
+    conn.execute(_UPSERT_PUSH, subscription)
 
 
-def insert_theme_override(override: tuple[str, date, date]) -> None:
-    with connection() as conn:
-        conn.execute(_UPSERT_OVERRIDE, (override[0], override[1].isoformat(), override[2].isoformat()))
+@connected
+def insert_theme_override(conn: sqlite3.Connection, override: tuple[str, date, date]) -> None:
+    conn.execute(_UPSERT_OVERRIDE, (override[0], override[1].isoformat(), override[2].isoformat()))
 
 
-def upsert_tag_clock(person: str, clock: m.TagClock) -> None:
-    with connection() as conn:
-        conn.execute(_UPSERT_CLOCK, (person, clock.offset, clock.heard))
+@connected
+def upsert_tag_clock(conn: sqlite3.Connection, person: str, clock: m.TagClock) -> None:
+    conn.execute(_UPSERT_CLOCK, (person, clock.offset, clock.heard))
 
 
 def update_avg(name: str, duration: float) -> None:
@@ -107,19 +103,6 @@ def update_avg(name: str, duration: float) -> None:
             conn.executemany(_UPDATE_AVG, batch)
 
 
-def fetch_durations() -> list[Any]:
-    with connection() as conn:
-        return conn.execute(_SELECT_DURATIONS).fetchall()
-
-
-@contextmanager
-def connection() -> Iterator[sqlite3.Connection]:
-    # Public DB connection context manager; plugins use it to own their own tables.
-    db_path = make_url(orc.config.settings.jobs_db).database
-    assert db_path is not None  # a configured sqlite URL always includes a path
-    conn = sqlite3.connect(db_path)
-    try:
-        with conn:
-            yield conn
-    finally:
-        conn.close()
+@connected
+def fetch_durations(conn: sqlite3.Connection) -> list[Any]:
+    return conn.execute(_SELECT_DURATIONS).fetchall()

@@ -1,11 +1,10 @@
 import requests
 
 from orc_extras.travel.dal import sqlite
-from orc_extras.travel.dal.sqlite import Connection
 
 
-def _lookup(connection: Connection, key: str, address: str, timeout: int) -> tuple[float, float] | None:
-    if (hit := sqlite.fetch_geocode(connection, address)) is not None:
+def _lookup(key: str, address: str, timeout: int) -> tuple[float, float] | None:
+    if (hit := sqlite.fetch_geocode(address)) is not None:
         return hit
     response = requests.get(
         f"https://api.tomtom.com/search/2/search/{requests.utils.quote(address)}.json",
@@ -17,12 +16,12 @@ def _lookup(connection: Connection, key: str, address: str, timeout: int) -> tup
     if not results:
         return None
     pos = results[0]["position"]
-    sqlite.insert_geocode(connection, address, pos["lat"], pos["lon"])
+    sqlite.insert_geocode(address, pos["lat"], pos["lon"])
     return pos["lat"], pos["lon"]
 
 
-def drive_minutes(connection: Connection, key: str, origin: str, dest: str, timeout: int) -> int:
-    d = _lookup(connection, key, dest, timeout)
+def drive_minutes(key: str, origin: str, dest: str, timeout: int) -> int:
+    d = _lookup(key, dest, timeout)
     if d is None:
         raise ValueError(f"could not geocode {dest!r}")
     d_lat, d_lon = d
@@ -35,6 +34,6 @@ def drive_minutes(connection: Connection, key: str, origin: str, dest: str, time
         response.raise_for_status()
     except requests.HTTPError:
         if response.status_code == 400:
-            sqlite.delete_geocode(connection, dest)
+            sqlite.delete_geocode(dest)
         raise
     return round(response.json()["routes"][0]["summary"]["travelTimeInSeconds"] / 60)

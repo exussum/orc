@@ -1,10 +1,8 @@
 from typing import Protocol
 
-from example.dal.sqlite import Connection
-
 
 class FooService(Protocol):
-    def do_foo(self, connection: Connection, key: str, arg: str, timeout: int) -> int: ...
+    def do_foo(self, key: str, arg: str, timeout: int) -> int: ...
 
 
 class BarService(Protocol):

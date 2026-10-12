@@ -24,13 +24,8 @@ from orc import model as m
 from orc.collections import LockedDeque, of_type
 from orc.dal import net, push, sqlite
 from orc.dal.mqtt import paho as mqtt
-from orc.dal.sqlite import (
-    connection,  # noqa: F401
-    init_db,  # noqa: F401
-    update_avg,
-)
-from orc.dal.sqlite import delete_theme_override as clear_theme_override
 from orc.dal.sqlite import fetch_durations as _fetch_durations
+from orc.dal.sqlite import init_db, update_avg  # noqa: F401
 from orc.decorators import mappable, requires_ctx
 from orc.kernel import cast
 from orc.kernel.declarations import Declarations
@@ -426,6 +421,10 @@ def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
     return False
 
 
+def clear_theme_override() -> None:
+    sqlite.delete_theme_override()
+
+
 def current_theme_override() -> m.ThemeOverride | None:
     row = sqlite.fetch_theme_override()
     if not row:
@@ -488,7 +487,13 @@ def start_ble_listener() -> None:
             log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
         reported = present
 
-    net.presence.start(config.ble_tags, config.settings.tz, report, clocks=sqlite.fetch_tag_clocks(), on_clock=sqlite.upsert_tag_clock)
+    net.presence.start(
+        config.ble_tags,
+        config.settings.tz,
+        report,
+        clocks=sqlite.fetch_tag_clocks(),
+        on_clock=sqlite.upsert_tag_clock,
+    )
 
 
 def schedule_presence_check(trigger: m.Trigger) -> None:

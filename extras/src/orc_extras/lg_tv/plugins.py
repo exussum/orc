@@ -14,7 +14,7 @@ def backend(ctx: AppContext) -> WebOsBackend:
 
 
 def pair(ctx: AppContext, hostname: str) -> str | None:
-    return backend(ctx).pair(ctx.api.connection, hostname)
+    return backend(ctx).pair(hostname)
 
 
 def is_off(ctx: AppContext, tv: DeviceEnum) -> bool:
@@ -22,7 +22,7 @@ def is_off(ctx: AppContext, tv: DeviceEnum) -> bool:
 
 
 def off(ctx: AppContext, tv: DeviceEnum) -> None:
-    backend(ctx).off(ctx.api.connection, tv)
+    backend(ctx).off(tv)
 
 
 def _dispatch(ctx: AppContext, w: DeviceEnum, command: "em.Command[Any]", stream: dict[Any, tuple[str, str]]) -> None:
