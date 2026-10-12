@@ -1,6 +1,6 @@
 from datetime import timedelta
 from types import SimpleNamespace
-from typing import Any, NamedTuple, Sequence
+from typing import Any, NamedTuple
 
 from orc_engine import cast
 from orc_engine import model as em
@@ -116,12 +116,8 @@ def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:
     # An open entrance door means someone is around even if presence hasn't seen them.
     # A door never seen over MQTT reads as closed, falling back to the presence-only
     # decision like the old unreachable-hub path.
-    device = _sensor(ctx.api.device_states(), sensor.setting.patio_door.value)
+    device = ctx.api.device_state(sensor.setting.patio_door.value)
     return device is not None and device.attributes.get("contact") == "open"
-
-
-def _sensor(devices: Sequence[m.DeviceState], device_id: str) -> m.DeviceState | None:
-    return next((d for d in devices if d.device.id == device_id), None)
 
 
 def _timed_commands(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, m.Commands]:
