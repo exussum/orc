@@ -20,7 +20,7 @@ extra <name> <minutes>
 
 
 _SERIALIZERS = {
-    "setting": scalar(Settings, types={"window_hours": cast.int, "http_timeout": cast.int, "buffer_minutes": cast.int}),
+    "setting": scalar(Settings, types={"http_timeout": cast.int, "buffer_minutes": cast.int}),
     "place": array(Place),
     "extra": array(Extra, types={"minutes": int}),
 }

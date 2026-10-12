@@ -13,8 +13,6 @@ class Log(m.LogSourceEnum):
 class Settings(NamedTuple):
     drive_backend: str
     flight_backend: str
-    cron: str
-    window_hours: int
     tomtom_secret: str
     aerodatabox_secret: str
     http_timeout: int

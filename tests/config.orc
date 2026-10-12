@@ -30,7 +30,6 @@ device seal USB
 
 device only Chromecast LIVING_ROOM        'Living room mini' --room Living
 device only Button     LIVING_ROOM_REMOTE scene              --room Living
-device only BroadLink
 device only AC
 device only LGTV
 device only WebOS
@@ -67,11 +66,9 @@ tag    Alice EIK_ALICE 2026-01-02T03:04:05+00:00
 
 ad_hoc define Silence          --section scene --no-reset Chromecast stop
 ad_hoc define Dog              --section scene --delay 7  Chromecast stop
-ad_hoc define 'All Lights On'  --section scene --no-reset Light      100
 ad_hoc define 'All Lights Off' --section scene --no-reset Light      off
 
-remote     Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
-remote     .                         1 held   Silence
+remote     Button.LIVING_ROOM_REMOTE 1 held   Silence
 
 plugin Buttons            orc.plugins.buttons
 plugin Battery            orc.plugins.battery
