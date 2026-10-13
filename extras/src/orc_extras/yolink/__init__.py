@@ -34,42 +34,6 @@ class Msg:
     ONLINE = "`{name}` online"
 
 
-def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
-    api = ctx.api
-    msg = None
-    notification = m.Notification(("yolink", name))
-    if kind == "connection" and old is not None:
-        msg = (Msg.CONNECTED if new == "connected" else Msg.DISCONNECTED).format(name=name)
-    elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
-        msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
-        notification = m.Notification(("leak", name))
-        if new == plugins.STATE_WET:
-            entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification=notification)
-            api.alert(m.Alarm.EMERGENCY, text=msg, entry=entry)
-            return
-    elif kind == "battery":
-        old_critical = old is not None and old.is_critical
-        if new.is_critical and not old_critical:
-            msg = Msg.LOW_BATTERY.format(name=name, battery=new.value)
-        elif old_critical and not new.is_critical:
-            msg = Msg.BATTERY_RESTORED.format(name=name, battery=new.value)
-    elif kind == "signal":
-        old_weak = old is not None and old <= _SIGNAL_WEAK_THRESHOLD
-        new_weak = new <= _SIGNAL_WEAK_THRESHOLD
-        if new_weak and not old_weak:
-            msg = Msg.WEAK_SIGNAL.format(name=name, signal=new)
-        elif old_weak and not new_weak:
-            msg = Msg.SIGNAL_RESTORED.format(name=name, signal=new)
-    elif kind == "interval" and old is not None:
-        msg = Msg.INTERVAL_CHANGED.format(name=name, interval=new)
-    elif kind == "online" and old is not None:
-        msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
-
-    if msg:
-        entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification=notification)
-        api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-
-
 def setup(ctx: AppContext) -> None:
     backend = cast.instance(resolve_backend(ctx.config.plugin_for(orc_extras.yolink).backend), CloudBackend)
     ctx.plugin_state[orc_extras.yolink] = plugins.states_for(ctx.config.devices.Leak)
@@ -112,3 +76,39 @@ def declare(declarations: Any) -> None:
         button_labels={"Test Leak Sensor": "Test {device}"},
         secrets={"YOLINK_ID": cast.nonblank, "YOLINK_SECRET": cast.nonblank},
     )
+
+
+def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
+    api = ctx.api
+    msg = None
+    notification = m.Notification(("yolink", name))
+    if kind == "connection" and old is not None:
+        msg = (Msg.CONNECTED if new == "connected" else Msg.DISCONNECTED).format(name=name)
+    elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
+        msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
+        notification = m.Notification(("leak", name))
+        if new == plugins.STATE_WET:
+            entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification=notification)
+            api.alert(m.Alarm.EMERGENCY, text=msg, entry=entry)
+            return
+    elif kind == "battery":
+        old_critical = old is not None and old.is_critical
+        if new.is_critical and not old_critical:
+            msg = Msg.LOW_BATTERY.format(name=name, battery=new.value)
+        elif old_critical and not new.is_critical:
+            msg = Msg.BATTERY_RESTORED.format(name=name, battery=new.value)
+    elif kind == "signal":
+        old_weak = old is not None and old <= _SIGNAL_WEAK_THRESHOLD
+        new_weak = new <= _SIGNAL_WEAK_THRESHOLD
+        if new_weak and not old_weak:
+            msg = Msg.WEAK_SIGNAL.format(name=name, signal=new)
+        elif old_weak and not new_weak:
+            msg = Msg.SIGNAL_RESTORED.format(name=name, signal=new)
+    elif kind == "interval" and old is not None:
+        msg = Msg.INTERVAL_CHANGED.format(name=name, interval=new)
+    elif kind == "online" and old is not None:
+        msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
+
+    if msg:
+        entry = api.log(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification=notification)
+        api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)

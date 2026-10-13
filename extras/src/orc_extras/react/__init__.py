@@ -49,6 +49,33 @@ _ERR_CONDITION = "react condition {!r} is not a condition"
 _WHOLE_DEVICE: Mapping[str, Any] = {"Chromecast": CastSubject, "AC": AcSubject}
 
 
+def declare(declarations: Any) -> None:
+    declarations.declare(setup=[setup], blueprints={"rules": react_bp}, scripts=[Path(__file__).parent / "static" / "react.js"])
+
+
+def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
+    cfg = load_plugin_config(
+        CONFIG,
+        ctx.config,
+        GRAMMAR,
+        serializers={"react": each(_rule, default=list, types={"delay": int, "pause": int})},
+    )
+    watches = tuple(reaction.watch for reaction in cfg.react)
+    groups = _group(cfg.react)
+    ctx.plugin_state[orc_extras.react] = model.State(
+        watches, groups, {watch: name for name, group in groups.items() for watch in group.watches}, plugins.functions(ctx)
+    )
+    sources = {reaction.source.value: reaction.source for reaction in cfg.react}
+    ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
+    return watches
+
+
+def namespace(source: DeviceEnum, types: Mapping[str, type[DeviceEnum]]) -> _Names:
+    bound: dict[str, Any] = dict(VOCABULARY)
+    bound.update({name: _Type(name, enum) for name, enum in types.items()})
+    return _Names(source, bound)
+
+
 class _Device:
     """`Light.desk` — attribute access off it names one of that device's MQTT attributes."""
 
@@ -82,33 +109,6 @@ class _Names(dict[str, Any]):
         if name in plugins.FUNCTIONS:
             return _formula(self._source, name)
         return MqttDeviceSubject(self._source, name)
-
-
-def declare(declarations: Any) -> None:
-    declarations.declare(setup=[setup], blueprints={"rules": react_bp}, scripts=[Path(__file__).parent / "static" / "react.js"])
-
-
-def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
-    cfg = load_plugin_config(
-        CONFIG,
-        ctx.config,
-        GRAMMAR,
-        serializers={"react": each(_rule, default=list, types={"delay": int, "pause": int})},
-    )
-    watches = tuple(reaction.watch for reaction in cfg.react)
-    groups = _group(cfg.react)
-    ctx.plugin_state[orc_extras.react] = model.State(
-        watches, groups, {watch: name for name, group in groups.items() for watch in group.watches}, plugins.functions(ctx)
-    )
-    sources = {reaction.source.value: reaction.source for reaction in cfg.react}
-    ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
-    return watches
-
-
-def namespace(source: DeviceEnum, types: Mapping[str, type[DeviceEnum]]) -> _Names:
-    bound: dict[str, Any] = dict(VOCABULARY)
-    bound.update({name: _Type(name, enum) for name, enum in types.items()})
-    return _Names(source, bound)
 
 
 def _group(reactions: Iterable[model.Reaction]) -> dict[str, model.Group]:

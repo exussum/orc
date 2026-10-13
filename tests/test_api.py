@@ -19,12 +19,6 @@ TRIGGER = m.Query("test")
 PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
 
 
-def _routine(name, when, *commands, skip_replay=False):
-    steps = tuple(em.Step(c.tag or em.And(), c) for c in commands)
-    tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
-    return em.Rule(steps, name=name, tags=tags)
-
-
 @pytest.fixture
 def snapshot_commands():
     return (em.Command(m.Devices(orc.Light.a), m.ON), em.Command(m.Devices(orc.Light.b), m.OFF))
@@ -217,10 +211,6 @@ def test_dispatch_routes_ac_commands_to_the_broker(log_entry):
         call(orc.AC.unit, m.AcState(power=m.ON, mode="cool")),
         call(orc.AC.unit, m.AcState(power=m.OFF)),
     ]
-
-
-def _ac(**attributes):
-    return patch.object(mqtt, "snapshot", return_value=[m.DeviceState(m.Device("clip-1", "unit", "lg_ac"), attributes, None)])
 
 
 def test_capture_acs_reads_the_device_cache():
@@ -684,3 +674,13 @@ def test_executor_injects_ctx():
         executor._do_submit_job(job, [])
 
     assert captured[0].kwargs["ctx"] is ctx
+
+
+def _routine(name, when, *commands, skip_replay=False):
+    steps = tuple(em.Step(c.tag or em.And(), c) for c in commands)
+    tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
+    return em.Rule(steps, name=name, tags=tags)
+
+
+def _ac(**attributes):
+    return patch.object(mqtt, "snapshot", return_value=[m.DeviceState(m.Device("clip-1", "unit", "lg_ac"), attributes, None)])

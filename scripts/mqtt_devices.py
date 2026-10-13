@@ -19,22 +19,6 @@ import paho.mqtt.client as mqtt
 devices: dict[int, dict[str, Any]] = {}
 
 
-def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    parts = msg.topic.split("/")
-    if len(parts) != 4 or parts[0] != "hubitat" or parts[2] != "devices":
-        return
-    try:
-        devices[int(parts[3])] = json.loads(msg.payload)
-    except ValueError:
-        pass
-
-
-def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
-    # Subscribe here, not before the loop: paho drops (does not queue)
-    # subscriptions made before the CONNACK arrives.
-    client.subscribe("hubitat/#", qos=0)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", required=True, help="MQTT broker address (the hub, if using its built-in broker)")
@@ -68,6 +52,22 @@ def main() -> None:
 
     if not devices:
         print("\nNothing found. Check that the MQTT Export app is enabled and devices are selected in it.")
+
+
+def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+    parts = msg.topic.split("/")
+    if len(parts) != 4 or parts[0] != "hubitat" or parts[2] != "devices":
+        return
+    try:
+        devices[int(parts[3])] = json.loads(msg.payload)
+    except ValueError:
+        pass
+
+
+def _on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
+    # Subscribe here, not before the loop: paho drops (does not queue)
+    # subscriptions made before the CONNACK arrives.
+    client.subscribe("hubitat/#", qos=0)
 
 
 if __name__ == "__main__":

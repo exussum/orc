@@ -28,12 +28,6 @@ def reset_ctx():
     api.set_ctx(m.AppContext(MagicMock(), api.runtime()))
 
 
-@pytest.fixture(autouse=True)
-def _device_enums(request, monkeypatch):
-    if enums := getattr(request.module, "DEVICE_ENUMS", None):
-        monkeypatch.setattr(orc.config, "registry", Declarations().build(enums))
-
-
 @pytest.fixture
 def ctx():
     mock = MagicMock()
@@ -54,3 +48,9 @@ def freezegun_clock(ctx, monkeypatch):
         ctx.api.local_now = api.local_now
         ctx.config.settings.tz = UTC
         yield frozen
+
+
+@pytest.fixture(autouse=True)
+def _device_enums(request, monkeypatch):
+    if enums := getattr(request.module, "DEVICE_ENUMS", None):
+        monkeypatch.setattr(orc.config, "registry", Declarations().build(enums))

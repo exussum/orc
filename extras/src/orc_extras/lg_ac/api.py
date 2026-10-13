@@ -24,7 +24,18 @@ from orc import security
 from orc.model import CA, OFF, ON, AcState, Certificate
 from orc_extras.lg_ac import model as m
 
-# --- Module constants ---
+_RESULT_OK = "0000"  # provisioning resultCode
+_VALID_FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)  # issued-cert validity window
+_VALID_TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
+
+#
+# The field map (TLV ids, mode/fan codes, temp scaling) lives in JSON, NOT here —
+# one file per device model at fieldmap/<kind>.json (kind comes from the device's
+# preDeploy payload, e.g. WIN_056905_WW). load_fieldmap() reads a model's map;
+# an unknown model leaves the codec inert (capture-only).
+# Override the directory with LG_AC_FIELDMAP_DIR.
+FIELDMAP_DIR = Path(os.environ.get("LG_AC_FIELDMAP_DIR") or Path(__file__).parent / "fieldmap")
+_ON = (True, "ON", "on", 1)
 
 
 class Query(enum.IntEnum):
@@ -34,20 +45,7 @@ class Query(enum.IntEnum):
     VALUES = 2  # current field values
 
 
-_RESULT_OK = "0000"  # provisioning resultCode
-_VALID_FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)  # issued-cert validity window
-_VALID_TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
 _ca: CA | None = None  # loaded CA, set by configure()
-
-# --- ThinQ2 TLV codec ---
-#
-# The field map (TLV ids, mode/fan codes, temp scaling) lives in JSON, NOT here —
-# one file per device model at fieldmap/<kind>.json (kind comes from the device's
-# preDeploy payload, e.g. WIN_056905_WW). load_fieldmap() reads a model's map;
-# an unknown model leaves the codec inert (capture-only).
-# Override the directory with LG_AC_FIELDMAP_DIR.
-FIELDMAP_DIR = Path(os.environ.get("LG_AC_FIELDMAP_DIR") or Path(__file__).parent / "fieldmap")
-_ON = (True, "ON", "on", 1)
 
 
 @lru_cache
@@ -106,33 +104,8 @@ def state_from_raw(fm: m.Fieldmap, raw: dict[int, int]) -> AcState:
     return AcState(**values)  # type: ignore[arg-type]
 
 
-def _fahrenheit(celsius: float) -> int:
-    return round(celsius * 9 / 5 + 32)
-
-
 def celsius(fahrenheit: float) -> float:
     return round((fahrenheit - 32) * 5 / 9, 1)
-
-
-def _clamp_temp(fm: m.Fieldmap, celsius: object) -> int:
-    value = max(fm.min_c, min(fm.max_c, float(celsius)))  # type: ignore[arg-type]
-    return round(value * fm.temp_div)
-
-
-def _crc16(data: bytes) -> int:
-    crc = 0
-    for byte in data:
-        crc ^= byte << 8
-        for _ in range(8):
-            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
-    return crc
-
-
-def _build_frame(b2: int, b3: int, b4: int, tlv: bytes) -> bytes:
-    # AABB frame: [01 01 | 04 00 00 00 65 b2 b3 b4 len | <tlv> | crc16]
-    body = bytes([0x04, 0x00, 0x00, 0x00, 0x65, b2, b3, b4, len(tlv)]) + tlv
-    crc = _crc16(body)
-    return bytes([0x01, 0x01]) + body + bytes([crc >> 8, crc & 0xFF])
 
 
 def build_query(query: Query) -> bytes:
@@ -183,9 +156,6 @@ def build_command(fm: m.Fieldmap, values: dict[str, object]) -> bytes:
     return _build_frame(2, 1, 1, encode_command(fm, values))
 
 
-# --- ThinQ2 provisioning responses ---
-
-
 def route(api_host: str, https_advertise: int, mqtt_host: str, mqtts_advertise: int) -> dict[str, object]:
     return {
         "resultCode": _RESULT_OK,
@@ -226,23 +196,63 @@ def deploy(device_id: str, mid: int, cmd: str = "completeProvisioning") -> dict[
     }
 
 
-# --- Certificate management ---
-
-
 def configure(ca_cert_pem: bytes, ca_key_pem: bytes) -> None:
     global _ca
     _ca = security.load_ca(ca_cert_pem, ca_key_pem)
+
+
+def ca() -> Certificate:
+    loaded = _require_ca()
+    return security.pem(loaded.cert)
+
+
+def sign_device_csr(csr_pem: bytes, device_id: str) -> bytes:
+    # The device's CSR is non-canonical DER that strict parsers reject. We don't
+    # need to validate its self-signature (it's enrolling on our own network) —
+    # extract the public key ahead of the offending field and sign a cert for it.
+    spki = _csr_public_key_der(security.pem_to_der(csr_pem))
+    public_key = cast.instance(serialization.load_der_public_key(spki), ec.EllipticCurvePublicKey)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, device_id)])
+    cert = security.sign(
+        _require_ca(),
+        subject,
+        public_key,
+        [x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH])],
+        not_before=_VALID_FROM,
+        not_after=_VALID_TO,
+    )
+    return cert.public_bytes(serialization.Encoding.PEM)
+
+
+def _fahrenheit(celsius: float) -> int:
+    return round(celsius * 9 / 5 + 32)
+
+
+def _clamp_temp(fm: m.Fieldmap, celsius: object) -> int:
+    value = max(fm.min_c, min(fm.max_c, float(celsius)))  # type: ignore[arg-type]
+    return round(value * fm.temp_div)
+
+
+def _crc16(data: bytes) -> int:
+    crc = 0
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    return crc
+
+
+def _build_frame(b2: int, b3: int, b4: int, tlv: bytes) -> bytes:
+    # AABB frame: [01 01 | 04 00 00 00 65 b2 b3 b4 len | <tlv> | crc16]
+    body = bytes([0x04, 0x00, 0x00, 0x00, 0x65, b2, b3, b4, len(tlv)]) + tlv
+    crc = _crc16(body)
+    return bytes([0x01, 0x01]) + body + bytes([crc >> 8, crc & 0xFF])
 
 
 def _require_ca() -> CA:
     if _ca is None:
         raise RuntimeError("CA not loaded; call configure(ca_cert, ca_key)")
     return _ca
-
-
-def ca() -> Certificate:
-    loaded = _require_ca()
-    return security.pem(loaded.cert)
 
 
 def _tlv(data: bytes, i: int) -> tuple[int, int]:
@@ -274,21 +284,3 @@ def _csr_public_key_der(csr_der: bytes) -> bytes:
     info_val_start, _ = _tlv(csr_der, info_start)
     spki_start, spki_end = _children(csr_der, info_val_start, info_end)[2]
     return csr_der[spki_start:spki_end]
-
-
-def sign_device_csr(csr_pem: bytes, device_id: str) -> bytes:
-    # The device's CSR is non-canonical DER that strict parsers reject. We don't
-    # need to validate its self-signature (it's enrolling on our own network) —
-    # extract the public key ahead of the offending field and sign a cert for it.
-    spki = _csr_public_key_der(security.pem_to_der(csr_pem))
-    public_key = cast.instance(serialization.load_der_public_key(spki), ec.EllipticCurvePublicKey)
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, device_id)])
-    cert = security.sign(
-        _require_ca(),
-        subject,
-        public_key,
-        [x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH])],
-        not_before=_VALID_FROM,
-        not_after=_VALID_TO,
-    )
-    return cert.public_bytes(serialization.Encoding.PEM)

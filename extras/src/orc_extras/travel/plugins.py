@@ -38,19 +38,6 @@ def resolve_place(ctx: AppContext, dest: str | None) -> str | None:
     return dest
 
 
-def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
-    if job.iata:
-        when = job.arrive if job.arrive.tzinfo else job.arrive.replace(tzinfo=tz)
-        arrive, where, terminal = rt.flight.arrival(rt.aerodatabox_key, job.iata, when, job.airport, rt.settings.http_timeout)
-    else:
-        arrive, where, terminal = job.arrive, job.destination, None
-    return Arrival(arrive if arrive.tzinfo else arrive.replace(tzinfo=tz), where, terminal)
-
-
-def _reschedule(ctx: AppContext, job: TravelJob, when: datetime) -> None:
-    ctx.scheduler.once(run_job, when, job, id=f"{job.summary}@{job.arrive.isoformat()}", persist=True)
-
-
 def schedule(ctx: AppContext, job: TravelJob) -> None:
     # First poll a few seconds out, not at `now`: an execute-immediately job is briefly
     # absent from the jobstore while run_job runs, so a create-then-list would miss it.
@@ -120,3 +107,16 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
         message = f"Time to leave for {target}."
     entry = ctx.api.log(Log.TRAVEL, message, m.Integration(job.summary))
     ctx.api.alert(Alarm.WARNING, text=message, entry=entry)
+
+
+def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
+    if job.iata:
+        when = job.arrive if job.arrive.tzinfo else job.arrive.replace(tzinfo=tz)
+        arrive, where, terminal = rt.flight.arrival(rt.aerodatabox_key, job.iata, when, job.airport, rt.settings.http_timeout)
+    else:
+        arrive, where, terminal = job.arrive, job.destination, None
+    return Arrival(arrive if arrive.tzinfo else arrive.replace(tzinfo=tz), where, terminal)
+
+
+def _reschedule(ctx: AppContext, job: TravelJob, when: datetime) -> None:
+    ctx.scheduler.once(run_job, when, job, id=f"{job.summary}@{job.arrive.isoformat()}", persist=True)

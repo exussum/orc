@@ -52,9 +52,6 @@ def device_csr():
     return x509.CertificateSigningRequestBuilder().subject_name(subject).sign(key, hashes.SHA256())
 
 
-# --- TLV codec ---
-
-
 @pytest.mark.parametrize(
     ("value", "length"),
     [(0x0, 0), (0xF, 0), (0x10, 1), (0xFF, 1), (0x100, 2), (0xFFFF, 2), (0x10000, 3)],
@@ -114,9 +111,6 @@ def test_frame_tlv_rejects_malformed_frames(name, payload):
     assert api.frame_tlv(payload) is None
 
 
-# --- Field map and state decoding ---
-
-
 def test_load_fieldmap_handles_unknown_models():
     assert api.load_fieldmap("WIN_000000_XX") is None
     assert api.load_fieldmap(MODEL) is FM
@@ -136,9 +130,6 @@ def test_load_fieldmap_handles_unknown_models():
 )
 def test_state_from_raw(raw, state):
     assert vars(api.state_from_raw(FM, raw)) == vars(state)
-
-
-# --- Command encoding ---
 
 
 @pytest.mark.parametrize(
@@ -173,9 +164,6 @@ def test_build_command_round_trips_through_the_codec():
     assert api.state_from_raw(FM, raw) == AcState("on", "cool", "low", temperature=72)
 
 
-# --- Provisioning responses ---
-
-
 def test_route_advertises_api_and_mqtt_servers():
     assert api.route("common.lgthinq.com", 443, "10.0.0.5", 8883) == {
         "resultCode": "0000",
@@ -189,9 +177,6 @@ def test_deploy_echoes_the_requested_phase():
     assert payload["mid"] == 7
     assert payload["data"]["provisioningType"] == "preDeploy"
     assert payload["data"]["appInfo"]["publication"]["message"] == f"clip/message/devices/{DEVICE_ID}"
-
-
-# --- Certificates ---
 
 
 def test_ca_requires_configure(monkeypatch):
@@ -218,21 +203,9 @@ def test_sign_device_csr_issues_a_client_cert(ca_pem, device_csr, encoding):
     assert ExtendedKeyUsageOID.CLIENT_AUTH in eku
 
 
-# --- Enrollment routes ---
-
-
 @pytest.fixture(autouse=True)
 def reset_thinq_stub():
     stub.reset()
-
-
-def _orc(*units):
-    settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtts_advertise=8883)
-    return SimpleNamespace(
-        plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())},
-        api=MagicMock(),
-        config=SimpleNamespace(devices=SimpleNamespace(AC=units)),
-    )
 
 
 @pytest.fixture
@@ -295,32 +268,12 @@ def test_state_prints_as_a_command():
     assert str(AcState(power="on")) == "on"
 
 
-# --- The adapter ---
-
-
-def _frame(values):
-    tlv = api.encode_command(FM, values)
-    return (bytes([1, 1, 4, 0, 0, 0, 0x87, 2, 1, 0, len(tlv)]) + tlv + b"\x00\x00").hex()
-
-
-def _data(message):
-    return bytes.fromhex(message.payload["data"])
-
-
 @pytest.fixture
 def mqtt_adapter():
     adapter = Thinq({"clip-1": "Living AC", "clip-2": "Bedroom AC"})
     adapter.sent = []
     adapter.attach(adapter.sent.append)
     return adapter
-
-
-def _provision(mqtt_adapter, device_id="clip-1"):
-    return mqtt_adapter.decode(f"clip/provisioning/devices/{device_id}", {"cmd": "preDeploy", "kind": MODEL})
-
-
-def _report(mqtt_adapter, **values):
-    return mqtt_adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame(values)})
 
 
 def test_provisioning_learns_the_model_and_answers(mqtt_adapter):
@@ -446,12 +399,6 @@ def test_encode_sends_only_what_the_unit_does_not_hold(mqtt_adapter, held, comma
         assert (msg.topic, _data(msg)) == ("lime/devices/clip-1", api.build_command(FM, sent))
 
 
-def _asked_for_high_fan(mqtt_adapter):
-    _provision(mqtt_adapter)
-    _report(mqtt_adapter, mode="cool", fan_mode="low", temperature=22, power="on")
-    mqtt_adapter.encode(UNIT, AcState(ON, AcMode.COOL, "high", temperature=72))
-
-
 @pytest.mark.parametrize(("report", "source"), [({"fan_mode": "high"}, Source.ORC), ({"mode": "dry"}, Source.EXTERNAL)])
 def test_a_report_is_orc_only_when_it_shows_what_was_asked(mqtt_adapter, report, source):
     _asked_for_high_fan(mqtt_adapter)
@@ -505,3 +452,35 @@ def test_capture_endpoint_dumps_recorded_frames(flask_client):
     frames = flask_client.get("/capture").get_json()
     assert frames[-1]["topic"] == "clip/topic"
     assert frames[-1]["payload"] == {"cmd": "device_packet", "data": "0102"}
+
+
+def _orc(*units):
+    settings = m.Settings(hostname="common.lgthinq.com", fqdn="orc.local", https_advertise=443, mqtts_advertise=8883)
+    return SimpleNamespace(
+        plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())},
+        api=MagicMock(),
+        config=SimpleNamespace(devices=SimpleNamespace(AC=units)),
+    )
+
+
+def _frame(values):
+    tlv = api.encode_command(FM, values)
+    return (bytes([1, 1, 4, 0, 0, 0, 0x87, 2, 1, 0, len(tlv)]) + tlv + b"\x00\x00").hex()
+
+
+def _data(message):
+    return bytes.fromhex(message.payload["data"])
+
+
+def _provision(mqtt_adapter, device_id="clip-1"):
+    return mqtt_adapter.decode(f"clip/provisioning/devices/{device_id}", {"cmd": "preDeploy", "kind": MODEL})
+
+
+def _report(mqtt_adapter, **values):
+    return mqtt_adapter.decode("clip/message/devices/clip-1", {"cmd": "device_packet", "data": _frame(values)})
+
+
+def _asked_for_high_fan(mqtt_adapter):
+    _provision(mqtt_adapter)
+    _report(mqtt_adapter, mode="cool", fan_mode="low", temperature=22, power="on")
+    mqtt_adapter.encode(UNIT, AcState(ON, AcMode.COOL, "high", temperature=72))

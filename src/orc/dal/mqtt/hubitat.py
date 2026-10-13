@@ -26,65 +26,6 @@ _COMMAND_TTL_SEC = 120.0
 _SOURCE = "hubitat"
 
 
-@dataclass(frozen=True)
-class _Command(ABC):
-    attribute: ClassVar[str]
-    sent: float = field(default_factory=time.monotonic, kw_only=True)
-
-    @abstractmethod
-    def message(self, hub_id: str, device_id: str) -> m.Message: ...
-
-    @abstractmethod
-    def expects(self) -> dict[str, Any]: ...
-
-    @staticmethod
-    def same(a: Any, b: Any) -> bool:
-        return a == b
-
-    def explains(self, attribute: str, reported: Any, now: float) -> bool:
-        asked = self.expects().get(attribute)
-        return asked is not None and reported is not None and now - self.sent <= _COMMAND_TTL_SEC and _kind(attribute).same(asked, reported)
-
-    # an attribute the report leaves out is not held against the command
-    def satisfied_by(self, attributes: dict[str, Any], now: float) -> bool:
-        return all(attributes.get(a) is None or self.explains(a, attributes.get(a), now) for a in self.expects())
-
-
-@dataclass(frozen=True)
-class _Switch(_Command):
-    attribute = "switch"
-    on: bool
-
-    def message(self, hub_id: str, device_id: str) -> m.Message:
-        return m.Message(f"hubitat/{hub_id}/devices/{device_id}/commands/{m.ON if self.on else m.OFF}", None)
-
-    def expects(self) -> dict[str, Any]:
-        return {"switch": m.ON if self.on else m.OFF}
-
-
-@dataclass(frozen=True)
-class _Level(_Command):
-    attribute = "level"
-    level: int
-
-    def message(self, hub_id: str, device_id: str) -> m.Message:
-        return m.Message(f"hubitat/{hub_id}/devices/{device_id}/commands/setLevel", str(self.level))
-
-    def expects(self) -> dict[str, Any]:
-        return {"switch": m.ON, "level": self.level} if self.level else {"switch": m.OFF}
-
-    @staticmethod
-    def same(a: Any, b: Any) -> bool:
-        return abs(int(a) - int(b)) <= 1  # drivers round through the 0-254 scale
-
-
-_COMMANDS = (_Switch, _Level)
-
-
-def _kind(attribute: str) -> type[_Command]:
-    return next((kind for kind in _COMMANDS if kind.attribute == attribute), _Command)
-
-
 class HubitatSource(m.SourceEnum):
     HUBITAT = "hubitat"
 
@@ -169,6 +110,76 @@ def discover(messages: Sequence[m.Message]) -> dict[str, tuple[str, frozenset[m.
     return found
 
 
+def parse_document(doc: dict[str, Any]) -> m.DeviceState | None:
+    try:
+        return m.DeviceState(
+            m.Device(str(doc["id"]), doc["name"], _SOURCE),
+            attributes={a["name"]: a["value"] for a in doc["attributes"]},
+            last_activity=doc.get("lastActivity"),
+        )
+    except ValueError, KeyError, TypeError:
+        return None
+
+
+@dataclass(frozen=True)
+class _Command(ABC):
+    attribute: ClassVar[str]
+    sent: float = field(default_factory=time.monotonic, kw_only=True)
+
+    @abstractmethod
+    def message(self, hub_id: str, device_id: str) -> m.Message: ...
+
+    @abstractmethod
+    def expects(self) -> dict[str, Any]: ...
+
+    @staticmethod
+    def same(a: Any, b: Any) -> bool:
+        return a == b
+
+    def explains(self, attribute: str, reported: Any, now: float) -> bool:
+        asked = self.expects().get(attribute)
+        return asked is not None and reported is not None and now - self.sent <= _COMMAND_TTL_SEC and _kind(attribute).same(asked, reported)
+
+    # an attribute the report leaves out is not held against the command
+    def satisfied_by(self, attributes: dict[str, Any], now: float) -> bool:
+        return all(attributes.get(a) is None or self.explains(a, attributes.get(a), now) for a in self.expects())
+
+
+@dataclass(frozen=True)
+class _Switch(_Command):
+    attribute = "switch"
+    on: bool
+
+    def message(self, hub_id: str, device_id: str) -> m.Message:
+        return m.Message(f"hubitat/{hub_id}/devices/{device_id}/commands/{m.ON if self.on else m.OFF}", None)
+
+    def expects(self) -> dict[str, Any]:
+        return {"switch": m.ON if self.on else m.OFF}
+
+
+@dataclass(frozen=True)
+class _Level(_Command):
+    attribute = "level"
+    level: int
+
+    def message(self, hub_id: str, device_id: str) -> m.Message:
+        return m.Message(f"hubitat/{hub_id}/devices/{device_id}/commands/setLevel", str(self.level))
+
+    def expects(self) -> dict[str, Any]:
+        return {"switch": m.ON, "level": self.level} if self.level else {"switch": m.OFF}
+
+    @staticmethod
+    def same(a: Any, b: Any) -> bool:
+        return abs(int(a) - int(b)) <= 1  # drivers round through the 0-254 scale
+
+
+_COMMANDS = (_Switch, _Level)
+
+
+def _kind(attribute: str) -> type[_Command]:
+    return next((kind for kind in _COMMANDS if kind.attribute == attribute), _Command)
+
+
 # State is never an event: first sightings (the retained flood at boot) and replays
 # (a document identical to the cached one — reconnect floods, hub republish after
 # reboot) update the cache but yield nothing. No other dedup: the hub regenerates
@@ -218,14 +229,3 @@ def _echo(topic: str) -> None:
     sent = _command_sent.pop(topic)
     if sent is not None:
         sqlite.update_avg(topic, time.monotonic() - sent)
-
-
-def parse_document(doc: dict[str, Any]) -> m.DeviceState | None:
-    try:
-        return m.DeviceState(
-            m.Device(str(doc["id"]), doc["name"], _SOURCE),
-            attributes={a["name"]: a["value"] for a in doc["attributes"]},
-            last_activity=doc.get("lastActivity"),
-        )
-    except ValueError, KeyError, TypeError:
-        return None

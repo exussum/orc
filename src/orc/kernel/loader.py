@@ -186,6 +186,27 @@ def ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, 
     return state
 
 
+def load_plugin_config(
+    name: str,
+    config: Any,
+    grammar: str,
+    serializers: Mapping[str, scalar | group | array | raw | each],
+) -> SimpleNamespace:
+    text = config.plugin_configs[name]
+    # Seed the parse with the sealed device registry so cast.devices/cast.device
+    # resolve in plugin configs the same way they do in the main config; a parse
+    # from declare() runs before the registry exists and gets no devices.
+    registry = getattr(config, "registry", None)
+    device = raw(lambda rows, objects: SimpleNamespace(enums=dict(registry.devices.items()) if registry else {}))
+    return SimpleNamespace(**command_cfg.load(text, grammar, {"device": device, **serializers}, variables=os.environ))
+
+
+def resolve_backend(value: ModuleType | None) -> ModuleType:
+    if value is None:
+        raise ConfigError("plugin has no --backend configured")
+    return value
+
+
 def _command(objects: dict[str, Any], args: SimpleNamespace, tag: em.Condition | None = None) -> em.Command[em.Condition, m.Devices]:
     devices = cast.devices(args.devices, objects)
     state = ac_state(devices.all(), cast.state(args.state), objects["device"].enums, source=args.devices)
@@ -314,24 +335,3 @@ def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:
         raise ValueError(f"Unknown routine {args.routine!r}: expected one of {tuple(objects['routine'])}")
     theme = objects["theme"].setdefault(args.name, m.Theme(args.name))
     theme.entries = (*theme.entries, m.ThemeEntry(args.time, rule, args.routine))
-
-
-def load_plugin_config(
-    name: str,
-    config: Any,
-    grammar: str,
-    serializers: Mapping[str, scalar | group | array | raw | each],
-) -> SimpleNamespace:
-    text = config.plugin_configs[name]
-    # Seed the parse with the sealed device registry so cast.devices/cast.device
-    # resolve in plugin configs the same way they do in the main config; a parse
-    # from declare() runs before the registry exists and gets no devices.
-    registry = getattr(config, "registry", None)
-    device = raw(lambda rows, objects: SimpleNamespace(enums=dict(registry.devices.items()) if registry else {}))
-    return SimpleNamespace(**command_cfg.load(text, grammar, {"device": device, **serializers}, variables=os.environ))
-
-
-def resolve_backend(value: ModuleType | None) -> ModuleType:
-    if value is None:
-        raise ConfigError("plugin has no --backend configured")
-    return value

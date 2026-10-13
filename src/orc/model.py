@@ -22,6 +22,39 @@ if TYPE_CHECKING:
     from orc import Config as OrcConfig
 
 
+type Listener = Callable[[Status], None]
+type DeviceCommand = em.Command[Any, Devices]
+type Commands = tuple[DeviceCommand, ...]
+
+
+SUNRISE = "sunrise"
+SUNSET = "sunset"
+
+SKIP_REPLAY_TAG = "skip-replay"
+
+OFF = "off"
+ON = "on"
+STOP = "stop"
+RESUME = "resume"
+PAUSE = "pause"
+FOLLOW = "follow"
+THEME_WORK_DAY = "work day"
+THEME_DAY_OFF = "day off"
+UNASSIGNED_ROOM = "Unassigned"
+
+
+_STATE_SORT_STOP = -2
+_STATE_SORT_INT = -1
+_STATE_SORT_ON = 0
+_STATE_SORT_OTHER = 1
+
+
+_LOG_SOURCES: dict[str, int] = {}
+
+
+ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
+
+
 class Person(NamedTuple):
     host: str
     mac: str
@@ -42,11 +75,6 @@ class TagClock(NamedTuple):
     offset: int  # tag clock minus the pair-date estimate, in seconds
     heard: int
     eid: bytes | None = None
-
-
-type Listener = Callable[[Status], None]
-type DeviceCommand = em.Command[Any, Devices]
-type Commands = tuple[DeviceCommand, ...]
 
 
 class ThemeOverride(NamedTuple):
@@ -125,33 +153,8 @@ class DeviceStatus:
     action: str | None = None
 
 
-SUNRISE = "sunrise"
-SUNSET = "sunset"
-
-SKIP_REPLAY_TAG = "skip-replay"
-
-OFF = "off"
-ON = "on"
-STOP = "stop"
-RESUME = "resume"
-PAUSE = "pause"
-FOLLOW = "follow"
-THEME_WORK_DAY = "work day"
-THEME_DAY_OFF = "day off"
-UNASSIGNED_ROOM = "Unassigned"
-
-
-_STATE_SORT_STOP = -2
-_STATE_SORT_INT = -1
-_STATE_SORT_ON = 0
-_STATE_SORT_OTHER = 1
-
-
 class Capability(Enum):
     change_level = auto()
-
-
-_LOG_SOURCES: dict[str, int] = {}
 
 
 class LogSourceEnum(StrEnum):
@@ -179,9 +182,6 @@ class LogSource(LogSourceEnum):
     SYSTEM = "system"
     PLUGIN = "plugin"
     EXTERNAL = "external"
-
-
-ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
 
 
 class WeatherCondition(str, Enum):

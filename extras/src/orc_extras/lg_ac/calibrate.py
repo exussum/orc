@@ -38,6 +38,52 @@ _raw: dict[int, int] = {}  # latest merged TLV values from the device
 _detected_model: str | None = None
 
 
+def main() -> None:
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="lg_ac-calibrate")
+    client.on_message = _on_message
+    client.connect("127.0.0.1", 1883, keepalive=30)
+    client.loop_start()
+    client.subscribe("#", qos=0)
+
+    print("Connected. Waiting for the AC to send a frame (change something on it if nothing happens)...")
+    while not _raw:
+        time.sleep(0.5)
+
+    model = input(f"Model name [{_detected_model or ''}]: ").strip() or _detected_model
+    if not model:
+        print("A model name is required. Aborting.")
+        return
+
+    print("\n--- Modes ---")
+    mode_names = _ask_list("Which modes does your AC have? (e.g. cool,dry,fan_only,econ): ")
+    modes = {name: _capture_code(FIELDS["mode"], name) for name in mode_names}
+
+    print("\n--- Fan speeds ---")
+    fan_names = _ask_list("Which fan speeds does your AC have? (e.g. low,mid,high): ")
+    fans = {name: _capture_code(FIELDS["fan_mode"], name) for name in fan_names}
+
+    print("\n--- Temperature range (sweep low → high) ---")
+    min_raw = _capture_temp("LOWEST")
+    max_raw = _capture_temp("HIGHEST")
+
+    def _celsius(raw: int) -> float | int:
+        value = raw / TEMP_DIVISOR
+        return int(value) if value.is_integer() else value
+
+    data = {
+        "fields": {name: hex(fid) for name, fid in FIELDS.items()},
+        "modes": modes,
+        "fans": fans,
+        "temperature": {"divisor": TEMP_DIVISOR, "min": _celsius(min_raw), "max": _celsius(max_raw)},
+    }
+
+    path = api.FIELDMAP_DIR / f"{model}.json"
+    path.write_text(json.dumps(data, indent=2) + "\n")
+    client.loop_stop()
+    print(f"\nWrote {path}")
+    print(json.dumps(data, indent=2))
+
+
 def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
     global _detected_model
     try:
@@ -92,52 +138,6 @@ def _ask_list(prompt: str) -> list[str]:
         if names:
             return names
         print("  Enter at least one, comma-separated.")
-
-
-def main() -> None:
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="lg_ac-calibrate")
-    client.on_message = _on_message
-    client.connect("127.0.0.1", 1883, keepalive=30)
-    client.loop_start()
-    client.subscribe("#", qos=0)
-
-    print("Connected. Waiting for the AC to send a frame (change something on it if nothing happens)...")
-    while not _raw:
-        time.sleep(0.5)
-
-    model = input(f"Model name [{_detected_model or ''}]: ").strip() or _detected_model
-    if not model:
-        print("A model name is required. Aborting.")
-        return
-
-    print("\n--- Modes ---")
-    mode_names = _ask_list("Which modes does your AC have? (e.g. cool,dry,fan_only,econ): ")
-    modes = {name: _capture_code(FIELDS["mode"], name) for name in mode_names}
-
-    print("\n--- Fan speeds ---")
-    fan_names = _ask_list("Which fan speeds does your AC have? (e.g. low,mid,high): ")
-    fans = {name: _capture_code(FIELDS["fan_mode"], name) for name in fan_names}
-
-    print("\n--- Temperature range (sweep low → high) ---")
-    min_raw = _capture_temp("LOWEST")
-    max_raw = _capture_temp("HIGHEST")
-
-    def _celsius(raw: int) -> float | int:
-        value = raw / TEMP_DIVISOR
-        return int(value) if value.is_integer() else value
-
-    data = {
-        "fields": {name: hex(fid) for name, fid in FIELDS.items()},
-        "modes": modes,
-        "fans": fans,
-        "temperature": {"divisor": TEMP_DIVISOR, "min": _celsius(min_raw), "max": _celsius(max_raw)},
-    }
-
-    path = api.FIELDMAP_DIR / f"{model}.json"
-    path.write_text(json.dumps(data, indent=2) + "\n")
-    client.loop_stop()
-    print(f"\nWrote {path}")
-    print(json.dumps(data, indent=2))
 
 
 if __name__ == "__main__":

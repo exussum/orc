@@ -18,6 +18,27 @@ REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 _VAPID_PRIVATE_KEY = base64.urlsafe_b64encode(hashlib.sha256(b"orc stub vapid").digest()).rstrip(b"=").decode()
 
 
+def fetch_secrets() -> m.Secrets:
+    warn_stub("secrets")
+    return m.Secrets(
+        hubitat_access_token="secret_hubitat_access_token",
+        market_holidays_url="secret_market_holidays_url",
+        mqtt_user="secret_mqtt_user",
+        mqtt_password="secret_mqtt_password",
+        vapid_private_key=_VAPID_PRIVATE_KEY,
+        other=_StubSecrets(),
+    )
+
+
+class _StubSecrets(dict[str, str]):
+    def __getitem__(self, key: str) -> str:
+        if key.endswith("_CERT"):
+            return _cert_pair(key.removesuffix("_CERT"))[0]
+        elif key.endswith("_KEY"):
+            return _cert_pair(key.removesuffix("_KEY"))[1]
+        return f"secret_{key}"
+
+
 @functools.cache
 def _cert_pair(stem: str) -> tuple[str, str]:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -40,24 +61,3 @@ def _cert_pair(stem: str) -> tuple[str, str]:
         serialization.NoEncryption(),
     )
     return cert.public_bytes(serialization.Encoding.PEM).decode(), key_pem.decode()
-
-
-class _StubSecrets(dict[str, str]):
-    def __getitem__(self, key: str) -> str:
-        if key.endswith("_CERT"):
-            return _cert_pair(key.removesuffix("_CERT"))[0]
-        elif key.endswith("_KEY"):
-            return _cert_pair(key.removesuffix("_KEY"))[1]
-        return f"secret_{key}"
-
-
-def fetch_secrets() -> m.Secrets:
-    warn_stub("secrets")
-    return m.Secrets(
-        hubitat_access_token="secret_hubitat_access_token",
-        market_holidays_url="secret_market_holidays_url",
-        mqtt_user="secret_mqtt_user",
-        mqtt_password="secret_mqtt_password",
-        vapid_private_key=_VAPID_PRIVATE_KEY,
-        other=_StubSecrets(),
-    )

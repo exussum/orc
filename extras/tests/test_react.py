@@ -16,6 +16,11 @@ from orc.dal.mqtt import hubitat
 from orc.model import DeviceEnum
 from tests.conftest import NOW, plugin_config
 
+_PAUSE_ERRORS = [
+    ("react_pause_zero", ConfigError, "Invalid --pause 0"),
+    ("react_pause_mismatch", ValueError, "same --pause"),
+]
+
 
 class Light(DeviceEnum):
     lamp = "1"
@@ -37,19 +42,6 @@ class Sensor(DeviceEnum):
 DEVICE_ENUMS = {"Light": Light, "AC": Ac, "Chromecast": Chromecast, "Sensor": Sensor}
 
 
-def _world_read(mock):
-    def read(subject):
-        match subject:
-            case m.PersonSubject(name):
-                return name in mock.api.present_names()
-            case m.AnyoneSubject():
-                return bool(mock.api.present_names())
-            case _:
-                raise KeyError(subject)
-
-    return read
-
-
 @pytest.fixture
 def ctx(ctx, freezegun_clock):
     ctx.engine = engine.Runtime(UTC)
@@ -67,21 +59,6 @@ def react_rules(ctx):
     rules = react.setup(ctx)
     ctx.sources = ctx.api.add_listener.call_args.args[0].args[1]
     return rules
-
-
-def _make(devices, attribute, state, action, target=None, delay=None, cond=None):
-    cond = cond or em.And()
-    span = timedelta(minutes=delay) if delay else timedelta()
-    watches = []
-    for source in devices.all():
-        command = em.Command(target or m.Devices(source), action)
-        trigger = model.Transition(model.MqttDeviceSubject(source, attribute), state)
-        watches.append(em.Watch(trigger, em.Rule((em.Step(cond, command),)), span, model.COOLDOWN))
-    return watches
-
-
-def _hub(id):
-    return m.Broker(id=id, source="hubitat")
 
 
 @pytest.fixture
@@ -124,11 +101,6 @@ def ac_report(ctx):
 @pytest.fixture
 def dispatches(ctx):
     return lambda: [(c.subject.one(), c.value) for c in ctx.api.dispatch.call_args.args[0]]
-
-
-def _payload(call):
-    """call.args is (func, when, *payload) — skip the scheduling positionals."""
-    return call.args[2:]
 
 
 @pytest.fixture
@@ -376,19 +348,6 @@ def test_ac_turns_on_fires_once(ctx, ruleset, dispatches):
     ctx.api.dispatch.assert_not_called()
 
 
-def _make_range(sensor, expression, low, high, target, action, people=None):
-    formula = model.FormulaSubject(sensor, expression)
-    watched = []
-    if isinstance(people, m.Anyone):
-        watched.append(em.Eq(m.AnyoneSubject(), True))
-    elif people:
-        watched.append(model.Present(people))
-    watched.append(model.Range(formula, low, high, edge=True))
-    command = em.Command(target, action)
-    rule = em.Rule((em.Step(em.And(*watched), command),))
-    return [em.Watch(em.Changed(model.Device(sensor)), rule, cooldown=model.COOLDOWN)]
-
-
 def test_range_rule_parses_expressions(ctx):
     ctx.config.plugin_configs = plugin_config(react, "react_range")
     rules = react.setup(ctx)
@@ -414,10 +373,6 @@ def test_temperature_entering_range_sets_the_ac(ctx, temperature, fires, ruleset
     ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
     device_report(Sensor.living.value, {"temperature": temperature})
     assert ctx.api.dispatch.called is fires
-
-
-def _past_cooldown(steps):
-    return NOW + timedelta(seconds=steps * (model.COOLDOWN.total_seconds() + 1))
 
 
 def test_range_fires_only_on_entry(ctx, ruleset, dispatches, device_report):
@@ -534,14 +489,58 @@ def test_unknown_rule_is_a_404(flask_client):
     assert flask_client.get("/Nope/sleep?sleeping=1").status_code == 404
 
 
-_PAUSE_ERRORS = [
-    ("react_pause_zero", ConfigError, "Invalid --pause 0"),
-    ("react_pause_mismatch", ValueError, "same --pause"),
-]
-
-
 @pytest.mark.parametrize("case, error, message", _PAUSE_ERRORS, ids=[case for case, _, _ in _PAUSE_ERRORS])
 def test_bad_pause_is_rejected(ctx, case, error, message):
     ctx.config.plugin_configs = plugin_config(react, case)
     with pytest.raises(error, match=message):
         react.setup(ctx)
+
+
+def _world_read(mock):
+    def read(subject):
+        match subject:
+            case m.PersonSubject(name):
+                return name in mock.api.present_names()
+            case m.AnyoneSubject():
+                return bool(mock.api.present_names())
+            case _:
+                raise KeyError(subject)
+
+    return read
+
+
+def _make(devices, attribute, state, action, target=None, delay=None, cond=None):
+    cond = cond or em.And()
+    span = timedelta(minutes=delay) if delay else timedelta()
+    watches = []
+    for source in devices.all():
+        command = em.Command(target or m.Devices(source), action)
+        trigger = model.Transition(model.MqttDeviceSubject(source, attribute), state)
+        watches.append(em.Watch(trigger, em.Rule((em.Step(cond, command),)), span, model.COOLDOWN))
+    return watches
+
+
+def _hub(id):
+    return m.Broker(id=id, source="hubitat")
+
+
+def _payload(call):
+    """call.args is (func, when, *payload) — skip the scheduling positionals."""
+    return call.args[2:]
+
+
+def _make_range(sensor, expression, low, high, target, action, people=None):
+    formula = model.FormulaSubject(sensor, expression)
+    watched = []
+    if isinstance(people, m.Anyone):
+        watched.append(em.Eq(m.AnyoneSubject(), True))
+    elif people:
+        watched.append(model.Present(people))
+    watched.append(model.Range(formula, low, high, edge=True))
+    command = em.Command(target, action)
+    rule = em.Rule((em.Step(em.And(*watched), command),))
+    return [em.Watch(em.Changed(model.Device(sensor)), rule, cooldown=model.COOLDOWN)]
+
+
+def _past_cooldown(steps):
+    return NOW + timedelta(seconds=steps * (model.COOLDOWN.total_seconds() + 1))

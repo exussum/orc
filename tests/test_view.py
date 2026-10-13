@@ -12,15 +12,8 @@ from orc import api, config
 from orc import model as m
 from orc.view import bp
 
-
-def _routine(name, when, *commands, skip_replay=False):
-    steps = tuple(em.Step(c.tag or em.And(), c) for c in commands)
-    tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
-    return em.Rule(steps, name=name, tags=tags)
-
-
-def _room(*commands):
-    return em.Action(commands)
+MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
+ANDROID = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/128.0 Mobile Safari/537.36"}
 
 
 @pytest.fixture
@@ -48,9 +41,6 @@ def flask_client(ctx):
 def test_manifest_titles_the_remote_host(flask_client, host, title):
     manifest = flask_client.get("/manifest.json", headers={"Host": host}).json
     assert (manifest["name"], manifest["short_name"]) == (title, title)
-
-
-# --- /api/run: 4-way branch ---
 
 
 def test_console_plugin(flask_client, ctx):
@@ -113,9 +103,6 @@ def test_console_unknown_returns_404(flask_client, config_ad_hoc):
     assert response.status_code == 404
 
 
-# --- /api/room: 4-way branch on state ---
-
-
 def test_room_on(flask_client, config_rooms, command_dispatch):
     config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
     flask_client.get("/api/room/Living Room?state=on")
@@ -158,9 +145,6 @@ def test_room_unknown_id_returns_404(flask_client, config_rooms, command_dispatc
     command_dispatch.assert_not_called()
 
 
-# --- /api/schedule/theme: form parsing + conditional date.fromisoformat ---
-
-
 def test_set_theme_clear_passes_none_dates(flask_client, ctx):
     with patch.object(api, "apply_theme_change") as apply_change:
         flask_client.post("/api/schedule/theme", data={"theme": ""})
@@ -187,9 +171,6 @@ def test_set_theme_rejects_unknown_theme(flask_client, ctx):
     apply_change.assert_not_called()
 
 
-# --- /api/durations ---
-
-
 def test_durations_returns_stats(flask_client):
     with (
         patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}),
@@ -208,9 +189,6 @@ def test_durations_lists_a_delayed_action_that_never_ran(flask_client, config_ad
     with config_ad_hoc({"AD_HOC_DOG": dog}), patch("orc.api.duration_stats", return_value={}):
         response = flask_client.get("/api/durations")
     assert response.get_json() == {"AD_HOC_DOG": {"avg": 0.0, "samples": 0, "delay": "0:06:00"}}
-
-
-# --- /api/schedule/<id>/pause: absolute paused state ---
 
 
 @pytest.mark.parametrize("paused", [True, False])
@@ -239,32 +217,6 @@ def test_checkin_unknown_person_returns_404(flask_client):
 def test_device_unknown_returns_404(flask_client):
     response = flask_client.get("/api/device/nope?state=on")
     assert response.status_code == 404
-
-
-# --- /schedule/: button colour and badges ---
-
-
-def _fake_iot_job(name="job", trigger=None, run_date=None, skip_replay=False):
-    run_date = run_date or datetime(2100, 1, 1)
-    rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger or m.Always()), skip_replay=skip_replay)
-    job = create_autospec(Job, instance=True)
-    job.id = name
-    job.name = name
-    job.next_run_time = run_date
-    job.args = [m.IotJob(rule, name)]
-    job.trigger.run_date = run_date
-    return job
-
-
-def _get_schedule(flask_client, jobs, present_names=()):
-    with patch.multiple(
-        api,
-        fetch_jobs_by_type=MagicMock(return_value=jobs),
-        current_theme_override=MagicMock(return_value=None),
-        present_names=MagicMock(return_value=set(present_names)),
-        fetch_durations=MagicMock(side_effect=lambda mapper=None: mapper([]) if mapper else []),
-    ):
-        return flask_client.get("/schedule/")
 
 
 @pytest.mark.parametrize(
@@ -310,12 +262,6 @@ def test_system_page_lists_each_light(flask_client):
     assert all(f">{light.name}</td>" in html for light in config.devices.Light)
 
 
-# --- /api/push/open ---
-
-MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
-ANDROID = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/128.0 Mobile Safari/537.36"}
-
-
 def test_push_open_from_a_mac_hands_a_meet_link_to_chrome(flask_client):
     response = flask_client.get("/api/push/open", query_string={"url": "https://meet.google.com/abc?x=1"}, headers=MAC)
     assert response.status_code == 302
@@ -351,3 +297,36 @@ def test_push_open_redirects_zoom_and_teams_everywhere(flask_client, url, header
 def test_push_open_rejects_anything_but_meeting_links(flask_client, url):
     response = flask_client.get("/api/push/open", query_string={"url": url}, headers=MAC)
     assert response.status_code == 400
+
+
+def _routine(name, when, *commands, skip_replay=False):
+    steps = tuple(em.Step(c.tag or em.And(), c) for c in commands)
+    tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
+    return em.Rule(steps, name=name, tags=tags)
+
+
+def _room(*commands):
+    return em.Action(commands)
+
+
+def _fake_iot_job(name="job", trigger=None, run_date=None, skip_replay=False):
+    run_date = run_date or datetime(2100, 1, 1)
+    rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger or m.Always()), skip_replay=skip_replay)
+    job = create_autospec(Job, instance=True)
+    job.id = name
+    job.name = name
+    job.next_run_time = run_date
+    job.args = [m.IotJob(rule, name)]
+    job.trigger.run_date = run_date
+    return job
+
+
+def _get_schedule(flask_client, jobs, present_names=()):
+    with patch.multiple(
+        api,
+        fetch_jobs_by_type=MagicMock(return_value=jobs),
+        current_theme_override=MagicMock(return_value=None),
+        present_names=MagicMock(return_value=set(present_names)),
+        fetch_durations=MagicMock(side_effect=lambda mapper=None: mapper([]) if mapper else []),
+    ):
+        return flask_client.get("/schedule/")

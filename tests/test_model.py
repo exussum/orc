@@ -19,10 +19,6 @@ Light._sort = 0
 Chromecast._sort = 1
 
 
-def _cmd(what, value):
-    return em.Command(m.Devices(what), value)
-
-
 def test_squish_dim_then_off():
     cfg = (_cmd(Light.a, 10), _cmd(Light.a, m.ON), _cmd(Light.a, 20), _cmd(Light.a, m.ON), _cmd(Light.a, m.OFF))
     assert m._squish(list(cfg)) == (_cmd(Light.a, 20), _cmd(Light.a, m.OFF))
@@ -98,3 +94,7 @@ def test_op_cmp_sorts_by_type_sort():
 )
 def test_ac_state_eq(a, b, expected):
     assert (a == b) is expected
+
+
+def _cmd(what, value):
+    return em.Command(m.Devices(what), value)
