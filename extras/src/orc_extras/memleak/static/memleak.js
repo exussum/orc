@@ -9,7 +9,7 @@ const TEMPLATES = `
         <div class="overflow-x-auto mb-4">
             <table class="text-sm w-full">
                 <thead class="text-gray-400 text-left">
-                    <tr><th class="pr-3">Location</th><th class="pr-3 text-right">KiB</th><th class="pr-3 text-right">KiB/h</th><th class="pr-3 text-right">Grown</th><th class="text-right">Since boot</th></tr>
+                    <tr><th class="pr-3">Location</th><th class="pr-3 text-right">KB</th><th class="pr-3 text-right">KB/h</th><th class="pr-3 text-right">Grown</th><th class="text-right">Since boot</th></tr>
                 </thead>
                 <tbody id="memleak-rows"></tbody>
             </table>
@@ -50,7 +50,7 @@ function render(data) {
     body.replaceChildren();
     if (!data.rows.length) {
         const tr = document.createElement("tr");
-        const td = cell(`Nothing has grown more than ${data.threshold_kib} KiB since boot. Next snapshot at ${fmtTime(data.next_snapshot)}.`, false);
+        const td = cell(`Nothing has grown more than ${data.threshold_kb} KB since boot. Next snapshot at ${fmtTime(data.next_snapshot)}.`, false);
         td.className = "text-gray-400";
         td.colSpan = 5;
         tr.appendChild(td);
@@ -61,10 +61,10 @@ function render(data) {
         const tr = document.createElement("tr");
         tr.append(
             cell(row.location, false),
-            cell(row.kib.toFixed(0), true),
-            cell(row.kib_per_hour.toFixed(1), true),
+            cell(row.kb.toFixed(0), true),
+            cell(row.kb_per_hour.toFixed(1), true),
             cell(`${row.grown}/${row.intervals}`, true),
-            cell(`+${row.since_boot_kib.toFixed(0)}`, true),
+            cell(`+${row.since_boot_kb.toFixed(0)}`, true),
         );
         body.appendChild(tr);
     }
