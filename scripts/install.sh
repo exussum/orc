@@ -20,6 +20,4 @@ $UV pip install orc==0.0.1 --reinstall-package orc $INSTALL_OPTS
 $UV pip install orc_extras==0.0.1 --reinstall-package orc_extras $INSTALL_OPTS
 $UV pip install orc_data==0.0.1 --reinstall-package orc_data $INSTALL_OPTS
 
-supervisorctl start orc
-
 tail -f /var/log/orc.log
