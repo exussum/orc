@@ -330,3 +330,7 @@ def _get_schedule(flask_client, jobs, present_names=()):
         fetch_durations=MagicMock(side_effect=lambda mapper=None: mapper([]) if mapper else []),
     ):
         return flask_client.get("/schedule/")
+
+
+def test_schedule_without_jobs_says_so(flask_client):
+    assert b"No scheduled events." in _get_schedule(flask_client, []).data
