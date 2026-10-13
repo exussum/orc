@@ -117,6 +117,10 @@
     grid-template-columns: 80px 1fr;
 }
 
+@utility orc-device-box {
+    @apply border border-[#333] p-2 rounded-xl;
+}
+
 @utility orc-routine-buttons {
     @apply flex overflow-auto justify-between;
 }
