@@ -215,10 +215,10 @@ def test_check_secrets_reads_typed_fields():
 
 def test_secret_needs_gathers_providers_plugins_and_tags():
     registry = SimpleNamespace(secrets={"PLUGIN_KEY": cast.nonblank})
-    providers = (SimpleNamespace(REQUIRED_SECRETS={"hubitat_access_token": cast.uuid}), SimpleNamespace(REQUIRED_SECRETS={}), None)
+    providers = (SimpleNamespace(REQUIRED_SECRETS={"market_holidays_url": cast.url}), SimpleNamespace(REQUIRED_SECRETS={}), None)
     tags = [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05+00:00")]
     assert loader.secret_needs(registry, providers, tags) == {
-        "hubitat_access_token": cast.uuid,
+        "market_holidays_url": cast.url,
         "PLUGIN_KEY": cast.nonblank,
         "EIK_ALICE": cast.hex32,
     }

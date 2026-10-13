@@ -51,10 +51,6 @@ def reboot(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     os.kill(os.getppid(), signal.SIGTERM)
 
 
-def reboot_hubitat(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
-    ctx.api.reboot_hubitat()
-
-
 def sound_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     for severity in m.Alarm:
         ctx.api.alert(severity, text=Log.SOUND_TEST_TEXT, entry=entry)

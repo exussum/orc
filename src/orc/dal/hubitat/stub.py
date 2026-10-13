@@ -9,9 +9,5 @@ REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 warn_stub("hubitat")
 
 
-def reboot() -> None:
-    pass
-
-
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
     return ()

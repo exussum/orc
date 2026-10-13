@@ -443,7 +443,6 @@ class Theme:
 
 @dataclass
 class Secrets:
-    hubitat_access_token: str = ""
     market_holidays_url: str = ""
     mqtt_user: str = ""
     mqtt_password: str = ""

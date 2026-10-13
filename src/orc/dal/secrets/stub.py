@@ -21,7 +21,6 @@ _VAPID_PRIVATE_KEY = base64.urlsafe_b64encode(hashlib.sha256(b"orc stub vapid").
 def fetch_secrets() -> m.Secrets:
     warn_stub("secrets")
     return m.Secrets(
-        hubitat_access_token="secret_hubitat_access_token",
         market_holidays_url="secret_market_holidays_url",
         mqtt_user="secret_mqtt_user",
         mqtt_password="secret_mqtt_password",

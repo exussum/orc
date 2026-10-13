@@ -350,10 +350,6 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
         dispatch((em.Command(m.Devices(device), path),), force=True, entry=entry)
 
 
-def reboot_hubitat() -> None:
-    config.providers.hubitat.reboot()
-
-
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
     return config.providers.hubitat.fetch_retry_stats()
 
