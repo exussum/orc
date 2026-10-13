@@ -69,7 +69,7 @@
                             <div class="flex gap-4 border border-[#333] p-4 rounded-xl"><input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full orc-device-slider" data-id="{{ device.id }}"/><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span></div>
                         {% else %}
                             <div class="text-sm">{{ device.name }}</div>
-                            <div class="flex gap-4 border border-[#333] p-4 rounded-xl"><input type="range" min="0" max="100" value="{{ device.level }}" class="w-full orc-device-slider" data-id="{{ device.id }}"/><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span></div>
+                            <div class="flex gap-4 border border-[#333] p-4 rounded-xl"><input type="range" min="0" max="100" step="10" value="{{ device.level }}" class="w-full orc-device-slider" data-id="{{ device.id }}"/><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span></div>
                         {% endif %}
                     {% endfor %}
                 </div>
