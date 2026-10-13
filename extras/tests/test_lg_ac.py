@@ -47,7 +47,7 @@ def ca_pem():
 
 @pytest.fixture(scope="module")
 def device_csr():
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    key = ec.generate_private_key(ec.SECP256R1())
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "factory-name")])
     return x509.CertificateSigningRequestBuilder().subject_name(subject).sign(key, hashes.SHA256())
 
