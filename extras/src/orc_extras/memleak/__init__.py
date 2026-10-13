@@ -33,11 +33,11 @@ app = cast("OrcFlask", current_app)
 
 class Row(NamedTuple):
     location: str
-    kib: float
-    kib_per_hour: float
+    kb: float
+    kb_per_hour: float
     grown: int
     intervals: int
-    since_boot_kib: float
+    since_boot_kb: float
 
 
 class Sample(NamedTuple):
@@ -46,7 +46,7 @@ class Sample(NamedTuple):
 
 
 class Settings(NamedTuple):
-    threshold_kib: float
+    threshold_kb: float
     snapshot_minute: int
 
 
@@ -55,7 +55,7 @@ class State(NamedTuple):
     history: deque[Sample]
 
 
-_SERIALIZERS = {"setting": scalar(Settings, types={"threshold_kib": engine_cast.float, "snapshot_minute": engine_cast.int})}
+_SERIALIZERS = {"setting": scalar(Settings, types={"threshold_kb": engine_cast.float, "snapshot_minute": engine_cast.int})}
 
 
 def declare(declarations: Any) -> None:
@@ -76,13 +76,13 @@ def setup(ctx: AppContext) -> None:
 def memory() -> dict[str, Any]:
     now = app.orc.api.local_now()
     state = app.orc.plugin_state[orc_extras.memleak]
-    history = [*state.history, sample(now)]
+    history = list(state.history)
     return {
         "since": history[0].taken.isoformat(),
         "samples": len(history),
-        "threshold_kib": state.settings.threshold_kib,
+        "threshold_kb": state.settings.threshold_kb,
         "next_snapshot": _next_snapshot(now, state.settings.snapshot_minute).isoformat(),
-        "rows": [row._asdict() for row in rank(history, state.settings.threshold_kib)],
+        "rows": [row._asdict() for row in rank(history, state.settings.threshold_kb)],
     }
 
 
@@ -97,17 +97,17 @@ def sample(now: datetime) -> Sample:
     return Sample(now, sizes)
 
 
-def rank(history: list[Sample], threshold_kib: float) -> list[Row]:
+def rank(history: list[Sample], threshold_kb: float) -> list[Row]:
     first, last = history[0], history[-1]
     hours = max((last.taken - first.taken).total_seconds() / 3600, 1)
     rows = []
     for key, size in last.sizes.items():
         since_boot = size - first.sizes.get(key, 0)
-        if since_boot < threshold_kib * 1024:
+        if since_boot < threshold_kb * 1024:
             continue
         grown = sum(1 for a, b in pairwise(history) if b.sizes.get(key, 0) > a.sizes.get(key, 0))
         rows.append(Row(key, size / 1024, since_boot / 1024 / hours, grown, len(history) - 1, since_boot / 1024))
-    rows.sort(key=lambda r: (r.grown, r.kib_per_hour), reverse=True)
+    rows.sort(key=lambda r: (r.grown, r.kb_per_hour), reverse=True)
     return rows[:ROWS]
 
 
