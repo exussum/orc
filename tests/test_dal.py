@@ -96,11 +96,16 @@ class TestMarketHoliday:
 
 def test_durations_reach_the_table_one_batch_at_a_time():
     sqlite._durations.clear()
+    sqlite._pending.clear()
     for _ in range(sqlite._DURATION_BATCH - 1):
         sqlite.update_avg("x", 1.0)
-    assert sqlite.fetch_durations() == []
-    sqlite.update_avg("x", 1.0)
-    assert sqlite.fetch_durations() == [("x", sqlite._DURATION_BATCH, 1.0)]
+    assert sqlite.durations() == {"x": (sqlite._DURATION_BATCH - 1, 1.0)}
+    sqlite.load_durations()
+    assert sqlite.durations() == {}
+    for _ in range(sqlite._DURATION_BATCH):
+        sqlite.update_avg("x", 1.0)
+    sqlite.load_durations()
+    assert sqlite.durations() == {"x": (sqlite._DURATION_BATCH, 1.0)}
 
 
 @pytest.mark.parametrize(

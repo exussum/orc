@@ -1,6 +1,5 @@
 import sqlite3
 from datetime import date
-from typing import Any
 
 from orc import model as m
 from orc.decorators import connected, connection
@@ -36,12 +35,13 @@ _UPSERT_CLOCK = (
     "ON CONFLICT(person) DO UPDATE SET offset = excluded.offset, heard = excluded.heard "
     f"WHERE abs(excluded.offset - orc_ble_clocks.offset) > {_CLOCK_MOVED_SECONDS}"
 )
-_UPDATE_AVG = (
-    "INSERT INTO orc_durations (name, samples, avg) VALUES (?, 1, ?) "
-    f"ON CONFLICT(name) DO UPDATE SET samples = samples + 1, avg = {_ALPHA} * excluded.avg + {1 - _ALPHA} * avg"
+_UPSERT_DURATION = (
+    "INSERT INTO orc_durations (name, samples, avg) VALUES (?, ?, ?) "
+    "ON CONFLICT(name) DO UPDATE SET samples = excluded.samples, avg = excluded.avg"
 )
 
-_durations: list[tuple[str, float]] = []
+_durations: dict[str, tuple[int, float]] = {}
+_pending: list[str] = []
 
 
 @connected
@@ -80,6 +80,13 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 @connected
+def load_durations(conn: sqlite3.Connection) -> None:
+    _pending.clear()
+    _durations.clear()
+    _durations.update({name: (samples, avg) for name, samples, avg in conn.execute(_SELECT_DURATIONS)})
+
+
+@connected
 def insert_push_subscription(conn: sqlite3.Connection, subscription: m.PushSubscription) -> None:
     conn.execute(_UPSERT_PUSH, subscription)
 
@@ -94,15 +101,16 @@ def upsert_tag_clock(conn: sqlite3.Connection, person: str, clock: m.TagClock) -
     conn.execute(_UPSERT_CLOCK, (person, clock.offset, clock.heard))
 
 
+def durations() -> dict[str, tuple[int, float]]:
+    return dict(_durations)
+
+
 def update_avg(name: str, duration: float) -> None:
-    global _durations
-    _durations.append((name, duration))
-    if len(_durations) >= _DURATION_BATCH:
-        batch, _durations = _durations, []
+    global _pending
+    samples, avg = _durations.get(name, (0, duration))
+    _durations[name] = (samples + 1, _ALPHA * duration + (1 - _ALPHA) * avg)
+    _pending.append(name)
+    if len(_pending) >= _DURATION_BATCH:
+        batch, _pending = _pending, []
         with connection() as conn:
-            conn.executemany(_UPDATE_AVG, batch)
-
-
-@connected
-def fetch_durations(conn: sqlite3.Connection) -> list[Any]:
-    return conn.execute(_SELECT_DURATIONS).fetchall()
+            conn.executemany(_UPSERT_DURATION, [(n, *_durations[n]) for n in set(batch)])

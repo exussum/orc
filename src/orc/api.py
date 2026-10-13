@@ -24,8 +24,8 @@ from orc import model as m
 from orc.collections import LockedDeque, of_type
 from orc.dal import net, push, sqlite
 from orc.dal.mqtt import paho as mqtt
-from orc.dal.sqlite import fetch_durations as _fetch_durations
-from orc.dal.sqlite import init_db, update_avg  # noqa: F401
+from orc.dal.sqlite import durations as _durations
+from orc.dal.sqlite import init_db, load_durations, update_avg  # noqa: F401
 from orc.decorators import mappable, requires_ctx
 from orc.kernel import cast
 from orc.kernel.declarations import Declarations
@@ -58,7 +58,7 @@ def set_ctx(ctx: m.AppContext) -> None:
 
 def duration_stats() -> dict[str, tuple[int, float]]:
     """name -> (samples, average seconds); job names and command topics alike."""
-    return {name: (samples, avg) for name, samples, avg in _fetch_durations()}
+    return _durations()
 
 
 @mappable
