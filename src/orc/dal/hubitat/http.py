@@ -1,6 +1,5 @@
-"""The hub's plain HTTP endpoints: the last Maker API call (reboot) and the
-past-log scrape. Everything else (state, events, commands, discovery) moved to
-the hub's MQTT export in orc.dal.mqtt."""
+"""The hub's past-log scrape over plain HTTP. Everything else (state, events,
+commands, discovery) moved to the hub's MQTT export in orc.dal.mqtt."""
 
 import re
 from collections import Counter
@@ -10,25 +9,16 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
-from orc_engine import cast
 
 import orc
 from orc import model as m
 
-REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {"hubitat_access_token": cast.uuid}
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _STATS_WINDOW = timedelta(days=2)
 _FAILED = "failed after 5 retries"
 _RETRIED = "succeeded on retry"
 _STATE_CHANGE = re.compile(r"(?:was turned (?:on|off)(?: \[digital\])?|level was set to \d+%)$")
-
-
-def reboot() -> None:
-    resp = requests.post(
-        f"{orc.config.settings.hubitat_url}/hub/reboot?access_token={orc.config.secrets.hubitat_access_token}",
-        timeout=orc.config.settings.http_timeout,
-    )
-    resp.raise_for_status()
 
 
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:

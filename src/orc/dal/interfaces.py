@@ -81,7 +81,6 @@ class PushService(Backend, Protocol):
 
 
 class HubitatService(Backend, Protocol):
-    def reboot(self) -> None: ...
     def fetch_retry_stats(self) -> tuple[RetryStats, ...]: ...
 
 

@@ -3,7 +3,7 @@
 Turns the hub's retained per-device JSON documents on
 ``hubitat/<hub-uuid>/devices/<id>`` into device statuses and light commands into
 publishes; the hub uuid is captured from the first message rather than
-configured. Everything but hub reboot (Maker API) flows through here.
+configured. Everything but the past-log scrape flows through here.
 """
 
 import logging

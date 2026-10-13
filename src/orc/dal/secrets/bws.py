@@ -60,7 +60,6 @@ def fetch_secrets() -> m.Secrets:
     secrets = {_decrypt_enc_string(s["key"], org_key): _decrypt_enc_string(s["value"], org_key) for s in secrets_resp["data"]}
 
     return m.Secrets(
-        hubitat_access_token=secrets.pop("HUBITAT_ACCESS_TOKEN", ""),
         market_holidays_url=secrets.pop("MARKET_HOLIDAYS_URL", ""),
         mqtt_user=secrets.pop("MQTT_USER", ""),
         mqtt_password=secrets.pop("MQTT_PASSWORD", ""),

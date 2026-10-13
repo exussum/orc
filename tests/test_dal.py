@@ -259,7 +259,7 @@ class TestKeepass:
     @pytest.fixture
     def keepass_db(self, tmp_path):
         kp = create_database(tmp_path / "secrets.kdbx", password="open sesame")
-        kp.add_entry(kp.root_group, "HUBITAT_ACCESS_TOKEN", "", "tok")
+        kp.add_entry(kp.root_group, "MARKET_HOLIDAYS_URL", "", "https://m")
         kp.add_entry(kp.root_group, "FEED_URL", "", "https://x")
         kp.save()
         with patch.object(config, "config_dir", str(tmp_path)):
@@ -267,7 +267,7 @@ class TestKeepass:
 
     def test_the_typed_password_opens_the_database(self, keepass_db):
         with patch("orc.dal.secrets.keepass.getpass", return_value="open sesame"):
-            assert keepass.fetch_secrets() == m.Secrets(hubitat_access_token="tok", other={"FEED_URL": "https://x"})
+            assert keepass.fetch_secrets() == m.Secrets(market_holidays_url="https://m", other={"FEED_URL": "https://x"})
 
     def test_a_wrong_password_is_a_config_error(self, keepass_db):
         with patch("orc.dal.secrets.keepass.getpass", return_value="nope"):

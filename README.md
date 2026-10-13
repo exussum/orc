@@ -28,8 +28,8 @@ react, travel, yolink.
 ## Install
 
 Before you start you need 1) a Bitwarden Secrets Manager account and 2) an
-MQTT broker, with the Hubitat MQTT Export app pointed at it (Maker API only
-for the reboot button). Everything else is optional; a device that isn't in
+MQTT broker, with the Hubitat MQTT Export app pointed at it. Everything else
+is optional; a device that isn't in
 `config.orc` is never touched.
 
 1. **Install the packages.** `command-cfg` comes from the internal package
@@ -208,7 +208,6 @@ value counts as missing wherever a secret is read.
 
 | Key                    | Declared by               | Shape                                 |
 | ---------------------- | ------------------------- | ------------------------------------- |
-| `HUBITAT_ACCESS_TOKEN` | `orc.dal.hubitat.http`    | UUID (Hubitat Maker API access token) |
 | `MARKET_HOLIDAYS_URL`  | `orc.dal.holiday.polygon` | http(s) URL returning market holidays |
 | `VAPID_PRIVATE_KEY`    | `orc.dal.push.webpush`    | base64url 32-byte EC key              |
 | `MQTT_USER`            | nobody (optional)         | Hubitat MQTT broker username          |
