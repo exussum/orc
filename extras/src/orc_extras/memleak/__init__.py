@@ -6,6 +6,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
+import psutil
 from command_cfg import scalar
 from flask import Blueprint, current_app
 from orc_engine import cast as engine_cast
@@ -43,6 +44,9 @@ class Row(NamedTuple):
 class Sample(NamedTuple):
     taken: datetime
     sizes: dict[str, int]
+    rss: int
+    heap: int
+    tracer: int
 
 
 class Settings(NamedTuple):
@@ -82,11 +86,15 @@ def memory() -> dict[str, Any]:
         "samples": len(history),
         "threshold_kb": state.settings.threshold_kb,
         "next_snapshot": _next_snapshot(now, state.settings.snapshot_minute).isoformat(),
+        "totals": {name: _total(history, name) for name in ("rss", "heap", "tracer")},
         "rows": [row._asdict() for row in rank(history, state.settings.threshold_kb)],
     }
 
 
 def sample(now: datetime) -> Sample:
+    rss = psutil.Process().memory_info().rss
+    heap = tracemalloc.get_traced_memory()[0]
+    tracer = tracemalloc.get_tracemalloc_memory()
     sizes: dict[str, int] = {}
     snapshot = tracemalloc.take_snapshot().filter_traces(
         [tracemalloc.Filter(False, f) for f in (__file__, tracemalloc.__file__, linecache.__file__)]
@@ -94,7 +102,7 @@ def sample(now: datetime) -> Sample:
     for stat in snapshot.statistics("lineno"):
         key = _location(stat.traceback[0])
         sizes[key] = sizes.get(key, 0) + stat.size
-    return Sample(now, sizes)
+    return Sample(now, sizes, rss, heap, tracer)
 
 
 def rank(history: list[Sample], threshold_kb: float) -> list[Row]:
@@ -113,6 +121,11 @@ def rank(history: list[Sample], threshold_kb: float) -> list[Row]:
 
 def _add_cron(ctx: AppContext, settings: Settings) -> None:
     ctx.scheduler.cron(_snapshot, f"{settings.snapshot_minute} * * * *", id=CRON_ID, name="Memory Cron")
+
+
+def _total(history: list[Sample], name: str) -> dict[str, float]:
+    first, last = getattr(history[0], name), getattr(history[-1], name)
+    return {"mb": last / 1024 / 1024, "since_boot_mb": (last - first) / 1024 / 1024}
 
 
 def _next_snapshot(now: datetime, minute: int) -> datetime:

@@ -5,7 +5,8 @@ const TEMPLATES = `
 <template id="memleak-dialog-tpl">
     <dialog id="memleak-dialog" class="orc-dialog max-w-full" style="top:2rem;translate:-50% 0;max-height:calc(100vh - 4rem);overflow-y:auto;width:48rem" autofocus>
         <h2 class="text-xl font-semibold mb-1">Memory</h2>
-        <p id="memleak-since" class="text-gray-400 text-xs mb-3"></p>
+        <p id="memleak-since" class="text-gray-400 text-xs mb-1"></p>
+        <p id="memleak-totals" class="text-gray-400 text-xs mb-3"></p>
         <div class="overflow-x-auto mb-4">
             <table class="text-sm w-full">
                 <thead class="text-gray-400 text-left">
@@ -46,6 +47,8 @@ function cell(text, right) {
 
 function render(data) {
     dialog.querySelector("#memleak-since").textContent = `${data.samples} samples since ${fmtTime(data.since)}`;
+    const total = (label, t) => `${label} ${t.mb.toFixed(0)} MB (${t.since_boot_mb >= 0 ? "+" : ""}${t.since_boot_mb.toFixed(1)})`;
+    dialog.querySelector("#memleak-totals").textContent = [total("RSS", data.totals.rss), total("Python heap", data.totals.heap), total("tracer", data.totals.tracer)].join(" · ");
     const body = dialog.querySelector("#memleak-rows");
     body.replaceChildren();
     if (!data.rows.length) {

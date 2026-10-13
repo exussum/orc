@@ -21,6 +21,10 @@ Tracks where the process's memory grows, hour by hour.
 - Groups allocations by file and line, folding the import machinery (`importlib`, `abc`, `enum`, `dataclasses`, `re`) into one row.
 - Ranks rows by how many hourly intervals they grew in, then by KB per hour, and drops rows under the threshold since boot. A one-time import grows in one interval; a leak grows in most of them.
 
+## Totals
+
+The line under the sample count shows the process RSS, what `tracemalloc` sees of the Python heap, and `tracemalloc`'s own bookkeeping, each with growth since boot. RSS climbing while the heap stays flat means the growth is in a native library.
+
 ## Columns
 
 | Column     | Meaning                                           |
