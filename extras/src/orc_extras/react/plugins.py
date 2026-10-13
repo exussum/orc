@@ -42,6 +42,10 @@ def is_disabled(state: State, watch: em.Watch[Any], now: datetime) -> bool:
     return bool(name and disabled_until(state, name, now))
 
 
+def functions(ctx: m.AppContext) -> dict[str, Callable[..., float]]:
+    return {name: getattr(ctx.api, name) for name in FUNCTIONS}
+
+
 def _trigger_label(watch: em.Watch[Any], state: State) -> Any:
     if isinstance(watch.condition, Transition):
         return watch.condition.to
@@ -55,10 +59,6 @@ def _changes(changed: MqttDeviceSubject, old: Any, new: Any) -> em.Changes:
         raise KeyError(subject)
 
     return changes
-
-
-def functions(ctx: m.AppContext) -> dict[str, Callable[..., float]]:
-    return {name: getattr(ctx.api, name) for name in FUNCTIONS}
 
 
 def _reader(ctx: m.AppContext) -> em.Read:

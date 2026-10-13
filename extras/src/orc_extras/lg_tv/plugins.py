@@ -25,17 +25,6 @@ def off(ctx: AppContext, tv: DeviceEnum) -> None:
     backend(ctx).off(tv)
 
 
-def _dispatch(ctx: AppContext, w: DeviceEnum, command: "em.Command[Any]", stream: dict[Any, tuple[str, str]]) -> None:
-    webos_device, bl_device = ctx.config.devices.WebOS[w.name], ctx.config.devices.BroadLink[w.name]
-    if command.value == OFF:
-        off(ctx, webos_device)
-    elif command.value == ON:
-        if is_off(ctx, webos_device):
-            ctx.api.tv_toggle(bl_device)
-    else:
-        raise Exception(f"LGTV only supports on and off, got: {command.value!r}")
-
-
 def tv_state(ctx: AppContext, backend: WebOsBackend) -> list[DeviceStatus]:
     # ``action`` makes each row a clickable runner -> /api/run/Pair LG TV?device=<name>.
     return [
@@ -51,6 +40,17 @@ def tv_state(ctx: AppContext, backend: WebOsBackend) -> list[DeviceStatus]:
 
 def pair_tv(ctx: AppContext, device: str, *, entry: LogEntry) -> None:
     pair(ctx, ctx.config.devices.WebOS[device].value)
+
+
+def _dispatch(ctx: AppContext, w: DeviceEnum, command: "em.Command[Any]", stream: dict[Any, tuple[str, str]]) -> None:
+    webos_device, bl_device = ctx.config.devices.WebOS[w.name], ctx.config.devices.BroadLink[w.name]
+    if command.value == OFF:
+        off(ctx, webos_device)
+    elif command.value == ON:
+        if is_off(ctx, webos_device):
+            ctx.api.tv_toggle(bl_device)
+    else:
+        raise Exception(f"LGTV only supports on and off, got: {command.value!r}")
 
 
 if TYPE_CHECKING:

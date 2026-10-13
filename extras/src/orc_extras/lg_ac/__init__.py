@@ -28,14 +28,14 @@ setting <key> <value>
 """
 
 
+_SECRET_CA_CERT = "LG_THINQ_CA_CERT"
+_SECRET_CA_KEY = "LG_THINQ_CA_KEY"
+
+
 class State(NamedTuple):
     settings: Settings
     transport: Transport
     capture: Capture
-
-
-_SECRET_CA_CERT = "LG_THINQ_CA_CERT"
-_SECRET_CA_KEY = "LG_THINQ_CA_KEY"
 
 
 def setup(ctx: AppContext) -> None:

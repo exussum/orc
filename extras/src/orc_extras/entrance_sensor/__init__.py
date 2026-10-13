@@ -55,37 +55,6 @@ class Timed(NamedTuple):
     commands: Commands
 
 
-def _routine_commands(ctx: AppContext, name: str) -> Commands:
-    # An ad_hoc's delay/snapshot are UI affordances - the plugin runs the
-    # commands immediately, composing the reset base exactly like api.run_action.
-    if (ad_hoc := ctx.config.ad_hoc_routines.get(name)) is not None:
-        base = ctx.config.reset_config.commands if ad_hoc.reset else ()
-        return (*base, *ad_hoc.commands)
-    if (routine := ctx.config.routines.get(name)) is not None:
-        return routine.commands
-    raise ValueError(f"unknown routine {name!r} — expected an ad_hoc name or routine id")
-
-
-def _rule(ctx: AppContext, **values: Any) -> str:
-    ctx.config.ad_hoc_routines[values["routine"]]
-    return values["routine"]
-
-
-def _timed(ctx: AppContext, **values: Any) -> Timed:
-    start, stop = engine_cast.clock(values["start"]), engine_cast.clock(values["stop"])
-    return Timed(start=start, stop=stop, commands=_routine_commands(ctx, values["routine"]))
-
-
-def _windows(timed: dict[str, list[Timed]]) -> tuple[Routine, ...]:
-    return tuple(
-        Routine(
-            tuple(em.Step(em.During(row.start, row.stop), command) for row in rows for command in row.commands),
-            name=name,
-        )
-        for name, rows in timed.items()
-    )
-
-
 def declare(declarations: Any) -> None:
     declarations.declare(setup=[setup])
 
@@ -118,3 +87,34 @@ def setup(ctx: AppContext) -> None:
         raise ValueError(f"cleanup_delay_minutes {sensor.setting.cleanup_delay_minutes} — BLE tags need at least {MIN_BLE_CLEANUP_MINUTES}")
     ctx.plugin_state[orc_extras.entrance_sensor] = None
     ctx.api.add_listener(partial(plugins._on_event, ctx, sensor))
+
+
+def _routine_commands(ctx: AppContext, name: str) -> Commands:
+    # An ad_hoc's delay/snapshot are UI affordances - the plugin runs the
+    # commands immediately, composing the reset base exactly like api.run_action.
+    if (ad_hoc := ctx.config.ad_hoc_routines.get(name)) is not None:
+        base = ctx.config.reset_config.commands if ad_hoc.reset else ()
+        return (*base, *ad_hoc.commands)
+    if (routine := ctx.config.routines.get(name)) is not None:
+        return routine.commands
+    raise ValueError(f"unknown routine {name!r} — expected an ad_hoc name or routine id")
+
+
+def _rule(ctx: AppContext, **values: Any) -> str:
+    ctx.config.ad_hoc_routines[values["routine"]]
+    return values["routine"]
+
+
+def _timed(ctx: AppContext, **values: Any) -> Timed:
+    start, stop = engine_cast.clock(values["start"]), engine_cast.clock(values["stop"])
+    return Timed(start=start, stop=stop, commands=_routine_commands(ctx, values["routine"]))
+
+
+def _windows(timed: dict[str, list[Timed]]) -> tuple[Routine, ...]:
+    return tuple(
+        Routine(
+            tuple(em.Step(em.During(row.start, row.stop), command) for row in rows for command in row.commands),
+            name=name,
+        )
+        for name, rows in timed.items()
+    )

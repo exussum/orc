@@ -36,22 +36,6 @@ class Sensor(DeviceEnum):
 DEVICE_ENUMS = {"Light": Light, "Chromecast": Chromecast, "Sensor": Sensor}
 
 
-def _cmd(device, state):
-    return em.Command[str, m.Devices](m.Devices(device), state)
-
-
-def _window(name, start, stop, *commands):
-    return em.Rule(tuple(em.Step(em.During(start, stop), c) for c in commands), name=name)
-
-
-def _snapshot(*commands, end=_FUTURE):
-    return m.SnapShot(routine=tuple(commands), end=end)
-
-
-def _no_world(subject):
-    raise KeyError(subject)
-
-
 @pytest.fixture
 def ctx(ctx, freezegun_clock):
     ctx.engine.evaluate.side_effect = engine.Runtime(UTC).evaluate
@@ -82,28 +66,6 @@ def config_sensor(ctx):
 def nobody_home_ctx(ctx):
     ctx.api.check_presence.return_value = set()
     return ctx
-
-
-def _cleanup(config_sensor, nobody_home_ctx, present_before=()):
-    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test"))
-    nobody_home_ctx.plugin_state = {entrance_sensor: plugins.Visit(entry, set(present_before))}
-    plugins._run_trigger_sensor_off.__wrapped__(config_sensor, entry, ctx=nobody_home_ctx)
-    return entry
-
-
-def _trigger_sensor(ctx, config_sensor, device_id, event):
-    old = "inactive" if event == "active" else "active"
-    name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
-    plugins._on_event(
-        ctx, config_sensor, m.Status(m.Device(device_id, name, "hubitat"), "motion", old, event, hubitat.HubitatSource.HUBITAT)
-    )
-    queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
-    ctx.scheduler.now.reset_mock()
-    for call in queued:
-        plugins._run_motion.__wrapped__(*call.args[1:], ctx=ctx)
-
-
-# --- Walking in ---
 
 
 def test_day_walk_in_brightens_entrance(ctx, config_sensor):
@@ -174,9 +136,6 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
     assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
 
-# --- Walking past, into the house ---
-
-
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
     ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
@@ -187,9 +146,6 @@ def test_cleanup_is_scheduled_for_later(ctx, config_sensor):
     ctx.scheduler.once.assert_called_once()
     _, kwargs = ctx.scheduler.once.call_args
     assert kwargs["id"] == "trigger-sensor"
-
-
-# --- Cleanup, minutes later ---
 
 
 def test_someone_home_stops_media(config_sensor, nobody_home_ctx):
@@ -241,14 +197,6 @@ def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(config_sensor, nob
     nobody_home_ctx.api.log.assert_not_called()
 
 
-def _seed_devices(nobody_home_ctx, *devices):
-    nobody_home_ctx.api.device_states.return_value = list(devices)
-
-
-def _door(state):
-    return m.DeviceState(m.Device("56", "balcony door", "hubitat"), {"contact": state, "battery": "98"}, None)
-
-
 @pytest.mark.parametrize(
     "contact, expected",
     [
@@ -289,9 +237,6 @@ def test_walk_out_leaves_presence_alone(ctx, config_sensor):
     ctx.api.delete_all_presence.assert_not_called()
 
 
-# --- Guards ---
-
-
 def test_other_devices_are_ignored(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "99", "active")
     ctx.api.dispatch.assert_not_called()
@@ -303,3 +248,46 @@ def test_unknown_events_are_ignored(ctx, config_sensor):
     ctx.api.dispatch.assert_not_called()
     ctx.scheduler.now.assert_not_called()
     ctx.engine.pop_snapshot.assert_not_called()
+
+
+def _cmd(device, state):
+    return em.Command[str, m.Devices](m.Devices(device), state)
+
+
+def _window(name, start, stop, *commands):
+    return em.Rule(tuple(em.Step(em.During(start, stop), c) for c in commands), name=name)
+
+
+def _snapshot(*commands, end=_FUTURE):
+    return m.SnapShot(routine=tuple(commands), end=end)
+
+
+def _no_world(subject):
+    raise KeyError(subject)
+
+
+def _cleanup(config_sensor, nobody_home_ctx, present_before=()):
+    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test"))
+    nobody_home_ctx.plugin_state = {entrance_sensor: plugins.Visit(entry, set(present_before))}
+    plugins._run_trigger_sensor_off.__wrapped__(config_sensor, entry, ctx=nobody_home_ctx)
+    return entry
+
+
+def _trigger_sensor(ctx, config_sensor, device_id, event):
+    old = "inactive" if event == "active" else "active"
+    name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
+    plugins._on_event(
+        ctx, config_sensor, m.Status(m.Device(device_id, name, "hubitat"), "motion", old, event, hubitat.HubitatSource.HUBITAT)
+    )
+    queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
+    ctx.scheduler.now.reset_mock()
+    for call in queued:
+        plugins._run_motion.__wrapped__(*call.args[1:], ctx=ctx)
+
+
+def _seed_devices(nobody_home_ctx, *devices):
+    nobody_home_ctx.api.device_states.return_value = list(devices)
+
+
+def _door(state):
+    return m.DeviceState(m.Device("56", "balcony door", "hubitat"), {"contact": state, "battery": "98"}, None)

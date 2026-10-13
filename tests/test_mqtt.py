@@ -10,22 +10,6 @@ from orc.collections import LockedDict
 from orc.dal.mqtt import hubitat, none
 from orc.dal.mqtt import paho as mqtt
 
-
-def _msg(topic, payload, retain=True):
-    return SimpleNamespace(topic=topic, payload=json.dumps(payload).encode() if isinstance(payload, dict) else payload, retain=retain)
-
-
-def _doc(id=17, name="entrance bulb 1", attributes=None, last_activity=None):
-    attrs = attributes if attributes is not None else {"switch": "off", "level": "20"}
-    return {
-        "id": id,
-        "name": name,
-        # fresh by default: stale documents update the cache but fire no listeners
-        "lastActivity": last_activity or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "attributes": [{"name": k, "value": v, "dataType": "ENUM", "unit": None} for k, v in attrs.items()],
-    }
-
-
 HUB = "05bd449a-6f6d-45a6-b2e6-7ecb91105f7e"
 
 
@@ -52,17 +36,6 @@ def mqtt_client(monkeypatch):
     monkeypatch.setattr(mqtt, "_client", client)
     hubitat.hub_id = HUB
     return client
-
-
-def _receive(docs):
-    """Deliver device documents through _on_message as if the broker pushed them."""
-    for doc in docs:
-        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/{doc['id']}", doc))
-
-
-def _seen(id, name="entrance bulb 1", **attributes):
-    """A device's first document only caches it: nothing fires until the next one."""
-    _receive([_doc(id=id, name=name, attributes=attributes)])
 
 
 class TestOnMessage:
@@ -139,11 +112,6 @@ class TestListeners:
         assert mqtt_events == [("contact", "open", "open")]
 
 
-def _button_msg(event_type, device_id=10, button=1):
-    payload = {"event_type": event_type, "button": button, "timestamp": "2026-07-29T22:42:37+0000"}
-    return _msg(f"hubitat/{HUB}/devices/{device_id}/button/{button}", payload, retain=False)
-
-
 class TestButtonEvents:
     def test_fires_listener_as_a_change_with_no_before(self, mqtt_events):
         mqtt.add_status_listener(lambda s: mqtt_events.append((s.device.id, s.device.name, s.attribute, s.old, s.new)))
@@ -182,33 +150,6 @@ class TestButtonEvents:
     def test_button_event_does_not_touch_device_cache(self):
         mqtt._on_message(None, None, _button_msg("pushed"))
         assert mqtt.snapshot() == []
-
-
-class _Adapter:
-    namespaces = ("clip",)
-    device_types = ("AC",)
-
-    def __init__(self):
-        self.seen, self.replies, self.hello = [], [], []
-
-    def attach(self, publish):
-        self.publish = publish
-
-    def decode(self, topic, doc):
-        self.seen.append((topic, doc))
-        for reply in self.replies:
-            self.publish(reply)
-        return ()
-
-    def encode(self, device, value):
-        return (m.Message(f"clip/command/{device.value}", {"set": value}),)
-
-    def snapshot(self):
-        return ()
-
-    def start(self):
-        for message in self.hello:
-            self.publish(message)
 
 
 class TestRouting:
@@ -406,3 +347,61 @@ class TestFetchHubitatConfig:
     def test_unretained_documents_fail_boot(self, monkeypatch):
         with pytest.raises(RuntimeError, match="not retained for entrance bulb 1"):
             self._fetch(monkeypatch, [_doc(id=17, name="entrance bulb 1")], timeout=0.1, retain=False)
+
+
+class _Adapter:
+    namespaces = ("clip",)
+    device_types = ("AC",)
+
+    def __init__(self):
+        self.seen, self.replies, self.hello = [], [], []
+
+    def attach(self, publish):
+        self.publish = publish
+
+    def decode(self, topic, doc):
+        self.seen.append((topic, doc))
+        for reply in self.replies:
+            self.publish(reply)
+        return ()
+
+    def encode(self, device, value):
+        return (m.Message(f"clip/command/{device.value}", {"set": value}),)
+
+    def snapshot(self):
+        return ()
+
+    def start(self):
+        for message in self.hello:
+            self.publish(message)
+
+
+def _msg(topic, payload, retain=True):
+    return SimpleNamespace(topic=topic, payload=json.dumps(payload).encode() if isinstance(payload, dict) else payload, retain=retain)
+
+
+def _doc(id=17, name="entrance bulb 1", attributes=None, last_activity=None):
+    attrs = attributes if attributes is not None else {"switch": "off", "level": "20"}
+    return {
+        "id": id,
+        "name": name,
+        # fresh by default: stale documents update the cache but fire no listeners
+        "lastActivity": last_activity or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "attributes": [{"name": k, "value": v, "dataType": "ENUM", "unit": None} for k, v in attrs.items()],
+    }
+
+
+def _receive(docs):
+    """Deliver device documents through _on_message as if the broker pushed them."""
+    for doc in docs:
+        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/{doc['id']}", doc))
+
+
+def _seen(id, name="entrance bulb 1", **attributes):
+    """A device's first document only caches it: nothing fires until the next one."""
+    _receive([_doc(id=id, name=name, attributes=attributes)])
+
+
+def _button_msg(event_type, device_id=10, button=1):
+    payload = {"event_type": event_type, "button": button, "timestamp": "2026-07-29T22:42:37+0000"}
+    return _msg(f"hubitat/{HUB}/devices/{device_id}/button/{button}", payload, retain=False)

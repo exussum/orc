@@ -16,6 +16,31 @@ _FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)
 _TO = datetime.datetime(2036, 6, 1, tzinfo=datetime.UTC)
 
 
+def main() -> None:
+    fqdn = _setting("fqdn")
+    if fqdn.endswith(".example"):
+        raise SystemExit(f"set 'fqdn' in {_CONFIG} to this server's real FQDN before generating certs (still the .example placeholder)")
+    mqtt_ip = socket.gethostbyname(fqdn)  # the device connects to the broker by IP
+    CERTS.mkdir(parents=True, exist_ok=True)
+
+    ca_key = _key()
+    ca_cert = (
+        _base(_name("lg_ac-ca"), _name("lg_ac-ca"), ca_key.public_key())
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(_key_usage(key_cert_sign=True, crl_sign=True), critical=True)
+        .sign(ca_key, hashes.SHA256())
+    )
+    _write("ca", ca_cert, ca_key)
+
+    ca_signed, ca_signed_key = _server(self_signed=False, fqdn=fqdn, mqtt_ip=mqtt_ip, ca_cert=ca_cert, ca_key=ca_key)
+    _write("server-ca", ca_signed, ca_signed_key)
+
+    self_signed, self_signed_key = _server(self_signed=True, fqdn=fqdn, mqtt_ip=mqtt_ip)
+    _write("server-selfsigned", self_signed, self_signed_key)
+
+    print(f"wrote {CERTS}/ca.crt, server-ca.crt, server-selfsigned.crt (+ keys)")
+
+
 def _key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -99,31 +124,6 @@ def _server(
         .sign(signer, hashes.SHA256())  # type: ignore[arg-type]
     )
     return cert, key
-
-
-def main() -> None:
-    fqdn = _setting("fqdn")
-    if fqdn.endswith(".example"):
-        raise SystemExit(f"set 'fqdn' in {_CONFIG} to this server's real FQDN before generating certs (still the .example placeholder)")
-    mqtt_ip = socket.gethostbyname(fqdn)  # the device connects to the broker by IP
-    CERTS.mkdir(parents=True, exist_ok=True)
-
-    ca_key = _key()
-    ca_cert = (
-        _base(_name("lg_ac-ca"), _name("lg_ac-ca"), ca_key.public_key())
-        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .add_extension(_key_usage(key_cert_sign=True, crl_sign=True), critical=True)
-        .sign(ca_key, hashes.SHA256())
-    )
-    _write("ca", ca_cert, ca_key)
-
-    ca_signed, ca_signed_key = _server(self_signed=False, fqdn=fqdn, mqtt_ip=mqtt_ip, ca_cert=ca_cert, ca_key=ca_key)
-    _write("server-ca", ca_signed, ca_signed_key)
-
-    self_signed, self_signed_key = _server(self_signed=True, fqdn=fqdn, mqtt_ip=mqtt_ip)
-    _write("server-selfsigned", self_signed, self_signed_key)
-
-    print(f"wrote {CERTS}/ca.crt, server-ca.crt, server-selfsigned.crt (+ keys)")
 
 
 if __name__ == "__main__":

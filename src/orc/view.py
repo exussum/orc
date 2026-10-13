@@ -23,6 +23,15 @@ from orc import model as m
 from orc.collections import where
 from orc.locale import Log
 
+_DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
+_CODESPAN_RE = re.compile(r"`([^`]+)`")
+
+
+_MANIFEST = json.loads((Path(__file__).parent / "static" / "manifest.json").read_text())
+
+
+_LINK_HOSTS = ("meet.google.com", "zoom.us", "teams.microsoft.com")
+
 
 class OrcFlask(Flask):
     orc: m.AppContext
@@ -65,9 +74,6 @@ app = cast(OrcFlask, _current_app)
 
 bp = Blueprint("controls", __name__)
 
-_DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
-_CODESPAN_RE = re.compile(r"`([^`]+)`")
-
 
 @bp.app_template_filter("codespan")
 def codespan(text: str) -> Markup:
@@ -107,31 +113,9 @@ def manifest() -> dict[str, Any]:
     return {**_MANIFEST, "name": title, "short_name": title}
 
 
-_MANIFEST = json.loads((Path(__file__).parent / "static" / "manifest.json").read_text())
-
-
-def _app_name() -> str:
-    internal = urlparse(config.settings.base_url).hostname if config.settings.base_url else None
-    return "Orc Remote" if internal and request.host.split(":")[0] != internal else "Orc"
-
-
-@cache
-def _hooks_bundle(scripts: tuple[tuple[str, Path], ...]) -> str:
-    static = Path(__file__).parent / "static"
-    gate = static / "hooks" / "are-you-sure.js"
-    core = [gate, *(p for p in (static / "hooks").glob("*.js") if p != gate)]
-    files = [(p.name, p) for p in core] + list(scripts)
-    return "\n".join(['import * as orc from "/static/orc.js";', *(f"// --- {name}\n{{\n{path.read_text()}}}" for name, path in files)])
-
-
 @bp.route("/hooks.js")
 def hooks() -> Response:
     return Response(_hooks_bundle(tuple(config.registry.scripts.items())), mimetype="text/javascript")
-
-
-@cache
-def _config_text(config_dir: str) -> str:
-    return (Path(config_dir) / "config.orc").read_text()
 
 
 @bp.route("/system/")
@@ -381,9 +365,6 @@ def push_subscribe() -> dict[str, Any]:
     return {}
 
 
-_LINK_HOSTS = ("meet.google.com", "zoom.us", "teams.microsoft.com")
-
-
 @bp.route("/api/push/open")
 def push_open() -> BaseResponse:
     url = request.args.get("url", "")  # nosemgrep: python.flask.security.open-redirect.open-redirect
@@ -406,6 +387,25 @@ def durations() -> tuple[dict[str, Any], int]:
         for name in stats.keys() | {name for name, delay in delays.items() if delay}
         for samples, avg in (stats.get(name, (0, 0.0)),)
     }, 200
+
+
+def _app_name() -> str:
+    internal = urlparse(config.settings.base_url).hostname if config.settings.base_url else None
+    return "Orc Remote" if internal and request.host.split(":")[0] != internal else "Orc"
+
+
+@cache
+def _hooks_bundle(scripts: tuple[tuple[str, Path], ...]) -> str:
+    static = Path(__file__).parent / "static"
+    gate = static / "hooks" / "are-you-sure.js"
+    core = [gate, *(p for p in (static / "hooks").glob("*.js") if p != gate)]
+    files = [(p.name, p) for p in core] + list(scripts)
+    return "\n".join(['import * as orc from "/static/orc.js";', *(f"// --- {name}\n{{\n{path.read_text()}}}" for name, path in files)])
+
+
+@cache
+def _config_text(config_dir: str) -> str:
+    return (Path(config_dir) / "config.orc").read_text()
 
 
 def _states_by_name(commands: m.Commands) -> dict[str, Any]:

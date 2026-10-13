@@ -21,6 +21,15 @@ TransitionKind = Literal["connection", "leak", "battery", "signal", "interval", 
 type TransitionCallback = Callable[[str, TransitionKind, Any, Any], None]
 
 
+STATE_DRY = "normal"
+STATE_WET = "alert"
+
+# Flap suppression: the real backend auto-reconnects transient drops, so only treat
+# the connection as down once we've seen several disconnects in a short window.
+_FLAP_WINDOW_SEC = 60
+_FLAP_THRESHOLD = 3
+
+
 @dataclasses.dataclass(frozen=True)
 class SensorState:
     name: str
@@ -34,27 +43,11 @@ class SensorState:
     last_change: datetime | None = None
 
 
-STATE_DRY = "normal"
-STATE_WET = "alert"
-
 _log = logging.getLogger(__name__)
-
-# Flap suppression: the real backend auto-reconnects transient drops, so only treat
-# the connection as down once we've seen several disconnects in a short window.
-_FLAP_WINDOW_SEC = 60
-_FLAP_THRESHOLD = 3
 
 
 def states_for(leak_devices: Any) -> LockedDict[str, SensorState]:
     return LockedDict({device.value: SensorState(name=device.label, device_id=device.value) for device in leak_devices})
-
-
-def _states(ctx: m.AppContext) -> LockedDict[str, SensorState]:
-    return cast.instance(ctx.plugin_state[orc_extras.yolink], LockedDict)
-
-
-def _leak_devices(ctx: m.AppContext) -> Any:
-    return ctx.config.devices.Leak
 
 
 def start(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback) -> None:
@@ -90,7 +83,12 @@ def simulate_transition(ctx: m.AppContext, name: str, on_transition: TransitionC
     return True
 
 
-# --- client lifecycle ---
+def _states(ctx: m.AppContext) -> LockedDict[str, SensorState]:
+    return cast.instance(ctx.plugin_state[orc_extras.yolink], LockedDict)
+
+
+def _leak_devices(ctx: m.AppContext) -> Any:
+    return ctx.config.devices.Leak
 
 
 def _run(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback) -> None:
@@ -163,9 +161,6 @@ def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: 
     _states(ctx).update(device_id, apply)
     for kind, old, new in captured["transitions"]:
         _fire(on_transition, kind, captured["name"], old, new)
-
-
-# --- state transitions ---
 
 
 def _hydrate_states(ctx: m.AppContext, backend: CloudBackend, access_token: str) -> None:

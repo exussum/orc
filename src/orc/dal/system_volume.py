@@ -30,6 +30,20 @@ def get_volume(serial: str) -> int:
     return _alsa_mixer(serial).getvolume()[0]
 
 
+def list_usb_audio_devices() -> list[UsbAudioDevice]:
+    import alsaaudio
+
+    return [UsbAudioDevice(idx, card, _usb_serial(idx)) for idx, card in enumerate(alsaaudio.cards())]
+
+
+def card_index_for_serial(serial: str) -> int:
+    devices = list_usb_audio_devices()
+    for dev in devices:
+        if dev.serial == serial:
+            return dev.card_index
+    raise RuntimeError(f"No ALSA card with USB serial {serial!r}: found {devices}")
+
+
 def _platform() -> str:
     if sys.platform == "darwin":
         return "darwin"
@@ -45,20 +59,6 @@ def _usb_serial(idx: int) -> str | None:
         if serial_file.exists():
             return serial_file.read_text().strip()
     return None
-
-
-def list_usb_audio_devices() -> list[UsbAudioDevice]:
-    import alsaaudio
-
-    return [UsbAudioDevice(idx, card, _usb_serial(idx)) for idx, card in enumerate(alsaaudio.cards())]
-
-
-def card_index_for_serial(serial: str) -> int:
-    devices = list_usb_audio_devices()
-    for dev in devices:
-        if dev.serial == serial:
-            return dev.card_index
-    raise RuntimeError(f"No ALSA card with USB serial {serial!r}: found {devices}")
 
 
 def _alsa_mixer(serial: str) -> Any:

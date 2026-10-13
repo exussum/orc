@@ -24,6 +24,13 @@ VAPID_PUBLIC_KEY = "BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tK
 SUBSCRIPTION = m.PushSubscription("https://push.example/a", "public-key", "auth-secret")
 
 
+_HOLIDAYS = [
+    {"date": "2026-11-26", "exchange": "NYSE", "status": "closed"},
+    {"date": "2026-11-27", "exchange": "NYSE", "status": "early-close"},
+    {"date": "2026-12-25", "exchange": "NASDAQ", "status": "closed"},
+]
+
+
 class TestStripGoogleVideoParams:
     def test_keeps_id_drops_other_params(self):
         url = "https://r1---sn-abc.googlevideo.com/videoplayback?id=abc123&sig=xxx&ip=1.2.3.4"
@@ -65,13 +72,6 @@ class TestWebPush:
         with patch("orc.dal.push.webpush.webpush") as send:
             webpush.send(SUBSCRIPTION, "[Calendar 01/05]", "standup", m.Notification(("calendar",), "https://meet.google.com/abc?x=1"))
         assert json.loads(send.call_args.kwargs["data"])["url"] == "https://meet.google.com/abc?x=1"
-
-
-_HOLIDAYS = [
-    {"date": "2026-11-26", "exchange": "NYSE", "status": "closed"},
-    {"date": "2026-11-27", "exchange": "NYSE", "status": "early-close"},
-    {"date": "2026-12-25", "exchange": "NASDAQ", "status": "closed"},
-]
 
 
 class TestMarketHoliday:

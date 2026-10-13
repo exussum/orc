@@ -131,11 +131,6 @@ class House:
         return [(entry.trigger, entry.action, [child.action for child in entry.children]) for entry in reversed(api.log_entries())]
 
 
-def _load(config_dir, hub):
-    os.environ["ORC_CONFIG_DIR"] = config_dir
-    config.load(m.Secrets(), hub)
-
-
 @pytest.fixture
 def house(request, monkeypatch, tmp_path):
     sample = os.environ.get("ORC_CONFIG_DIR", "src")
@@ -194,3 +189,8 @@ def house(request, monkeypatch, tmp_path):
             yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed)
     finally:
         _load(sample, {})
+
+
+def _load(config_dir, hub):
+    os.environ["ORC_CONFIG_DIR"] = config_dir
+    config.load(m.Secrets(), hub)

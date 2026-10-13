@@ -20,8 +20,33 @@ from orc.kernel.loader import ConfigError, parse_config, validate
 FIXTURE = Path(__file__).parent / "fixture"
 
 
-def _condition(person=None, weather=None):
-    return loader._condition({"person": {"alice": None, "bob": None}}, SimpleNamespace(trigger_person=person, trigger_weather=weather))
+_PARSE_ERRORS = [
+    ("device_type_not_defined", "name 'Foo' is not defined — device types must be defined and sealed first"),
+    ("unknown_device_member", "Unknown Foo device 'B': expected one of ['A']"),
+    ("device_expression_syntax_error", "'(' was never closed"),
+    ("add_before_define", "Unknown device type 'Foo'"),
+    ("add_after_seal", "Device type 'Foo' is already sealed"),
+    ("unsealed_at_end", "Device types defined but never sealed: ['Foo']"),
+    ("duplicate_member_names", "Duplicate names in 'Foo': {'A'}"),
+    ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),
+    ("invalid_state", "Invalid state 'wibble'"),
+    ("invalid_ac_command", "Invalid AC command 'chill:low:75'"),
+    ("ac_command_non_ac", "AC command cool:low:75 applies only to AC devices, got 'Foo.A'"),
+    ("ac_device_bad_state", "AC devices take a mode:fan:temp command, 'on', or 'off', got 'stop'"),
+    ("invalid_delay", "invalid literal for int() with base 10: 'soon'"),
+    ("invalid_snapshot", "invalid literal for int() with base 10: 'lots'"),
+    ("invalid_section", "Invalid parameter section='weird'"),
+    ("time_not_hh_mm", "Invalid time 'noon'"),
+    ("time_out_of_range", "Invalid time '25:00'"),
+    ("plugin_import_failure", "Cannot load module 'not.a.module'"),
+    ("theme_unknown_routine", "Unknown routine 'OTHER'"),
+    ("append_unknown_routine", "Unknown routine 'R'"),
+    ("unknown_trigger", "Unknown person 'NOPE'"),
+    ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
+    ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
+    ("invalid_button_event", "Invalid button event 'clicked'"),
+    ("non_numeric_button", "invalid literal for int() with base 10: 'one'"),
+]
 
 
 @pytest.mark.parametrize(
@@ -292,35 +317,6 @@ def test_plugin_command_imports_callable():
     assert plugin.delay == timedelta()
 
 
-_PARSE_ERRORS = [
-    ("device_type_not_defined", "name 'Foo' is not defined — device types must be defined and sealed first"),
-    ("unknown_device_member", "Unknown Foo device 'B': expected one of ['A']"),
-    ("device_expression_syntax_error", "'(' was never closed"),
-    ("add_before_define", "Unknown device type 'Foo'"),
-    ("add_after_seal", "Device type 'Foo' is already sealed"),
-    ("unsealed_at_end", "Device types defined but never sealed: ['Foo']"),
-    ("duplicate_member_names", "Duplicate names in 'Foo': {'A'}"),
-    ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),
-    ("invalid_state", "Invalid state 'wibble'"),
-    ("invalid_ac_command", "Invalid AC command 'chill:low:75'"),
-    ("ac_command_non_ac", "AC command cool:low:75 applies only to AC devices, got 'Foo.A'"),
-    ("ac_device_bad_state", "AC devices take a mode:fan:temp command, 'on', or 'off', got 'stop'"),
-    ("invalid_delay", "invalid literal for int() with base 10: 'soon'"),
-    ("invalid_snapshot", "invalid literal for int() with base 10: 'lots'"),
-    ("invalid_section", "Invalid parameter section='weird'"),
-    ("time_not_hh_mm", "Invalid time 'noon'"),
-    ("time_out_of_range", "Invalid time '25:00'"),
-    ("plugin_import_failure", "Cannot load module 'not.a.module'"),
-    ("theme_unknown_routine", "Unknown routine 'OTHER'"),
-    ("append_unknown_routine", "Unknown routine 'R'"),
-    ("unknown_trigger", "Unknown person 'NOPE'"),
-    ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
-    ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
-    ("invalid_button_event", "Invalid button event 'clicked'"),
-    ("non_numeric_button", "invalid literal for int() with base 10: 'one'"),
-]
-
-
 @pytest.mark.parametrize("case, error", _PARSE_ERRORS, ids=[case for case, _ in _PARSE_ERRORS])
 def test_parse_error(case, error):
     with pytest.raises(ConfigError, match=re.escape(error)):
@@ -381,3 +377,7 @@ def test_validate_missing_themes():
 def test_validate_requires_reset_routine_name():
     with pytest.raises(ConfigError, match="Missing required routine names: Reset"):
         validate(parse("validate_missing_reset_name"))
+
+
+def _condition(person=None, weather=None):
+    return loader._condition({"person": {"alice": None, "bob": None}}, SimpleNamespace(trigger_person=person, trigger_weather=weather))

@@ -13,6 +13,16 @@ VECTORS = [
 ]
 
 
+PARSE_CASES = [
+    ("legacy frame", bytes([0x40]) + bytes(20) + bytes([0x7F]), bytes(20)),
+    ("unwanted-tracking frame", bytes([0x41]) + bytes(20) + bytes([0x7F]), bytes(20)),
+    ("modern frame", bytes([0x40]) + bytes(range(32)) + bytes([0x7F]), bytes(range(32))),
+    ("legacy frame without flags", bytes([0x40]) + bytes(20), bytes(20)),
+    ("eddystone uid frame", bytes([0x00]) + bytes(21), None),
+    ("truncated frame", bytes([0x40]) + bytes(4), None),
+]
+
+
 @pytest.mark.parametrize("name,idx,expected", VECTORS, ids=[v[0] for v in VECTORS])
 def test_fmdn_eids_golden_vector(name, idx, expected):
     assert security.fmdn_eids(EIK, COUNTER)[idx].hex() == expected
@@ -22,16 +32,6 @@ def test_fmdn_eids_constant_within_rotation_window():
     base = 2 * security.FMDN_ROTATION_SECONDS + 5
     assert security.fmdn_eids(EIK, base) == security.fmdn_eids(EIK, base + 1)
     assert security.fmdn_eids(EIK, base) != security.fmdn_eids(EIK, base + security.FMDN_ROTATION_SECONDS)
-
-
-PARSE_CASES = [
-    ("legacy frame", bytes([0x40]) + bytes(20) + bytes([0x7F]), bytes(20)),
-    ("unwanted-tracking frame", bytes([0x41]) + bytes(20) + bytes([0x7F]), bytes(20)),
-    ("modern frame", bytes([0x40]) + bytes(range(32)) + bytes([0x7F]), bytes(range(32))),
-    ("legacy frame without flags", bytes([0x40]) + bytes(20), bytes(20)),
-    ("eddystone uid frame", bytes([0x00]) + bytes(21), None),
-    ("truncated frame", bytes([0x40]) + bytes(4), None),
-]
 
 
 @pytest.mark.parametrize("name,frame,expected", PARSE_CASES, ids=[c[0] for c in PARSE_CASES])

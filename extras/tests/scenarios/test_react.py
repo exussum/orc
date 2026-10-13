@@ -32,10 +32,6 @@ def test_rapid_broker_events_roll_up_and_a_late_one_starts_its_own_entry(house):
     ]
 
 
-def _cmd(device, value):
-    return em.Command(m.Devices(device), value, tag=m.Always())
-
-
 @pytest.mark.plugins(react)
 def test_chromecast_pauses_dispatch_after_the_lights(house):
     house.report(orc.Light.BEDROOM_LAMP, "switch", "on")
@@ -64,3 +60,7 @@ def test_chromecast_pauses_dispatch_after_the_lights(house):
         _cmd(orc.Chromecast.LIVING_ROOM, m.PAUSE),
         _cmd(orc.Chromecast.BEDROOM, m.PAUSE),
     )
+
+
+def _cmd(device, value):
+    return em.Command(m.Devices(device), value, tag=m.Always())

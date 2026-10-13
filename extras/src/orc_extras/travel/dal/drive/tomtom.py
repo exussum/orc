@@ -3,23 +3,6 @@ import requests
 from orc_extras.travel.dal import sqlite
 
 
-def _lookup(key: str, address: str, timeout: int) -> tuple[float, float] | None:
-    if (hit := sqlite.fetch_geocode(address)) is not None:
-        return hit
-    response = requests.get(
-        f"https://api.tomtom.com/search/2/search/{requests.utils.quote(address)}.json",
-        params={"key": key, "limit": "1"},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    results = response.json()["results"]
-    if not results:
-        return None
-    pos = results[0]["position"]
-    sqlite.insert_geocode(address, pos["lat"], pos["lon"])
-    return pos["lat"], pos["lon"]
-
-
 def drive_minutes(key: str, origin: str, dest: str, timeout: int) -> int:
     d = _lookup(key, dest, timeout)
     if d is None:
@@ -37,3 +20,20 @@ def drive_minutes(key: str, origin: str, dest: str, timeout: int) -> int:
             sqlite.delete_geocode(dest)
         raise
     return round(response.json()["routes"][0]["summary"]["travelTimeInSeconds"] / 60)
+
+
+def _lookup(key: str, address: str, timeout: int) -> tuple[float, float] | None:
+    if (hit := sqlite.fetch_geocode(address)) is not None:
+        return hit
+    response = requests.get(
+        f"https://api.tomtom.com/search/2/search/{requests.utils.quote(address)}.json",
+        params={"key": key, "limit": "1"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    results = response.json()["results"]
+    if not results:
+        return None
+    pos = results[0]["position"]
+    sqlite.insert_geocode(address, pos["lat"], pos["lon"])
+    return pos["lat"], pos["lon"]

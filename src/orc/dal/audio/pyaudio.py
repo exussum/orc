@@ -18,14 +18,6 @@ _MODEL_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx
 _CONFIG_PATH: Traversable = resources.files("orc_data") / "en_GB-alba-medium.onnx.json"
 
 
-@cache
-def _voice() -> Any:
-    from piper import PiperVoice
-
-    # resources.files() yields a concrete Path here; piper's stub only accepts str | Path, not the broader Traversable
-    return PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
-
-
 def alert(device: m.DeviceEnum, path: str) -> None:
     with wave.open(path, "rb") as wf:
         channels, rate = wf.getnchannels(), wf.getframerate()
@@ -51,6 +43,28 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     return m.SoundState(what=device, content=None, volume=volume)
 
 
+def list_devices_cli() -> None:
+    pa = pyaudio.PyAudio()
+    try:
+        infos = [pa.get_device_info_by_index(i) for i in range(pa.get_device_count())]
+    finally:
+        pa.terminate()
+    pa_names = [info["name"] for info in infos if info["maxOutputChannels"] > 0]
+
+    for dev in system_volume.list_usb_audio_devices():
+        marker = f"(hw:{dev.card_index},"
+        pa_name = next((name for name in pa_names if marker in name), "?")
+        print(f"card {dev.card_index:<2} serial={dev.serial or '(none)':<20} alsa={dev.card:<15} portaudio={pa_name}")
+
+
+@cache
+def _voice() -> Any:
+    from piper import PiperVoice
+
+    # resources.files() yields a concrete Path here; piper's stub only accepts str | Path, not the broader Traversable
+    return PiperVoice.load(_MODEL_PATH, _CONFIG_PATH, use_cuda=False)  # type: ignore[arg-type]
+
+
 @cache
 def _find_output_device(serial: str) -> tuple[int, Any]:
     card_idx = system_volume.card_index_for_serial(serial)
@@ -64,20 +78,6 @@ def _find_output_device(serial: str) -> tuple[int, Any]:
     finally:
         pa.terminate()
     raise RuntimeError(f"No audio output device for ALSA card {card_idx} (serial {serial!r})")
-
-
-def list_devices_cli() -> None:
-    pa = pyaudio.PyAudio()
-    try:
-        infos = [pa.get_device_info_by_index(i) for i in range(pa.get_device_count())]
-    finally:
-        pa.terminate()
-    pa_names = [info["name"] for info in infos if info["maxOutputChannels"] > 0]
-
-    for dev in system_volume.list_usb_audio_devices():
-        marker = f"(hw:{dev.card_index},"
-        pa_name = next((name for name in pa_names if marker in name), "?")
-        print(f"card {dev.card_index:<2} serial={dev.serial or '(none)':<20} alsa={dev.card:<15} portaudio={pa_name}")
 
 
 def _play_stream(device: m.DeviceEnum, chunks: Iterable[bytes], channels: int, src_rate: int) -> None:

@@ -42,24 +42,6 @@ def test_travel_declares_its_configured_keys():
     assert builder.secrets == {"TOMTOM_KEY": cast.nonblank, "AERODATABOX_KEY": cast.nonblank}
 
 
-def _with_runtime(ctx, rt):
-    ctx.plugin_state = {travel: rt}
-    return ctx
-
-
-def _runtime(extras, buffer=0):
-    return m.Runtime(
-        drive=drive_stub,
-        flight=flight_stub,
-        settings=m.Settings("d", "f", "T", "A", 120, buffer),
-        extras=extras,
-        places=[],
-        origin="40.7,-74.0",
-        tomtom_key="",
-        aerodatabox_key="",
-    )
-
-
 def test_travel_config_loads(ctx):
     ctx.plugin_state = {}
     ctx.config.plugin_configs = plugin_config(travel, "travel")
@@ -151,13 +133,6 @@ def test_arrival_flight_uses_backend(flight_travel_job):
     assert plugins._arrival(_runtime([]), flight_travel_job, timezone.utc) == m.Arrival(ARRIVE, "JFK", "1")
 
 
-def _boom(msg):
-    def raiser(*args, **kwargs):
-        raise RuntimeError(msg)
-
-    return raiser
-
-
 def test_evaluate_destination_schedules(ctx, home_travel_job):
     arrival, sched = plugins.evaluate(_with_runtime(ctx, _runtime([])), home_travel_job, timezone.utc, ARRIVE - timedelta(hours=1))
     assert arrival == m.Arrival(ARRIVE, "Home", None)
@@ -233,3 +208,28 @@ def test_run_job_syncs_arrive_to_live_verified_time(ctx, monkeypatch, flight_tra
     ctx.api.local_now.return_value = ARRIVE - timedelta(hours=3)
     plugins.run_job(flight_travel_job, ctx=ctx)
     assert flight_travel_job.arrive == verified
+
+
+def _with_runtime(ctx, rt):
+    ctx.plugin_state = {travel: rt}
+    return ctx
+
+
+def _runtime(extras, buffer=0):
+    return m.Runtime(
+        drive=drive_stub,
+        flight=flight_stub,
+        settings=m.Settings("d", "f", "T", "A", 120, buffer),
+        extras=extras,
+        places=[],
+        origin="40.7,-74.0",
+        tomtom_key="",
+        aerodatabox_key="",
+    )
+
+
+def _boom(msg):
+    def raiser(*args, **kwargs):
+        raise RuntimeError(msg)
+
+    return raiser

@@ -48,6 +48,9 @@ mark_present = net.presence.mark
 resume_presence = net.presence.resume
 
 
+type _Job = tuple[Callable[..., None], m.DeviceEnum, em.Command[Any]]
+
+
 def set_ctx(ctx: m.AppContext) -> None:
     global _ctx
     _ctx = ctx
@@ -69,16 +72,6 @@ def action_delays() -> dict[str, timedelta]:
     return ad_hoc | plugins
 
 
-@contextlib.contextmanager
-def _record_duration(name: str) -> Iterator[None]:
-    start = time.perf_counter()
-    yield
-    update_avg(name, time.perf_counter() - start)
-
-
-# --- Utilities ---
-
-
 def set_job_paused(id: str, paused: bool) -> bool:
     return _scheduler().set_paused(id, paused)
 
@@ -90,17 +83,6 @@ def fetch_jobs_by_type(type: type) -> list[Job]:
 
 def local_now() -> datetime:
     return datetime.now(tz=config.settings.tz)
-
-
-def _notify(
-    source: m.LogSourceEnum,
-    action: str,
-    trigger: m.Trigger,
-    notification: m.Notification,
-    subscriptions: tuple[m.PushSubscription, ...] | None = None,
-) -> None:
-    title = Log.PUSH_TITLE.format(source=source.capitalize(), date=f"{local_now():%m/%d}")
-    _schedule_push(title, action.replace("`", ""), notification, trigger, subscriptions)
 
 
 def push_public_key() -> str:
@@ -137,9 +119,6 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, notificatio
 
 def log_entries() -> list[m.LogEntry]:
     return _ACTIVITY_LOG.snapshot()
-
-
-# --- Device control ---
 
 
 def add_listener(fn: m.Listener) -> None:
@@ -325,9 +304,6 @@ def restore_scene(key: str, commands: m.Commands, entry: m.LogEntry) -> None:
     dispatch(commands, force=True, entry=entry)
 
 
-type _Job = tuple[Callable[..., None], m.DeviceEnum, em.Command[Any]]
-
-
 def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
     assert _ctx is not None
     commands = m.squish(commands)
@@ -351,20 +327,6 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
 
     with Pool(max_workers=max(1, len(todo))) as ex:
         list(ex.map(partial(_dispatch_one, stream=stream, entry=entry), todo))
-
-
-def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.LogEntry) -> None:
-    handler, w, command = job
-    try:
-        handler(_ctx, w, command, stream)
-    except Exception as exc:
-        msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
-        entry.add(entry.source, msg)
-        _notify(entry.source, msg, entry.trigger, m.Notification(("dispatch",)))
-        try:
-            config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
-        except Exception:
-            pass
 
 
 def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, entry: m.LogEntry) -> None:
@@ -449,12 +411,6 @@ def calculate_theme(today: date) -> str:
 def is_working_day(today: date) -> bool:
     """Whether the day's theme is the working one — asked by plugins so a theme name stays out of them."""
     return calculate_theme(today) == m.THEME_WORK_DAY
-
-
-def _base_theme(today: date) -> str:
-    if today.weekday() in (5, 6):
-        return m.THEME_DAY_OFF
-    return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
 
 
 def set_theme_override(name: str, start: date, end: date) -> None:
@@ -547,6 +503,146 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
     return result
 
 
+def next_iot_job(present_names: set[str]) -> Job | None:
+    jobs = sorted(fetch_jobs_by_type(m.IotJob), key=lambda e: e.trigger.run_date)
+    return next(
+        (
+            j
+            for j in jobs
+            if j.next_run_time
+            and not any(isinstance(step.command.tag, m.Always) for step in j.args[0].rule.steps)
+            and _matching_items(j.args[0].rule, j.next_run_time, present_names)
+        ),
+        None,
+    )
+
+
+@requires_ctx
+def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
+    _run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`", m.Scheduled(job.rule.name)), present_names())
+
+
+def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry) -> m.Commands:
+    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
+        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
+
+    return m.squish(commands, on_conflict=log_conflict)
+
+
+def rebuild_jobs(ctx: m.AppContext) -> None:
+    ctx.scheduler.rebuild()
+    setup_scheduler(ctx)
+
+
+def setup_scheduler(ctx: m.AppContext) -> None:
+    if not fetch_jobs_by_type(m.IotJob):
+        rebuild_iot_schedule(ctx=ctx)
+    for job_id, func, crontab, name in (
+        ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
+        ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron"),
+        ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
+    ):
+        ctx.scheduler.cron(func, crontab, id=job_id, name=name)
+
+
+def has_presence(rule: m.Routine) -> bool:
+    return bool(_presence(rule).steps)
+
+
+def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
+    assert _ctx is not None
+    presence = _presence(rule)
+    return bool(presence.steps) and not presence.holds(_ctx.engine.world(reader(present_names)))
+
+
+def weather_active(rule: m.Routine, now: datetime) -> bool:
+    assert _ctx is not None
+    return rule.where(lambda command: isinstance(command.tag, m.Weather)).holds(_ctx.engine.world(lambda _subject: _fetch_weather(now)))
+
+
+def reader(present: set[str] | None = None, now: datetime | None = None) -> em.Read:
+    pnames = present_names() if present is None else present
+    when = local_now() if now is None else now
+
+    @cache
+    def read(subject: em.Subject) -> em.Value:
+        match subject:
+            case m.PersonSubject(name):
+                return name in pnames
+            case m.AnyoneSubject():
+                return bool(pnames)
+            case m.WeatherSubject():
+                return _fetch_weather(when) if pnames else frozenset()
+            case m.OutsideTemperatureSubject():
+                return config.providers.weather.fetch_temperature(when, config.settings.lat, config.settings.long)
+            case _:
+                raise KeyError(subject)
+
+    return read
+
+
+def runtime() -> engine.Runtime:
+    return engine.Runtime(config.settings.tz, bypass=m.Always(), override_key=ORC_SYSTEM_SNAPSHOT)
+
+
+@requires_ctx
+def rebuild_iot_schedule(ctx: m.AppContext) -> None:
+    now = local_now()
+    for run_at, entry in get_schedule():
+        if now <= run_at:
+            job = m.IotJob(entry.routine, entry.routine_id)
+            ctx.scheduler.once(
+                run_iot_job, run_at, job, name=entry.routine.name, id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}", persist=True
+            )
+
+
+def replay_day(now: datetime, entry: m.LogEntry) -> None:
+    jobs = sorted(get_schedule(), key=lambda x: x[0])
+    present = present_names()
+    matched = [
+        c for when, e in jobs if when <= now and m.SKIP_REPLAY_TAG not in e.routine.tags for c in _matching_items(e.routine, now, present)
+    ]
+    dispatch(tuple(matched), force=True, entry=entry)
+
+
+@contextlib.contextmanager
+def _record_duration(name: str) -> Iterator[None]:
+    start = time.perf_counter()
+    yield
+    update_avg(name, time.perf_counter() - start)
+
+
+def _notify(
+    source: m.LogSourceEnum,
+    action: str,
+    trigger: m.Trigger,
+    notification: m.Notification,
+    subscriptions: tuple[m.PushSubscription, ...] | None = None,
+) -> None:
+    title = Log.PUSH_TITLE.format(source=source.capitalize(), date=f"{local_now():%m/%d}")
+    _schedule_push(title, action.replace("`", ""), notification, trigger, subscriptions)
+
+
+def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.LogEntry) -> None:
+    handler, w, command = job
+    try:
+        handler(_ctx, w, command, stream)
+    except Exception as exc:
+        msg = Log.DISPATCH_FAILED.format(device=w.name, exc=exc)
+        entry.add(entry.source, msg)
+        _notify(entry.source, msg, entry.trigger, m.Notification(("dispatch",)))
+        try:
+            config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
+        except Exception:
+            pass
+
+
+def _base_theme(today: date) -> str:
+    if today.weekday() in (5, 6):
+        return m.THEME_DAY_OFF
+    return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
+
+
 def _scheduled_theme(today: date) -> m.Theme:
     if override := active_theme_override(today):
         theme = config.themes.get(override.name)
@@ -586,32 +682,6 @@ def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: i
     return sunrise, sunset
 
 
-def next_iot_job(present_names: set[str]) -> Job | None:
-    jobs = sorted(fetch_jobs_by_type(m.IotJob), key=lambda e: e.trigger.run_date)
-    return next(
-        (
-            j
-            for j in jobs
-            if j.next_run_time
-            and not any(isinstance(step.command.tag, m.Always) for step in j.args[0].rule.steps)
-            and _matching_items(j.args[0].rule, j.next_run_time, present_names)
-        ),
-        None,
-    )
-
-
-@requires_ctx
-def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
-    _run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`", m.Scheduled(job.rule.name)), present_names())
-
-
-def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry) -> m.Commands:
-    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
-        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
-
-    return m.squish(commands, on_conflict=log_conflict)
-
-
 def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
     now = local_now()
     if not (matched := _matching_items(rule, now, pnames)):
@@ -627,39 +697,8 @@ def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], 
     dispatch(squish(matched, entry), force=force, entry=entry)
 
 
-def rebuild_jobs(ctx: m.AppContext) -> None:
-    ctx.scheduler.rebuild()
-    setup_scheduler(ctx)
-
-
-def setup_scheduler(ctx: m.AppContext) -> None:
-    if not fetch_jobs_by_type(m.IotJob):
-        rebuild_iot_schedule(ctx=ctx)
-    for job_id, func, crontab, name in (
-        ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
-        ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron"),
-        ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
-    ):
-        ctx.scheduler.cron(func, crontab, id=job_id, name=name)
-
-
 def _presence(rule: m.Routine) -> m.Routine:
     return rule.where(lambda command: isinstance(command.tag, m.Present | m.Anyone))
-
-
-def has_presence(rule: m.Routine) -> bool:
-    return bool(_presence(rule).steps)
-
-
-def is_absent(rule: m.Routine, present_names: set[str]) -> bool:
-    assert _ctx is not None
-    presence = _presence(rule)
-    return bool(presence.steps) and not presence.holds(_ctx.engine.world(reader(present_names)))
-
-
-def weather_active(rule: m.Routine, now: datetime) -> bool:
-    assert _ctx is not None
-    return rule.where(lambda command: isinstance(command.tag, m.Weather)).holds(_ctx.engine.world(lambda _subject: _fetch_weather(now)))
 
 
 def _matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
@@ -667,56 +706,8 @@ def _matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Comma
     return _ctx.engine.evaluate((rule,), read=reader(pnames, now), force=True)[0].commands
 
 
-def reader(present: set[str] | None = None, now: datetime | None = None) -> em.Read:
-    pnames = present_names() if present is None else present
-    when = local_now() if now is None else now
-
-    @cache
-    def read(subject: em.Subject) -> em.Value:
-        match subject:
-            case m.PersonSubject(name):
-                return name in pnames
-            case m.AnyoneSubject():
-                return bool(pnames)
-            case m.WeatherSubject():
-                return _fetch_weather(when) if pnames else frozenset()
-            case m.OutsideTemperatureSubject():
-                return config.providers.weather.fetch_temperature(when, config.settings.lat, config.settings.long)
-            case _:
-                raise KeyError(subject)
-
-    return read
-
-
-def runtime() -> engine.Runtime:
-    return engine.Runtime(config.settings.tz, bypass=m.Always(), override_key=ORC_SYSTEM_SNAPSHOT)
-
-
 def _fetch_weather(now: datetime) -> frozenset[m.WeatherCondition]:
     return config.providers.weather.fetch_weather(now, config.settings.lat, config.settings.long)
-
-
-@requires_ctx
-def rebuild_iot_schedule(ctx: m.AppContext) -> None:
-    now = local_now()
-    for run_at, entry in get_schedule():
-        if now <= run_at:
-            job = m.IotJob(entry.routine, entry.routine_id)
-            ctx.scheduler.once(
-                run_iot_job, run_at, job, name=entry.routine.name, id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}", persist=True
-            )
-
-
-def replay_day(now: datetime, entry: m.LogEntry) -> None:
-    jobs = sorted(get_schedule(), key=lambda x: x[0])
-    present = present_names()
-    matched = [
-        c for when, e in jobs if when <= now and m.SKIP_REPLAY_TAG not in e.routine.tags for c in _matching_items(e.routine, now, present)
-    ]
-    dispatch(tuple(matched), force=True, entry=entry)
-
-
-# --- Private helpers ---
 
 
 def _scheduler() -> m.Scheduler:

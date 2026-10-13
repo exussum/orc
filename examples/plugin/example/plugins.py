@@ -34,14 +34,14 @@ def schedule(scheduler: Scheduler, job: ExampleJob, tz: Any) -> None:
     pass
 
 
-def _dispatch(ctx: AppContext, w: Any, command: Any, stream: dict[Any, tuple[str, str]]) -> None:
-    pass
-
-
 def status() -> list[DeviceStatus]:
     raise NotImplementedError
 
 
 @requires_ctx
 def run_job(job: ExampleJob, *, ctx: AppContext) -> None:
+    pass
+
+
+def _dispatch(ctx: AppContext, w: Any, command: Any, stream: dict[Any, tuple[str, str]]) -> None:
     pass

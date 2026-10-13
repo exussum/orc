@@ -37,27 +37,6 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
         return m.SoundState(what=device, content=None, volume=0)
 
 
-def _sound_state(device: m.DeviceEnum, cast: Any) -> m.SoundState:
-    time.sleep(0.5)
-    content = None
-    playback = m.Playback.STOPPED
-    mc = cast.media_controller
-    # update_status on a device with no media app running launches one, which chimes
-    if mc.namespace in cast.socket_client.app_namespaces:
-        mc.update_status()
-        time.sleep(0.5)
-        ms = mc.status
-        if ms and ms.player_state in _PLAYING_STATES:
-            content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
-            playback = m.Playback.PAUSED if ms.player_state == "PAUSED" else m.Playback.PLAYING
-    return m.SoundState(
-        what=device,
-        content=content,
-        volume=int(cast.status.volume_level * 100),
-        playback=playback,
-    )
-
-
 def fetch_youtube_stream_metadata(id: str) -> tuple[str, str]:
     with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
         info = ydl.extract_info(id, download=False)
@@ -114,6 +93,27 @@ def set_volume(device: m.DeviceEnum, lvl: int) -> None:
     with _cast(device) as cast:
         cast.set_volume(lvl / 100)
         time.sleep(1)
+
+
+def _sound_state(device: m.DeviceEnum, cast: Any) -> m.SoundState:
+    time.sleep(0.5)
+    content = None
+    playback = m.Playback.STOPPED
+    mc = cast.media_controller
+    # update_status on a device with no media app running launches one, which chimes
+    if mc.namespace in cast.socket_client.app_namespaces:
+        mc.update_status()
+        time.sleep(0.5)
+        ms = mc.status
+        if ms and ms.player_state in _PLAYING_STATES:
+            content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
+            playback = m.Playback.PAUSED if ms.player_state == "PAUSED" else m.Playback.PLAYING
+    return m.SoundState(
+        what=device,
+        content=content,
+        volume=int(cast.status.volume_level * 100),
+        playback=playback,
+    )
 
 
 @contextmanager

@@ -10,17 +10,6 @@ from orc.dal.mqtt import paho as mqtt
 from orc.plugins import battery, buttons
 
 
-def _capture(name, fn):
-    captured = {}
-    with patch.object(mqtt, name, side_effect=lambda listener: captured.setdefault("fn", listener)):
-        fn()
-    return captured["fn"]
-
-
-def _remote(device_id):
-    return m.Device(device_id, "remote", "hubitat")
-
-
 class TestButtons:
     @staticmethod
     def _wire(ctx, remotes):
@@ -76,3 +65,14 @@ class TestBattery:
         with patch.object(api, "log") as log:
             on_event(m.Status(device, "motion", "inactive", "active", hubitat.HubitatSource.HUBITAT))
         log.assert_not_called()
+
+
+def _capture(name, fn):
+    captured = {}
+    with patch.object(mqtt, name, side_effect=lambda listener: captured.setdefault("fn", listener)):
+        fn()
+    return captured["fn"]
+
+
+def _remote(device_id):
+    return m.Device(device_id, "remote", "hubitat")
