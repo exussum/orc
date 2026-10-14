@@ -43,9 +43,9 @@
                     {{ icon_svg("chevron-down", "w-4 h-4 ml-1") }}
                 </button>
                 <div id="orc-routines-menu" popover class="orc-dropdown-menu">
-                    {% for id in schedule_routines|sort %}
+                    {% for id, rule in schedule_routines.items()|sort(attribute='1.name') %}
                         <button class="orc-dropdown-item orc-runner w-full text-left" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}"
-                                popovertarget="orc-routines-menu" popovertargetaction="hide">{{ id }}</button>
+                                popovertarget="orc-routines-menu" popovertargetaction="hide">{{ rule.name }}</button>
                     {% endfor %}
                 </div>
             </div>
