@@ -294,15 +294,15 @@ if you're installing elsewhere, use [Install](#install)
 instead.
 
 `sh scripts/upload.sh` builds and publishes to the internal package registry.
-Pass `full` to also publish the `orc_data` sub-package:
+Pass `--full` to also publish the `orc_data` sub-package:
 
 ```sh
-sh scripts/upload.sh full
+sh scripts/upload.sh --full
 ```
 
-`sh scripts/build-and-install.sh` runs `upload.sh` then SSHs to the target host and
-runs `install.sh`, which syncs dependencies, reinstalls from the registry, and
-bounces the `orc` supervisor job.
+The host-side scripts that follow it — one that SSHes to the target host, one
+that syncs dependencies, reinstalls from the registry, and bounces the `orc`
+supervisor job — are specific to the author's host and aren't in the repo.
 
 ## Layout
 
@@ -310,7 +310,7 @@ bounces the `orc` supervisor job.
 - `extras/` — optional `orc_extras` plugin package with its own tests
 - `data/` — sibling `orc_data` package (piper voice model + ephemeris)
 - `examples/` — copyable per-plugin config samples and an example plugin
-- `scripts/` — build, publish, and install scripts
+- `scripts/` — build and publish scripts
 - `tests/` — the core test suite
 
 ## Quick start — development, no hardware required

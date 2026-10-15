@@ -27,7 +27,7 @@ uv pip install dist/orc_data-*.whl
 
 uv publish dist/orc-*.whl dist/orc_extras-*.whl
 
-if [ "$1" = "full" ]; then
+if [ "$1" = "--full" ]; then
     uv publish dist/orc_data-*.whl
 fi
 
