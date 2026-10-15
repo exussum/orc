@@ -25,6 +25,7 @@ _WINDOW_SECONDS = 3
 _BLE_INDEX_REFRESH_SECONDS = 300
 _BLE_SEARCH_WINDOWS = 200
 _BLE_CLOCK_TRUST_SECONDS = 24 * 3600
+_BLE_MIN_RUN_SECONDS = 60
 
 _log = logging.getLogger(__name__)
 
@@ -119,11 +120,16 @@ class Presence:
             self._on_change(trigger)
 
     def _listen(self) -> None:
-        try:
-            asyncio.run(self._run())
-        except Exception:
-            _log.exception("ble: listener died, restarting orc")
-            os.kill(os.getppid(), signal.SIGTERM)
+        while True:
+            started = time.monotonic()
+            try:
+                asyncio.run(self._run())
+            except Exception:
+                _log.exception("ble: listener died")
+            if time.monotonic() - started < _BLE_MIN_RUN_SECONDS:
+                _log.error("ble: listener failed immediately, restarting orc")
+                os.kill(os.getppid(), signal.SIGTERM)
+                return
 
     async def _run(self) -> None:
         while True:
