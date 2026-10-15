@@ -6,17 +6,17 @@
             {% for id in rooms %}
                 <div class="text-sm self-center">{{ id }}</div>
                 <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
+                    <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                         {{ icon_svg("light-bulb") }}
                     </button>
                 </div>
                 <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
+                    <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                         {{ icon_svg("light-bulb-outline") }}
                     </button>
                 </div>
                 <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
+                    <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
                         {{ icon_svg("map-pin") }}
                     </button>
                 </div>
@@ -44,7 +44,7 @@
                 </button>
                 <div id="orc-routines-menu" popover class="orc-dropdown-menu">
                     {% for id, rule in schedule_routines.items()|sort(attribute='1.name') %}
-                        <button class="orc-dropdown-item orc-runner w-full text-left" data-id="{{ id }}" data-duration="{{ durations.get(id, 0) }}"
+                        <button class="orc-dropdown-item orc-runner w-full text-left" data-id="{{ id }}" data-name="{{ rule.name }}" data-duration="{{ durations.get(id, 0) }}"
                                 popovertarget="orc-routines-menu" popovertargetaction="hide">{{ rule.name }}</button>
                     {% endfor %}
                 </div>
@@ -55,7 +55,7 @@
                         <div>{{ next_routine.name }}</div>
                         <div>At: {{ next_routine.trigger.run_date.time().strftime("%I:%M %p") }}</div>
                     </div>
-                    <button class="orc-btn orc-pause" data-id="{{ next_routine.id }}">Skip</button>
+                    <button class="orc-btn orc-pause" data-id="{{ next_routine.id }}" data-name="{{ next_routine.name }}">Skip</button>
                 </div>
             {% endif %}
         </div>

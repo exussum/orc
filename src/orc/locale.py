@@ -5,6 +5,7 @@ class Log:
 
     SNAPSHOT_TAKEN: str = "Snapshot for `{name}` until {end:%I:%M}: {items}"
     SNAPSHOT_ALL_OFF: str = "all off"
+    SNAPSHOT_RESTORE: str = "Restore Snapshot"
     SNAPSHOT_RESTORED: str = "Snapshot for `{name}` restored"
 
     THEME_OVERRIDE_CLEARED: str = "Theme override cleared"
