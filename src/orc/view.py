@@ -62,8 +62,9 @@ class DeviceRow(NamedTuple):
     temperature: int | None
 
 
-class JobMeta(NamedTuple):
+class JobRow(NamedTuple):
     routine_id: str
+    name: str
     absent: bool
     weather: bool
     presence: bool
@@ -302,17 +303,18 @@ def schedule() -> str:
 
     present_names = api.present_names()
 
-    def meta(job: Job) -> JobMeta:
+    def row(job: Job) -> JobRow:
         iot_job = job.args[0]
-        return JobMeta(
+        return JobRow(
             routine_id=iot_job.routine_id,
+            name=iot_job.rule.name,
             absent=api.is_absent(iot_job.rule, present_names),
             weather=api.weather_active(iot_job.rule, job.trigger.run_date),
             presence=api.has_presence(iot_job.rule),
             skip_replay=m.SKIP_REPLAY_TAG in iot_job.rule.tags,
         )
 
-    job_meta = {j.id: meta(j) for j in jobs}
+    job_rows = {j.id: row(j) for j in jobs}
     jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
 
     return render_template(
@@ -321,7 +323,7 @@ def schedule() -> str:
         theme=theme,
         themes=sorted(config.themes),
         durations=api.fetch_durations(mapper=dict),
-        job_meta=job_meta,
+        job_rows=job_rows,
     )
 
 

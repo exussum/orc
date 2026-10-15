@@ -25,7 +25,7 @@ export function startProgress(seconds) {
 
 
 export async function get(url, el, onFailure = () => {}) {
-    if (!(await orcHooks.onCommand(el?.dataset.id, el, url))) {
+    if (!(await orcHooks.onCommand(el?.dataset.name, el, url))) {
         onFailure();
         return false;
     }

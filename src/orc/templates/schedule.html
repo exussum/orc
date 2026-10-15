@@ -12,21 +12,21 @@
                 </tr>
             {% endif %}
             {% for job in day_jobs %}
-                {% set meta = job_meta[job.id] %}
+                {% set row = job_rows[job.id] %}
                 <tr>
                     <td class="px-2 py-3 align-middle w-16">
                         <div class="relative inline-block">
-                            <button class="orc-btn{% if meta.absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ meta.routine_id }}" data-duration="{{ durations.get(meta.routine_id, 0) }}">&nbsp;</button>
+                            <button class="orc-btn{% if row.absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ row.routine_id }}" data-name="{{ row.name }}" data-duration="{{ durations.get(row.routine_id, 0) }}">&nbsp;</button>
                             <span class="orc-job-badges">
-                                {%- if meta.skip_replay %}<span>⏩</span>{% endif -%}
-                                {%- if meta.weather %}<span>🌤</span>{% endif -%}
-                                {%- if meta.presence %}<span>👤</span>{% endif -%}
+                                {%- if row.skip_replay %}<span>⏩</span>{% endif -%}
+                                {%- if row.weather %}<span>🌤</span>{% endif -%}
+                                {%- if row.presence %}<span>👤</span>{% endif -%}
                             </span>
                         </div>
                     </td>
                     <td class="px-2 py-3 align-middle w-16">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" class="orc-enable sr-only peer" data-id="{{ job.id }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
+                            <input type="checkbox" class="orc-enable sr-only peer" data-id="{{ job.id }}" data-name="{{ job.name }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
                             <div class="orc-switch"></div>
                         </label>
                     </td>

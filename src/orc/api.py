@@ -38,7 +38,6 @@ DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolv
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
 _ROLLUP_WINDOW = timedelta(seconds=5)
-_RUN_DISPLAY = {ORC_SYSTEM_SNAPSHOT: "Restore Snapshot"}
 
 _ctx: m.AppContext | None = None
 _ACTIVITY_LOG: LockedDeque[m.LogEntry] = LockedDeque(maxlen=200)
@@ -225,6 +224,7 @@ def declare_core(declarations: Declarations) -> None:
 
 class RunAction(NamedTuple):
     effect: Callable[[m.LogEntry], object]
+    name: str
     delay: timedelta = timedelta()
 
 
@@ -238,30 +238,29 @@ def run_action(
     skip_delay: bool = False,
 ) -> bool:
     if id == ORC_SYSTEM_SNAPSHOT:
-        action = RunAction(lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry))
+        action = RunAction(lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry), Log.SNAPSHOT_RESTORE)
     elif (plugin := config.plugin(id)) is not None:
-        action = RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.delay)
+        action = RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.name, plugin.delay)
     elif id in config.schedule_routines:
-        action = RunAction(lambda entry: _run_schedule_routine(config.schedule_routines[id], entry, set(config.people), force=True))
+        rule = config.schedule_routines[id]
+        action = RunAction(lambda entry: _run_schedule_routine(rule, entry, set(config.people), force=True), rule.name)
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
-            action = RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, routine.name, entry))
+            action = RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, routine.name, entry), routine.name)
         else:
             base = config.reset_config.commands if routine.reset else ()
             commands = (*base, *routine.commands)
-            action = RunAction(lambda entry: dispatch(commands, force=True, entry=entry), routine.delay)
+            action = RunAction(lambda entry: dispatch(commands, force=True, entry=entry), routine.name, routine.delay)
     else:
         return False
 
-    ad_hoc = config.ad_hoc_routines.get(id)
-    name = _RUN_DISPLAY.get(id) or (ad_hoc.name if ad_hoc else id)
-    display = f"`{name}`"
+    display = f"`{action.name}`"
     with _record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
-            log(source, Log.TASK_QUEUED.format(id=name, when=when), trigger)
+            log(source, Log.TASK_QUEUED.format(id=action.name, when=when), trigger)
             run = requires_ctx(lambda ctx: action.effect(log(source, display, trigger)))
             _scheduler().once(run, when, id=f"run-{id}")
         else:
