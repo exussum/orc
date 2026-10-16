@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 CN = "common.lgthinq.com"
+HOSTNAMES = (CN, "aic-common.lgthinq.com", "common.iot.aic.lgthinq.com")
 CERTS = Path("certs/lg_ac")
 _CONFIG = Path(os.environ.get("ORC_CONFIG_DIR", "src")) / "plugins" / "orc_extras" / "lg_ac.orc"
 _FROM = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)
@@ -83,7 +84,7 @@ def _setting(key: str) -> str:
 def _san(fqdn: str, mqtt_ip: str) -> x509.SubjectAlternativeName:
     # the AC connects to the broker by IP string and matches it against dNSName
     # entries only, so the IP goes in as a DNSName as well as an IPAddress
-    entries: list[x509.GeneralName] = [x509.DNSName(CN), x509.DNSName(fqdn), x509.DNSName(mqtt_ip)]
+    entries: list[x509.GeneralName] = [x509.DNSName(h) for h in (*HOSTNAMES, fqdn, mqtt_ip)]
     entries.append(x509.IPAddress(ipaddress.ip_address(mqtt_ip)))
     return x509.SubjectAlternativeName(entries)
 
