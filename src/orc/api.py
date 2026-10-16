@@ -65,6 +65,23 @@ def fetch_durations() -> list[tuple[str, int]]:
     return [(name, math.ceil(avg)) for name, (_, avg) in duration_stats().items()]
 
 
+def actions() -> dict[str, Any]:
+    delays, stats = action_delays(), duration_stats()
+
+    def timing(name: str) -> dict[str, Any]:
+        samples, avg = stats.get(name, (0, 0.0))
+        return {"avg": round(avg, 3), "samples": samples, "delay": str(delays.get(name, timedelta()))}
+
+    routines = {id: routine.name for id, routine in config.ad_hoc_routines.items()}
+    routines |= {id: rule.name for id, rule in config.schedule_routines.items()}
+    return {
+        "rooms": {name: timing(name) for name in sorted(config.rooms)},
+        "routines": {id: {"name": name, **timing(id)} for id, name in sorted(routines.items())},
+        "plugins": {p.name: timing(p.name) for p in of_type(config.plugins, m.CallablePlugin)},
+        "people": sorted(config.people),
+    }
+
+
 def action_delays() -> dict[str, timedelta]:
     ad_hoc = {id: routine.delay for id, routine in config.ad_hoc_routines.items()}
     plugins = {p.name: p.delay for p in of_type(config.plugins, m.CallablePlugin)}
