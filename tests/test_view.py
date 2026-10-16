@@ -191,6 +191,18 @@ def test_durations_lists_a_delayed_action_that_never_ran(flask_client, config_ad
     assert response.get_json() == {"AD_HOC_DOG": {"avg": 0.0, "samples": 0, "delay": "0:06:00"}}
 
 
+def test_actions_lists_what_arrow_can_call(flask_client, config_ad_hoc, config_rooms):
+    dog = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), name="Dog", delay=timedelta(minutes=6))
+    config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
+    with config_ad_hoc({"AD_HOC_DOG": dog}), patch("orc.api.duration_stats", return_value={"Living Room": (4, 3.0)}):
+        response = flask_client.get("/api/actions")
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["rooms"] == {"Living Room": {"avg": 3.0, "samples": 4, "delay": "0:00:00"}}
+    assert body["routines"]["AD_HOC_DOG"] == {"name": "Dog", "avg": 0.0, "samples": 0, "delay": "0:06:00"}
+    assert "people" in body and "plugins" in body
+
+
 @pytest.mark.parametrize("paused", [True, False])
 def test_pause_sets_the_absolute_state(flask_client, ctx, paused):
     ctx.scheduler.set_paused.return_value = True

@@ -380,6 +380,11 @@ def push_open() -> BaseResponse:
     return redirect(url)
 
 
+@bp.route("/api/actions")
+def actions() -> dict[str, Any]:
+    return api.actions()
+
+
 @bp.route("/api/durations")
 def durations() -> tuple[dict[str, Any], int]:
     delays = api.action_delays()
