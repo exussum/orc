@@ -256,13 +256,21 @@ def test_missed_job_is_logged(caplog):
 
 
 class TestKeepass:
-    @pytest.fixture
-    def keepass_db(self, tmp_path):
-        kp = create_database(tmp_path / "secrets.kdbx", password="open sesame")
+    @pytest.fixture(scope="session")
+    def keepass_db(self, tmp_path_factory):
+        path = tmp_path_factory.mktemp("keepass")
+        kp = create_database(path / "secrets.kdbx", password="open sesame")
         kp.add_entry(kp.root_group, "MARKET_HOLIDAYS_URL", "", "https://m")
         kp.add_entry(kp.root_group, "FEED_URL", "", "https://x")
+        # argon2 at the file's default cost is 0.19s per open; these tests only need the format
+        params = kp.kdbx.header.value.dynamic_header.kdf_parameters.data.dict
+        params["I"].value, params["M"].value, params["P"].value = 1, 1 << 14, 1
         kp.save()
-        with patch.object(config, "config_dir", str(tmp_path)):
+        return str(path)
+
+    @pytest.fixture(autouse=True)
+    def config_dir(self, keepass_db):
+        with patch.object(config, "config_dir", keepass_db):
             yield
 
     def test_the_typed_password_opens_the_database(self, keepass_db):
