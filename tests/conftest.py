@@ -77,14 +77,36 @@ def reset_stubs():
     yield
 
 
-@pytest.fixture(autouse=True)
-def config_jobs_db(tmp_path, monkeypatch):
-    from orc import config
+@pytest.fixture(scope="session")
+def jobs_db():
+    import sqlite3
+    from contextlib import contextmanager
+
+    from orc import decorators
     from orc.dal import sqlite
 
+    conn = sqlite3.connect(":memory:")
+
+    @contextmanager
+    def connection():
+        yield conn
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(decorators, "connection", connection)
+        patch.setattr(sqlite, "connection", connection)
+        sqlite.init_db()
+        conn.commit()
+        yield conn
+    conn.close()
+
+
+@pytest.fixture(autouse=True)
+def config_jobs_db(jobs_db, tmp_path, monkeypatch):
+    from orc import config
+
     monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
-    sqlite.init_db()
     yield
+    jobs_db.rollback()
 
 
 @pytest.fixture(autouse=True)
