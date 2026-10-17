@@ -34,14 +34,14 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on
         # the scheduler's worker; None grace so a busy worker delays, never drops.
+
         previous = ctx.plugin_state[orc_extras.entrance_sensor]
-        if new == sensor.setting.active_event or not previous:
-            trigger: m.Trigger = m.Broker(id=device.id, source=device.source)
+        if previous:
+            log_entry = previous.entry
+            if new == sensor.setting.active_event:
+                log_entry.add(Log.ENTRANCE, CANCELLED_MSG)
         else:
-            trigger = previous.entry.trigger
-        log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, trigger)
-        if new == sensor.setting.active_event and previous:
-            previous.entry.add(Log.ENTRANCE, CANCELLED_MSG)
+            log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, m.Broker(id=device.id, source=device.source))
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
             log_entry, previous.present_before if previous else set(ctx.api.present_names())
         )
