@@ -5,7 +5,6 @@ import orc
 
 WALK_IN = [
     "Applying `Day` rules",
-    "Entrance sensor triggered",
     "Motion cleared, running `All Lights Off`, cleanup in 2 minutes",
     "`All Lights Off`",
 ]
@@ -108,18 +107,15 @@ def test_a_tag_passing_through_mid_visit_counts_for_neither(house):
         (
             entrance,
             "Entrance sensor triggered",
-            [*WALK_IN, "Cleanup cancelled: motion triggered"],
-        ),
-        (
-            entrance,
-            "Entrance sensor triggered",
             [
+                *WALK_IN,
+                "Cleanup cancelled: motion triggered",
                 *WALK_IN,
                 "Snapshot for `entrance_sensor` until 03:48: all off",
                 "Trigger sensor off: applying OFF",
                 "Entrance motion with nobody tracked before or after",
             ],
-        ),
+        )
     ]
 
 

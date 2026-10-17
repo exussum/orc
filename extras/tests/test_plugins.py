@@ -129,6 +129,7 @@ def test_before_set_is_captured_once(ctx, config_sensor):
 
 
 def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
+    ctx.plugin_state = {entrance_sensor: None}
     entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
     ctx.api.log.return_value = entry
     _trigger_sensor(ctx, config_sensor, "16", "active")
@@ -137,8 +138,9 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
 
 
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
+    visit = ctx.plugin_state[entrance_sensor]
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
+    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", visit.entry.trigger, source=plugins.Log.ENTRANCE)
 
 
 def test_cleanup_is_scheduled_for_later(ctx, config_sensor):
@@ -226,6 +228,7 @@ def test_cleanup_checks_presence_then_resumes(config_sensor, nobody_home_ctx):
 
 
 def test_walk_in_pauses_and_purges_presence(ctx, config_sensor):
+    ctx.plugin_state = {entrance_sensor: None}
     _trigger_sensor(ctx, config_sensor, "16", "active")
     ctx.api.pause_presence.assert_called_once_with()
     ctx.api.delete_all_presence.assert_called_once_with(ctx.api.log.return_value.trigger)
