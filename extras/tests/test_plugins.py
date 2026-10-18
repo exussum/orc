@@ -45,6 +45,8 @@ def ctx(ctx, freezegun_clock):
     ctx.config.people = {"Rex": []}
     ctx.config.ble_tags = {}
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
+    ctx.api.log.return_value = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
+    ctx.plugin_state = {entrance_sensor: None}
     ctx.config.ad_hoc_routines = {
         "AD_HOC_LIGHTS_OFF": m.AdhocAction((_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF)), name="Lights Off", reset=False),
         "AD_HOC_LAMP_OFF": m.AdhocAction((_cmd(Light.lamp, m.OFF),), name="Lamp Off", reset=False),
@@ -138,9 +140,8 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
 
 
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
-    visit = ctx.plugin_state[entrance_sensor]
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", visit.entry.trigger, source=plugins.Log.ENTRANCE)
+    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
 
 
 def test_cleanup_is_scheduled_for_later(ctx, config_sensor):

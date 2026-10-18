@@ -90,6 +90,9 @@ class House:
         self.entrance_sensor("inactive")
         self.tick(**(after or {"minutes": 2}))
 
+    def drop(self, device, attribute, new):
+        self.reported[(device, attribute)] = new
+
     def come_home(self, name):
         self.lan.clear()
         self.advertise(name)
