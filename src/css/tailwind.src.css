@@ -126,16 +126,23 @@
 }
 
 @utility orc-scene-grid {
-    @apply grid gap-2;
+    @apply grid gap-5;
     grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 @utility orc-group-box {
-    @apply border border-[#333] rounded-xl px-2 pb-2 mb-3 last:mb-0;
+    @apply border border-[#333] rounded-xl relative pointer-events-none;
+    margin: -4px;  /* grows the border off the buttons; must stay under half the grid gap or boxes collide */
+}
+
+@utility orc-group-cells {
+    @apply grid justify-items-center;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
 }
 
 @utility orc-group-title {
-    @apply px-2 text-xs font-semibold opacity-70;
+    @apply absolute -top-2 left-3 px-1 bg-orc-bg text-xs font-semibold opacity-70;
 }
 
 @utility orc-routine-grid {
