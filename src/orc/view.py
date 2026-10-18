@@ -18,12 +18,14 @@ from markupsafe import Markup, escape
 from werkzeug.exceptions import HTTPException
 from werkzeug.wrappers import Response as BaseResponse
 
-from orc import alerts, api, config
+from orc import alerts, api, config, grid
 from orc import model as m
 from orc.collections import where
 from orc.locale import Log
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
+_GRID_WIDTH = 5
+_GRID_SLACK = 4
 _CODESPAN_RE = re.compile(r"`([^`]+)`")
 
 
@@ -48,6 +50,24 @@ class HighlightRow(NamedTuple):
     name: str
     start: str
     end: str
+
+
+class ButtonCell(NamedTuple):
+    id: str
+    label: str
+    icon: str
+    duration: float
+    delay: timedelta
+    no_func: bool
+
+
+class ButtonBox(NamedTuple):
+    title: str
+    cells: tuple[ButtonCell | None, ...]
+    x: int
+    y: int
+    width: int
+    height: int
 
 
 class DeviceRow(NamedTuple):
@@ -218,14 +238,56 @@ def index() -> str:
 
     return render_template(
         "scene.html",
-        highlight_configs=[HighlightRow(n, s.strftime("%H:%M"), e.strftime("%H:%M")) for n, s, e in config.button_highlights],
-        plugins=config.plugins_in("scene"),
+        highlight_configs=[
+            HighlightRow(b.id, b.stripe_from.strftime("%H:%M"), b.stripe_to.strftime("%H:%M")) for b in config.buttons if b.stripe_from
+        ],
+        boxes=_scene_boxes(api.fetch_durations(mapper=dict)),
         rooms=config.rooms,
-        ad_hoc_routines=where(config.ad_hoc_routines, section="scene"),
         schedule_routines=config.schedule_routines,
         next_routine=next_schedule,
         durations=api.fetch_durations(mapper=dict),
     )
+
+
+def _scene_boxes(durations: dict[str, float]) -> list[ButtonBox]:
+    cells = {
+        id: ButtonCell(id, routine.name, "clipboard-check", durations.get(id, 0), routine.delay, False)
+        for id, routine in where(config.ad_hoc_routines, section="scene").items()
+    }
+    for plugin in config.plugins_in("scene"):
+        delay = getattr(plugin, "delay", timedelta())
+        cells[plugin.name] = ButtonCell(
+            plugin.name, plugin.name, plugin.icon, durations.get(plugin.name, 0), delay, not getattr(plugin, "func", None)
+        )
+    placed: dict[str, list[ButtonCell]] = {}
+    for button in config.buttons:
+        placed.setdefault(button.group, []).append(cells.pop(button.id))
+    boxes = [grid.Box(g.title, placed[g.id]) for g in config.button_groups if g.id in placed]
+    boxes += [grid.Box("", list(cells.values()))] if cells else []
+    return _packed(boxes) or _stacked(boxes)
+
+
+def _cells(box: grid.Box, width: int, height: int) -> tuple[ButtonCell | None, ...]:
+    return tuple(box.items) + (None,) * (width * height - len(box.items))
+
+
+def _packed(boxes: list[grid.Box]) -> list[ButtonBox]:
+    total = sum(len(b.items) for b in boxes)
+    base = -(-total // _GRID_WIDTH) + 1  # a spare row, so a group can take a squarer shape
+    for height in range(base, base + _GRID_SLACK):
+        if placements := grid.pack(height, _GRID_WIDTH, boxes):
+            return [ButtonBox(p.box.name, _cells(p.box, *p.shape), p.x, p.y, *p.shape) for p in placements]
+    return []
+
+
+def _stacked(boxes: list[grid.Box]) -> list[ButtonBox]:
+    rows, out = 0, []
+    for box in boxes:
+        width = min(len(box.items), _GRID_WIDTH)
+        height = -(-len(box.items) // width)
+        out.append(ButtonBox(box.name, _cells(box, width, height), 0, rows, width, height))
+        rows += height
+    return out
 
 
 @bp.route("/log/")

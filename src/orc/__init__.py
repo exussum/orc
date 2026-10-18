@@ -100,7 +100,8 @@ class Config:
         self.themes = parsed.theme
         self.ad_hoc_routines = parsed.ad_hoc
         self.remotes = parsed.remote
-        self.button_highlights = parsed.highlight
+        self.buttons = parsed.button
+        self.button_groups = parsed.group
 
 
 config = Config()

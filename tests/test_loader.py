@@ -43,7 +43,6 @@ _PARSE_ERRORS = [
     ("append_unknown_routine", "Unknown routine 'R'"),
     ("unknown_trigger", "Unknown person 'NOPE'"),
     ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
-    ("highlight_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
     ("invalid_button_event", "Invalid button event 'clicked'"),
     ("non_numeric_button", "invalid literal for int() with base 10: 'one'"),
 ]
@@ -297,8 +296,13 @@ def test_remote_repeats_device_with_ditto():
     )
 
 
-def test_highlight_windows_reference_ad_hoc():
-    assert parse("core").highlight == (("AD_HOC_SILENCE", time(21, 0), time(23, 59)),)
+def test_validate_unknown_button_id():
+    with pytest.raises(ConfigError, match="Unknown scene button 'AD_HOC_X'"):
+        validate(parse("button_unknown_id"))
+
+
+def test_buttons_carry_group_and_stripe():
+    assert parse("core").button == (("AD_HOC_DOG", "media", time(21, 0), time(23, 59)),)
 
 
 def test_person_becomes_known_trigger():

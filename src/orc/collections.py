@@ -1,6 +1,7 @@
 import threading
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from itertools import batched
 from typing import Any
 
 
@@ -62,6 +63,11 @@ class LockedDeque[T]:
 
 def where[V](items: Mapping[str, V], **kwargs: Any) -> dict[str, V]:
     return {k: v for k, v in items.items() if all(getattr(v, attr) == val for attr, val in kwargs.items())}
+
+
+def group[T](items: Iterable[T], size: int) -> Iterator[tuple[T | None, ...]]:
+    for batch in batched(items, size, strict=False):
+        yield batch + (None,) * (size - len(batch))
 
 
 def of_type[T](items: Iterable[object], cls: type[T]) -> Iterator[T]:

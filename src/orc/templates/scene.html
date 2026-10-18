@@ -25,12 +25,20 @@
     </div>
     <div class="orc-card mb-2">
         <div class="p-4">
-            <div class="orc-routine-grid">
-                {% for id in ad_hoc_routines %}
-                    {{ btn_stripe(ad_hoc_routines[id].name, id, "clipboard-check", durations.get(id, 0), delay=ad_hoc_routines[id].delay) }}
-                {% endfor %}
-                {% for plugin in plugins %}
-                    {{ btn_stripe(plugin.name, plugin.name, plugin.icon, durations.get(plugin.name, 0), no_func=not plugin.func) }}
+            <div class="orc-scene-grid">
+                {% for box in boxes %}
+                    <fieldset class="orc-group-box" style="grid-column: {{ box.x + 1 }} / span {{ box.width }}; grid-row: {{ box.y + 1 }} / span {{ box.height }}">
+                        {% if box.title %}<legend class="orc-group-title">{{ box.title }}</legend>{% endif %}
+                        <div class="orc-routine-grid" style="grid-template-columns: repeat({{ box.width }}, minmax(0, 1fr))">
+                            {% for cell in box.cells %}
+                                {% if cell %}
+                                    {{ btn_stripe(cell.label, cell.id, cell.icon, cell.duration, delay=cell.delay, no_func=cell.no_func) }}
+                                {% else %}
+                                    <div></div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </fieldset>
                 {% endfor %}
             </div>
         </div>

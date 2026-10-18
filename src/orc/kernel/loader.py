@@ -32,7 +32,9 @@ device add <type> <id> <target> [--room=<room>] [--name=<name>]
 device only <type> [<id> <target>] [--room=<room>] [--name=<name>] [--sort=<n>]
 device seal <type>
 
-highlight <id> <start> <stop>
+group <id> <title>
+
+button <id> <group> [--stripe-from=<stripe_from> --stripe-to=<stripe_to>]
 
 person <name> <host> <mac>
 
@@ -66,7 +68,8 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         "ad_hoc": each(_ad_hoc, default=dict, types={"snapshot": int, "delay": int}),
         "remote": each(_remote, default=tuple, types={"button": int}),
         "routine": each(_routine, default=dict),
-        "highlight": each(_highlight, default=tuple, types={"start": cast.when, "stop": cast.when}),
+        "group": each(_group, default=tuple),
+        "button": each(_button, default=tuple, types={"stripe_from": cast.when, "stripe_to": cast.when}),
         "theme": each(_theme, default=dict, types={"time": cast.when}),
         "plugin": each(_plugin, default=list, types={"module": engine_cast.module, "backend": engine_cast.module}),
         "provider": scalar(interfaces.Provider, types={field: engine_cast.module for field in interfaces.Provider._fields}),
@@ -94,7 +97,8 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         ad_hoc=objects["ad_hoc"],
         enums=objects["device"].enums,
         virtual_devices=objects["device"].virtual_devices,
-        highlight=objects["highlight"],
+        button=objects["button"],
+        group=objects["group"],
         person=objects["person"],
         plugin_modules=[p.module for p in objects["plugin"]],
         plugins=tuple(p for p in objects["plugin"] if p.section is not None),
@@ -125,6 +129,14 @@ def validate(config: SimpleNamespace) -> None:
     sun_timed = [e.routine.name for theme in config.theme.values() for e in theme.entries if e.when in (m.SUNRISE, m.SUNSET)]
     if sun_timed and abs(config.setting.lat) > _POLAR_LATITUDE:
         raise ConfigError(f"Latitude {config.setting.lat} has days without a sunrise or sunset: {', '.join(sun_timed)}")
+    groups = {g.id for g in config.group}
+    placeable = {id for id, routine in config.ad_hoc.items() if routine.section == "scene"}
+    placeable |= {p.name for p in config.plugins if p.section == "scene"}
+    for button in config.button:
+        if button.id not in placeable:
+            raise ConfigError(f"Unknown scene button {button.id!r}: expected one of {tuple(sorted(placeable))}")
+        if button.group not in groups:
+            raise ConfigError(f"Unknown group {button.group!r} for button {button.id!r}: expected one of {tuple(sorted(groups))}")
     for tag in config.tag:
         if tag.person not in config.person:
             raise ConfigError(f"Unknown person {tag.person!r} in tag line: expected one of {tuple(config.person)}")
@@ -300,10 +312,14 @@ def _remote(objects: dict[str, Any], args: SimpleNamespace) -> None:
     objects["remote"] = (*objects["remote"], m.Remote(cast.device(args.device, objects), args.button, args.event, args.action))
 
 
-def _highlight(objects: dict[str, Any], args: SimpleNamespace) -> None:
-    if args.id not in objects["ad_hoc"]:
-        raise ValueError(f"Unknown ad-hoc routine {args.id!r}: expected one of {tuple(objects['ad_hoc'])}")
-    objects["highlight"] = (*objects["highlight"], m.Highlight(args.id, args.start, args.stop))
+def _group(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    objects["group"] = (*objects["group"], m.ButtonGroup(args.id, args.title))
+
+
+def _button(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    if (args.stripe_from is None) != (args.stripe_to is None):
+        raise ValueError(f"Button {args.id!r} needs both --stripe-from and --stripe-to, or neither")
+    objects["button"] = (*objects["button"], m.SceneButton(args.id, args.group, args.stripe_from, args.stripe_to))
 
 
 def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:

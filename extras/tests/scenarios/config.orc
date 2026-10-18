@@ -83,7 +83,9 @@ remote     Button.LIVING_ROOM_REMOTE 1 pushed AD_HOC_ALL_LIGHTS_ON
 remote     .                         1 held   AD_HOC_SILENCE
 
 
-highlight AD_HOC_SILENCE 21:00 23:59
+group media 'Media'
+
+button AD_HOC_SILENCE media --stripe-from 21:00 --stripe-to 23:59
 
 person Alice alice-phone aa:bb:cc:dd:ee:01
 person Rex   rex-collar  aa:bb:cc:dd:ee:02
