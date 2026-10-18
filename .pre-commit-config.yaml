@@ -53,12 +53,16 @@ repos:
         pass_filenames: false
         files: ^(pyproject\.toml|uv\.lock|pylock\.toml)$
 
+      # CVE-2024-23342: Minerva timing attack on ecdsa's P-256 signing, keygen and
+      # ECDH. Affects every release ever published and upstream won't fix — constant
+      # time is out of scope for them. orc only multiplies on SECP160r1 to derive a
+      # public EID (security.py) and signs nothing; its P-256 goes through cryptography.
       - id: pip-audit
         name: pip-audit
-        entry: pip-audit --locked .
+        entry: pip-audit --locked . --ignore-vuln PYSEC-2026-1325
         language: system
         pass_filenames: false
-        files: ^pylock\.toml$
+        files: ^(pyproject\.toml|uv\.lock)$
 
       - id: mypy
         name: mypy
