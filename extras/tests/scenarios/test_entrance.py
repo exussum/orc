@@ -39,6 +39,17 @@ def test_a_second_walk_in_starts_its_own_entry(house):
 
 
 @pytest.mark.plugins(entrance_sensor)
+@pytest.mark.parametrize("minutes, entries", [(14, 1), (16, 2)])
+def test_a_stale_visit_starts_a_new_entry(house, minutes, entries):
+    house.entrance_sensor("active")
+    house.drop(orc.Sensor.ENTRANCE_SENSOR, "motion", "inactive")
+    house.tick(minutes=minutes)
+    house.entrance_sensor("active")
+
+    assert len(house.log()) == entries
+
+
+@pytest.mark.plugins(entrance_sensor)
 def test_a_broadcast_during_the_pause_is_ignored(house):
     house.come_home("Rex")
     house.walk_in(seconds=20)
