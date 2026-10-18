@@ -2,25 +2,30 @@
 {% from 'macros.html' import btn_stripe, icon_svg %}
 {% block body %}
     <div class="orc-card mb-2">
-        <div class="orc-room-buttons p-4">
-            {% for id in rooms %}
-                <div class="text-sm self-center">{{ id }}</div>
-                <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                        {{ icon_svg("light-bulb") }}
-                    </button>
+        <div class="p-4">
+            <div class="orc-group-box">
+                <div class="orc-group-title">Rooms</div>
+                <div class="orc-room-buttons">
+                    {% for id in rooms %}
+                        <div class="text-sm self-center">{{ id }}</div>
+                        <div class="orc-button">
+                            <button class="orc-runner orc-btn" data-state="on" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
+                                {{ icon_svg("light-bulb") }}
+                            </button>
+                        </div>
+                        <div class="orc-button">
+                            <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
+                                {{ icon_svg("light-bulb-outline") }}
+                            </button>
+                        </div>
+                        <div class="orc-button">
+                            <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
+                                {{ icon_svg("map-pin") }}
+                            </button>
+                        </div>
+                    {% endfor %}
                 </div>
-                <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="off" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                        {{ icon_svg("light-bulb-outline") }}
-                    </button>
-                </div>
-                <div class="orc-button">
-                    <button class="orc-runner orc-btn" data-state="follow" data-type="room" data-id="{{ id }}" data-name="{{ id }}" data-duration="{{ durations.get(id, 0) }}">
-                        {{ icon_svg("map-pin") }}
-                    </button>
-                </div>
-            {% endfor %}
+            </div>
         </div>
     </div>
     <div class="orc-card mb-2">
