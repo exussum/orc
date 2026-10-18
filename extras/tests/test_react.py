@@ -49,7 +49,8 @@ def ctx(ctx, freezegun_clock):
     ctx.api.squish.side_effect = lambda commands, entry: m.squish(commands)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState(power=m.OFF)),)
     ctx.config.registry = orc.config.registry
-    ctx.plugin_state = {react: model.State((), {}, {}, {"dewpoint": api.dewpoint})}
+    ctx.api.dewpoint.side_effect = api.dewpoint
+    ctx.plugin_state = {react: model.State((), {}, {})}
     return ctx
 
 
@@ -302,13 +303,13 @@ def test_reader_resolves_ac_playback_and_attr(ctx, ac_report):
     assert read(model.MqttDeviceSubject(Light.desk, "switch")) == m.ON
 
 
-def test_reader_formula_evaluates_and_raises_with_context(ctx):
+def test_reader_calls_a_function(ctx):
     ctx.api.device_states.return_value = [m.DeviceState(m.Device("5", "sensor", "hubitat"), {"temperature": 77, "humidity": 60}, None)]
     read = plugins._reader(ctx)
-    assert read(model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)")) == pytest.approx(62.1, abs=0.2)
+    assert read(_dewpoint_of(Sensor.living)) == pytest.approx(62.1, abs=0.2)
     ctx.api.device_states.return_value = [m.DeviceState(m.Device("5", "sensor", "hubitat"), {"humidity": 60}, None)]
-    with pytest.raises(ValueError, match="dewpoint"):
-        read(model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)"))
+    with pytest.raises(KeyError, match="temperature"):
+        read(_dewpoint_of(Sensor.living))
 
 
 @pytest.mark.parametrize("value, inside", [(65.9, False), (66, True), (119.9, True), (120, False)])
@@ -353,7 +354,7 @@ def test_range_rule_parses_expressions(ctx):
     rules = react.setup(ctx)
     # A bare attribute reads the device directly; only a named formula needs evaluating.
     temp = model.MqttDeviceSubject(Sensor.living, "temperature")
-    dewpoint = model.FormulaSubject(Sensor.living, "dewpoint(temperature,humidity)")
+    dewpoint = _dewpoint_of(Sensor.living)
     assert rules[0].condition == em.Changed(model.Device(Sensor.living))
     assert rules[0].rule.steps[0].condition == em.And(model.Range(temp, 68, 75, edge=True))
     assert rules[0].rule.steps[0].command == em.Command(m.Devices(Ac), m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72))
@@ -370,14 +371,18 @@ def test_range_rule_parses_expressions(ctx):
 @pytest.mark.parametrize("temperature, fires", [(70, True), (80, False)])
 def test_temperature_entering_range_sets_the_ac(ctx, temperature, fires, ruleset, device_report):
     ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
-    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
+    ruleset(
+        _make_range(Sensor.living, model.MqttDeviceSubject(Sensor.living, "temperature"), 68, 75, m.Devices(Ac), ac), {"5": Sensor.living}
+    )
     device_report(Sensor.living.value, {"temperature": temperature})
     assert ctx.api.dispatch.called is fires
 
 
 def test_range_fires_only_on_entry(ctx, ruleset, dispatches, device_report):
     ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
-    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac), {"5": Sensor.living})
+    ruleset(
+        _make_range(Sensor.living, model.MqttDeviceSubject(Sensor.living, "temperature"), 68, 75, m.Devices(Ac), ac), {"5": Sensor.living}
+    )
     device_report(Sensor.living.value, {"temperature": 70})
     assert dispatches() == [(Ac.living, ac)]  # AC comes on
 
@@ -398,7 +403,7 @@ def test_range_fires_only_on_entry(ctx, ruleset, dispatches, device_report):
 @pytest.mark.parametrize("humidity, fires", [(60, True), (20, False)])
 def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, device_report):
     ac = m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=70)
-    ruleset(_make_range(Sensor.living, "dewpoint(temperature,humidity)", 59, 64, m.Devices(Ac), ac), {"5": Sensor.living})
+    ruleset(_make_range(Sensor.living, _dewpoint_of(Sensor.living), 59, 64, m.Devices(Ac), ac), {"5": Sensor.living})
     device_report(Sensor.living.value, {"temperature": 77, "humidity": humidity})
     assert ctx.api.dispatch.called is fires
 
@@ -409,7 +414,10 @@ def test_dewpoint_formula_in_range_sets_the_ac(ctx, humidity, fires, ruleset, de
 )
 def test_presence_gates_the_range_rule(ctx, people, home, fires, ruleset, device_report):
     ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
-    ruleset(_make_range(Sensor.living, "temperature", 68, 75, m.Devices(Ac), ac, people=people), {"5": Sensor.living})
+    ruleset(
+        _make_range(Sensor.living, model.MqttDeviceSubject(Sensor.living, "temperature"), 68, 75, m.Devices(Ac), ac, people=people),
+        {"5": Sensor.living},
+    )
     ctx.api.present_names.return_value = home
     device_report(Sensor.living.value, {"temperature": 70})
     assert ctx.api.dispatch.called is fires
@@ -496,6 +504,28 @@ def test_bad_pause_is_rejected(ctx, case, error, message):
         react.setup(ctx)
 
 
+def test_function_arguments_resolve(ctx):
+    names = react.namespace(Sensor.living, DEVICE_ENUMS)
+    dewpoint = names["dewpoint"]
+    assert names["self"] == m.Devices(Sensor.living)
+    assert dewpoint(names["Sensor"].living, "temperature", "humidity").args[0] == m.Devices(Sensor.living)
+    assert dewpoint(names["Sensor"], "temperature", "humidity").args[0] == m.Devices(Sensor)
+    with pytest.raises(ValueError, match="attribute, not a device"):
+        dewpoint(names["temperature"], "humidity")
+
+
+def test_phrases_expand_to_the_same_condition(ctx):
+    ctx.config.plugin_configs = plugin_config(react, "react_phrase")
+    phrased, inline = react.setup(ctx)
+    assert phrased.rule.steps[0].condition == inline.rule.steps[0].condition
+
+
+def test_phrase_name_cannot_repeat(ctx):
+    ctx.config.plugin_configs = plugin_config(react, "react_phrase_duplicate")
+    with pytest.raises(ConfigError, match="already taken"):
+        react.setup(ctx)
+
+
 def _world_read(mock):
     def read(subject):
         match subject:
@@ -529,14 +559,17 @@ def _payload(call):
     return call.args[2:]
 
 
-def _make_range(sensor, expression, low, high, target, action, people=None):
-    formula = model.FormulaSubject(sensor, expression)
+def _dewpoint_of(sensor):
+    return model.FunctionSubject(react.FUNCTIONS["dewpoint"], (m.Devices(sensor), "temperature", "humidity"))
+
+
+def _make_range(sensor, subject, low, high, target, action, people=None):
     watched = []
     if isinstance(people, m.Anyone):
         watched.append(em.Eq(m.AnyoneSubject(), True))
     elif people:
         watched.append(model.Present(people))
-    watched.append(model.Range(formula, low, high, edge=True))
+    watched.append(model.Range(subject, low, high, edge=True))
     command = em.Command(target, action)
     rule = em.Rule((em.Step(em.And(*watched), command),))
     return [em.Watch(em.Changed(model.Device(sensor)), rule, cooldown=model.COOLDOWN)]

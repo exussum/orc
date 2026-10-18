@@ -15,9 +15,13 @@ load once at startup.
 ## Grammar
 
 ```
+phrase <name> <condition>...
 react <name> <devices> turns <to> [if <condition>...] set [<target>] <action> [--delay=<minutes>] [--pause=<minutes>]
 react <name> <devices> if <condition>...            set [<target>] <action> [--delay=<minutes>] [--pause=<minutes>]
 ```
+
+A `phrase` line names a condition once; every `if` can then use it as
+`Phrase.<name>`. A phrase may use phrases defined above it.
 
 | Part          | Meaning                                                                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -60,8 +64,10 @@ Names resolve in two layers:
   `temperature`, `humidity`.
 - A dotted name is absolute: `Light.desk.switch` is that light's attribute;
   `Chromecast.tv` and `AC.living` are the whole device.
-- `dewpoint(temperature,humidity)` is a measurement computed from the
-  device's attributes (°F); it can stand wherever an attribute can.
+- `dewpoint(self, "temperature", "humidity")` is the dew point (°F) computed
+  from those two attributes, averaged over the devices given; `self` is the
+  rule's own device, and `Sensor.LIVING_ROOM` or a bare `Sensor` work too.
+- `Phrase.<name>` is a condition a `phrase` line defined.
 - `Outside.temperature` is the outside temperature (°F) from the weather
   provider, fetched at most once an hour; use it with `Range`, since the
   weather doesn't report changes.
@@ -71,8 +77,8 @@ Names resolve in two layers:
 ```
 react 'Lights off' Light turns on set off --delay=15 --pause=30
 react 'Cool'       Sensor.LIVING_ROOM if 'Entered(temperature, 68, 75)' set AC cool:low:72
-react 'Dry'        Sensor.LIVING_ROOM if 'And(Present("alice","bob"), Entered(dewpoint(temperature,humidity), 50, 60))' set AC fan_only:low:70
-react 'Dry off'    Sensor.LIVING_ROOM if 'And(AcIs(AC.LIVING_ROOM, "on"), Entered(dewpoint(temperature,humidity), 0, 56))' set AC off
+react 'Dry'        Sensor.LIVING_ROOM if 'And(Present("alice","bob"), Entered(dewpoint(self, "temperature", "humidity"), 50, 60))' set AC fan_only:low:70
+react 'Dry off'    Sensor.LIVING_ROOM if 'And(AcIs(AC.LIVING_ROOM, "on"), Entered(dewpoint(self, "temperature", "humidity"), 0, 56))' set AC off
 react Arrive Sensor.ENTRANCE_SENSOR turns active set Light      on
 react Arrive Sensor.ENTRANCE_SENSOR turns active set Chromecast pause
 ```
@@ -85,7 +91,7 @@ react 'Cool the house when it gets warm'
       if 'And(
              Anyone(),
              Eq(Sensor.PATIO_DOOR.contact, "closed"),
-             Entered(dewpoint(temperature,humidity), 60, 100)
+             Entered(dewpoint(self, "temperature", "humidity"), 60, 100)
           )'
       set AC cool:low:77
       --pause=180

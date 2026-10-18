@@ -28,7 +28,7 @@ from orc_extras.react.model import (
     AcSubject,
     CastSubject,
     Device,
-    FormulaSubject,
+    FunctionSubject,
     MqttDeviceSubject,
     Present,
     Range,
@@ -39,6 +39,7 @@ from orc_extras.react.web import react_bp
 CONFIG = "orc_extras/react"
 _OPTIONS = "[--delay=<minutes>] [--pause=<minutes>]"
 GRAMMAR = f"""
+phrase <name> <condition>...
 react <name> <devices> turns <to> [if <condition>...] set <action> {_OPTIONS}
 react <name> <devices> turns <to> [if <condition>...] set <target> <action> {_OPTIONS}
 react <name> <devices> if <condition>... set <action> {_OPTIONS}
@@ -58,12 +59,15 @@ def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
         CONFIG,
         ctx.config,
         GRAMMAR,
-        serializers={"react": each(_rule, default=list, types={"delay": int, "pause": int})},
+        serializers={
+            "phrase": each(_phrase, default=dict),
+            "react": each(_rule, default=list, types={"delay": int, "pause": int}),
+        },
     )
     watches = tuple(reaction.watch for reaction in cfg.react)
     groups = _group(cfg.react)
     ctx.plugin_state[orc_extras.react] = model.State(
-        watches, groups, {watch: name for name, group in groups.items() for watch in group.watches}, plugins.functions(ctx)
+        watches, groups, {watch: name for name, group in groups.items() for watch in group.watches}
     )
     sources = {reaction.source.value: reaction.source for reaction in cfg.react}
     ctx.api.add_listener(partial(plugins._on_event, ctx, sources))
@@ -73,6 +77,8 @@ def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
 def namespace(source: DeviceEnum, types: Mapping[str, type[DeviceEnum]]) -> _Names:
     bound: dict[str, Any] = dict(VOCABULARY)
     bound.update({name: _Type(name, enum) for name, enum in types.items()})
+    bound["self"] = Devices(source)
+    bound.update({name: _call(function) for name, function in FUNCTIONS.items()})
     return _Names(source, bound)
 
 
@@ -106,8 +112,6 @@ class _Names(dict[str, Any]):
         self._source = source
 
     def __missing__(self, name: str) -> Any:
-        if name in plugins.FUNCTIONS:
-            return _formula(self._source, name)
         return MqttDeviceSubject(self._source, name)
 
 
@@ -132,6 +136,12 @@ def _pause(minutes: int | None) -> timedelta:
     return timedelta(minutes=minutes)
 
 
+def _phrase(objects: dict[str, Any], args: Any) -> None:
+    if args.name in objects["phrase"]:
+        raise ValueError(f"react phrase {args.name!r}: that name is already taken")
+    objects["phrase"][args.name] = " ".join(args.condition)
+
+
 def _rule(objects: dict[str, Any], args: Any) -> None:
     target, action = _parse_target(args.target, cast.state(args.action), objects)
     types = objects["device"].enums
@@ -139,7 +149,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     pause = _pause(args.pause)
     condition = " ".join(args.condition) if args.condition else None
     for source in cast.devices(args.devices, objects).all():
-        guards = [_build(source, condition, types)] if condition else []
+        guards = [_build(source, condition, types, objects["phrase"])] if condition else []
         if args.to is None:
             # No `turns`: the rule watches its device for any report.
             trigger: em.Condition = em.Changed(Device(source))
@@ -183,22 +193,23 @@ def _ac_state(value: str) -> AcState:
     return state
 
 
-def _build(source: DeviceEnum, text: str, types: Mapping[str, type[DeviceEnum]]) -> em.Condition:
+def _build(source: DeviceEnum, text: str, types: Mapping[str, type[DeviceEnum]], phrases: Mapping[str, str]) -> em.Condition:
     """Build the condition `text` describes for a rule whose device is `source`."""
+    names = namespace(source, types)
+    names["Phrase"] = built = SimpleNamespace()
+    for name, phrase in phrases.items():
+        setattr(built, name, _eval(phrase, names))
+    return _eval(text, names)
+
+
+def _eval(text: str, names: _Names) -> em.Condition:
     try:
-        built = eval(text, {"__builtins__": {}}, namespace(source, types))  # noqa: S307  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
+        built = eval(text, {"__builtins__": {}}, names)  # noqa: S307  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
     except Exception as exc:
         raise ValueError(_ERR_BUILD.format(text, exc)) from exc
     if not isinstance(built, em.Condition):
         raise ValueError(_ERR_CONDITION.format(text))
     return built
-
-
-def _formula(source: DeviceEnum, name: str) -> Callable[..., FormulaSubject]:
-    def make(*attributes: MqttDeviceSubject) -> FormulaSubject:
-        return FormulaSubject(source, f"{name}({','.join(a.attribute for a in attributes)})")
-
-    return make
 
 
 def _ac_is(subject: AcSubject, state: str) -> AcIs:
@@ -213,6 +224,33 @@ def _became(*args: Any) -> Transition:
             raise ValueError(f"Became({state!r}) needs the attribute too; write Became(<attribute>, {state!r})")
     raise ValueError(f"Became{args!r}: expected Became(<attribute>, <state>)")
 
+
+def _call(function: Callable[..., float | None]) -> Callable[..., FunctionSubject]:
+    def make(*args: Any) -> FunctionSubject:
+        return FunctionSubject(function, tuple(_resolve(arg) for arg in args))
+
+    return make
+
+
+def _resolve(arg: Any) -> Any:
+    if isinstance(arg, _Device):
+        return Devices(arg.device)
+    elif isinstance(arg, _Type):
+        return Devices(arg.enum)
+    elif isinstance(arg, MqttDeviceSubject):
+        raise ValueError(f"{arg.attribute!r} is an attribute, not a device; name the device or use self")
+    return arg
+
+
+def _dewpoint(ctx: AppContext, devices: Devices, temperature: str, humidity: str) -> float | None:
+    values = []
+    for device in devices.all():
+        found = ctx.api.device_state(str(device.value))
+        values.append(ctx.api.dewpoint(found.attributes[temperature], found.attributes[humidity]))
+    return sum(values) / len(values) if values else None
+
+
+FUNCTIONS: Mapping[str, Callable[..., float | None]] = {"dewpoint": _dewpoint}
 
 VOCABULARY: Mapping[str, Any] = {
     "And": em.And,
