@@ -83,7 +83,7 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, 
         frozen.tick(timedelta(minutes=7))
         ctx.scheduler.once.call_args.args[0](ctx=ctx)
     (queued,) = api.log_entries()
-    assert [c.action for c in queued.children] == ["`r`"]
+    assert [c.action for c in queued.children] == ["Running `r`"]
     command_dispatch.assert_called_once_with(action.commands, force=True, entry=queued)
 
 
