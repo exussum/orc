@@ -6,7 +6,7 @@ import orc
 WALK_IN = [
     "Applying `Day` rules",
     "Motion cleared, running `All Lights Off`, cleanup in 2 minutes",
-    "`All Lights Off`",
+    "Running `All Lights Off`",
 ]
 
 
@@ -22,7 +22,7 @@ def test_walk_in_rolls_up_under_the_entrance_entry(house):
             [
                 *WALK_IN,
                 "Presence detected: `Alice`",
-                "`Silence`",
+                "Running `Silence`",
                 "Trigger sensor off: skip (people present)",
             ],
         )

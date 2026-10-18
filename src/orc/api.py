@@ -273,7 +273,7 @@ def run_action(
     else:
         return False
 
-    display = f"`{action.name}`"
+    display = f"Running `{action.name}`"
     with _record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
