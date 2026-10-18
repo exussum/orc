@@ -80,5 +80,7 @@ plugin 'LG AC'            orc_extras.lg_ac
 plugin React              orc_extras.react --section system
 plugin Travel             orc_extras.travel --section scene
 
-highlight AD_HOC_SILENCE 21:00 23:59
+group media 'Media'
+
+button AD_HOC_SILENCE media --stripe-from 21:00 --stripe-to 23:59
 

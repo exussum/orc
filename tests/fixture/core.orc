@@ -40,13 +40,15 @@ tag Alice EIK_ALICE 2026-01-02T03:04:05+00:00
 routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger-person Alice
 
 ad_hoc define AD_HOC_SILENCE        Silence          --no-reset Chromecast.CC stop
-ad_hoc define AD_HOC_DOG            Dog              --delay 7  Chromecast.CC stop
+ad_hoc define AD_HOC_DOG            Dog              --section scene --delay 7  Chromecast.CC stop
 ad_hoc define AD_HOC_ALL_LIGHTS_OFF 'All Lights Off' --no-reset Light off
 ad_hoc append AD_HOC_ALL_LIGHTS_OFF Chromecast.CC stop
 
 remote     Button.REMOTE 1 pushed AD_HOC_ALL_LIGHTS_OFF
 remote     .             1 held   AD_HOC_SILENCE
 
-highlight AD_HOC_SILENCE 21:00 23:59
+group media 'Media'
+
+button AD_HOC_DOG media --stripe-from 21:00 --stripe-to 23:59
 
 plugin 'Test Light' orc.plugins light_test --section device --icon tv

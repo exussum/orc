@@ -101,10 +101,16 @@ class Remote(NamedTuple):
     action: str
 
 
-class Highlight(NamedTuple):
+class ButtonGroup(NamedTuple):
     id: str
-    start: time
-    stop: time
+    title: str
+
+
+class SceneButton(NamedTuple):
+    id: str
+    group: str
+    stripe_from: time | None
+    stripe_to: time | None
 
 
 class Settings(NamedTuple):

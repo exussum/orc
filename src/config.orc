@@ -90,5 +90,11 @@ plugin Battery            orc.plugins.battery
 plugin 'Pair LG TV'       orc_extras.lg_tv           pair_tv     --section device --backend orc_extras.lg_tv.dal.webos
 plugin 'Test Leak Sensor' orc_extras.yolink          test_sensor --section device --backend orc_extras.yolink.dal.yosmart
 
-highlight AD_HOC_SILENCE 21:00 23:59
+group lights 'Lights'
+group media  'Media'
+
+button AD_HOC_ALL_LIGHTS_ON  lights
+button AD_HOC_ALL_LIGHTS_OFF lights
+button AD_HOC_SILENCE        media --stripe-from 21:00 --stripe-to 23:59
+button AD_HOC_DOG            media
 

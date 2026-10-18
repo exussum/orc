@@ -125,6 +125,19 @@
     @apply flex overflow-auto justify-between;
 }
 
+@utility orc-scene-grid {
+    @apply grid gap-2;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@utility orc-group-box {
+    @apply border border-[#333] rounded-xl px-2 pb-2 mb-3 last:mb-0;
+}
+
+@utility orc-group-title {
+    @apply px-2 text-xs font-semibold opacity-70;
+}
+
 @utility orc-routine-grid {
     @apply grid grid-cols-5 justify-items-center gap-y-2;
 }
