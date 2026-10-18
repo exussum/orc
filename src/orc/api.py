@@ -239,12 +239,6 @@ def declare_core(declarations: Declarations) -> None:
     declarations.controllable_devices.append("USB")
 
 
-class RunAction(NamedTuple):
-    effect: Callable[[m.LogEntry], object]
-    name: str
-    delay: timedelta = timedelta()
-
-
 def run_action(
     ctx: m.AppContext,
     id: str,
@@ -255,21 +249,21 @@ def run_action(
     skip_delay: bool = False,
 ) -> bool:
     if id == ORC_SYSTEM_SNAPSHOT:
-        action = RunAction(lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry), Log.SNAPSHOT_RESTORE)
+        action = _RunAction(lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry), Log.SNAPSHOT_RESTORE)
     elif (plugin := config.plugin(id)) is not None:
-        action = RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.name, plugin.delay)
+        action = _RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.name, plugin.delay)
     elif id in config.schedule_routines:
         rule = config.schedule_routines[id]
-        action = RunAction(lambda entry: _run_schedule_routine(rule, entry, set(config.people), force=True), rule.name)
+        action = _RunAction(lambda entry: _run_schedule_routine(rule, entry, set(config.people), force=True), rule.name)
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
-            action = RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, routine.name, entry), routine.name)
+            action = _RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, routine.name, entry), routine.name)
         else:
             base = config.reset_config.commands if routine.reset else ()
             commands = (*base, *routine.commands)
-            action = RunAction(lambda entry: dispatch(commands, force=True, entry=entry), routine.name, routine.delay)
+            action = _RunAction(lambda entry: dispatch(commands, force=True, entry=entry), routine.name, routine.delay)
     else:
         return False
 
@@ -615,6 +609,12 @@ def replay_day(now: datetime, entry: m.LogEntry) -> None:
         c for when, e in jobs if when <= now and m.SKIP_REPLAY_TAG not in e.routine.tags for c in _matching_items(e.routine, now, present)
     ]
     dispatch(tuple(matched), force=True, entry=entry)
+
+
+class _RunAction(NamedTuple):
+    effect: Callable[[m.LogEntry], object]
+    name: str
+    delay: timedelta = timedelta()
 
 
 @contextlib.contextmanager
