@@ -27,18 +27,17 @@
         <div class="p-4">
             <div class="orc-scene-grid">
                 {% for box in boxes %}
-                    {% set area = "grid-column: %d / span %d; grid-row: %d / span %d"|format(box.x + 1, box.width, box.y + 1, box.height) %}
-                    <div class="orc-group-box" style="{{ area }}">
-                        {% if box.title %}<span class="orc-group-title">{{ box.title }}</span>{% endif %}
-                    </div>
-                    <div class="orc-group-cells" style="{{ area }}">
-                        {% for cell in box.cells %}
-                            {% if cell %}
-                                {{ btn_stripe(cell.name, cell.id, cell.icon or "clipboard-check", cell.duration, delay=cell.delay or "0:00:00", no_func=cell.no_func) }}
-                            {% else %}
-                                <div></div>
-                            {% endif %}
-                        {% endfor %}
+                    <div class="orc-group-box" style="grid-column: {{ box.x + 1 }} / span {{ box.width }}; grid-row: {{ box.y + 1 }} / span {{ box.height }}">
+                        {% if box.title %}<div class="orc-group-title">{{ box.title }}</div>{% endif %}
+                        <div class="orc-group-cells" style="grid-template-columns: repeat({{ box.width }}, minmax(0, 1fr))">
+                            {% for cell in box.cells %}
+                                {% if cell %}
+                                    {{ btn_stripe(cell.name, cell.id, cell.icon or "clipboard-check", cell.duration, delay=cell.delay or "0:00:00", no_func=cell.no_func) }}
+                                {% else %}
+                                    <div></div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                     </div>
                 {% endfor %}
             </div>
