@@ -126,12 +126,12 @@
 }
 
 @utility orc-scene-grid {
-    @apply grid gap-2;
+    @apply grid gap-x-2 gap-y-5;
     grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 @utility orc-group-box {
-    @apply border border-[#333] rounded-xl p-2;
+    @apply border border-[#333] rounded-xl px-1 py-2 relative;  /* a 1-wide box must fit a 46px button: wider padding crosses it under ~360px */
 }
 
 @utility orc-group-cells {
@@ -139,7 +139,7 @@
 }
 
 @utility orc-group-title {
-    @apply mb-1 text-xs font-semibold opacity-70;
+    @apply absolute -top-2 left-3 px-1 bg-orc-bg text-xs font-semibold opacity-70;
 }
 
 @utility orc-routine-grid {
