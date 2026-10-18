@@ -246,7 +246,7 @@ def _dewpoint(ctx: AppContext, devices: Devices, temperature: str, humidity: str
     values = []
     for device in devices.all():
         found = ctx.api.device_state(str(device.value))
-        values.append(ctx.api.dewpoint(found.attributes[temperature], found.attributes[humidity]))
+        values.append(ctx.api.dewpoint(float(found.attributes[temperature]), float(found.attributes[humidity])))
     return sum(values) / len(values) if values else None
 
 
