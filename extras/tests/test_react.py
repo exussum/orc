@@ -505,13 +505,13 @@ def test_bad_pause_is_rejected(ctx, case, error, message):
 
 
 def test_function_arguments_resolve(ctx):
-    names = react.namespace(Sensor.living, DEVICE_ENUMS)
-    dewpoint = names["dewpoint"]
-    assert names["self"] == m.Devices(Sensor.living)
-    assert dewpoint(names["Sensor"].living, "temperature", "humidity").args[0] == m.Devices(Sensor.living)
-    assert dewpoint(names["Sensor"], "temperature", "humidity").args[0] == m.Devices(Sensor)
+    namespace = react.build_namespace(Sensor.living, DEVICE_ENUMS)
+    dewpoint = namespace["dewpoint"]
+    assert namespace["self"] == m.Devices(Sensor.living)
+    assert dewpoint(namespace["Sensor"].living, "temperature", "humidity").args[0] == m.Devices(Sensor.living)
+    assert dewpoint(namespace["Sensor"], "temperature", "humidity").args[0] == m.Devices(Sensor)
     with pytest.raises(ValueError, match="attribute, not a device"):
-        dewpoint(names["temperature"], "humidity")
+        dewpoint(namespace["temperature"], "humidity")
 
 
 def test_phrases_expand_to_the_same_condition(ctx):
@@ -560,7 +560,7 @@ def _payload(call):
 
 
 def _dewpoint_of(sensor):
-    return model.FunctionSubject(react.FUNCTIONS["dewpoint"], (m.Devices(sensor), "temperature", "humidity"))
+    return model.FormulaSubject(react.FUNCTIONS["dewpoint"], (m.Devices(sensor), "temperature", "humidity"))
 
 
 def _make_range(sensor, subject, low, high, target, action, people=None):

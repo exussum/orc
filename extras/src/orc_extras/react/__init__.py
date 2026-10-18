@@ -28,7 +28,7 @@ from orc_extras.react.model import (
     AcSubject,
     CastSubject,
     Device,
-    FunctionSubject,
+    FormulaSubject,
     MqttDeviceSubject,
     Present,
     Range,
@@ -74,12 +74,12 @@ def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
     return watches
 
 
-def namespace(source: DeviceEnum, types: Mapping[str, type[DeviceEnum]]) -> _Names:
+def build_namespace(source: DeviceEnum, types: Mapping[str, type[DeviceEnum]]) -> _Namespace:
     bound: dict[str, Any] = dict(VOCABULARY)
     bound.update({name: _Type(name, enum) for name, enum in types.items()})
     bound["self"] = Devices(source)
     bound.update({name: _call(function) for name, function in FUNCTIONS.items()})
-    return _Names(source, bound)
+    return _Namespace(source, bound)
 
 
 class _Device:
@@ -104,7 +104,7 @@ class _Type:
         return _Device(self.enum[member])
 
 
-class _Names(dict[str, Any]):
+class _Namespace(dict[str, Any]):
     """Bare names fall through to the source device, so `switch` means this rule's own switch."""
 
     def __init__(self, source: DeviceEnum, bound: Mapping[str, Any]) -> None:
@@ -195,16 +195,16 @@ def _ac_state(value: str) -> AcState:
 
 def _build(source: DeviceEnum, text: str, types: Mapping[str, type[DeviceEnum]], phrases: Mapping[str, str]) -> em.Condition:
     """Build the condition `text` describes for a rule whose device is `source`."""
-    names = namespace(source, types)
-    names["Phrase"] = built = SimpleNamespace()
+    namespace = build_namespace(source, types)
+    namespace["Phrase"] = built = SimpleNamespace()
     for name, phrase in phrases.items():
-        setattr(built, name, _eval(phrase, names))
-    return _eval(text, names)
+        setattr(built, name, _eval(phrase, namespace))
+    return _eval(text, namespace)
 
 
-def _eval(text: str, names: _Names) -> em.Condition:
+def _eval(text: str, namespace: _Namespace) -> em.Condition:
     try:
-        built = eval(text, {"__builtins__": {}}, names)  # noqa: S307  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
+        built = eval(text, {"__builtins__": {}}, namespace)  # noqa: S307  # nosemgrep: python.lang.security.audit.eval-detected.eval-detected
     except Exception as exc:
         raise ValueError(_ERR_BUILD.format(text, exc)) from exc
     if not isinstance(built, em.Condition):
@@ -225,9 +225,9 @@ def _became(*args: Any) -> Transition:
     raise ValueError(f"Became{args!r}: expected Became(<attribute>, <state>)")
 
 
-def _call(function: Callable[..., float | None]) -> Callable[..., FunctionSubject]:
-    def make(*args: Any) -> FunctionSubject:
-        return FunctionSubject(function, tuple(_resolve(arg) for arg in args))
+def _call(function: Callable[..., float | None]) -> Callable[..., FormulaSubject]:
+    def make(*args: Any) -> FormulaSubject:
+        return FormulaSubject(function, tuple(_resolve(arg) for arg in args))
 
     return make
 
