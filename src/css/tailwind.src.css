@@ -109,7 +109,7 @@
 }
 
 @utility orc-room-buttons {
-    @apply grid grid-cols-4;
+    @apply grid grid-cols-4 px-2;
 }
 
 @utility orc-device-grid {
