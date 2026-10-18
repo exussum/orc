@@ -68,7 +68,6 @@ class State:
     watches: tuple[em.Watch[m.Devices], ...]
     groups: dict[str, Group]
     name_of: dict[em.Watch[Any], str]
-    functions: dict[str, Callable[..., float]] = field(default_factory=dict)  # a formula's vocabulary, bound at setup
     disabled: dict[str, datetime] = field(default_factory=dict)
 
 
@@ -82,9 +81,9 @@ class AcIs(em.Condition):
 
 
 @dataclass(frozen=True)
-class FormulaSubject(em.Subject):
-    device: m.DeviceEnum
-    expr: str
+class FunctionSubject(em.Subject):
+    function: Callable[..., float | None]
+    args: tuple[Any, ...]
 
 
 @dataclass(frozen=True)
