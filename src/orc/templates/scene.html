@@ -32,7 +32,7 @@
                         <div class="orc-routine-grid" style="grid-template-columns: repeat({{ box.width }}, minmax(0, 1fr))">
                             {% for cell in box.cells %}
                                 {% if cell %}
-                                    {{ btn_stripe(cell.label, cell.id, cell.icon, cell.duration, delay=cell.delay, no_func=cell.no_func) }}
+                                    {{ btn_stripe(cell.name, cell.id, cell.icon or "clipboard-check", cell.duration, delay=cell.delay or "0:00:00", no_func=cell.no_func) }}
                                 {% else %}
                                     <div></div>
                                 {% endif %}

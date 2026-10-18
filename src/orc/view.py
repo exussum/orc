@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+from collections import defaultdict
 from dataclasses import replace
 from datetime import date, datetime, timedelta
 from functools import cache
@@ -25,7 +26,6 @@ from orc.locale import Log
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
 _GRID_WIDTH = 5
-_GRID_SLACK = 4
 _CODESPAN_RE = re.compile(r"`([^`]+)`")
 
 
@@ -52,13 +52,20 @@ class HighlightRow(NamedTuple):
     end: str
 
 
-class ButtonCell(NamedTuple):
-    id: str
-    label: str
-    icon: str
-    duration: float
-    delay: timedelta
-    no_func: bool
+class ButtonCell:
+    def __init__(self, obj: Any, id: str, duration: float) -> None:
+        self.obj, self.id, self.duration = obj, id, duration
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return getattr(self.obj, name)
+        except AttributeError:
+            return None
+
+    @property
+    def no_func(self) -> bool:
+        """Nothing to run server-side: a plugin with no --function. Ad hocs carry commands."""
+        return self.func is None and self.commands is None
 
 
 class ButtonBox(NamedTuple):
@@ -250,44 +257,20 @@ def index() -> str:
 
 
 def _scene_boxes(durations: dict[str, float]) -> list[ButtonBox]:
-    cells = {
-        id: ButtonCell(id, routine.name, "clipboard-check", durations.get(id, 0), routine.delay, False)
-        for id, routine in where(config.ad_hoc_routines, section="scene").items()
-    }
-    for plugin in config.plugins_in("scene"):
-        delay = getattr(plugin, "delay", timedelta())
-        cells[plugin.name] = ButtonCell(
-            plugin.name, plugin.name, plugin.icon, durations.get(plugin.name, 0), delay, not getattr(plugin, "func", None)
-        )
-    placed: dict[str, list[ButtonCell]] = {}
-    for button in config.buttons:
-        placed.setdefault(button.group, []).append(cells.pop(button.id))
-    boxes = [grid.Box(g.title, placed[g.id]) for g in config.button_groups if g.id in placed]
-    boxes += [grid.Box("", list(cells.values()))] if cells else []
-    return _packed(boxes) or _stacked(boxes)
+    actions = where(config.ad_hoc_routines, section="scene") | {p.name: p for p in config.plugins_in("scene")}
+    cells = {id: ButtonCell(action, id, durations.get(id, 0)) for id, action in actions.items()}
 
+    placement = {b.id: b.group for b in config.buttons}
+    grouped = defaultdict(list)
+    for id, cell in cells.items():
+        grouped[placement.get(id, "")].append(cell)
 
-def _cells(box: grid.Box, width: int, height: int) -> tuple[ButtonCell | None, ...]:
-    return tuple(box.items) + (None,) * (width * height - len(box.items))
+    titles = {g.id: g.title for g in config.button_groups} | {"": ""}
+    groups = {id: cs for id, cs in grouped.items() if cs}
 
-
-def _packed(boxes: list[grid.Box]) -> list[ButtonBox]:
-    total = sum(len(b.items) for b in boxes)
-    base = -(-total // _GRID_WIDTH) + 1  # a spare row, so a group can take a squarer shape
-    for height in range(base, base + _GRID_SLACK):
-        if placements := grid.pack(height, _GRID_WIDTH, boxes):
-            return [ButtonBox(p.box.name, _cells(p.box, *p.shape), p.x, p.y, *p.shape) for p in placements]
-    return []
-
-
-def _stacked(boxes: list[grid.Box]) -> list[ButtonBox]:
-    rows, out = 0, []
-    for box in boxes:
-        width = min(len(box.items), _GRID_WIDTH)
-        height = -(-len(box.items) // width)
-        out.append(ButtonBox(box.name, _cells(box, width, height), 0, rows, width, height))
-        rows += height
-    return out
+    row_major = lambda cells, p: tuple(cells) + (None,) * (p.width * p.height - len(cells))  # noqa: E731
+    layout = grid.pack(_GRID_WIDTH, groups)
+    return [ButtonBox(titles[id], row_major(groups[id], p), p.x, p.y, p.width, p.height) for id, p in layout]
 
 
 @bp.route("/log/")
