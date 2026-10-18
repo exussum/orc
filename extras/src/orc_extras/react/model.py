@@ -81,7 +81,7 @@ class AcIs(em.Condition):
 
 
 @dataclass(frozen=True)
-class FunctionSubject(em.Subject):
+class FormulaSubject(em.Subject):
     function: Callable[..., float | None]
     args: tuple[Any, ...]
 

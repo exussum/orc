@@ -6,7 +6,7 @@ from orc_engine import model as em
 import orc_extras.react
 from orc import model as m
 from orc.plugins import requires_ctx
-from orc_extras.react.model import AcSubject, CastSubject, Device, FunctionSubject, Log, MqttDeviceSubject, State, Transition
+from orc_extras.react.model import AcSubject, CastSubject, Device, FormulaSubject, Log, MqttDeviceSubject, State, Transition
 
 JOB_ID = "react"
 
@@ -69,7 +69,7 @@ def _reader(ctx: m.AppContext) -> em.Read:
             case CastSubject(device):
                 sound = next((s for s in ctx.api.capture_sounds() if s.what is device), None)
                 return sound.playback.value if sound else None
-            case FunctionSubject(function, args):
+            case FormulaSubject(function, args):
                 return function(ctx, *args)
             case _:
                 return world_read(subject)
