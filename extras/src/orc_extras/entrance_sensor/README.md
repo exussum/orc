@@ -24,7 +24,7 @@ timed <name> <start> <stop> <routine>
 
 | Part      | Meaning                                                                                                                                                          |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setting` | One of the keys below; every key is required.                                                                                                                    |
+| `setting` | One of the keys below; every key but `new_entry_minutes` is required.                                                                                            |
 | `message` | The line the cleanup logs for each outcome: `log_present`, `log_door_open`, `log_absent`, `log_shutdown`, `log_nobody`. All five are required.                   |
 | `rules`   | The ad hoc routine, by id, run for each trigger: `inside`, `present`, `absent`, `shutdown`. All four are required.                                                |
 | `timed`   | A wall-clock window (wrapping midnight when `<start>` is later than `<stop>`) naming an ad hoc or routine id; the first window containing the current time wins. |
@@ -38,6 +38,7 @@ timed <name> <start> <stop> <routine>
 | `inactive_event`        | The `motion` value that means clear (`inactive`).                                          |
 | `snapshot`              | Minutes the `shutdown` scene override lasts before the scene restores itself.              |
 | `listener`              | The person whose presence alone means "the visitor left"; must be a `person`.              |
+| `new_entry_minutes`     | Minutes of quiet after which the next motion starts a new log entry. Default 15.           |
 
 ## Example
 

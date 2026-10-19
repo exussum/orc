@@ -14,7 +14,6 @@ JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
 CLEARED_MSG = "Motion cleared, cleanup in {minutes} minutes"
 CANCELLED_MSG = "Cleanup cancelled: motion triggered"
-NEW_ENTRY_MINUTES = 15
 
 
 class Visit(NamedTuple):
@@ -37,7 +36,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         # the scheduler's worker; None grace so a busy worker delays, never drops.
 
         previous = ctx.plugin_state[orc_extras.entrance_sensor]
-        if previous and new == sensor.setting.active_event and _expired(ctx, previous.entry):
+        if previous and new == sensor.setting.active_event and _expired(ctx, sensor, previous.entry):
             previous = None
         if previous:
             log_entry = previous.entry
@@ -60,9 +59,9 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribut
     )
 
 
-def _expired(ctx: m.AppContext, entry: m.LogEntry) -> bool:
+def _expired(ctx: m.AppContext, sensor: SimpleNamespace, entry: m.LogEntry) -> bool:
     last = entry.children[-1].timestamp if entry.children else entry.timestamp
-    return ctx.api.local_now() - last >= timedelta(minutes=NEW_ENTRY_MINUTES)
+    return ctx.api.local_now() - last >= timedelta(minutes=sensor.setting.new_entry_minutes)
 
 
 @requires_ctx

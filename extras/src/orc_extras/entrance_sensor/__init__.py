@@ -32,6 +32,7 @@ class Settings(NamedTuple):
     inactive_event: str
     snapshot: int
     listener: str
+    new_entry_minutes: int = 15
 
 
 class Messages(NamedTuple):
@@ -72,6 +73,7 @@ def setup(ctx: AppContext) -> None:
                     "entrance": cast.device,
                     "patio_door": cast.device,
                     "snapshot": engine_cast.int,
+                    "new_entry_minutes": engine_cast.int,
                 },
             ),
             "message": scalar(Messages),
