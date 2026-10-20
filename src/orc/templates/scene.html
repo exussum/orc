@@ -3,6 +3,24 @@
 {% block body %}
     <div class="orc-card mb-2">
         <div class="p-4">
+            <div class="orc-scene-grid">
+                {% for box in boxes %}
+                    <div class="orc-group-shape" style="grid-column: {{ box.x + 1 }} / span {{ box.width }}; grid-row: {{ box.y + 1 }} / span {{ box.height }}"></div>
+                {% endfor %}
+                {% for corner in concave_corners %}
+                    <div class="orc-scoop orc-scoop-{{ corner.corner }}" style="grid-column: {{ corner.x + 1 }}; grid-row: {{ corner.y + 1 }}"></div>
+                {% endfor %}
+                {% for cell in cells %}
+                    <div class="orc-group-cell" style="grid-column: {{ cell.column + 1 }}; grid-row: {{ cell.row + 1 }}">
+                        <div class="orc-group-title">{{ cell.title }}</div>
+                        {{ btn_stripe(cell.button.name, cell.button.id, cell.button.icon or "clipboard-check", cell.button.duration, delay=cell.button.delay or "0:00:00", no_func=cell.button.no_func) }}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="orc-card mb-2">
+        <div class="p-4">
             <div class="orc-group-box pb-2">
                 <div class="orc-group-title">Rooms</div>
                 <div class="orc-room-buttons">
@@ -25,24 +43,6 @@
                         </div>
                     {% endfor %}
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="orc-card mb-2">
-        <div class="p-4">
-            <div class="orc-scene-grid">
-                {% for box in boxes %}
-                    <div class="orc-group-shape" style="grid-column: {{ box.x + 1 }} / span {{ box.width }}; grid-row: {{ box.y + 1 }} / span {{ box.height }}"></div>
-                {% endfor %}
-                {% for corner in concave_corners %}
-                    <div class="orc-scoop orc-scoop-{{ corner.corner }}" style="grid-column: {{ corner.x + 1 }}; grid-row: {{ corner.y + 1 }}"></div>
-                {% endfor %}
-                {% for cell in cells %}
-                    <div class="orc-group-cell" style="grid-column: {{ cell.column + 1 }}; grid-row: {{ cell.row + 1 }}">
-                        <div class="orc-group-title">{{ cell.title }}</div>
-                        {{ btn_stripe(cell.button.name, cell.button.id, cell.button.icon or "clipboard-check", cell.button.duration, delay=cell.button.delay or "0:00:00", no_func=cell.button.no_func) }}
-                    </div>
-                {% endfor %}
             </div>
         </div>
     </div>

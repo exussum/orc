@@ -23,7 +23,10 @@
 }
 
 :root {
-    --orc-control-height: 38px;
+    --orc-control-height: 32px;
+    @variant sm {
+        --orc-control-height: 38px;
+    }
     /* opaque, since the boxes of one group overlap and a translucent tint would stack where they do */
     --orc-group-fill: color-mix(in srgb, white 5%, var(--color-orc-bg));
 }
@@ -53,7 +56,7 @@
     --orc-btn-color-active-border: var(--color-orc-primary-active-border);
     --orc-btn-focus-ring: color-mix(in srgb, var(--color-orc-primary) 50%, transparent);
 
-    @apply inline-flex items-center justify-center py-1.5 px-3 rounded text-white font-normal leading-normal;
+    @apply inline-flex items-center justify-center py-1.5 px-1.5 sm:px-3 rounded text-white font-normal leading-normal;
     border: 1px solid var(--orc-btn-color);
     background-color: var(--orc-btn-color);
     height: var(--orc-control-height);
