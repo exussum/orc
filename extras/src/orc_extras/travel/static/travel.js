@@ -32,7 +32,7 @@ const TEMPLATES = `
         <form id="travel-form" class="flex flex-col gap-2">
             <div class="relative">
                 <input name="target" class="orc-input" placeholder="Flight (AA657) or address" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">
-                <ul id="travel-places" class="orc-card absolute z-50 w-full hidden" style="max-height:12rem;overflow-y:auto"></ul>
+                <ul id="travel-places" class="orc-surface absolute z-50 w-full hidden" style="max-height:12rem;overflow-y:auto"></ul>
             </div>
             <input name="arrive" type="text" class="orc-input" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">
             <details id="travel-extras-details">

@@ -31,7 +31,7 @@
     --orc-group-fill: color-mix(in srgb, white 5%, var(--color-orc-bg));
 }
 
-@utility orc-card {
+@utility orc-surface {
     @apply rounded border bg-orc-bg border-orc-border;
 }
 
@@ -97,12 +97,12 @@
 }
 
 @utility orc-input {
-    @apply orc-card block w-full px-2 py-1.5 text-white leading-normal;
+    @apply orc-surface block w-full px-2 py-1.5 text-white leading-normal;
     height: var(--orc-control-height);
 }
 
 @utility orc-navbar {
-    @apply orc-card my-2 py-2 px-3 flex flex-wrap items-end;
+    @apply orc-surface my-2 py-2 px-3 flex flex-wrap items-end;
 }
 
 @utility orc-room-buttons {
@@ -201,7 +201,7 @@
 @utility orc-job-badges {
     @apply absolute left-1/2 -bottom-1 flex text-xs leading-none whitespace-nowrap;
     &:not(:empty) {
-        @apply orc-card px-0.5 py-px;
+        @apply orc-surface px-0.5 py-px;
     }
 }
 
@@ -234,7 +234,7 @@
 }
 
 @utility orc-dialog {
-    @apply orc-card text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible;
+    @apply orc-surface text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible;
     &::backdrop {
         @apply bg-black/50;
     }
@@ -246,7 +246,7 @@
 }
 
 @utility orc-dropdown-menu {
-    @apply orc-card min-w-40 px-0 py-1;
+    @apply orc-surface min-w-40 px-0 py-1;
     position: fixed;
     position-anchor: --orc-dropup;
     position-area: top span-right;
