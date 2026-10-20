@@ -6,7 +6,7 @@
         {% set other = devices | selectattr('type', 'ne', 'AC') | list %}
         {% set ac = devices | selectattr('type', 'eq', 'AC') | list %}
         {% for card in [other, ac] if card %}
-        <div class="orc-card mb-2">
+        <div class="orc-surface mb-2">
             <div class="p-4">
                 <div class="text-sm font-semibold mb-2">{{ title }}</div>
                 {% set toggles = card | selectattr('toggle') | list %}
