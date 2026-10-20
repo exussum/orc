@@ -4,6 +4,7 @@
 @source "../orc/static/*.js";
 @source "../orc/static/hooks/*.js";
 @source "../../extras/src/orc_extras/*/static/*.js";
+@source inline("orc-scoop-tl orc-scoop-tr orc-scoop-bl orc-scoop-br");
 
 @theme {
     --color-orc-bg: #1a1a1a;
@@ -23,6 +24,8 @@
 
 :root {
     --orc-control-height: 38px;
+    /* opaque, since the boxes of one group overlap and a translucent tint would stack where they do */
+    --orc-group-fill: color-mix(in srgb, white 5%, var(--color-orc-bg));
 }
 
 @utility orc-card {
@@ -117,20 +120,51 @@
 }
 
 @utility orc-scene-grid {
-    @apply grid gap-2;
+    @apply grid gap-[5px];
     grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-@utility orc-group-box {
-    @apply rounded-xl bg-white/5 pb-2;
+@utility orc-group-shape {
+    @apply rounded-[22px];
+    background: var(--orc-group-fill);
 }
 
-@utility orc-group-cells {
-    @apply grid justify-items-center items-end gap-x-2;
+@utility orc-scoop {
+    /* a 22px square in the gap, filled outside a quarter circle centred on its far corner */
+    @apply w-[22px] h-[22px];
+    background: radial-gradient(farthest-side at var(--scoop-at), transparent 99%, var(--orc-group-fill));
+}
+
+@utility orc-scoop-tl {
+    @apply -mt-[5px] -ml-[5px] self-start justify-self-start;
+    --scoop-at: 100% 100%;
+}
+
+@utility orc-scoop-tr {
+    @apply -mt-[5px] -mr-[5px] self-start justify-self-end;
+    --scoop-at: 0% 100%;
+}
+
+@utility orc-scoop-bl {
+    @apply -mb-[5px] -ml-[5px] self-end justify-self-start;
+    --scoop-at: 100% 0%;
+}
+
+@utility orc-scoop-br {
+    @apply -mb-[5px] -mr-[5px] self-end justify-self-end;
+    --scoop-at: 0% 0%;
+}
+
+@utility orc-group-box {
+    @apply rounded-xl bg-white/5;
 }
 
 @utility orc-group-title {
-    @apply px-2 pt-1 text-xs font-semibold opacity-70;
+    @apply px-1 pt-1 text-xs font-semibold opacity-70;
+}
+
+@utility orc-group-cell {
+    @apply flex flex-col justify-between;
 }
 
 @utility orc-routine-grid {

@@ -19,9 +19,9 @@ from markupsafe import Markup, escape
 from werkzeug.exceptions import HTTPException
 from werkzeug.wrappers import Response as BaseResponse
 
-from orc import alerts, api, config, grid
+from orc import alerts, api, config
 from orc import model as m
-from orc.collections import where
+from orc.collections import Box, ConcaveCorner, boxes, concave_corners, pack, where
 from orc.locale import Log
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
@@ -68,13 +68,11 @@ class ButtonCell:
         return self.func is None and self.commands is None
 
 
-class ButtonBox(NamedTuple):
+class SceneCell(NamedTuple):
+    button: ButtonCell
+    column: int
+    row: int
     title: str
-    cells: tuple[ButtonCell | None, ...]
-    x: int
-    y: int
-    width: int
-    height: int
 
 
 class DeviceRow(NamedTuple):
@@ -242,13 +240,16 @@ def expire_presence(name: str) -> dict[str, Any]:
 def index() -> str:
     present_names = api.present_names()
     next_schedule = api.next_iot_job(present_names)
+    cells, page_boxes, page_concave_corners = _scene_layout(api.fetch_durations(mapper=dict))
 
     return render_template(
         "scene.html",
         highlight_configs=[
             HighlightRow(b.id, b.stripe_from.strftime("%H:%M"), b.stripe_to.strftime("%H:%M")) for b in config.buttons if b.stripe_from
         ],
-        boxes=_scene_boxes(api.fetch_durations(mapper=dict)),
+        cells=cells,
+        boxes=page_boxes,
+        concave_corners=page_concave_corners,
         rooms=config.rooms,
         schedule_routines=config.schedule_routines,
         next_routine=next_schedule,
@@ -256,21 +257,25 @@ def index() -> str:
     )
 
 
-def _scene_boxes(durations: dict[str, float]) -> list[ButtonBox]:
-    actions = where(config.ad_hoc_routines, section="scene") | {p.name: p for p in config.plugins_in("scene")}
-    cells = {id: ButtonCell(action, id, durations.get(id, 0)) for id, action in actions.items()}
+def _scene_layout(durations: dict[str, float]) -> tuple[list[SceneCell], list[Box], list[ConcaveCorner]]:
+    actions_by_routine_id = where(config.ad_hoc_routines, section="scene") | {p.name: p for p in config.plugins_in("scene")}
+    cells_by_routine_id = {id: ButtonCell(action, id, durations.get(id, 0)) for id, action in actions_by_routine_id.items()}
 
-    placement = {b.id: b.group for b in config.buttons}
-    grouped = defaultdict(list)
-    for id, cell in cells.items():
-        grouped[placement.get(id, "")].append(cell)
+    group_id_by_routine_id = {b.id: b.group for b in config.buttons}
+    cells_by_group_id = defaultdict(list)
+    for id, cell in cells_by_routine_id.items():
+        cells_by_group_id[group_id_by_routine_id.get(id, "")].append(cell)
 
-    titles = {g.id: g.title for g in config.button_groups} | {"": ""}
-    groups = {id: cs for id, cs in grouped.items() if cs}
+    titles_by_group_id = {g.id: g.title for g in config.button_groups} | {"": ""}
 
-    row_major = lambda cells, p: tuple(cells) + (None,) * (p.width * p.height - len(cells))  # noqa: E731
-    layout = grid.pack(_GRID_WIDTH, groups)
-    return [ButtonBox(titles[id], row_major(groups[id], p), p.x, p.y, p.width, p.height) for id, p in layout]
+    placed, page_boxes, page_concave_corners = [], [], []
+    for id, shape in pack(_GRID_WIDTH, cells_by_group_id):
+        page_boxes += boxes(shape)
+        page_concave_corners += concave_corners(shape)
+        # row-major through the shape, so config order reads left to right, top to bottom
+        for n, (x, y) in enumerate(sorted(shape, key=lambda c: (c[1], c[0]))):
+            placed.append(SceneCell(cells_by_group_id[id][n], x, y, titles_by_group_id[id] if n == 0 else ""))
+    return placed, page_boxes, page_concave_corners
 
 
 @bp.route("/log/")
