@@ -34,7 +34,7 @@
 }
 
 @utility orc-th {
-    @apply px-2 py-1 font-normal;
+    @apply orc-td font-normal;
 }
 
 @utility orc-selected {
@@ -77,16 +77,7 @@
     height: 28px;
 }
 
-@utility orc-btn-absent {
-    --orc-btn-color: var(--color-orc-secondary);
-    --orc-btn-color-hover: var(--color-orc-secondary-hover);
-    --orc-btn-color-hover-border: var(--color-orc-secondary-hover-border);
-    --orc-btn-color-active: var(--color-orc-secondary-active);
-    --orc-btn-color-active-border: var(--color-orc-secondary-active-border);
-    --orc-btn-focus-ring: color-mix(in srgb, var(--color-orc-secondary) 50%, transparent);
-}
-
-@utility orc-btn-secondary {
+@utility orc-btn-muted {
     --orc-btn-color: var(--color-orc-secondary);
     --orc-btn-color-hover: var(--color-orc-secondary-hover);
     --orc-btn-color-hover-border: var(--color-orc-secondary-hover-border);
@@ -100,12 +91,12 @@
 }
 
 @utility orc-input {
-    @apply block w-full px-2 py-1.5 rounded text-white bg-orc-bg border border-orc-border leading-normal;
+    @apply orc-card block w-full px-2 py-1.5 text-white leading-normal;
     height: var(--orc-control-height);
 }
 
 @utility orc-navbar {
-    @apply my-2 py-2 px-3 rounded flex flex-wrap items-end bg-orc-bg border border-orc-border;
+    @apply orc-card my-2 py-2 px-3 flex flex-wrap items-end;
 }
 
 @utility orc-room-buttons {
@@ -118,7 +109,7 @@
 }
 
 @utility orc-device-box {
-    @apply border border-[#333] p-2 rounded-xl;
+    @apply orc-group-box p-2;
 }
 
 @utility orc-routine-buttons {
@@ -173,7 +164,7 @@
 @utility orc-job-badges {
     @apply absolute left-1/2 -bottom-1 flex text-xs leading-none whitespace-nowrap;
     &:not(:empty) {
-        @apply rounded border border-orc-border bg-orc-bg px-0.5 py-px;
+        @apply orc-card px-0.5 py-px;
     }
 }
 
@@ -206,7 +197,7 @@
 }
 
 @utility orc-dialog {
-    @apply rounded border bg-orc-bg border-orc-border text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible;
+    @apply orc-card text-white p-6 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible;
     &::backdrop {
         @apply bg-black/50;
     }
@@ -218,7 +209,7 @@
 }
 
 @utility orc-dropdown-menu {
-    @apply min-w-40 px-0 py-1 rounded bg-orc-bg border border-orc-border;
+    @apply orc-card min-w-40 px-0 py-1;
     position: fixed;
     position-anchor: --orc-dropup;
     position-area: top span-right;

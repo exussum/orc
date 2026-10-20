@@ -30,7 +30,7 @@
                         {% if device.type == "AC" %}
                             <div class="col-span-full text-sm font-medium">{{ device.name }}</div>
                             <div class="col-span-full orc-device-grid relative py-4 pr-4">
-                                <div class="absolute inset-y-0 right-0 left-20 border border-[#333] rounded-xl pointer-events-none"></div>
+                                <div class="absolute inset-y-0 right-0 left-20 orc-group-box pointer-events-none"></div>
                                 <div class="text-sm">Power</div>
                                 <div class="grid grid-cols-2 gap-2">
                                     <button class="orc-btn orc-ac-power" data-state="off" data-id="{{ device.id }}" data-name="{{ device.name }}">Off</button>

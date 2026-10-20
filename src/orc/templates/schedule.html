@@ -16,7 +16,7 @@
                 <tr>
                     <td class="px-2 py-3 align-middle w-16">
                         <div class="relative inline-block">
-                            <button class="orc-btn{% if row.absent %} orc-btn-absent{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ row.routine_id }}" data-name="{{ row.name }}" data-duration="{{ durations.get(row.routine_id, 0) }}">&nbsp;</button>
+                            <button class="orc-btn{% if row.absent %} orc-btn-muted{% endif %} orc-runner w-8 h-8 p-0" data-id="{{ row.routine_id }}" data-name="{{ row.name }}" data-duration="{{ durations.get(row.routine_id, 0) }}">&nbsp;</button>
                             <span class="orc-job-badges">
                                 {%- if row.skip_replay %}<span>⏩</span>{% endif -%}
                                 {%- if row.weather %}<span>🌤</span>{% endif -%}

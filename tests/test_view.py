@@ -234,11 +234,11 @@ def test_device_unknown_returns_404(flask_client):
 @pytest.mark.parametrize(
     "kwargs, present, present_badges, absent_badges",
     [
-        ({"trigger": m.Always()}, (), (), (b"orc-btn-absent", "👤".encode(), "⏩".encode())),
-        ({"trigger": m.Present("me")}, (), (b"orc-btn-absent", "👤".encode()), ()),
-        ({"trigger": m.Present("me")}, ("me",), (), (b"orc-btn-absent",)),
-        ({"trigger": m.Anyone()}, ("me",), (), (b"orc-btn-absent",)),
-        ({"trigger": m.Anyone()}, (), (b"orc-btn-absent",), ()),
+        ({"trigger": m.Always()}, (), (), (b"orc-btn-muted orc-runner", "👤".encode(), "⏩".encode())),
+        ({"trigger": m.Present("me")}, (), (b"orc-btn-muted orc-runner", "👤".encode()), ()),
+        ({"trigger": m.Present("me")}, ("me",), (), (b"orc-btn-muted orc-runner",)),
+        ({"trigger": m.Anyone()}, ("me",), (), (b"orc-btn-muted orc-runner",)),
+        ({"trigger": m.Anyone()}, (), (b"orc-btn-muted orc-runner",), ()),
         ({"trigger": m.Weather(m.WeatherCondition.SUNNY)}, (), ("🌤".encode(),), ()),
         ({"skip_replay": True}, (), ("⏩".encode(),), ()),
     ],
