@@ -133,8 +133,8 @@
 }
 
 @utility orc-scoop {
-    /* a 22px square in the gap, filled outside a quarter circle centred on its far corner */
-    @apply w-[22px] h-[22px];
+    /* corner radius plus the gap, so the fillet is concentric with the neighbouring corner */
+    @apply w-[27px] h-[27px];
     background: radial-gradient(farthest-side at var(--scoop-at), transparent 99%, var(--orc-group-fill));
 }
 
@@ -163,7 +163,7 @@
 }
 
 @utility orc-group-title {
-    @apply px-1 pt-1 text-xs font-semibold opacity-70;
+    @apply px-2 pt-2 text-xs font-semibold opacity-70;
 }
 
 @utility orc-group-cell {
