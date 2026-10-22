@@ -96,5 +96,14 @@ def test_ac_state_eq(a, b, expected):
     assert (a == b) is expected
 
 
+def test_secrets_update_in_place_names_changes():
+    secrets = m.Secrets(mqtt_user="a", other={"X": "1", "Y": "2"})
+    other = secrets.other
+    assert secrets.update(m.Secrets(mqtt_user="b", other={"X": "1", "Z": "3"})) == {"mqtt_user", "Y", "Z"}
+    assert secrets.mqtt_user == "b"
+    assert secrets.other is other
+    assert secrets.other == {"X": "1", "Z": "3"}
+
+
 def _cmd(what, value):
     return em.Command(m.Devices(what), value)
