@@ -28,4 +28,4 @@ theme 'work day' ROUTINE_RESET   1:00
 theme 'day off'  ROUTINE_DEFAULT sunset
 
 person Alice host9 aa:bb
-tag Bob EIK_BOB 2026-01-02T03:04:05+00:00
+tag Bob 'Bob Tag'

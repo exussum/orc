@@ -35,7 +35,7 @@ device only Button REMOTE scene
 
 person Alice host9 aa:bb
 
-tag Alice EIK_ALICE 2026-01-02T03:04:05+00:00
+tag Alice 'Alice Tag'
 
 routine append ROUTINE_DEFAULT Chromecast.CC stop --trigger-person Alice
 

@@ -13,13 +13,14 @@ _SCHEMA = (
     "CREATE TABLE IF NOT EXISTS orc_theme_override "
     "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS orc_durations (name TEXT PRIMARY KEY, samples INTEGER NOT NULL, avg REAL NOT NULL)",
-    "CREATE TABLE IF NOT EXISTS orc_ble_clocks (person TEXT PRIMARY KEY, offset INTEGER NOT NULL, heard INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS orc_ble_tags "
+    "(person TEXT PRIMARY KEY, eik BLOB NOT NULL, pair_date INTEGER NOT NULL, offset INTEGER, heard INTEGER)",
     "CREATE TABLE IF NOT EXISTS orc_push_subscriptions (endpoint TEXT PRIMARY KEY, public_key TEXT NOT NULL, auth_secret TEXT NOT NULL)",
 )
 _DELETE_PUSH = "DELETE FROM orc_push_subscriptions WHERE endpoint = ?"
 _DELETE_OVERRIDE = "DELETE FROM orc_theme_override WHERE id = 0"
 _SELECT_PUSH = "SELECT endpoint, public_key, auth_secret FROM orc_push_subscriptions"
-_SELECT_CLOCKS = "SELECT person, offset, heard FROM orc_ble_clocks"
+_SELECT_TAGS = "SELECT person, eik, pair_date, offset, heard FROM orc_ble_tags"
 _SELECT_OVERRIDE = "SELECT name, start, end FROM orc_theme_override WHERE id = 0"
 _SELECT_DURATIONS = "SELECT name, samples, avg FROM orc_durations ORDER BY name"
 _UPSERT_PUSH = (
@@ -30,10 +31,10 @@ _UPSERT_OVERRIDE = (
     "INSERT INTO orc_theme_override (id, name, start, end) VALUES (0, ?, ?, ?) "
     "ON CONFLICT(id) DO UPDATE SET name=excluded.name, start=excluded.start, end=excluded.end"
 )
-_UPSERT_CLOCK = (
-    "INSERT INTO orc_ble_clocks (person, offset, heard) VALUES (?, ?, ?) "
-    "ON CONFLICT(person) DO UPDATE SET offset = excluded.offset, heard = excluded.heard "
-    f"WHERE abs(excluded.offset - orc_ble_clocks.offset) > {_CLOCK_MOVED_SECONDS}"
+_UPDATE_CLOCK = "UPDATE orc_ble_tags SET offset = ?, heard = ? WHERE person = ? AND (offset IS NULL OR abs(? - offset) > ?)"
+_UPSERT_TAG_KEY = (
+    "INSERT INTO orc_ble_tags (person, eik, pair_date) VALUES (?, ?, ?) "
+    "ON CONFLICT(person) DO UPDATE SET eik = excluded.eik, pair_date = excluded.pair_date"
 )
 _UPSERT_DURATION = (
     "INSERT INTO orc_durations (name, samples, avg) VALUES (?, ?, ?) "
@@ -60,9 +61,12 @@ def fetch_push_subscriptions(conn: sqlite3.Connection) -> list[m.PushSubscriptio
 
 
 @connected
-def fetch_tag_clocks(conn: sqlite3.Connection) -> dict[str, m.TagClock]:
-    rows = conn.execute(_SELECT_CLOCKS).fetchall()
-    return {person: m.TagClock(offset, heard) for person, offset, heard in rows}
+def fetch_tags(conn: sqlite3.Connection) -> dict[str, tuple[m.TagKey, m.TagClock | None]]:
+    rows = conn.execute(_SELECT_TAGS).fetchall()
+    return {
+        person: (m.TagKey(bytes(eik), pair_date), m.TagClock(offset, heard) if heard is not None else None)
+        for person, eik, pair_date, offset, heard in rows
+    }
 
 
 @connected
@@ -97,8 +101,13 @@ def insert_theme_override(conn: sqlite3.Connection, override: tuple[str, date, d
 
 
 @connected
-def upsert_tag_clock(conn: sqlite3.Connection, person: str, clock: m.TagClock) -> None:
-    conn.execute(_UPSERT_CLOCK, (person, clock.offset, clock.heard))
+def upsert_tag_key(conn: sqlite3.Connection, person: str, key: m.TagKey) -> None:
+    conn.execute(_UPSERT_TAG_KEY, (person, key.eik, key.pair_date))
+
+
+@connected
+def update_tag_clock(conn: sqlite3.Connection, person: str, clock: m.TagClock) -> None:
+    conn.execute(_UPDATE_CLOCK, (clock.offset, clock.heard, person, clock.offset, _CLOCK_MOVED_SECONDS))
 
 
 def durations() -> dict[str, tuple[int, float]]:

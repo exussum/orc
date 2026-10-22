@@ -270,25 +270,25 @@ example, a Chipolo POP. A `tag` line binds a tag to a person:
 
 ```
 person Alice alices-phone.example aa:bb:cc:dd:ee:ff
-tag    Alice EIK_ALICE 2026-09-22T13:48:37+00:00
+tag    Alice 'Alice Keys'
 ```
 
-Pair the tag with Google Find Hub on an Android phone, then export its
-identity key and pair date with GoogleFindMyTools. The key goes in the
-secrets provider under the name the `tag` line references (`EIK_ALICE`
-above), as 32 bytes of hex; the pair date goes in the line as ISO 8601.
+The second word is the tag's name in the Find Hub app. Pair the tag with
+Google Find Hub on an Android phone; orc reads its identity key and pair
+date from the account through the `findhub` provider and keeps them in
+`jobs_db`, so a boot never waits on Google. The account login comes from
+four secrets, `FIND_HUB_USERNAME`, `FIND_HUB_AAS_TOKEN`,
+`FIND_HUB_ANDROID_ID` and `FIND_HUB_OWNER_KEY`, produced once by
+GoogleFindMyTools' Chrome login and copied into the secrets provider with
+`scripts/seed_find_hub.py`.
 
-Matching is fully local: a background listener computes the tag's rotating
+Matching is local: a background listener computes the tag's rotating
 ephemeral ID (EID) from the key and pair date and hears every advertisement
 the tag sends, so every hearing updates the person's presence directly
-instead of gambling on a scan window. After the one-time key export, nothing
-talks to Google.
-
-Find Hub can re-key a tag without any action on your side; the tag then
-broadcasts EIDs the stored key no longer derives and goes absent. Export the
-key again, update the secret, and press **Refresh Secrets** on the System
-page; the listener picks up the new key on its next index rebuild, within
-five minutes, with no restart.
+instead of gambling on a scan window. Find Hub can re-key a tag without any
+action on your side, so orc re-reads each tag's key from the account every
+12 hours and on **Refresh Secrets**; a changed key reaches the listener
+within five minutes, no restart.
 
 The EID scheme is Google's public
 [Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).

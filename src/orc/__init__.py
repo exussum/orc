@@ -11,7 +11,7 @@ from orc.collections import of_type
 from orc.dal.mqtt import paho as mqtt
 from orc.dal.secrets import stub as secrets_stub
 from orc.kernel.declarations import collect_declarations
-from orc.kernel.loader import ble_keys, check_secrets, parse_config, secret_needs, validate
+from orc.kernel.loader import check_secrets, parse_config, secret_needs, validate
 
 Light: type[m.DeviceEnum] = m.DeviceEnum("Light", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
 Chromecast: type[m.DeviceEnum] = m.DeviceEnum("Chromecast", {}, module="orc")  # type: ignore[call-arg,arg-type,assignment]
@@ -99,8 +99,9 @@ class Config:
 
         self.people = parsed.person
         self.providers = parsed.provider
-        self.secret_needs = secret_needs(self.registry, parsed.provider, parsed.tag)
-        self.ble_tags = ble_keys(parsed.tag, self.secrets, parsed.setting.tz)
+        self.secret_needs = secret_needs(self.registry, parsed.provider)
+        self.tags = parsed.tag
+        self.ble_tags: dict[str, m.BleKey] = {}
         self.routines = parsed.routine
         self.themes = parsed.theme
         self.ad_hoc_routines = parsed.ad_hoc
