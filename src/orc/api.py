@@ -458,11 +458,11 @@ def start_ble_listener() -> None:
     for person, (key, _clock) in tags.items():
         net.presence.set_key(person, key)
     net.presence.start(
+        {tag.person for tag in config.tags},
         config.settings.tz,
         report,
         clocks={person: clock for person, (_key, clock) in tags.items() if clock},
         on_clock=sqlite.update_tag_clock,
-        listen=bool(config.tags),
     )
 
 
@@ -522,11 +522,11 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
 
 def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM, *, probe: bool = False) -> set[str]:
     pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
-    if not pairs and not config.tags:
+    if not pairs and not net.presence.tags:
         return present_names()
     present = present_names()
     stale = set(net.presence.seen()) - present
-    tags = {tag.person for tag in config.tags}
+    tags = net.presence.tags
     net.presence.probe(tags - present if probe else stale & tags, trigger)
     if lost := stale - present_names():
         expire_presence(sorted(lost), trigger)
