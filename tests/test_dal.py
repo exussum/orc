@@ -122,7 +122,7 @@ class TestPresence:
     EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
     ANCHOR = int(NOW.timestamp()) - 5000
-    KEY = BleKey("EIK_ALICE", ANCHOR, m.Secrets(other={"EIK_ALICE": EIK.hex()}))
+    KEY = BleKey(lambda: TestPresence.EIK, ANCHOR)
 
     ADDRESS = "11:22:33:44:55:66"
 
@@ -186,7 +186,7 @@ class TestPresence:
 
     def test_wrong_key_names_nobody(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey("EIK_ALICE", self.ANCHOR, m.Secrets(other={"EIK_ALICE": "00" * 32}))})
+        presence = self._hear([frame], {"Alice": BleKey(lambda: bytes(32), self.ANCHOR)})
         assert self._present(presence) == set()
 
     def test_forget_clears_the_hearing(self):

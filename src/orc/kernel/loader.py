@@ -155,8 +155,12 @@ def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, 
         pair_date = datetime.fromisoformat(tag.pair_date)
         if not pair_date.tzinfo:
             pair_date = pair_date.replace(tzinfo=tz)
-        keys[tag.person] = m.BleKey(tag.secret, int(pair_date.timestamp()), secrets)
+        keys[tag.person] = m.BleKey(_eik_reader(getattr(secrets, tag.secret)), int(pair_date.timestamp()))
     return keys
+
+
+def _eik_reader(read: m.SecretReader) -> Callable[[], bytes]:
+    return lambda: engine_cast.hex32(read())
 
 
 def secret_needs(registry: m.Registry, providers: interfaces.Provider, tags: list[m.BleTag]) -> dict[str, Callable[[str], Any]]:

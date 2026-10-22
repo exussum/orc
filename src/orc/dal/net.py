@@ -252,6 +252,6 @@ def _eid_index(tags: Mapping[str, m.BleKey], clocks: Mapping[str, m.TagClock], n
             span = _BLE_SEARCH_WINDOWS
         for step in range(-span, span + 1):
             window = (expected + step * FMDN_ROTATION_SECONDS) & ~(FMDN_ROTATION_SECONDS - 1)
-            for eid in fmdn_eids(key.eik, window):
+            for eid in fmdn_eids(key.eik(), window):
                 index[eid] = (person, window)
     return index

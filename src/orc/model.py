@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 
 type Listener = Callable[[Status], None]
+type SecretReader = Callable[[], str]
 type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
 
@@ -67,13 +68,8 @@ class BleTag(NamedTuple):
 
 
 class BleKey(NamedTuple):
-    secret: str
+    eik: Callable[[], bytes]
     anchor: int  # unix seconds of the tag's clock zero (its pair date)
-    secrets: "Secrets"
-
-    @property
-    def eik(self) -> bytes:
-        return cast.hex32(self.secrets.other[self.secret])
 
 
 class TagClock(NamedTuple):
@@ -464,6 +460,11 @@ class Secrets:
     # (named by `tag` config lines). A key with a fixed in-repo consumer
     # belongs on a typed field instead.
     other: dict[str, str] = field(default_factory=dict)
+
+    def __getattr__(self, name: str) -> SecretReader:
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return lambda: self.other[name]
 
     def update(self, new: "Secrets") -> set[str]:
         typed = {f.name for f in fields(self) if f.name != "other"}
