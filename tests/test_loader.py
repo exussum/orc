@@ -184,7 +184,8 @@ def test_ble_keys_derives_eik_and_anchor():
     secrets = m.Secrets(other={"EIK_ALICE": "ab" * 32})
     tags = [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05+00:00")]
     anchor = int(datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp())
-    assert loader.ble_keys(tags, secrets, timezone.utc) == {"Alice": m.BleKey(bytes.fromhex("ab" * 32), anchor)}
+    assert loader.ble_keys(tags, secrets, timezone.utc) == {"Alice": m.BleKey("EIK_ALICE", anchor, secrets)}
+    assert loader.ble_keys(tags, secrets, timezone.utc)["Alice"].eik == bytes.fromhex("ab" * 32)
 
 
 def test_ble_keys_naive_pair_date_reads_config_tz():

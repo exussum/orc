@@ -100,7 +100,8 @@ class House:
 
     def advertise(self, name):
         now = api.local_now()
-        key = config.ble_tags.setdefault(name, m.BleKey(name.encode().ljust(32, b"\0"), int(now.timestamp()) - 5000))
+        config.secrets.other.setdefault(f"EIK_{name}", name.encode().ljust(32, b"\0").hex())
+        key = config.ble_tags.setdefault(name, m.BleKey(f"EIK_{name}", int(now.timestamp()) - 5000, config.secrets))
         frame = bytes([0x40]) + security.fmdn_eids(key.eik, int(now.timestamp()) - key.anchor)[1]
         net.presence._tags = config.ble_tags
         net.presence._index = net._eid_index(config.ble_tags, net.presence._clocks.copy(), now)

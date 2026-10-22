@@ -122,6 +122,7 @@ class TestPresence:
     EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
     ANCHOR = int(NOW.timestamp()) - 5000
+    KEY = BleKey("EIK_ALICE", ANCHOR, m.Secrets(other={"EIK_ALICE": EIK.hex()}))
 
     ADDRESS = "11:22:33:44:55:66"
 
@@ -139,7 +140,7 @@ class TestPresence:
 
     def _heard(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        return self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        return self._hear([frame], {"Alice": self.KEY})
 
     def test_heard_tag_names_person(self):
         presence = self._heard()
@@ -148,13 +149,13 @@ class TestPresence:
     def test_neighbour_window_still_matches(self):
         # a slightly-off pair date lands the true window one rotation from expected
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[0]
-        presence = self._hear([frame], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._hear([frame], {"Alice": self.KEY})
         assert self._present(presence) == {"Alice"}
 
     def test_far_window_matches_and_narrows_the_index(self):
         far = 5000 + 6 * security.FMDN_ROTATION_SECONDS
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, far)[1]
-        tags = {"Alice": BleKey(self.EIK, self.ANCHOR)}
+        tags = {"Alice": self.KEY}
         presence = self._hear([frame], tags)
         assert self._present(presence) == {"Alice"}
         narrowed = net._eid_index(tags, presence._clocks.copy(), self.NOW)
@@ -162,7 +163,7 @@ class TestPresence:
         assert set(security.fmdn_eids(self.EIK, far)) <= narrowed.keys()
 
     def test_stale_clock_widens_the_index_again(self):
-        tags = {"Alice": BleKey(self.EIK, self.ANCHOR)}
+        tags = {"Alice": self.KEY}
         clocks = {"Alice": m.TagClock(0, int(self.NOW.timestamp()) - net._BLE_CLOCK_TRUST_SECONDS)}
         assert len(net._eid_index(tags, clocks, self.NOW)) == 3 * (2 * net._BLE_SEARCH_WINDOWS + 1)
 
@@ -175,17 +176,17 @@ class TestPresence:
         presence._on_clock.assert_called_once_with("Alice", m.TagClock(5120 - 5000, int(self.NOW.timestamp()), second[1:]))
 
     def test_a_seeded_clock_starts_narrow(self):
-        tags = {"Alice": BleKey(self.EIK, self.ANCHOR)}
+        tags = {"Alice": self.KEY}
         clocks = {"Alice": m.TagClock(0, int(self.NOW.timestamp()))}
         assert len(net._eid_index(tags, clocks, self.NOW)) == 9
 
     def test_silence_names_nobody(self):
-        presence = self._hear([], {"Alice": BleKey(self.EIK, self.ANCHOR)})
+        presence = self._hear([], {"Alice": self.KEY})
         assert self._present(presence) == set()
 
     def test_wrong_key_names_nobody(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(bytes(32), self.ANCHOR)})
+        presence = self._hear([frame], {"Alice": BleKey("EIK_ALICE", self.ANCHOR, m.Secrets(other={"EIK_ALICE": "00" * 32}))})
         assert self._present(presence) == set()
 
     def test_forget_clears_the_hearing(self):

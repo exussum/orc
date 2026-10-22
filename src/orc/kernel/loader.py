@@ -155,7 +155,7 @@ def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, 
         pair_date = datetime.fromisoformat(tag.pair_date)
         if not pair_date.tzinfo:
             pair_date = pair_date.replace(tzinfo=tz)
-        keys[tag.person] = m.BleKey(engine_cast.hex32(secrets.other[tag.secret]), int(pair_date.timestamp()))
+        keys[tag.person] = m.BleKey(tag.secret, int(pair_date.timestamp()), secrets)
     return keys
 
 
