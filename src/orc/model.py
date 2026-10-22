@@ -2,7 +2,7 @@ import importlib
 import math
 from collections import defaultdict
 from collections.abc import Callable, ItemsView, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, StrEnum, auto
 from pathlib import Path
@@ -459,6 +459,16 @@ class Secrets:
     # (named by `tag` config lines). A key with a fixed in-repo consumer
     # belongs on a typed field instead.
     other: dict[str, str] = field(default_factory=dict)
+
+    def update(self, new: "Secrets") -> set[str]:
+        typed = {f.name for f in fields(self) if f.name != "other"}
+        changed = {name for name in typed if getattr(self, name) != getattr(new, name)}
+        changed |= {name for name in self.other.keys() | new.other.keys() if self.other.get(name) != new.other.get(name)}
+        for name in typed:
+            setattr(self, name, getattr(new, name))
+        self.other.clear()
+        self.other.update(new.other)
+        return changed
 
 
 class Scheduler(Protocol):

@@ -1,4 +1,5 @@
 import re
+from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -210,6 +211,17 @@ def test_check_secrets_reads_typed_fields():
     assert loader.check_secrets(m.Secrets(vapid_private_key="short"), {"vapid_private_key": cast.key32}) == {
         "vapid_private_key": "expected key32"
     }
+
+
+def test_refresh_secrets_keeps_old_values_on_bad_vault(monkeypatch):
+    import orc
+
+    fetch = SimpleNamespace(fetch_secrets=lambda: m.Secrets(other={"EIK_ALICE": "short"}))
+    monkeypatch.setattr(orc.config, "providers", orc.config.providers._replace(secrets=fetch))
+    before = replace(orc.config.secrets)
+    with pytest.raises(ConfigError, match="EIK_ALICE expected hex32"):
+        orc.config.refresh_secrets()
+    assert orc.config.secrets == before
 
 
 def test_secret_needs_gathers_providers_plugins_and_tags():
