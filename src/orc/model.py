@@ -67,8 +67,13 @@ class BleTag(NamedTuple):
 
 
 class BleKey(NamedTuple):
-    eik: bytes
+    secret: str
     anchor: int  # unix seconds of the tag's clock zero (its pair date)
+    secrets: "Secrets"
+
+    @property
+    def eik(self) -> bytes:
+        return cast.hex32(self.secrets.other[self.secret])
 
 
 class TagClock(NamedTuple):
