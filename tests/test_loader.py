@@ -1,6 +1,6 @@
 import re
 from dataclasses import replace
-from datetime import UTC, datetime, time, timedelta, timezone
+from datetime import UTC, time, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -162,37 +162,12 @@ def test_validate_accepts_complete_config():
 
 
 def test_tag_lines_parse():
-    assert parse("core").tag == [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05+00:00")]
+    assert parse("core").tag == [m.BleTag("Alice", "Alice Tag")]
 
 
 def test_validate_unknown_tag_person():
     with pytest.raises(ConfigError, match="Unknown person 'Bob' in tag line"):
         validate(parse("tag_unknown_person"))
-
-
-def test_validate_bad_tag_pair_date():
-    with pytest.raises(ConfigError, match="Invalid pair_date 'yesterday' in tag line"):
-        validate(parse("tag_bad_pair_date"))
-
-
-def test_ble_keys_empty_without_secrets():
-    tags = [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05+00:00")]
-    assert loader.ble_keys(tags, m.Secrets(), timezone.utc) == {}
-
-
-def test_ble_keys_derives_eik_and_anchor():
-    secrets = m.Secrets(other={"EIK_ALICE": "ab" * 32})
-    tags = [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05+00:00")]
-    anchor = int(datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp())
-    key = loader.ble_keys(tags, secrets, timezone.utc)["Alice"]
-    assert (key.eik(), key.anchor) == (bytes.fromhex("ab" * 32), anchor)
-
-
-def test_ble_keys_naive_pair_date_reads_config_tz():
-    secrets = m.Secrets(other={"EIK_ALICE": "ab" * 32})
-    tags = [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05")]
-    anchor = int(datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp())
-    assert loader.ble_keys(tags, secrets, timezone.utc)["Alice"].anchor == anchor
 
 
 @pytest.mark.parametrize(
@@ -217,23 +192,18 @@ def test_check_secrets_reads_typed_fields():
 def test_refresh_secrets_keeps_old_values_on_bad_vault(monkeypatch):
     import orc
 
-    fetch = SimpleNamespace(fetch_secrets=lambda: m.Secrets(other={"EIK_ALICE": "short"}))
+    fetch = SimpleNamespace(fetch_secrets=lambda: m.Secrets(other={"TOMTOM_KEY": ""}))
     monkeypatch.setattr(orc.config, "providers", orc.config.providers._replace(secrets=fetch))
     before = replace(orc.config.secrets)
-    with pytest.raises(ConfigError, match="EIK_ALICE expected hex32"):
+    with pytest.raises(ConfigError, match="TOMTOM_KEY not set"):
         orc.config.refresh_secrets()
     assert orc.config.secrets == before
 
 
-def test_secret_needs_gathers_providers_plugins_and_tags():
+def test_secret_needs_gathers_providers_and_plugins():
     registry = SimpleNamespace(secrets={"PLUGIN_KEY": cast.nonblank})
     providers = (SimpleNamespace(REQUIRED_SECRETS={"market_holidays_url": cast.url}), SimpleNamespace(REQUIRED_SECRETS={}), None)
-    tags = [m.BleTag("Alice", "EIK_ALICE", "2026-01-02T03:04:05+00:00")]
-    assert loader.secret_needs(registry, providers, tags) == {
-        "market_holidays_url": cast.url,
-        "PLUGIN_KEY": cast.nonblank,
-        "EIK_ALICE": cast.hex32,
-    }
+    assert loader.secret_needs(registry, providers) == {"market_holidays_url": cast.url, "PLUGIN_KEY": cast.nonblank}
 
 
 @pytest.mark.parametrize(

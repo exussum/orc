@@ -63,12 +63,11 @@ class Person(NamedTuple):
 
 class BleTag(NamedTuple):
     person: str
-    secret: str
-    pair_date: str
+    device: str
 
 
 class BleKey(NamedTuple):
-    eik: Callable[[], bytes]
+    eik: bytes
     anchor: int  # unix seconds of the tag's clock zero (its pair date)
 
 

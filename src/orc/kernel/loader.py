@@ -2,7 +2,7 @@ import os
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, replace
-from datetime import datetime, timedelta, tzinfo
+from datetime import timedelta
 from functools import partial
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -50,7 +50,7 @@ routine append <id> <devices> <state> [--trigger-person=<person>] [--trigger-wea
 
 setting <key> <value>
 
-tag <person> <secret> <pair_date>
+tag <person> <device>
 
 theme <name> <routine> <time>
 """
@@ -140,36 +140,14 @@ def validate(config: SimpleNamespace) -> None:
     for tag in config.tag:
         if tag.person not in config.person:
             raise ConfigError(f"Unknown person {tag.person!r} in tag line: expected one of {tuple(config.person)}")
-        try:
-            datetime.fromisoformat(tag.pair_date)
-        except ValueError:
-            raise ConfigError(f"Invalid pair_date {tag.pair_date!r} in tag line: expected ISO 8601") from None
 
 
-def ble_keys(tags: list[m.BleTag], secrets: m.Secrets, tz: tzinfo) -> dict[str, m.BleKey]:
-    """Per-person EID keys; empty when secrets aren't loaded (the blank first pass)."""
-    if not secrets.other:
-        return {}
-    keys = {}
-    for tag in tags:
-        pair_date = datetime.fromisoformat(tag.pair_date)
-        if not pair_date.tzinfo:
-            pair_date = pair_date.replace(tzinfo=tz)
-        keys[tag.person] = m.BleKey(_eik_reader(getattr(secrets, tag.secret)), int(pair_date.timestamp()))
-    return keys
-
-
-def _eik_reader(read: m.SecretReader) -> Callable[[], bytes]:
-    return lambda: engine_cast.hex32(read())
-
-
-def secret_needs(registry: m.Registry, providers: interfaces.Provider, tags: list[m.BleTag]) -> dict[str, Callable[[str], Any]]:
+def secret_needs(registry: m.Registry, providers: interfaces.Provider) -> dict[str, Callable[[str], Any]]:
     needs: dict[str, Callable[[str], Any]] = {}
     for backend in providers:
         if backend:
             needs |= backend.REQUIRED_SECRETS
     needs |= registry.secrets
-    needs |= {tag.secret: engine_cast.hex32 for tag in tags}
     return needs
 
 

@@ -183,17 +183,23 @@ def test_durations_reach_the_table_one_batch_at_a_time():
     "offsets, expected",
     [([100], 100), ([100, 400], 100), ([100, 700], 700), ([100, 700, 300], 700), ([100, 700, 100], 100)],
 )
-def test_tag_clock_row_moves_only_by_more_than_half_a_window(offsets, expected):
+def test_tag_clock_moves_only_by_more_than_half_a_window(offsets, expected):
+    sqlite.upsert_tag_key("Alice", m.TagKey(bytes(32), 5))
     for offset in offsets:
-        sqlite.upsert_tag_clock("Alice", m.TagClock(offset, 0))
-    assert sqlite.fetch_tag_clocks() == {"Alice": m.TagClock(expected, 0)}
+        sqlite.update_tag_clock("Alice", m.TagClock(offset, 0))
+    assert sqlite.fetch_tags() == {"Alice": (m.TagKey(bytes(32), 5), m.TagClock(expected, 0))}
+
+
+def test_tag_clock_needs_a_key_row():
+    sqlite.update_tag_clock("Bob", m.TagClock(100, 0))
+    assert "Bob" not in sqlite.fetch_tags()
 
 
 class TestPresence:
     EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
     ANCHOR = int(NOW.timestamp()) - 5000
-    KEY = BleKey(lambda: TestPresence.EIK, ANCHOR)
+    KEY = BleKey(EIK, ANCHOR)
 
     ADDRESS = "11:22:33:44:55:66"
 
@@ -257,7 +263,7 @@ class TestPresence:
 
     def test_wrong_key_names_nobody(self):
         frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
-        presence = self._hear([frame], {"Alice": BleKey(lambda: bytes(32), self.ANCHOR)})
+        presence = self._hear([frame], {"Alice": BleKey(bytes(32), self.ANCHOR)})
         assert self._present(presence) == set()
 
     def test_forget_clears_the_hearing(self):

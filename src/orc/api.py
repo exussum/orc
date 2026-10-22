@@ -454,12 +454,14 @@ def start_ble_listener() -> None:
             log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
         reported = present
 
+    tags = sqlite.fetch_tags()
+    config.ble_tags.update({person: m.BleKey(key.eik, key.pair_date) for person, (key, clock) in tags.items()})
     net.presence.start(
         config.ble_tags,
         config.settings.tz,
         report,
-        clocks=sqlite.fetch_tag_clocks(),
-        on_clock=sqlite.upsert_tag_clock,
+        clocks={person: clock for person, (key, clock) in tags.items() if clock},
+        on_clock=sqlite.update_tag_clock,
     )
 
 

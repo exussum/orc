@@ -610,7 +610,7 @@ class TestPresence:
     def test_check_presence_with_only_tags_reads_memory(self):
         with (
             patch.object(config, "people", {}),
-            patch.object(config, "ble_tags", {"Alice": m.BleKey(lambda: bytes(32), 0)}),
+            patch.object(config, "ble_tags", {"Alice": m.BleKey(bytes(32), 0)}),
         ):
             api.mark_present(["Alice"], api.local_now(), TRIGGER)
             assert api.check_presence(TRIGGER) == {"Alice"}
@@ -667,7 +667,7 @@ class TestPresence:
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
         api.mark_present(["Alice"], api.local_now() - timedelta(hours=10), TRIGGER)
         with (
-            patch.object(config, "ble_tags", {name: m.BleKey(lambda: bytes(32), 0) for name in ("Alice", "Bob", "Carol")}),
+            patch.object(config, "ble_tags", {name: m.BleKey(bytes(32), 0) for name in ("Alice", "Bob", "Carol")}),
             patch.object(net.presence, "probe") as probe,
             patch.object(net, "scan_presence", return_value=(set(), [])),
         ):

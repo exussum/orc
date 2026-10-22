@@ -63,7 +63,7 @@ room 'Living Room' Light.LIVING_ROOM  on
 room Bedroom       Light.BEDROOM_LAMP on
 
 person Alice alice.example aa:bb:cc:dd:ee:ff
-tag    Alice EIK_ALICE 2026-01-02T03:04:05+00:00
+tag    Alice 'Alice Tag'
 
 ad_hoc define AD_HOC_SILENCE        Silence          --section scene --no-reset Chromecast stop
 ad_hoc define AD_HOC_DOG            Dog              --section scene --delay 7  Chromecast stop
