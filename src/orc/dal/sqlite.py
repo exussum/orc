@@ -61,10 +61,10 @@ def fetch_push_subscriptions(conn: sqlite3.Connection) -> list[m.PushSubscriptio
 
 
 @connected
-def fetch_tags(conn: sqlite3.Connection) -> dict[str, tuple[m.TagKey, m.TagClock | None]]:
+def fetch_tags(conn: sqlite3.Connection) -> dict[str, tuple[m.BleKey, m.TagClock | None]]:
     rows = conn.execute(_SELECT_TAGS).fetchall()
     return {
-        person: (m.TagKey(bytes(eik), pair_date), m.TagClock(offset, heard) if heard is not None else None)
+        person: (m.BleKey(bytes(eik), pair_date), m.TagClock(offset, heard) if heard is not None else None)
         for person, eik, pair_date, offset, heard in rows
     }
 
@@ -101,8 +101,8 @@ def insert_theme_override(conn: sqlite3.Connection, override: tuple[str, date, d
 
 
 @connected
-def upsert_tag_key(conn: sqlite3.Connection, person: str, key: m.TagKey) -> None:
-    conn.execute(_UPSERT_TAG_KEY, (person, key.eik, key.pair_date))
+def upsert_tag_key(conn: sqlite3.Connection, person: str, key: m.BleKey) -> None:
+    conn.execute(_UPSERT_TAG_KEY, (person, key.eik, key.anchor))
 
 
 @connected

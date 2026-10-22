@@ -85,7 +85,7 @@ def setup(ctx: AppContext) -> None:
     sensor.timed = _windows(sensor.timed)
     if sensor.setting.listener not in ctx.config.people:
         raise ValueError(f"unknown listener {sensor.setting.listener!r} — expected one of {tuple(ctx.config.people)}")
-    if ctx.config.ble_tags and sensor.setting.cleanup_delay_minutes < MIN_BLE_CLEANUP_MINUTES:
+    if ctx.config.tags and sensor.setting.cleanup_delay_minutes < MIN_BLE_CLEANUP_MINUTES:
         raise ValueError(f"cleanup_delay_minutes {sensor.setting.cleanup_delay_minutes} — BLE tags need at least {MIN_BLE_CLEANUP_MINUTES}")
     ctx.plugin_state[orc_extras.entrance_sensor] = None
     ctx.api.add_listener(partial(plugins._on_event, ctx, sensor))

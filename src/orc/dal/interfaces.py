@@ -9,6 +9,7 @@ from orc.dal.mqtt import hubitat as _adapter_default
 from orc.dal.push import webpush as _push_default
 from orc.dal.secrets import bws as _secrets_default
 from orc.model import (
+    BleKey,
     Capability,
     DeviceEnum,
     DeviceState,
@@ -20,7 +21,6 @@ from orc.model import (
     Secrets,
     SoundState,
     Status,
-    TagKey,
     WeatherCondition,
 )
 
@@ -86,7 +86,7 @@ class HubitatService(Backend, Protocol):
 
 
 class FindHubService(Backend, Protocol):
-    def identity_key(self, device: str, secrets: Secrets, timeout: int) -> TagKey: ...
+    def identity_key(self, device: str, secrets: Secrets, timeout: int) -> BleKey: ...
 
 
 class Provider(NamedTuple):

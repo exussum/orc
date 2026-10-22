@@ -44,7 +44,7 @@ def entrance_ctx(ctx):
     ctx.config.devices = orc.config.devices
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
     ctx.config.people = {"Rex": []}
-    ctx.config.ble_tags = {}
+    ctx.config.tags = []
     ctx.config.reset_config = SimpleNamespace(commands=(RESET,))
     ctx.config.ad_hoc_routines = {
         "AD_HOC_LIGHTS_OFF": m.AdhocAction((LIGHTS_OFF,), name="Lights Off", reset=False),
@@ -79,7 +79,7 @@ def test_entrance_config_loads(entrance_ctx):
 def test_entrance_ble_needs_slower_cleanup(entrance_ctx):
     config = entrance_ctx.config.plugin_configs[entrance_sensor.CONFIG]
     entrance_ctx.config.plugin_configs[entrance_sensor.CONFIG] = config.replace("cleanup_delay_minutes 2", "cleanup_delay_minutes 0")
-    entrance_ctx.config.ble_tags = {"Rex": object()}
+    entrance_ctx.config.tags = [m.BleTag("Rex", "Rex Tag")]
     with pytest.raises(ValueError, match="cleanup_delay_minutes"):
         entrance_sensor.setup(entrance_ctx)
 

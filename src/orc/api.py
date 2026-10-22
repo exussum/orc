@@ -455,13 +455,14 @@ def start_ble_listener() -> None:
         reported = present
 
     tags = sqlite.fetch_tags()
-    config.ble_tags.update({person: m.BleKey(key.eik, key.pair_date) for person, (key, clock) in tags.items()})
+    for person, (key, _clock) in tags.items():
+        net.presence.set_key(person, key)
     net.presence.start(
-        config.ble_tags,
         config.settings.tz,
         report,
-        clocks={person: clock for person, (key, clock) in tags.items() if clock},
+        clocks={person: clock for person, (_key, clock) in tags.items() if clock},
         on_clock=sqlite.update_tag_clock,
+        listen=bool(config.tags),
     )
 
 
@@ -489,17 +490,17 @@ def schedule_tag_key_refresh(trigger: m.Trigger) -> None:
 def refresh_tag_keys(trigger: m.Trigger) -> None:
     provider = config.providers.findhub
     assert provider is not None
+    rows = sqlite.fetch_tags()
     for tag in config.tags:
         try:
             key = provider.identity_key(tag.device, config.secrets, config.settings.http_timeout)
         except Exception as exc:
             log(m.LogSource.SYSTEM, Log.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
             continue
-        current = config.ble_tags.get(tag.person)
-        if current and m.TagKey(current.eik, current.anchor) == key:
+        if (row := rows.get(tag.person)) and row[0] == key:
             continue
         sqlite.upsert_tag_key(tag.person, key)
-        config.ble_tags[tag.person] = m.BleKey(key.eik, key.pair_date)
+        net.presence.set_key(tag.person, key)
         log(
             m.LogSource.SYSTEM,
             Log.TAG_KEY_UPDATED.format(name=tag.person),
@@ -521,11 +522,11 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
 
 def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM, *, probe: bool = False) -> set[str]:
     pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
-    if not pairs and not config.ble_tags:
+    if not pairs and not config.tags:
         return present_names()
     present = present_names()
     stale = set(net.presence.seen()) - present
-    tags = set(config.ble_tags)
+    tags = {tag.person for tag in config.tags}
     net.presence.probe(tags - present if probe else stale & tags, trigger)
     if lost := stale - present_names():
         expire_presence(sorted(lost), trigger)
