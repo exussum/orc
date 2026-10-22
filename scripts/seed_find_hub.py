@@ -1,11 +1,11 @@
 # /// script
 # requires-python = ">=3.12"
 # ///
-"""Copy GoogleFindMyTools' saved login into Bitwarden for rekey_tag.py.
+"""Copy GoogleFindMyTools' saved login into Bitwarden for orc's findhub provider.
 
     uv run scripts/seed_find_hub.py <secrets.json> [--project <id>] [--force]
 
-Reads the four values rekey_tag.py needs from the secrets.json that
+Reads the four values orc.dal.findhub.nova needs from the secrets.json that
 GoogleFindMyTools' Chrome login writes and creates the FIND_HUB_* secrets
 that are missing. An existing secret is left alone unless --force, which
 overwrites it. --project names the project to create in; it may be omitted

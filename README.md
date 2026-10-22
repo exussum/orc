@@ -211,7 +211,7 @@ With the default `secrets` provider (`orc.dal.secrets.bws`), secrets are
 pulled from Bitwarden Secrets Manager by name. Each consumer declares the
 secrets it reads and the shape each must have: a real provider backend
 through a `REQUIRED_SECRETS` constant, a plugin through the `secrets=` argument of
-its `declare()` hook, and a `tag` line through its named EIK. Startup
+its `declare()` hook. Startup
 checks every declared secret before any plugin's `setup()` runs and fails
 with the full list of problems, so what is required follows the providers
 and plugins the config selects; a stub provider declares nothing. A blank
@@ -223,7 +223,10 @@ value counts as missing wherever a secret is read.
 | `VAPID_PRIVATE_KEY`    | `orc.dal.push.webpush`    | base64url 32-byte EC key              |
 | `MQTT_USER`            | nobody (optional)         | Hubitat MQTT broker username          |
 | `MQTT_PASSWORD`        | nobody (optional)         | Hubitat MQTT broker password          |
-| a `tag` line's secret  | the `tag` line            | 32-byte hex EIK                       |
+| `FIND_HUB_USERNAME`    | `orc.dal.findhub.nova`    | the Find Hub account's Google address |
+| `FIND_HUB_AAS_TOKEN`   | `orc.dal.findhub.nova`    | its long-lived Android auth token     |
+| `FIND_HUB_ANDROID_ID`  | `orc.dal.findhub.nova`    | Android id the token was minted for   |
+| `FIND_HUB_OWNER_KEY`   | `orc.dal.findhub.nova`    | 32-byte hex owner key                 |
 | plugin secrets         | the plugin's `declare`    | see the plugin's README               |
 
 ### Secrets in a KeePass database (`orc.dal.secrets.keepass`)
