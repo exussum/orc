@@ -13,6 +13,7 @@ from orc import api, config, plugins
 from orc import model as m
 from orc.dal import net, push, scheduler, sqlite
 from orc.dal.mqtt import paho as mqtt
+from orc.dal.secrets import stub as secrets_stub
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
 TRIGGER = m.Query("test")
@@ -277,6 +278,27 @@ def test_dispatch_usb_speaks_state_error(log_entry):
 
     assert len(audio_stub._spoken) == 1
     assert "USB devices don't support state" in audio_stub._spoken[0]
+
+
+class TestRefreshSecrets:
+    @pytest.fixture(autouse=True)
+    def reset_secrets(self):
+        api._ACTIVITY_LOG.clear()
+        before = replace(config.secrets, other=dict(config.secrets.other))
+        yield
+        config.secrets.update(before)
+
+    def test_refreshed_value_reaches_a_reader(self, monkeypatch):
+        read = config.secrets.TOMTOM_KEY
+        monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: m.Secrets(other={"TOMTOM_KEY": "new"}))
+        api.refresh_secrets(m.Manual("secrets"))
+        assert read() == "new"
+        assert [e.action for e in api.log_entries()] == ["Secrets refreshed: `TOMTOM_KEY`"]
+
+    def test_unchanged_vault_logs_unchanged(self, monkeypatch):
+        monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: replace(config.secrets, other=dict(config.secrets.other)))
+        api.refresh_secrets(m.Manual("secrets"))
+        assert [e.action for e in api.log_entries()] == ["Secrets unchanged"]
 
 
 class TestLog:
