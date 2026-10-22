@@ -68,6 +68,13 @@ def _connected[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
 
 
 @_connected
+def reauth(secrets: m.Secrets) -> None:
+    assert _client is not None
+    _client.username_pw_set(secrets.mqtt_user, secrets.mqtt_password)
+    _client.reconnect()
+
+
+@_connected
 def command(device: m.DeviceEnum, value: Any) -> None:
     adapter = next((c for c in _adapters if device.kind in c.device_types), None)
     if adapter is None:
@@ -122,9 +129,7 @@ def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message:
 
 def _on_connect(adapters: Sequence["Adapter"], client: mqtt.Client, userdata: Any, flags: Any, rc: Any, *args: Any) -> None:
     if rc != 0:
-        # Bad credentials land here and paho retries quietly forever; make it loud.
-        _log.warning("mqtt: connect refused: %s", rc)
-        return
+        raise ConnectionRefusedError(f"mqtt: connect refused: {rc}")
     # Subscribe after CONNACK: paho drops (does not queue) subscriptions made earlier.
     for adapter in adapters:
         for namespace in adapter.namespaces:

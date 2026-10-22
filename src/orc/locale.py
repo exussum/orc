@@ -27,6 +27,9 @@ class Log:
     PRESENCE_CHECKED_IN: str = "Presence checked in: `{name}`"
     PRESENCE_RESCAN: str = "Presence rescan"
 
+    SECRETS_UNCHANGED: str = "Secrets unchanged"
+    SECRETS_REFRESHED: str = "Secrets refreshed: `{names}`"
+
     TASK_QUEUED: str = "Queued: `{id}` (until {when:%I:%M})"
     BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
     LOW_BATTERY: str = "Low battery on `{device}` ({level})"
