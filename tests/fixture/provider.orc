@@ -3,7 +3,6 @@ provider weather    orc.dal.weather.stub
 provider holiday    orc.dal.holiday.stub
 provider chromecast orc.dal.chromecast.stub
 provider blaster    orc.dal.blaster.stub
-provider findhub    orc.dal.findhub.stub
 provider hubitat    orc.dal.hubitat.stub
 provider audio      orc.dal.audio.stub
 

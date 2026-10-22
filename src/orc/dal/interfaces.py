@@ -4,6 +4,7 @@ from typing import Any, NamedTuple, Protocol
 
 from orc.dal.audio import pyaudio as _audio_default
 from orc.dal.chromecast import pychromecast as _chromecast_default
+from orc.dal.findhub import nova as _findhub_default
 from orc.dal.hubitat import http as _hubitat_default
 from orc.dal.mqtt import hubitat as _adapter_default
 from orc.dal.push import webpush as _push_default
@@ -99,4 +100,4 @@ class Provider(NamedTuple):
     hubitat: HubitatService | None = _hubitat_default
     audio: AudioService | None = _audio_default
     push: PushService | None = _push_default
-    findhub: FindHubService | None = None
+    findhub: FindHubService | None = _findhub_default
