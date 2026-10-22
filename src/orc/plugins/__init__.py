@@ -47,6 +47,10 @@ def rebuild_jobs(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) ->
     ctx.api.rebuild_jobs(ctx)
 
 
+def refresh_secrets(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
+    ctx.api.refresh_secrets(entry.trigger)
+
+
 def reboot(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     os.kill(os.getppid(), signal.SIGTERM)
 

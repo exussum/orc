@@ -67,11 +67,10 @@ def _connected[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
-@_connected
 def reauth(secrets: m.Secrets) -> None:
-    assert _client is not None
-    _client.username_pw_set(secrets.mqtt_user, secrets.mqtt_password)
-    _client.reconnect()
+    if _client:
+        _client.username_pw_set(secrets.mqtt_user, secrets.mqtt_password)
+        _client.reconnect()
 
 
 @_connected

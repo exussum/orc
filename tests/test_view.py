@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from unittest.mock import ANY, MagicMock, create_autospec, patch
 
@@ -10,6 +11,7 @@ from orc_engine import model as em
 import orc
 from orc import api, config
 from orc import model as m
+from orc.dal.secrets import stub as secrets_stub
 from orc.view import bp
 
 MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
@@ -355,3 +357,19 @@ def _get_schedule(flask_client, jobs, present_names=()):
 
 def test_schedule_without_jobs_says_so(flask_client):
     assert b"No scheduled events." in _get_schedule(flask_client, []).data
+
+
+def test_refresh_secrets_button_runs_the_refresh_under_its_entry(flask_client, monkeypatch):
+    api._ACTIVITY_LOG.clear()
+    monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: replace(config.secrets, other=dict(config.secrets.other)))
+    response = flask_client.get("/api/run/Refresh Secrets")
+    assert response.status_code == 200
+    (entry,) = api.log_entries()
+    assert entry.action == "Running `Refresh Secrets`"
+    assert [c.action for c in entry.children] == ["Secrets unchanged"]
+
+
+def test_system_page_lists_the_core_system_plugins(flask_client):
+    html = flask_client.get("/system/").get_data(as_text=True)
+    assert 'data-id="Refresh Secrets"' in html
+    assert 'data-id="Enable Notifications" data-name="Enable Notifications" data-duration="0" data-delay="0:00:00" data-no-func' in html
