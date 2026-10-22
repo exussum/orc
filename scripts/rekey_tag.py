@@ -1,10 +1,10 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["gpsoauth", "httpx", "cryptography", "ecdsa"]
+# dependencies = ["bleak", "gpsoauth", "httpx", "cryptography", "ecdsa"]
 # ///
 """Refresh a Find Hub tag's identity key in Bitwarden and in a running orc.
 
-    uv run scripts/rekey_tag.py <device name> <secret name> <orc url> [--verify <frame hex>...] [--dry-run]
+    uv run scripts/rekey_tag.py <device name> <secret name> <orc url> [--scan] [--dry-run]
 
 Fetches the tag's current identity key from the Find Hub account, compares it
 with the named Bitwarden secret, and on a difference writes the new value and
@@ -14,10 +14,13 @@ Chrome login produces once: FIND_HUB_USERNAME, FIND_HUB_AAS_TOKEN,
 FIND_HUB_ANDROID_ID and FIND_HUB_OWNER_KEY. A refused token or a failed
 decrypt means that login has to be repeated.
 
---verify takes FMDN frames as btmon prints them and refuses to write a key
-that doesn't derive them within ±200 rotation windows of the pair date.
+--scan listens on this machine's Bluetooth radio first and refuses to write
+unless the key derives at least one FMDN frame heard within ±200 rotation
+windows of the pair date; neighbours' tags are heard too, and the tag has to
+be in range.
 """
 
+import asyncio
 import json
 import subprocess
 import sys
@@ -26,6 +29,9 @@ from uuid import uuid4
 
 import gpsoauth
 import httpx
+from bleak import BleakScanner
+from bleak.backends.device import BLEDevice
+from bleak.backends.scanner import AdvertisementData
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ecdsa.curves import SECP160r1
@@ -37,6 +43,9 @@ ADM_SIGNATURE = "38918a453d07199354f8b19af05ec6562ced5788"
 MCU_MODEL_ID = "003200"
 ROTATION = 1024
 SEARCH_WINDOWS = 200
+SCAN_SECONDS = 15
+FMDN_SERVICE_UUID = "0000feaa-0000-1000-8000-00805f9b34fb"
+FMDN_FRAME_TYPES = (0x40, 0x41)
 REFRESH_PATH = "/api/run/Refresh%20Secrets"
 
 type Field = tuple[int, int | bytes]
@@ -48,14 +57,19 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     device, secret_name, orc_url = args[0], args[1], args[2].rstrip("/")
-    frames = [bytes.fromhex(a) for a in args[3:]]
     dry_run = "--dry-run" in argv
+    frames = scan_frames() if "--scan" in argv else []
+    if "--scan" in argv and not frames:
+        print(f"no FMDN frames heard in {SCAN_SECONDS}s")
+        return 1
+    for frame in frames:
+        print(f"  {frame.hex()}")
 
     vault = {s["key"]: s for s in bws("list")}
     creds = {k: vault[f"FIND_HUB_{k}"]["value"] for k in ("USERNAME", "AAS_TOKEN", "ANDROID_ID", "OWNER_KEY")}
     eik, pair_date = fetch_identity_key(device, creds)
-    if frames and not verify(eik, pair_date, frames):
-        print("fetched key does not derive the captured frames; not writing")
+    if frames and not derives_any(eik, pair_date, frames):
+        print("fetched key derives none of the frames heard; not writing")
         return 1
 
     current = vault[secret_name]
@@ -90,7 +104,7 @@ def fetch_identity_key(device: str, creds: dict[str, str]) -> tuple[bytes, int]:
         if not isinstance(name, bytes) or name.decode() != device:
             continue
         information = first(metadata, 4)
-        registration = first(instance(information), 1)
+        registration = first(parse(instance(information)), 1)
         fields = parse(instance(registration))
         secrets = first(fields, 19)
         encrypted = first(parse(instance(secrets)), 1)
@@ -119,14 +133,31 @@ def decrypt_identity_key(owner_key: bytes, encrypted: bytes) -> bytes:
     raise SystemExit(f"unexpected identity key length {len(encrypted)}")
 
 
-def verify(eik: bytes, pair_date: int, frames: list[bytes]) -> bool:
-    targets = {f[1:21] if len(f) == 22 else f for f in frames}
+def scan_frames() -> list[bytes]:
+    frames: set[bytes] = set()
+
+    def seen(device: BLEDevice, data: AdvertisementData) -> None:
+        frame = data.service_data.get(FMDN_SERVICE_UUID)
+        if frame and len(frame) == 22 and frame[0] in FMDN_FRAME_TYPES:
+            frames.add(bytes(frame))
+
+    async def run() -> None:
+        async with BleakScanner(seen):
+            await asyncio.sleep(SCAN_SECONDS)
+
+    print(f"scanning for {SCAN_SECONDS}s")
+    asyncio.run(run())
+    return sorted(frames)
+
+
+def derives_any(eik: bytes, pair_date: int, frames: list[bytes]) -> bool:
+    targets = {f[1:21] for f in frames}
     expected = int(time.time()) - pair_date
     for step in range(-SEARCH_WINDOWS, SEARCH_WINDOWS + 1):
         window = (expected + step * ROTATION) & ~(ROTATION - 1)
-        if window >= 0:
-            targets.discard(eid(eik, window))
-    return not targets
+        if window >= 0 and eid(eik, window) in targets:
+            return True
+    return False
 
 
 def eid(eik: bytes, counter: int) -> bytes:
