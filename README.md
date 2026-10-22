@@ -164,13 +164,17 @@ Two config surfaces:
 
 ## Built-in plugins
 
-Two listeners on the Hubitat MQTT feed ship inside `orc` and are turned
-on the same way as any plugin, by a `plugin` line. The sample config
-carries both; drop a line and that listener is off.
+Two listeners on the Hubitat MQTT feed and three System page buttons ship
+inside `orc` and are turned on the same way as any plugin, by a `plugin`
+line. The sample config carries all five; drop a line and that listener or
+button is gone.
 
 ```
-plugin Buttons  orc.plugins.buttons
-plugin Battery  orc.plugins.battery
+plugin Buttons                 orc.plugins.buttons
+plugin Battery                 orc.plugins.battery
+plugin 'Refresh Secrets'       orc.plugins refresh_secrets --section system --icon arrow-path
+plugin 'Enable Notifications'  orc.plugins                 --section system --icon bell
+plugin 'Disable Notifications' orc.plugins                 --section system --icon bell-slash
 ```
 
 - **Buttons** runs an ad hoc routine when a remote is pressed. Each
@@ -178,6 +182,13 @@ plugin Battery  orc.plugins.battery
   event (`pushed`, `held`, ...) on a `Button` device to an ad hoc id; a
   press with no matching line is ignored, and a line naming an unknown
   action logs and alerts. The log attributes the run to the remote.
+- **Refresh Secrets** fetches the vault again and applies it without a
+  restart: a tag's identity key or a plugin's API key is read from the live
+  secrets on each use, and changed MQTT credentials reconnect the broker
+  client. The log names the secrets that changed. A vault that fails the
+  boot-time check is refused and the running values stay.
+- **Enable Notifications** and **Disable Notifications** have no server
+  side; a browser hook handles the press (see Phone notifications).
 
   ```
   remote Button.LIVING_ROOM_REMOTE 1 pushed 'All Lights On'
@@ -243,13 +254,14 @@ Signing uses [py-vapid](https://pypi.org/project/py-vapid/), with
    orc-vapid-key
    ```
 
-2. Open the System page on the device and press **Enable notifications**.
+2. Open the System page on the device and press **Enable Notifications**.
    The browser asks for notification permission, registers orc's service
    worker, and hands orc its subscription, and orc answers with a
    confirmation notification; opening the System page again later re-sends
    the subscription silently, which is how a device recovers after
-   `jobs_db` is lost. **Disable notifications** drops the device from
-   orc's table and releases the browser's subscription.
+   `jobs_db` is lost. **Disable Notifications** drops the device from
+   orc's table and releases the browser's subscription. Both buttons are
+   `plugin` lines (see Built-in plugins).
 
 ## BLE tag presence (Find Hub)
 
@@ -271,6 +283,12 @@ ephemeral ID (EID) from the key and pair date and hears every advertisement
 the tag sends, so every hearing updates the person's presence directly
 instead of gambling on a scan window. After the one-time key export, nothing
 talks to Google.
+
+Find Hub can re-key a tag without any action on your side; the tag then
+broadcasts EIDs the stored key no longer derives and goes absent. Export the
+key again, update the secret, and press **Refresh Secrets** on the System
+page; the listener picks up the new key on its next index rebuild, within
+five minutes, with no restart.
 
 The EID scheme is Google's public
 [Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).
