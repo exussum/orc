@@ -110,7 +110,7 @@ def test_rebuild_offers_the_running_events_as_choices(rebuild, events, expected)
 
 @pytest.mark.parametrize(
     ("choices", "url", "link"),
-    [((("A", ZOOM), ("B", MEET)), CHOOSER_LINK, CHOOSER_LINK), ((), ZOOM, None)],
+    [((("A", ZOOM), ("B", MEET)), CHOOSER_LINK, CHOOSER_LINK), ((), ZOOM, f"/api/push/open?url={ZOOM}")],
     ids=["overlapping", "alone"],
 )
 def test_alarm_links_the_choice_page(ctx, choices, url, link):

@@ -121,8 +121,8 @@ def _run_event(job: CalendarJob, *, ctx: m.AppContext) -> None:
         entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, job.summary, trigger)
         ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
     else:
-        link = build_chooser_link(job.choices) if job.choices else None
-        entry = ctx.api.log(Log.CALENDAR, job.summary, trigger, notification=m.Notification(("calendar",), link or job.url), link=link)
+        link = build_chooser_link(job.choices) if job.choices else job.url
+        entry = ctx.api.log(Log.CALENDAR, job.summary, trigger, notification=m.Notification(("calendar",), link), link=opener(link))
         ctx.api.alert(m.Alarm.ATTENTION, text=job.summary, entry=entry)
 
 
