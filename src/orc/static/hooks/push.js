@@ -1,9 +1,3 @@
-import { get } from "./orc.js";
-
-const enableButton = document.getElementById("orc-push-subscribe");
-const disableButton = document.getElementById("orc-push-unsubscribe");
-const meetDialog = document.getElementById("orc-meet-dialog");
-
 function toBytes(base64url) {
     const padded = base64url.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(base64url.length / 4) * 4, "=");
     return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
@@ -21,7 +15,7 @@ function sameKey(subscription, key) {
 
 async function enroll(registration, greet) {
     try {
-        const key = toBytes((await get("/api/push/key")).key);
+        const key = toBytes((await orc.get("/api/push/key")).key);
         let subscription = await registration.pushManager.getSubscription();
         if (subscription && !sameKey(subscription, key)) {
             await send("DELETE", { endpoint: subscription.endpoint });
@@ -38,7 +32,7 @@ async function enroll(registration, greet) {
 async function subscribe() {
     if ((await Notification.requestPermission()) !== "granted") return;
     await enroll(await navigator.serviceWorker.register("/static/push-sw.js"), true);
-    if (navigator.userAgent.includes("Macintosh")) meetDialog.showModal();
+    if (navigator.userAgent.includes("Macintosh")) document.getElementById("orc-meet-dialog").showModal();
 }
 
 async function unsubscribe() {
@@ -60,7 +54,13 @@ async function resync() {
 }
 
 if ("serviceWorker" in navigator && "PushManager" in window) {
-    enableButton.addEventListener("click", subscribe);
-    disableButton.addEventListener("click", unsubscribe);
-    resync();
+    orc.hooks.register({
+        async onPress(buttonName) {
+            if (buttonName === "Enable Notifications") await subscribe();
+            else if (buttonName === "Disable Notifications") await unsubscribe();
+            else return true;
+            return false;
+        },
+    });
+    if (window.location.pathname === "/system/") resync();
 }
