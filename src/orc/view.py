@@ -8,7 +8,7 @@ from functools import cache
 from itertools import chain, groupby
 from pathlib import Path
 from typing import Any, NamedTuple, cast
-from urllib.parse import urlparse, urlsplit, urlunsplit
+from urllib.parse import urlparse
 
 import psutil
 from apscheduler.job import Job
@@ -18,6 +18,7 @@ from flask.wrappers import Response
 from markupsafe import Markup, escape
 from werkzeug.exceptions import HTTPException
 from werkzeug.wrappers import Response as BaseResponse
+from yarl import URL
 
 from orc import alerts, api, config
 from orc import model as m
@@ -421,12 +422,12 @@ def push_subscribe() -> dict[str, Any]:
 def push_open() -> BaseResponse:
     url = request.args.get("url", "")  # nosemgrep: python.flask.security.open-redirect.open-redirect
     print(f"push open: {request.remote_addr} {request.user_agent.string} {url}", file=sys.stderr, flush=True)
-    parts = urlsplit(url)
-    host = parts.hostname or ""
+    link = URL(url)
+    host = link.host or ""
     if not any(host == h or host.endswith(f".{h}") for h in _LINK_HOSTS):
         abort(400)
     if host == "meet.google.com" and "Macintosh" in request.user_agent.string:
-        return redirect(urlunsplit(("orc-chrome", "meet.google.com", parts.path, parts.query, parts.fragment)))
+        return redirect(str(link.with_scheme("orc-chrome")))
     return redirect(url)
 
 

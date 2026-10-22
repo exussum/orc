@@ -5,7 +5,7 @@ from orc_engine import cast
 
 from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
-from orc_extras.calendar import plugins
+from orc_extras.calendar import plugins, web
 
 CONFIG = "orc_extras/calendar"
 GRAMMAR = """
@@ -38,7 +38,7 @@ _SERIALIZERS = {
 
 def declare(declarations: Any) -> None:
     feeds = load_plugin_config(CONFIG, declarations, GRAMMAR, _SERIALIZERS).feed
-    declarations.declare(setup=[setup], secrets={feed.secret: cast.url for feed in feeds})
+    declarations.declare(setup=[setup], secrets={feed.secret: cast.url for feed in feeds}, blueprints={"choose": web.choose})
 
 
 def setup(ctx: AppContext) -> None:

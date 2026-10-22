@@ -1,13 +1,14 @@
 from datetime import datetime
 
 import requests
+from yarl import URL
 
 _HOST = "aerodatabox.p.rapidapi.com"
 
 
 def arrival(key: str, iata: str, when: datetime, airport: str | None, timeout: int) -> tuple[datetime, str, str | None]:
     response = requests.get(
-        f"https://{_HOST}/flights/number/{iata}/{when.date().isoformat()}",
+        str(URL.build(scheme="https", host=_HOST) / "flights/number" / iata / when.date().isoformat()),
         params={"dateLocalRole": "Both"},
         headers={"x-rapidapi-key": key, "x-rapidapi-host": _HOST},
         timeout=timeout,
