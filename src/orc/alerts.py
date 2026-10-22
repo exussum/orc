@@ -51,12 +51,6 @@ def _render_alert_image(text: str) -> bytes:
     width, height = ALERT_IMAGE_SIZE[0] - 2 * _ALERT_MARGIN, ALERT_IMAGE_SIZE[1] - 2 * _ALERT_MARGIN
     wrapped = ImageText.Text(text, font=font)
     wrapped.wrap(width, height, scaling=("shrink", _ALERT_MIN_FONT_SIZE))
-    if "\n" not in wrapped.text:
-        # scaling wrap early-returns without writing the wrapped lines back when the
-        # text fits at the starting size. Drop this once the early return in the
-        # scaling=="shrink" branch of ImageText.Text.wrap is fixed upstream:
-        # https://github.com/python-pillow/Pillow/pull/9286 (present through 12.3.0).
-        wrapped.wrap(width, height)
     draw.text((ALERT_IMAGE_SIZE[0] / 2, ALERT_IMAGE_SIZE[1] / 2), wrapped, fill="white", anchor="mm", align="center")
     buf = io.BytesIO()
     image.save(buf, format="PNG")
