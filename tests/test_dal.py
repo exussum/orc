@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from command_cfg import ConfigError
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pykeepass import create_database
 from pywebpush import WebPushException
 
@@ -13,6 +15,7 @@ from orc import config, security
 from orc import model as m
 from orc.dal import net, push, sqlite
 from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
+from orc.dal.findhub import nova
 from orc.dal.holiday import polygon
 from orc.dal.push import webpush
 from orc.dal.secrets import keepass
@@ -92,6 +95,74 @@ class TestMarketHoliday:
 
     def test_ordinary_day_is_work_day(self):
         assert self._market_holiday(date(2026, 11, 30)) is False
+
+
+class TestFindHub:
+    OWNER_KEY = bytes(range(32))
+    EIK = bytes(range(100, 132))
+    PAIR_DATE = 1758575479
+
+    def _devices_list(self, *devices):
+        return b"".join(_field(2, _device(*d)) for d in devices)
+
+    def test_reads_a_cbc_wrapped_key(self):
+        iv = bytes(16)
+        encryptor = Cipher(algorithms.AES(self.OWNER_KEY), modes.CBC(iv)).encryptor()
+        encrypted = iv + encryptor.update(self.EIK) + encryptor.finalize()
+        reply = self._devices_list(("Galaxy S22", b"x" * 48, 1, ""), ("Chipolo POP", encrypted, self.PAIR_DATE, ""))
+        assert nova.registration("Chipolo POP", reply, self.OWNER_KEY) == m.TagKey(self.EIK, self.PAIR_DATE)
+
+    def test_reads_a_gcm_wrapped_key_and_flips_an_mcu_tracker(self):
+        nonce = bytes(12)
+        encrypted = nonce + AESGCM(self.OWNER_KEY).encrypt(nonce, self.EIK, None)
+        flipped = bytes(b ^ 0xFF for b in encrypted)
+        reply = self._devices_list(("ESP32", flipped, self.PAIR_DATE, "003200"))
+        assert nova.registration("ESP32", reply, self.OWNER_KEY) == m.TagKey(self.EIK, self.PAIR_DATE)
+
+    def test_unknown_device_is_a_lookup_error(self):
+        with pytest.raises(LookupError, match="no Find Hub device named 'Chipolo POP'"):
+            nova.registration("Chipolo POP", self._devices_list(("Galaxy S22", b"x" * 48, 1, "")), self.OWNER_KEY)
+
+    def test_identity_key_authenticates_then_posts(self):
+        secrets = m.Secrets(find_hub_username="u", find_hub_aas_token="t", find_hub_android_id="a", find_hub_owner_key=self.OWNER_KEY.hex())
+        iv = bytes(16)
+        encryptor = Cipher(algorithms.AES(self.OWNER_KEY), modes.CBC(iv)).encryptor()
+        reply = self._devices_list(("Chipolo POP", iv + encryptor.update(self.EIK) + encryptor.finalize(), self.PAIR_DATE, ""))
+        with patch.object(nova.gpsoauth, "perform_oauth", return_value={"Auth": "bearer"}) as oauth, patch("requests.post") as post:
+            post.return_value.content = reply
+            assert nova.identity_key("Chipolo POP", secrets, 5) == m.TagKey(self.EIK, self.PAIR_DATE)
+        assert oauth.call_args.args[:3] == ("u", "t", "a")
+        assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer bearer"
+
+    def test_refused_token_is_a_permission_error(self):
+        with patch.object(nova.gpsoauth, "perform_oauth", return_value={"Error": "BadAuthentication"}):
+            with pytest.raises(PermissionError, match="BadAuthentication"):
+                nova.identity_key("Chipolo POP", m.Secrets(), 5)
+
+
+def _varint(value):
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
+
+def _field(number, value):
+    if isinstance(value, int):
+        return _varint(number << 3) + _varint(value)
+    return _varint(number << 3 | 2) + _varint(len(value)) + value
+
+
+def _device(name, encrypted_key, pair_date, model_id):
+    registration = _field(19, _field(1, encrypted_key)) + _field(23, pair_date)
+    if model_id:
+        registration += _field(21, model_id.encode())
+    return _field(5, name.encode()) + _field(4, _field(1, registration))
 
 
 def test_durations_reach_the_table_one_batch_at_a_time():

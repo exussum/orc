@@ -20,6 +20,7 @@ from orc.model import (
     Secrets,
     SoundState,
     Status,
+    TagKey,
     WeatherCondition,
 )
 
@@ -84,6 +85,10 @@ class HubitatService(Backend, Protocol):
     def fetch_retry_stats(self) -> tuple[RetryStats, ...]: ...
 
 
+class FindHubService(Backend, Protocol):
+    def identity_key(self, device: str, secrets: Secrets, timeout: int) -> TagKey: ...
+
+
 class Provider(NamedTuple):
     secrets: SecretsService | None = _secrets_default
     weather: WeatherService | None = None
@@ -94,3 +99,4 @@ class Provider(NamedTuple):
     hubitat: HubitatService | None = _hubitat_default
     audio: AudioService | None = _audio_default
     push: PushService | None = _push_default
+    findhub: FindHubService | None = None

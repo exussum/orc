@@ -72,6 +72,11 @@ class BleKey(NamedTuple):
     anchor: int  # unix seconds of the tag's clock zero (its pair date)
 
 
+class TagKey(NamedTuple):
+    eik: bytes
+    pair_date: int
+
+
 class TagClock(NamedTuple):
     offset: int  # tag clock minus the pair-date estimate, in seconds
     heard: int
@@ -455,6 +460,10 @@ class Secrets:
     mqtt_user: str = ""
     mqtt_password: str = ""
     vapid_private_key: str = ""
+    find_hub_username: str = ""
+    find_hub_aas_token: str = ""
+    find_hub_android_id: str = ""
+    find_hub_owner_key: str = ""
 
     # Dynamically named secrets: plugin-consumed keys and per-tag BLE EIKs
     # (named by `tag` config lines). A key with a fixed in-repo consumer
