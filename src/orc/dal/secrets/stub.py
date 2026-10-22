@@ -25,6 +25,10 @@ def fetch_secrets() -> m.Secrets:
         mqtt_user="secret_mqtt_user",
         mqtt_password="secret_mqtt_password",
         vapid_private_key=_VAPID_PRIVATE_KEY,
+        find_hub_username="secret_find_hub_username",
+        find_hub_aas_token="secret_find_hub_aas_token",
+        find_hub_android_id="secret_find_hub_android_id",
+        find_hub_owner_key="00" * 32,
         other=_StubSecrets(),
     )
 

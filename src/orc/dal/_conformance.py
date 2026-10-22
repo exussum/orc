@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from orc.dal.blaster import stub as blaster_stub
     from orc.dal.chromecast import pychromecast
     from orc.dal.chromecast import stub as chromecast_stub
+    from orc.dal.findhub import nova
+    from orc.dal.findhub import stub as findhub_stub
     from orc.dal.holiday import polygon
     from orc.dal.holiday import stub as holiday_stub
     from orc.dal.hubitat import http as hubitat_http
@@ -35,6 +37,8 @@ if TYPE_CHECKING:
     _weather_stub: interfaces.WeatherService = weather_stub
     _holiday_real: interfaces.HolidayService = polygon
     _holiday_stub: interfaces.HolidayService = holiday_stub
+    _findhub_real: interfaces.FindHubService = nova
+    _findhub_stub: interfaces.FindHubService = findhub_stub
     _adapter_real: interfaces.Adapter = hubitat
     _adapter_stub: interfaces.Adapter = adapter_stub
     _adapter_none: interfaces.Adapter = adapter_none

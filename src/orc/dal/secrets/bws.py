@@ -64,6 +64,10 @@ def fetch_secrets() -> m.Secrets:
         mqtt_user=secrets.pop("MQTT_USER", ""),
         mqtt_password=secrets.pop("MQTT_PASSWORD", ""),
         vapid_private_key=secrets.pop("VAPID_PRIVATE_KEY", ""),
+        find_hub_username=secrets.pop("FIND_HUB_USERNAME", ""),
+        find_hub_aas_token=secrets.pop("FIND_HUB_AAS_TOKEN", ""),
+        find_hub_android_id=secrets.pop("FIND_HUB_ANDROID_ID", ""),
+        find_hub_owner_key=secrets.pop("FIND_HUB_OWNER_KEY", ""),
         other=secrets,
     )
 
