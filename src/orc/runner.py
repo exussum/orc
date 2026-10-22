@@ -123,6 +123,8 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
         ctx.scheduler.resume()
     with step("presence check"):
         api.schedule_presence_check(m.Cron("presence"))
+    with step("find hub"):
+        api.schedule_tag_key_refresh(m.Cron("findhub"))
     assert boot.entry is not None and boot.started is not None
     boot.entry.add(m.LogSource.SYSTEM, Log.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)

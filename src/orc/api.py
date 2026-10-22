@@ -481,6 +481,33 @@ def schedule_presence_check(trigger: m.Trigger) -> None:
         _scheduler().now(_check_presence_job, trigger, name="Presence Boot Check", skip_if_late=True)
 
 
+def schedule_tag_key_refresh(trigger: m.Trigger) -> None:
+    if config.tags:
+        _scheduler().now(_refresh_tag_keys_job, trigger, name="Find Hub Boot Check", skip_if_late=True)
+
+
+def refresh_tag_keys(trigger: m.Trigger) -> None:
+    provider = config.providers.findhub
+    assert provider is not None
+    for tag in config.tags:
+        try:
+            key = provider.identity_key(tag.device, config.secrets, config.settings.http_timeout)
+        except Exception as exc:
+            log(m.LogSource.SYSTEM, Log.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
+            continue
+        current = config.ble_tags.get(tag.person)
+        if current and m.TagKey(current.eik, current.anchor) == key:
+            continue
+        sqlite.upsert_tag_key(tag.person, key)
+        config.ble_tags[tag.person] = m.BleKey(key.eik, key.pair_date)
+        log(
+            m.LogSource.SYSTEM,
+            Log.TAG_KEY_UPDATED.format(name=tag.person),
+            trigger,
+            notification=m.Notification(("tag-key", tag.person), "/presence/"),
+        )
+
+
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
     if not name:
         log(m.LogSource.MANUAL, Log.THEME_OVERRIDE_CLEARED, trigger)
@@ -562,6 +589,7 @@ def setup_scheduler(ctx: m.AppContext) -> None:
     for job_id, func, crontab, name in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
         ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron"),
+        ("findhub-cron", _tag_keys_cron_job, "0 */4 * * *", "Find Hub Cron"),
         ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
     ):
         ctx.scheduler.cron(func, crontab, id=job_id, name=name)
@@ -842,3 +870,13 @@ def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
 @requires_ctx
 def _presence_cron_job(ctx: m.AppContext) -> set[str]:
     return check_presence(m.Cron("presence"))
+
+
+@requires_ctx
+def _refresh_tag_keys_job(trigger: m.Trigger, *, ctx: m.AppContext) -> None:
+    refresh_tag_keys(trigger)
+
+
+@requires_ctx
+def _tag_keys_cron_job(ctx: m.AppContext) -> None:
+    refresh_tag_keys(m.Cron("findhub"))

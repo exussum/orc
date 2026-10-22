@@ -287,7 +287,7 @@ ephemeral ID (EID) from the key and pair date and hears every advertisement
 the tag sends, so every hearing updates the person's presence directly
 instead of gambling on a scan window. Find Hub can re-key a tag without any
 action on your side, so orc re-reads each tag's key from the account every
-12 hours and on **Refresh Secrets**; a changed key reaches the listener
+four hours and on **Refresh Secrets**; a changed key reaches the listener
 within five minutes, no restart.
 
 The EID scheme is Google's public

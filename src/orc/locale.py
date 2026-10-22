@@ -29,6 +29,8 @@ class Log:
 
     SECRETS_UNCHANGED: str = "Secrets unchanged"
     SECRETS_REFRESHED: str = "Secrets refreshed: `{names}`"
+    TAG_KEY_UPDATED: str = "Tag key for `{name}` read from Find Hub"
+    TAG_KEY_FAILED: str = "Find Hub lookup failed for `{name}`: {exc}"
 
     TASK_QUEUED: str = "Queued: `{id}` (until {when:%I:%M})"
     BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
