@@ -50,7 +50,7 @@ def next_run(rt: Runtime, job: TravelJob, now: datetime, arrival: Arrival | None
     minutes, then None once within 10 minutes of the leave."""
     if arrival is None:
         return Schedule(None, datetime.combine(job.arrive.astimezone(now.tzinfo).date(), time.min, tzinfo=now.tzinfo))
-    lead = rt.drive.drive_minutes(rt.tomtom_key, rt.origin, arrival.where, rt.settings.http_timeout)
+    lead = rt.drive.drive_minutes(rt.tomtom_key(), rt.origin, arrival.where, rt.settings.http_timeout)
     lead += sum(e.minutes for e in rt.extras if e.name in job.extras)
     lead += rt.settings.buffer_minutes
     leave_at = arrival.when - timedelta(minutes=lead)
@@ -112,7 +112,7 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
 def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
     if job.iata:
         when = job.arrive if job.arrive.tzinfo else job.arrive.replace(tzinfo=tz)
-        arrive, where, terminal = rt.flight.arrival(rt.aerodatabox_key, job.iata, when, job.airport, rt.settings.http_timeout)
+        arrive, where, terminal = rt.flight.arrival(rt.aerodatabox_key(), job.iata, when, job.airport, rt.settings.http_timeout)
     else:
         arrive, where, terminal = job.arrive, job.destination, None
     return Arrival(arrive if arrive.tzinfo else arrive.replace(tzinfo=tz), where, terminal)
