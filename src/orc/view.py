@@ -1,6 +1,5 @@
 import json
 import re
-import sys
 from collections import defaultdict
 from dataclasses import replace
 from datetime import date, datetime, timedelta
@@ -421,7 +420,6 @@ def push_subscribe() -> dict[str, Any]:
 @bp.route("/api/push/open")
 def push_open() -> BaseResponse:
     url = request.args.get("url", "")  # nosemgrep: python.flask.security.open-redirect.open-redirect
-    print(f"push open: {request.remote_addr} {request.user_agent.string} {url}", file=sys.stderr, flush=True)
     link = URL(url)
     host = link.host or ""
     if not any(host == h or host.endswith(f".{h}") for h in _LINK_HOSTS):
