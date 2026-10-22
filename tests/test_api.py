@@ -694,7 +694,7 @@ class TestPresence:
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
         api.mark_present(["Alice"], api.local_now() - timedelta(hours=10), TRIGGER)
         with (
-            patch.object(config, "tags", [m.BleTag(name, f"{name} Tag") for name in ("Alice", "Bob", "Carol")]),
+            patch.object(net.presence, "tags", frozenset({"Alice", "Bob", "Carol"})),
             patch.object(net.presence, "probe") as probe,
             patch.object(net, "scan_presence", return_value=(set(), [])),
         ):

@@ -43,6 +43,7 @@ class Presence:
     """
 
     def __init__(self) -> None:
+        self.tags: frozenset[str] = frozenset()
         self._tags: dict[str, m.BleKey] = {}
         self._tz: tzinfo | None = None
         self._index: dict[bytes, tuple[str, int]] = {}
@@ -55,19 +56,20 @@ class Presence:
 
     def start(
         self,
+        tags: Iterable[str],
         tz: tzinfo,
         on_change: Callable[[m.Trigger], object],
         clocks: Mapping[str, m.TagClock],
         on_clock: Callable[[str, m.TagClock], object],
-        *,
-        listen: bool,
     ) -> None:
         self._on_change = on_change
         self._on_clock = on_clock
+        self.tags = frozenset(tags)
+        if not self.tags:
+            return
         self._tz = tz
         self._clocks = LockedDict(clocks)
-        if listen:
-            threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
+        threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
 
     def set_key(self, person: str, key: m.BleKey) -> None:
         self._tags[person] = key
