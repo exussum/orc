@@ -10,7 +10,6 @@ from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
-from urllib.parse import quote
 
 from apscheduler.job import Job
 from orc_engine import cast as engine_cast
@@ -18,6 +17,7 @@ from orc_engine import engine
 from orc_engine import model as em
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
+from yarl import URL
 
 from orc import config, plugins
 from orc import model as m
@@ -115,7 +115,9 @@ def unsubscribe_push(endpoint: str) -> None:
     sqlite.delete_push_subscription(endpoint)
 
 
-def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, notification: m.Notification | None = None) -> m.LogEntry:
+def log(
+    source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, notification: m.Notification | None = None, link: str | None = None
+) -> m.LogEntry:
     now = local_now()
     entries = _ACTIVITY_LOG.snapshot()
     recent = [e for e in entries if now - (e.children or [e])[-1].timestamp < _ROLLUP_WINDOW]
@@ -123,10 +125,10 @@ def log(source: m.LogSourceEnum, action: str, trigger: m.Trigger, *, notificatio
     # ==: a separate event with an equal trigger, rolled up only within the window.
     parent = next((e for e in entries if e.trigger is trigger or (e in recent and e.trigger == trigger)), None)
     if parent:
-        parent.add(source, action, notified=bool(notification))
+        parent.add(source, action, notified=bool(notification), link=link)
         parent.notified = parent.notified or bool(notification)
     else:
-        parent = m.LogEntry(now, source, action, trigger, notified=bool(notification))
+        parent = m.LogEntry(now, source, action, trigger, notified=bool(notification), link=link)
         _ACTIVITY_LOG.appendleft(parent)
     if notification:
         _notify(source, action, parent.trigger, notification)
@@ -349,7 +351,7 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
     if severity is m.Alarm.EMERGENCY:
         dispatch(config.routines[config.settings.emergency_routine].commands, force=True, entry=entry)
         if text is not None:
-            video_url = m.AlertVideo(f"{config.settings.base_url}/api/alert.mp4?text={quote(text)}")
+            video_url = m.AlertVideo(str((URL(config.settings.base_url) / "api/alert.mp4").with_query(text=text)))
             dispatch((em.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, entry=entry)
             if not isinstance(device, config.devices.Chromecast):
                 dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)

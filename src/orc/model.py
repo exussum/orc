@@ -316,6 +316,7 @@ class LogSubEntry:
     source: LogSourceEnum
     action: str
     notified: bool = field(default=False, kw_only=True)
+    link: str | None = field(default=None, kw_only=True)
 
 
 @dataclass
@@ -323,8 +324,8 @@ class LogEntry(LogSubEntry):
     trigger: Trigger
     children: list[LogSubEntry] = field(default_factory=list)
 
-    def add(self, source: LogSourceEnum, action: str, *, notified: bool = False) -> LogSubEntry:
-        entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action, notified=notified)
+    def add(self, source: LogSourceEnum, action: str, *, notified: bool = False, link: str | None = None) -> LogSubEntry:
+        entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action, notified=notified, link=link)
         self.children.append(entry)
         return entry
 

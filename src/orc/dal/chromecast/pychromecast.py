@@ -4,11 +4,11 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import pychromecast
 import yt_dlp
 from pychromecast.error import RequestTimeout
+from yarl import URL
 
 from orc import model as m
 from orc.dal.chromecast import check_length, tts_url
@@ -130,12 +130,11 @@ def _cast(device: m.DeviceEnum, **kwargs: Any) -> Iterator[Any]:
 
 
 def _strip_googlevideo_params(url: str) -> str:
-    parsed = urlparse(url)
-    if not parsed.hostname or not parsed.hostname.endswith("googlevideo.com"):
+    parsed = URL(url)
+    if not parsed.host or not parsed.host.endswith("googlevideo.com"):
         return url
-    vid_id = parse_qs(parsed.query).get("id", [None])[0]
-    query = urlencode({"id": vid_id}) if vid_id is not None else ""
-    return urlunparse(parsed._replace(query=query))
+    vid_id = parsed.query.get("id")
+    return str(parsed.with_query({"id": vid_id}) if vid_id is not None else parsed.with_query(None))
 
 
 def _settle(device: m.DeviceEnum, states: tuple[str, ...], act: Callable[[Any], None]) -> None:

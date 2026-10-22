@@ -63,3 +63,6 @@ Recurring events are expanded; all-day events are skipped.
   the same severity, and pushes a notification whose click opens the
   event's Google Meet, Zoom or Teams link when one is found in the event,
   and that day in Google Calendar otherwise.
+- When another event is still running as one starts, the notification
+  opens a page at `/api/calendar/choose/` listing every running event as a
+  button, and the log line carries a 🔗 to the same page before the title.

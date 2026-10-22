@@ -167,7 +167,7 @@ def test_build_command_round_trips_through_the_codec():
 def test_route_advertises_api_and_mqtt_servers():
     assert api.route("common.lgthinq.com", 443, "10.0.0.5", 8883) == {
         "resultCode": "0000",
-        "result": {"apiServer": "https://common.lgthinq.com:443", "mqttServer": "ssl://10.0.0.5:8883"},
+        "result": {"apiServer": "https://common.lgthinq.com", "mqttServer": "ssl://10.0.0.5:8883"},
     }
 
 

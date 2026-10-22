@@ -1,6 +1,10 @@
 import requests
+from yarl import URL
 
 from orc_extras.travel.dal import sqlite
+
+ROUTING = URL("https://api.tomtom.com/routing/1/calculateRoute")
+SEARCH = URL("https://api.tomtom.com/search/2/search")
 
 
 def drive_minutes(key: str, origin: str, dest: str, timeout: int) -> int:
@@ -9,7 +13,7 @@ def drive_minutes(key: str, origin: str, dest: str, timeout: int) -> int:
         raise ValueError(f"could not geocode {dest!r}")
     d_lat, d_lon = d
     response = requests.get(
-        f"https://api.tomtom.com/routing/1/calculateRoute/{origin}:{d_lat},{d_lon}/json",
+        str(ROUTING / f"{origin}:{d_lat},{d_lon}" / "json"),
         params={"key": key, "traffic": "true"},
         timeout=timeout,
     )
@@ -26,7 +30,7 @@ def _lookup(key: str, address: str, timeout: int) -> tuple[float, float] | None:
     if (hit := sqlite.fetch_geocode(address)) is not None:
         return hit
     response = requests.get(
-        f"https://api.tomtom.com/search/2/search/{requests.utils.quote(address)}.json",
+        str(SEARCH / f"{address}.json"),
         params={"key": key, "limit": "1"},
         timeout=timeout,
     )

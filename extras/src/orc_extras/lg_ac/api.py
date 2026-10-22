@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from orc_engine import cast
+from yarl import URL
 
 from orc import security
 from orc.model import CA, OFF, ON, AcState, Certificate
@@ -160,8 +161,8 @@ def route(api_host: str, https_advertise: int, mqtt_host: str, mqtts_advertise: 
     return {
         "resultCode": _RESULT_OK,
         "result": {
-            "apiServer": f"https://{api_host}:{https_advertise}",
-            "mqttServer": f"ssl://{mqtt_host}:{mqtts_advertise}",
+            "apiServer": str(URL.build(scheme="https", host=api_host, port=https_advertise)),
+            "mqttServer": str(URL.build(scheme="ssl", host=mqtt_host, port=mqtts_advertise)),
         },
     }
 

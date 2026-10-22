@@ -1,4 +1,4 @@
-from urllib.parse import urlencode
+from yarl import URL
 
 MAX_CHARS = 200
 
@@ -9,4 +9,4 @@ def check_length(text: str, kind: str) -> None:
 
 
 def tts_url(text: str) -> str:
-    return "https://translate.google.com/translate_tts?" + urlencode({"ie": "UTF-8", "q": text, "tl": "en", "client": "tw-ob"})
+    return str(URL("https://translate.google.com/translate_tts").with_query(ie="UTF-8", q=text, tl="en", client="tw-ob"))

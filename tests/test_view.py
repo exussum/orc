@@ -260,6 +260,15 @@ def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
     assert html.count("🔔") == 2
 
 
+def test_log_page_links_a_line_before_its_action(flask_client):
+    api.log(m.LogSource.SYSTEM, "Standup", m.Manual("link"), link="/api/calendar/choose/?title=a")
+    html = flask_client.get("/log/").get_data(as_text=True)
+    assert (
+        '<a href="/api/calendar/choose/?title=a">🔗</a>\n                            <div class="orc-log-action truncate min-w-0">Standup'
+        in html
+    )
+
+
 def test_system_page_adds_dewpoint_to_sensors(flask_client):
     status = m.DeviceStatus(name="living room sensor", details={"temperature": 77, "humidity": "60"})
     with patch.object(api, "capture_sensors", return_value=[status]):
