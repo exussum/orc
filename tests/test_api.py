@@ -283,17 +283,15 @@ def test_dispatch_usb_speaks_state_error(log_entry):
 
 class TestRefreshTagKeys:
     @pytest.fixture(autouse=True)
-    def reset_tags(self):
+    def reset_log(self):
         api._ACTIVITY_LOG.clear()
-        config.ble_tags.clear()
-        yield
-        config.ble_tags.clear()
 
-    def test_a_new_key_reaches_the_listener_mapping_and_the_row(self):
-        api.refresh_tag_keys(m.Manual("secrets"))
-        key = m.TagKey(b"Alice Tag".ljust(32, b"\0"), 0)
-        assert config.ble_tags == {"Alice": m.BleKey(key.eik, key.pair_date)}
+    def test_a_new_key_reaches_the_row_and_the_listener(self):
+        with patch.object(net.presence, "set_key") as set_key:
+            api.refresh_tag_keys(m.Manual("secrets"))
+        key = m.BleKey(b"Alice Tag".ljust(32, b"\0"), 0)
         assert sqlite.fetch_tags() == {"Alice": (key, None)}
+        set_key.assert_called_once_with("Alice", key)
         assert [e.action for e in api.log_entries()] == ["Tag key for `Alice` read from Find Hub"]
 
     def test_an_unchanged_key_is_silent(self):
@@ -305,7 +303,7 @@ class TestRefreshTagKeys:
     def test_a_failed_lookup_logs_and_keeps_going(self, monkeypatch):
         monkeypatch.setattr(findhub_stub, "identity_key", MagicMock(side_effect=RuntimeError("boom")))
         api.refresh_tag_keys(m.Manual("secrets"))
-        assert config.ble_tags == {}
+        assert sqlite.fetch_tags() == {}
         assert [e.action for e in api.log_entries()] == ["Find Hub lookup failed for `Alice`: boom"]
 
 
@@ -639,7 +637,7 @@ class TestPresence:
     def test_check_presence_with_only_tags_reads_memory(self):
         with (
             patch.object(config, "people", {}),
-            patch.object(config, "ble_tags", {"Alice": m.BleKey(bytes(32), 0)}),
+            patch.object(config, "tags", [m.BleTag("Alice", "Alice Tag")]),
         ):
             api.mark_present(["Alice"], api.local_now(), TRIGGER)
             assert api.check_presence(TRIGGER) == {"Alice"}
@@ -696,7 +694,7 @@ class TestPresence:
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
         api.mark_present(["Alice"], api.local_now() - timedelta(hours=10), TRIGGER)
         with (
-            patch.object(config, "ble_tags", {name: m.BleKey(bytes(32), 0) for name in ("Alice", "Bob", "Carol")}),
+            patch.object(config, "tags", [m.BleTag(name, f"{name} Tag") for name in ("Alice", "Bob", "Carol")]),
             patch.object(net.presence, "probe") as probe,
             patch.object(net, "scan_presence", return_value=(set(), [])),
         ):

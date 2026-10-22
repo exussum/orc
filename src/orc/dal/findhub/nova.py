@@ -34,7 +34,7 @@ _MCU_MODEL_ID = "003200"
 type Field = tuple[int, int | bytes]
 
 
-def identity_key(device: str, secrets: m.Secrets, timeout: int) -> m.TagKey:
+def identity_key(device: str, secrets: m.Secrets, timeout: int) -> m.BleKey:
     auth = gpsoauth.perform_oauth(
         secrets.find_hub_username,
         secrets.find_hub_aas_token,
@@ -56,7 +56,7 @@ def identity_key(device: str, secrets: m.Secrets, timeout: int) -> m.TagKey:
     return registration(device, reply.content, bytes.fromhex(secrets.find_hub_owner_key))
 
 
-def registration(device: str, devices_list: bytes, owner_key: bytes) -> m.TagKey:
+def registration(device: str, devices_list: bytes, owner_key: bytes) -> m.BleKey:
     for metadata in _submessages(devices_list, 2):
         name = _first(metadata, 5)
         if not isinstance(name, bytes) or name.decode() != device:
@@ -69,7 +69,7 @@ def registration(device: str, devices_list: bytes, owner_key: bytes) -> m.TagKey
             raise LookupError(f"Find Hub device {device!r} has no identity key registration")
         if isinstance(model_id, bytes) and model_id.decode() == _MCU_MODEL_ID:
             encrypted = bytes(b ^ 0xFF for b in encrypted)
-        return m.TagKey(_decrypt(owner_key, encrypted), pair_date)
+        return m.BleKey(_decrypt(owner_key, encrypted), pair_date)
     raise LookupError(f"no Find Hub device named {device!r}")
 
 

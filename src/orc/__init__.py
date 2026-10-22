@@ -101,7 +101,6 @@ class Config:
         self.providers = parsed.provider
         self.secret_needs = secret_needs(self.registry, parsed.provider)
         self.tags = parsed.tag
-        self.ble_tags: dict[str, m.BleKey] = {}
         self.routines = parsed.routine
         self.themes = parsed.theme
         self.ad_hoc_routines = parsed.ad_hoc

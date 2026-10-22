@@ -71,11 +71,6 @@ class BleKey(NamedTuple):
     anchor: int  # unix seconds of the tag's clock zero (its pair date)
 
 
-class TagKey(NamedTuple):
-    eik: bytes
-    pair_date: int
-
-
 class TagClock(NamedTuple):
     offset: int  # tag clock minus the pair-date estimate, in seconds
     heard: int

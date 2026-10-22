@@ -43,7 +43,7 @@ class Presence:
     """
 
     def __init__(self) -> None:
-        self._tags: Mapping[str, m.BleKey] = {}
+        self._tags: dict[str, m.BleKey] = {}
         self._tz: tzinfo | None = None
         self._index: dict[bytes, tuple[str, int]] = {}
         self._clocks: LockedDict[str, m.TagClock] = LockedDict()
@@ -55,20 +55,22 @@ class Presence:
 
     def start(
         self,
-        tags: Mapping[str, m.BleKey],
         tz: tzinfo,
         on_change: Callable[[m.Trigger], object],
         clocks: Mapping[str, m.TagClock],
         on_clock: Callable[[str, m.TagClock], object],
+        *,
+        listen: bool,
     ) -> None:
         self._on_change = on_change
         self._on_clock = on_clock
-        if not tags:
-            return
-        self._tags = tags
         self._tz = tz
         self._clocks = LockedDict(clocks)
-        threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
+        if listen:
+            threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
+
+    def set_key(self, person: str, key: m.BleKey) -> None:
+        self._tags[person] = key
 
     def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger) -> None:
         for name in names:

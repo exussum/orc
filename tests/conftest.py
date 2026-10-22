@@ -58,9 +58,9 @@ def reset_presence():
     from orc.dal import net
 
     # api's aliases bind the singleton's methods, so reset it in place; re-wiring
-    # installs a fresh reporter closure (empty ble_tags keeps the scanner thread off).
+    # installs a fresh reporter closure (no tag lines keeps the scanner thread off).
     net.presence.__init__()
-    with patch.object(config, "ble_tags", {}):
+    with patch.object(config, "tags", []):
         api.start_ble_listener()
 
 

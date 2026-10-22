@@ -110,14 +110,14 @@ class TestFindHub:
         encryptor = Cipher(algorithms.AES(self.OWNER_KEY), modes.CBC(iv)).encryptor()
         encrypted = iv + encryptor.update(self.EIK) + encryptor.finalize()
         reply = self._devices_list(("Galaxy S22", b"x" * 48, 1, ""), ("Chipolo POP", encrypted, self.PAIR_DATE, ""))
-        assert nova.registration("Chipolo POP", reply, self.OWNER_KEY) == m.TagKey(self.EIK, self.PAIR_DATE)
+        assert nova.registration("Chipolo POP", reply, self.OWNER_KEY) == m.BleKey(self.EIK, self.PAIR_DATE)
 
     def test_reads_a_gcm_wrapped_key_and_flips_an_mcu_tracker(self):
         nonce = bytes(12)
         encrypted = nonce + AESGCM(self.OWNER_KEY).encrypt(nonce, self.EIK, None)
         flipped = bytes(b ^ 0xFF for b in encrypted)
         reply = self._devices_list(("ESP32", flipped, self.PAIR_DATE, "003200"))
-        assert nova.registration("ESP32", reply, self.OWNER_KEY) == m.TagKey(self.EIK, self.PAIR_DATE)
+        assert nova.registration("ESP32", reply, self.OWNER_KEY) == m.BleKey(self.EIK, self.PAIR_DATE)
 
     def test_unknown_device_is_a_lookup_error(self):
         with pytest.raises(LookupError, match="no Find Hub device named 'Chipolo POP'"):
@@ -130,7 +130,7 @@ class TestFindHub:
         reply = self._devices_list(("Chipolo POP", iv + encryptor.update(self.EIK) + encryptor.finalize(), self.PAIR_DATE, ""))
         with patch.object(nova.gpsoauth, "perform_oauth", return_value={"Auth": "bearer"}) as oauth, patch("requests.post") as post:
             post.return_value.content = reply
-            assert nova.identity_key("Chipolo POP", secrets, 5) == m.TagKey(self.EIK, self.PAIR_DATE)
+            assert nova.identity_key("Chipolo POP", secrets, 5) == m.BleKey(self.EIK, self.PAIR_DATE)
         assert oauth.call_args.args[:3] == ("u", "t", "a")
         assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer bearer"
 
@@ -184,10 +184,10 @@ def test_durations_reach_the_table_one_batch_at_a_time():
     [([100], 100), ([100, 400], 100), ([100, 700], 700), ([100, 700, 300], 700), ([100, 700, 100], 100)],
 )
 def test_tag_clock_moves_only_by_more_than_half_a_window(offsets, expected):
-    sqlite.upsert_tag_key("Alice", m.TagKey(bytes(32), 5))
+    sqlite.upsert_tag_key("Alice", m.BleKey(bytes(32), 5))
     for offset in offsets:
         sqlite.update_tag_clock("Alice", m.TagClock(offset, 0))
-    assert sqlite.fetch_tags() == {"Alice": (m.TagKey(bytes(32), 5), m.TagClock(expected, 0))}
+    assert sqlite.fetch_tags() == {"Alice": (m.BleKey(bytes(32), 5), m.TagClock(expected, 0))}
 
 
 def test_tag_clock_needs_a_key_row():
