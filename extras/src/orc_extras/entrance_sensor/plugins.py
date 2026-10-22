@@ -12,7 +12,6 @@ from orc.plugins import requires_ctx
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
-CLEARED_MSG = "Motion cleared, cleanup in {minutes} minutes"
 CANCELLED_MSG = "Cleanup cancelled: motion triggered"
 
 
@@ -75,7 +74,6 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
         ctx.api.dispatch(m.squish((*restore, *timed_commands)), force=True, entry=log_entry)
     elif new == sensor.setting.inactive_event:
-        log_entry.add(Log.ENTRANCE, CLEARED_MSG.format(minutes=sensor.setting.cleanup_delay_minutes))
         ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
         ctx.scheduler.once(
             _run_trigger_sensor_off,
