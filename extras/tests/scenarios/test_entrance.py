@@ -5,7 +5,6 @@ import orc
 
 WALK_IN = [
     "Applying `Day` rules",
-    "Motion cleared, cleanup in 2 minutes",
     "Running `All Lights Off`",
 ]
 
