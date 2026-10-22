@@ -12,6 +12,7 @@ import orc
 from orc import api, config, plugins
 from orc import model as m
 from orc.dal import net, push, scheduler, sqlite
+from orc.dal.findhub import stub as findhub_stub
 from orc.dal.mqtt import paho as mqtt
 from orc.dal.secrets import stub as secrets_stub
 
@@ -278,6 +279,34 @@ def test_dispatch_usb_speaks_state_error(log_entry):
 
     assert len(audio_stub._spoken) == 1
     assert "USB devices don't support state" in audio_stub._spoken[0]
+
+
+class TestRefreshTagKeys:
+    @pytest.fixture(autouse=True)
+    def reset_tags(self):
+        api._ACTIVITY_LOG.clear()
+        config.ble_tags.clear()
+        yield
+        config.ble_tags.clear()
+
+    def test_a_new_key_reaches_the_listener_mapping_and_the_row(self):
+        api.refresh_tag_keys(m.Manual("secrets"))
+        key = m.TagKey(b"Alice Tag".ljust(32, b"\0"), 0)
+        assert config.ble_tags == {"Alice": m.BleKey(key.eik, key.pair_date)}
+        assert sqlite.fetch_tags() == {"Alice": (key, None)}
+        assert [e.action for e in api.log_entries()] == ["Tag key for `Alice` read from Find Hub"]
+
+    def test_an_unchanged_key_is_silent(self):
+        api.refresh_tag_keys(m.Manual("secrets"))
+        api._ACTIVITY_LOG.clear()
+        api.refresh_tag_keys(m.Manual("secrets"))
+        assert api.log_entries() == []
+
+    def test_a_failed_lookup_logs_and_keeps_going(self, monkeypatch):
+        monkeypatch.setattr(findhub_stub, "identity_key", MagicMock(side_effect=RuntimeError("boom")))
+        api.refresh_tag_keys(m.Manual("secrets"))
+        assert config.ble_tags == {}
+        assert [e.action for e in api.log_entries()] == ["Find Hub lookup failed for `Alice`: boom"]
 
 
 class TestRefreshSecrets:

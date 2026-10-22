@@ -49,6 +49,7 @@ def rebuild_jobs(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) ->
 
 def refresh_secrets(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     ctx.api.refresh_secrets(entry.trigger)
+    ctx.api.refresh_tag_keys(entry.trigger)
 
 
 def reboot(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
