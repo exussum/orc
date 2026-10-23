@@ -15,11 +15,9 @@ from orc import model as m
 def mock_registry(monkeypatch):
     """Install a minimal registry that wires device types to dispatch handlers, for
     tests that exercise dispatch without running real registration. Each keyword is
-    ``name=(enum_cls, dispatch | None)``; the enum is also attached to ``orc``."""
+    ``name=(enum_cls, dispatch | None)``."""
 
     def install(ctx, **dispatch_by_type):
-        for name, (cls, _) in dispatch_by_type.items():
-            monkeypatch.setattr(orc, name, cls, raising=False)
         devices = m.DeviceNamespace(**{name: cls for name, (cls, _) in dispatch_by_type.items()})
         registry = m.Registry(
             devices=devices,
@@ -60,9 +58,13 @@ class TestDispatchLGTV:
         self.bl = BroadLink.living_room
         self.entry = m.LogEntry(datetime.now(UTC), m.LogSource.MANUAL, "test", m.Manual("test"))
 
-    def test_off_powers_webos_off(self):
-        with patch.object(plugins, "off") as webos_off:
-            api.dispatch((em.Command(m.Devices(self.lg_tv), m.OFF),), entry=self.entry)
+    @pytest.fixture
+    def webos_off(self):
+        with patch.object(plugins, "off") as off:
+            yield off
+
+    def test_off_powers_webos_off(self, webos_off):
+        api.dispatch((em.Command(m.Devices(self.lg_tv), m.OFF),), entry=self.entry)
         webos_off.assert_called_once_with(self.ctx, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
@@ -75,7 +77,6 @@ class TestDispatchLGTV:
             api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
         self.ctx.api.tv_toggle.assert_not_called()
 
-    def test_device_command_routes_to_lg_tv_handler(self):
-        with patch.object(plugins, "off") as webos_off:
-            api.device_command("living_room", m.OFF, self.entry)
+    def test_device_command_routes_to_lg_tv_handler(self, webos_off):
+        api.device_command("living_room", m.OFF, self.entry)
         webos_off.assert_called_once_with(self.ctx, self.webos)

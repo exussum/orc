@@ -203,13 +203,17 @@ class TestPresence:
 
     ADDRESS = "11:22:33:44:55:66"
 
-    def _hear(self, frames, tags):
+    @pytest.fixture(autouse=True)
+    def frozen_now(self):
         with patch.object(net.Presence, "_now", return_value=self.NOW):
-            presence = net.Presence()
-            presence._tags = tags
-            presence._index = net._eid_index(tags, {}, self.NOW)
-            for frame in frames:
-                presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
+            yield
+
+    def _hear(self, frames, tags):
+        presence = net.Presence()
+        presence._tags = tags
+        presence._index = net._eid_index(tags, {}, self.NOW)
+        for frame in frames:
+            presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
         return presence
 
     def _present(self, presence):
@@ -248,8 +252,7 @@ class TestPresence:
         second = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[1]
         presence = self._heard()
         presence._on_clock = MagicMock()
-        with patch.object(net.Presence, "_now", return_value=self.NOW):
-            presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
+        presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
         presence._on_clock.assert_called_once_with("Alice", m.TagClock(5120 - 5000, int(self.NOW.timestamp()), second[1:]))
 
     def test_a_seeded_clock_starts_narrow(self):
@@ -289,7 +292,7 @@ class TestPresence:
         return presence
 
     def _probe(self, presence, client):
-        with patch.object(net, "BleakClient", client), patch.object(net.Presence, "_now", return_value=self.NOW):
+        with patch.object(net, "BleakClient", client):
             presence.probe(["Alice"], TRIGGER)
 
     def test_probe_marks_reachable_tag(self):

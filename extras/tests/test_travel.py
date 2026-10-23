@@ -13,7 +13,6 @@ from orc_extras.travel.dal.drive import stub as drive_stub
 from orc_extras.travel.dal.drive import tomtom
 from orc_extras.travel.dal.flight import stub as flight_stub
 
-import orc
 from orc.kernel.declarations import Declarations
 from tests.conftest import plugin_config
 
@@ -31,8 +30,7 @@ def flight_travel_job():
 
 
 @pytest.fixture
-def travel_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(orc.config, "settings", orc.config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'travel.sqlite'}"))
+def travel_db():
     travel_sqlite.init_db()
 
 

@@ -1,4 +1,3 @@
-from dataclasses import replace
 from datetime import date, datetime, timedelta
 from unittest.mock import ANY, MagicMock, create_autospec, patch
 
@@ -11,7 +10,6 @@ from orc_engine import model as em
 import orc
 from orc import api, config
 from orc import model as m
-from orc.dal.secrets import stub as secrets_stub
 from orc.view import bp
 
 MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
@@ -24,6 +22,18 @@ def config_rooms(monkeypatch):
         monkeypatch.setattr(config, "rooms", payload)
 
     return install
+
+
+@pytest.fixture
+def fake_theme_change():
+    with patch.object(api, "apply_theme_change") as apply_change:
+        yield apply_change
+
+
+@pytest.fixture
+def fake_duration_stats():
+    with patch("orc.api.duration_stats", return_value={}) as stats:
+        yield stats
 
 
 @pytest.fixture
@@ -58,7 +68,7 @@ def test_console_plugin(flask_client, ctx):
 
 def test_console_schedule_routine(flask_client, command_dispatch):
     rule = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()))
-    with patch.object(config, "schedule_routines", {"r": rule}), patch.object(config, "plugins", {}):
+    with patch.object(config, "schedule_routines", {"r": rule}):
         flask_client.get("/api/run/r")
     command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=True, entry=ANY)
 
@@ -89,13 +99,13 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, 
     command_dispatch.assert_called_once_with(action.commands, force=True, entry=queued)
 
 
-def test_console_ad_hoc_snapshot_skipped_for_web_callers(flask_client, ctx, config_ad_hoc, command_dispatch):
+def test_console_ad_hoc_snapshot_skipped_for_web_callers(flask_client, ctx, config_ad_hoc, command_dispatch, fake_capture_lights):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
-    with config_ad_hoc({"r": action}, reset_config=reset), patch.object(api, "capture_lights") as capture:
+    with config_ad_hoc({"r": action}, reset_config=reset):
         flask_client.get("/api/run/r")
     assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots()
-    capture.assert_not_called()
+    fake_capture_lights.assert_not_called()
     command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
 
 
@@ -147,37 +157,26 @@ def test_room_unknown_id_returns_404(flask_client, config_rooms, command_dispatc
     command_dispatch.assert_not_called()
 
 
-def test_set_theme_clear_passes_none_dates(flask_client, ctx):
-    with patch.object(api, "apply_theme_change") as apply_change:
-        flask_client.post("/api/schedule/theme", data={"theme": ""})
-    apply_change.assert_called_once_with(ctx, "", None, None, m.Manual("theme"))
+def test_set_theme_clear_passes_none_dates(flask_client, ctx, fake_theme_change):
+    flask_client.post("/api/schedule/theme", data={"theme": ""})
+    fake_theme_change.assert_called_once_with(ctx, "", None, None, m.Manual("theme"))
 
 
-def test_set_theme_set_parses_dates(flask_client, ctx):
+def test_set_theme_set_parses_dates(flask_client, ctx, fake_theme_change):
     theme = next(iter(orc.config.themes))
-    with patch.object(api, "apply_theme_change") as apply_change:
-        flask_client.post(
-            "/api/schedule/theme",
-            data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"},
-        )
-    apply_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
+    flask_client.post("/api/schedule/theme", data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"})
+    fake_theme_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
 
 
-def test_set_theme_rejects_unknown_theme(flask_client, ctx):
-    with patch.object(api, "apply_theme_change") as apply_change:
-        response = flask_client.post(
-            "/api/schedule/theme",
-            data={"theme": "vacation", "start": "2100-01-01", "end": "2100-01-10"},
-        )
+def test_set_theme_rejects_unknown_theme(flask_client, ctx, fake_theme_change):
+    response = flask_client.post("/api/schedule/theme", data={"theme": "vacation", "start": "2100-01-01", "end": "2100-01-10"})
     assert response.status_code == 404
-    apply_change.assert_not_called()
+    fake_theme_change.assert_not_called()
 
 
-def test_durations_returns_stats(flask_client):
-    with (
-        patch("orc.api.duration_stats", return_value={"TV Lights": (4, 3.0), "Reset": (2, 0.5)}),
-        patch("orc.api.action_delays", return_value={}),
-    ):
+def test_durations_returns_stats(flask_client, fake_duration_stats):
+    fake_duration_stats.return_value = {"TV Lights": (4, 3.0), "Reset": (2, 0.5)}
+    with patch("orc.api.action_delays", return_value={}):
         response = flask_client.get("/api/durations")
     assert response.status_code == 200
     assert response.get_json() == {
@@ -186,17 +185,18 @@ def test_durations_returns_stats(flask_client):
     }
 
 
-def test_durations_lists_a_delayed_action_that_never_ran(flask_client, config_ad_hoc):
+def test_durations_lists_a_delayed_action_that_never_ran(flask_client, config_ad_hoc, fake_duration_stats):
     dog = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), name="Dog", delay=timedelta(minutes=6))
-    with config_ad_hoc({"AD_HOC_DOG": dog}), patch("orc.api.duration_stats", return_value={}):
+    with config_ad_hoc({"AD_HOC_DOG": dog}):
         response = flask_client.get("/api/durations")
     assert response.get_json() == {"AD_HOC_DOG": {"avg": 0.0, "samples": 0, "delay": "0:06:00"}}
 
 
-def test_actions_lists_what_arrow_can_call(flask_client, config_ad_hoc, config_rooms):
+def test_actions_lists_what_arrow_can_call(flask_client, config_ad_hoc, config_rooms, fake_duration_stats):
     dog = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), name="Dog", delay=timedelta(minutes=6))
     config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
-    with config_ad_hoc({"AD_HOC_DOG": dog}), patch("orc.api.duration_stats", return_value={"Living Room": (4, 3.0)}):
+    fake_duration_stats.return_value = {"Living Room": (4, 3.0)}
+    with config_ad_hoc({"AD_HOC_DOG": dog}):
         response = flask_client.get("/api/actions")
     assert response.status_code == 200
     body = response.get_json()
@@ -359,9 +359,8 @@ def test_schedule_without_jobs_says_so(flask_client):
     assert b"No scheduled events." in _get_schedule(flask_client, []).data
 
 
-def test_refresh_secrets_button_runs_the_refresh_under_its_entry(flask_client, monkeypatch):
+def test_refresh_secrets_button_runs_the_refresh_under_its_entry(flask_client, unchanged_vault):
     api._ACTIVITY_LOG.clear()
-    monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: replace(config.secrets, other=dict(config.secrets.other)))
     response = flask_client.get("/api/run/Refresh Secrets")
     assert response.status_code == 200
     (entry,) = api.log_entries()
