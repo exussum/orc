@@ -290,7 +290,7 @@ def test_buttons_carry_group_and_stripe():
 
 def test_person_becomes_known_trigger():
     parsed = parse("core")
-    assert parsed.person == {"Alice": [m.Person("host9", "aa:bb")]}
+    assert parsed.person == (m.Person("Alice", (m.Host("host9", "aa:bb"),)),)
     assert parsed.routine["ROUTINE_DEFAULT"].commands[-1].tag == m.Present("Alice")
 
 

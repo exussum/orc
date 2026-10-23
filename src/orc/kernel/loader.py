@@ -58,7 +58,7 @@ theme <name> <routine> <time>
 
 def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = None) -> SimpleNamespace:
     serializers = {
-        "person": group(m.Person),
+        "person": group(m.Host),
         "device": each(
             partial(_device, zigbee_config or {}),
             default=lambda: SimpleNamespace(members={}, enums={}, sorts={}, virtual_devices=set()),
@@ -99,7 +99,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         virtual_devices=objects["device"].virtual_devices,
         button=objects["button"],
         group=objects["group"],
-        person=objects["person"],
+        person=tuple(m.Person(name, tuple(hosts)) for name, hosts in objects["person"].items()),
         plugin_modules=[p.module for p in objects["plugin"]],
         plugins=tuple(p for p in objects["plugin"] if p.section is not None),
         provider=objects["provider"] or interfaces.Provider(),
@@ -137,9 +137,10 @@ def validate(config: SimpleNamespace) -> None:
             raise ConfigError(f"Unknown scene button {button.id!r}: expected one of {tuple(sorted(placeable))}")
         if button.group not in groups:
             raise ConfigError(f"Unknown group {button.group!r} for button {button.id!r}: expected one of {tuple(sorted(groups))}")
+    names = tuple(person.name for person in config.person)
     for tag in config.tag:
-        if tag.person not in config.person:
-            raise ConfigError(f"Unknown person {tag.person!r} in tag line: expected one of {tuple(config.person)}")
+        if tag.person not in names:
+            raise ConfigError(f"Unknown person {tag.person!r} in tag line: expected one of {names}")
 
 
 def secret_needs(registry: m.Registry, providers: interfaces.Provider) -> dict[str, Callable[[str], Any]]:

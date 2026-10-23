@@ -132,13 +132,33 @@ def command_dispatch():
 
 
 @pytest.fixture
+def fake_capture_lights():
+    from unittest.mock import patch
+
+    from orc import api
+
+    with patch.object(api, "capture_lights") as capture:
+        yield capture
+
+
+@pytest.fixture
+def unchanged_vault(monkeypatch):
+    from dataclasses import replace
+
+    from orc import config
+    from orc.dal.secrets import stub as secrets_stub
+
+    monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: replace(config.secrets, other=dict(config.secrets.other)))
+
+
+@pytest.fixture
 def config_ad_hoc():
     from unittest.mock import patch
 
     from orc import config
 
     def install(routines, **overrides):
-        return patch.multiple(config, plugins={}, schedule_routines={}, ad_hoc_routines=routines, **overrides)
+        return patch.multiple(config, ad_hoc_routines=routines, **overrides)
 
     return install
 

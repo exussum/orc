@@ -297,12 +297,12 @@ def presence() -> str:
     present = api.present_names()
     rows = [
         PresenceStatus(
-            name=name,
-            hostnames=sorted(host for host, _ in entries),
-            last_seen=last_seen.get(name),
-            present=name in present,
+            name=person.name,
+            hostnames=sorted(host.host for host in person.hosts),
+            last_seen=last_seen.get(person.name),
+            present=person.name in present,
         )
-        for name, entries in config.people.items()
+        for person in config.people
     ]
     return render_template("presence.html", rows=rows, strip_suffix="." + config.settings.lan_domain)
 
@@ -491,6 +491,6 @@ def _to_level(state: object) -> int:
 
 
 def _person(name: str) -> str:
-    if name not in config.people:
+    if name not in {person.name for person in config.people}:
         abort(404, f"Unknown person: {name}")
     return name

@@ -43,7 +43,7 @@ def entrance_ctx(ctx):
     ctx.config.registry = orc.config.registry
     ctx.config.devices = orc.config.devices
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
-    ctx.config.people = {"Rex": []}
+    ctx.config.people = (m.Person("Rex", ()),)
     ctx.config.tags = []
     ctx.config.reset_config = SimpleNamespace(commands=(RESET,))
     ctx.config.ad_hoc_routines = {
