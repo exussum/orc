@@ -18,8 +18,6 @@ def reset_mqtt(monkeypatch):
     for name in ("_devices", "_command_sent", "_commanded"):
         monkeypatch.setattr(hubitat, name, LockedDict())
     monkeypatch.setattr(hubitat, "hub_id", None)
-    monkeypatch.setattr(mqtt, "_adapters", [])
-    monkeypatch.setattr(mqtt, "_status_listeners", [])
     monkeypatch.setattr(mqtt, "_client", None)
     mqtt.register(hubitat)
 
@@ -192,14 +190,16 @@ class TestRouting:
         mqtt.start()
         assert mqtt_client.published == [("clip/hello", '{"q": 1}', True)]
 
-    def test_start_builds_no_client_without_a_namespace(self, monkeypatch):
-        monkeypatch.setattr(mqtt, "_adapters", [none])
+    @pytest.fixture
+    def no_broker(self, monkeypatch):
         monkeypatch.setattr(mqtt, "_new_client", lambda *a: pytest.fail("client built"))
+
+    def test_start_builds_no_client_without_a_namespace(self, monkeypatch, no_broker):
+        monkeypatch.setattr(mqtt, "_adapters", [none])
         mqtt.start()
         assert mqtt._client is None
 
-    def test_discover_skips_the_broker_without_a_namespace(self, monkeypatch):
-        monkeypatch.setattr(mqtt, "_new_client", lambda *a: pytest.fail("client built"))
+    def test_discover_skips_the_broker_without_a_namespace(self, no_broker):
         assert mqtt.discover(none, m.Secrets()) == {}
 
     def test_command_routes_by_device_type(self, mqtt_client):

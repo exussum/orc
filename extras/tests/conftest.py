@@ -24,6 +24,11 @@ def plugin_config(plugin, name):
 
 
 @pytest.fixture(autouse=True)
+def config_jobs_db(tmp_path, monkeypatch):
+    monkeypatch.setattr(orc.config, "settings", orc.config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
+
+
+@pytest.fixture(autouse=True)
 def reset_ctx():
     api.set_ctx(m.AppContext(MagicMock(), api.runtime()))
 
