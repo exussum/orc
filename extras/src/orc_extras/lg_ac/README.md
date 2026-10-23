@@ -9,13 +9,6 @@ routines and react rules all work on it.
 Calibrated for `WIN_056905_WW` (model `LW1522IVSM`); another model needs a
 one-time calibration (last section).
 
-## Credit
-
-The ThinQ2 "clip" protocol (enrollment, the AABB/TLV framing, the
-`lime/devices` transport and the field maps) was reverse-engineered by
-**anszom** in the **rethink** project — https://github.com/anszom/rethink.
-This plugin is a Python reimplementation of that work for orc.
-
 ## Quick start
 
 1. Add `plugin 'LG AC' orc_extras.lg_ac` to `config.orc` and create

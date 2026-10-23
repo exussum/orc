@@ -1,3 +1,20 @@
+# Copyright (C) 2025-2026 exussum
+# Golden vectors from BSkando's GoogleFindMy-HA, GPL-3.0,
+# tests/test_eid_generator_variants.py: https://github.com/BSkando/GoogleFindMy-HA.
+#
+# This file is part of orc.
+#
+# orc is free software: you can redistribute it and/or modify it under the terms
+# of the GNU General Public License version 3 as published by the Free Software
+# Foundation.
+#
+# orc is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# orc. If not, see <https://www.gnu.org/licenses/>.
+
 import pytest
 
 from orc import security
@@ -5,7 +22,6 @@ from orc import security
 EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 COUNTER = 0x12345678
 
-# Golden vectors from BSkando/GoogleFindMy-HA (MIT), tests/test_eid_generator_variants.py.
 VECTORS = [
     ("secp160r1", 0, "7bf149821dafae98259bfe53a87283c41d7b1b1c"),
     ("p256", 1, "72d4e4be2c6f3c1c5328f10d884ab58e0a474b06584d9c893b1e099853289cd9"),
