@@ -1,3 +1,20 @@
+# Copyright (C) 2025-2026 exussum
+# The clip transport follows anszom's rethink, GPL-2.0:
+# https://github.com/anszom/rethink. This is a Python reimplementation.
+#
+# This file is part of orc.
+#
+# orc is free software: you can redistribute it and/or modify it under the terms
+# of the GNU General Public License version 3 as published by the Free Software
+# Foundation.
+#
+# orc is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# orc. If not, see <https://www.gnu.org/licenses/>.
+
 """ThinQ2 (clip) adapter.
 
 Rides orc's broker connection as the adapter for the ``clip`` and ``lime``
@@ -5,9 +22,6 @@ namespaces. Merges the latest raw TLV values per device from
 ``clip/message/devices/<did>`` (decoded on read), answers provisioning on
 ``clip/provisioning/devices/<did>``, and encodes commands downstream on
 ``lime/devices/<did>``.
-
-The clip transport (the upstream/downstream topics and the JSON ``packet``
-envelope) is from anszom's rethink: https://github.com/anszom/rethink.
 """
 
 from __future__ import annotations

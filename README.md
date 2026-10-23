@@ -293,13 +293,6 @@ action on your side, so orc re-reads each tag's key from the account every
 four hours and on **Refresh Secrets**; a changed key reaches the listener
 within five minutes, no restart.
 
-The EID scheme is Google's public
-[Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).
-The variant semantics and golden test vectors follow **BSkando**'s
-**GoogleFindMy-HA** (MIT) — https://github.com/BSkando/GoogleFindMy-HA — and
-identity keys are exported with **leonboe1**'s **GoogleFindMyTools** —
-https://github.com/leonboe1/GoogleFindMyTools.
-
 ## Running
 
 Two entry points in `src/orc/runner.py`, both serving on `0.0.0.0:<port>`
@@ -333,6 +326,26 @@ supervisor job — are specific to the author's host and aren't in the repo.
 - `examples/` — copyable per-plugin config samples and an example plugin
 - `scripts/` — build and publish scripts
 - `tests/` — the core test suite
+
+## License and credits
+
+orc is licensed under the GNU General Public License version 3; see
+[LICENSE](LICENSE). Parts of orc build on other projects, and those files
+carry the notice:
+
+- **GoogleFindMyTools**, Copyright 2024 Leon Böttger, GPL-3.0 —
+  https://github.com/leonboe1/GoogleFindMyTools. The Find Hub login and the
+  Nova device-list request in `src/orc/dal/findhub/nova.py` derive from it,
+  and `scripts/seed_find_hub.py` imports the secrets its login writes.
+- **GoogleFindMy-HA** by BSkando, GPL-3.0 —
+  https://github.com/BSkando/GoogleFindMy-HA. The EID variant semantics in
+  `src/orc/security.py` and the golden vectors in `tests/test_security.py`
+  follow it. The EID scheme itself is Google's public
+  [Find Hub Network accessory spec](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn).
+- **rethink** by anszom, GPL-2.0 — https://github.com/anszom/rethink. The
+  ThinQ2 "clip" protocol the `lg_ac` plugin speaks (enrollment, the AABB/TLV
+  framing, the `lime/devices` transport and the field maps) was
+  reverse-engineered there; the plugin is a Python reimplementation.
 
 ## Quick start — development, no hardware required
 

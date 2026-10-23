@@ -12,12 +12,6 @@ from ecdsa.curves import SECP160r1
 
 from orc.model import CA, Certificate
 
-# FMDN ephemeral-identifier math and frame parsing. The EID scheme — the two-block
-# PRF input (spec Table 10), AES-256-ECB, and the per-curve scalar projection — is
-# from Google's Find Hub Network accessory spec:
-# https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn.
-# Variant semantics and the golden test vectors follow BSkando's GoogleFindMy-HA
-# (MIT): https://github.com/BSkando/GoogleFindMy-HA.
 FMDN_SERVICE_UUID = "0000feaa-0000-1000-8000-00805f9b34fb"
 FMDN_ROTATION_SECONDS = 1024
 
@@ -77,6 +71,8 @@ def fmdn_parse(service_data: bytes) -> bytes | None:
     return service_data[1:21]
 
 
+# Google's Find Hub Network accessory spec, Table 10; the three variants follow
+# BSkando's GoogleFindMy-HA (GPL-3.0): https://github.com/BSkando/GoogleFindMy-HA.
 def fmdn_eids(eik: bytes, counter: int) -> tuple[bytes, bytes, bytes]:
     """The EID variants a tag may broadcast: secp160r1, p256, and p256 truncated."""
     r = int.from_bytes(_fmdn_prf(eik, counter), "big")
