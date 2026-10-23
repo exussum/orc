@@ -113,17 +113,17 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
         ctx.scheduler.start(ctx)
         api.setup_scheduler(ctx)
     for hook in config.config.registry.setup_hooks:
-        with step(hook.__module__):
+        with step(f"{hook.__module__} setup"):
             hook(ctx)
-    with step("mqtt"):
+    with step("mqtt start"):
         api.start_mqtt()
-    with step("ble"):
+    with step("ble start"):
         api.start_ble_listener()
     with step("scheduler resume"):
         ctx.scheduler.resume()
     with step("presence check"):
         api.schedule_presence_check(m.Cron("presence"))
-    with step("find hub"):
+    with step("tag key check"):
         api.schedule_tag_key_refresh(m.Cron("findhub"))
     assert boot.entry is not None and boot.started is not None
     boot.entry.add(m.LogSource.SYSTEM, Log.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
@@ -132,9 +132,9 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
 
 def _build_app(boot: Boot) -> OrcFlask:
     step = partial(_step, boot)
-    with step("config"):
+    with step("config load"):
         config.config.load()
-    with step("database"):
+    with step("database init"):
         api.init_db()
         api.load_durations()
 
