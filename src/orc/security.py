@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ecdsa.curves import SECP160r1
 
 from orc.model import CA, Certificate
@@ -84,6 +85,17 @@ def fmdn_eids(eik: bytes, counter: int) -> tuple[bytes, bytes, bytes]:
     modern_key = ec.derive_private_key(r % (_P256_ORDER - 1) + 1, ec.SECP256R1()).public_key()
     modern = modern_key.public_numbers().x.to_bytes(32, "big")
     return legacy, modern, modern[:20]
+
+
+def fmdn_identity_key(owner_key: bytes, encrypted: bytes, *, inverted: bool = False) -> bytes:
+    if inverted:
+        encrypted = bytes(b ^ 0xFF for b in encrypted)
+    if len(encrypted) == 48:
+        decryptor = Cipher(algorithms.AES(owner_key), modes.CBC(encrypted[:16])).decryptor()
+        return decryptor.update(encrypted[16:]) + decryptor.finalize()
+    elif len(encrypted) == 60:
+        return AESGCM(owner_key).decrypt(encrypted[:12], encrypted[12:], None)
+    raise ValueError(f"unexpected identity key length {len(encrypted)}")
 
 
 def _fmdn_prf(eik: bytes, counter: int) -> bytes:
