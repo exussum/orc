@@ -27,6 +27,15 @@ def snapshot_commands():
 
 
 @pytest.fixture
+def elapsed_schedule():
+    def install(rule, id):
+        past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
+        return patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), rule, id))])
+
+    return install
+
+
+@pytest.fixture
 def system_snapshot(snapshot_commands):
     api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
 
@@ -44,30 +53,29 @@ def push_subscriptions():
     return build
 
 
-@patch("orc.api.dispatch")
 class TestRestoreScene:
-    def test_restore_with_snapshot(self, dispatch, snapshot_commands, log_entry):
+    def test_restore_with_snapshot(self, command_dispatch, snapshot_commands, log_entry):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
         api.restore_scene("test", (), log_entry)
-        assert dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
+        assert command_dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
 
-    def test_restore_without_snapshot(self, dispatch, snapshot_commands, log_entry):
+    def test_restore_without_snapshot(self, command_dispatch, snapshot_commands, log_entry):
         api.restore_scene("test", snapshot_commands, log_entry)
-        assert dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
+        assert command_dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
 
-    def test_restore_drops_expired_snapshot(self, dispatch, snapshot_commands, log_entry):
+    def test_restore_drops_expired_snapshot(self, command_dispatch, snapshot_commands, log_entry):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
         api.restore_scene("test", snapshot_commands, log_entry)
-        assert dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
+        assert command_dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
         assert not api._ctx.engine.snapshots()
 
-    def test_pop_snapshot_once_and_never_expired(self, dispatch, snapshot_commands):
+    def test_pop_snapshot_once_and_never_expired(self, command_dispatch, snapshot_commands):
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
         assert api._ctx.engine.pop_snapshot("test").routine is snapshot_commands
         assert api._ctx.engine.pop_snapshot("test") is None
         api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
         assert api._ctx.engine.pop_snapshot("test") is None
-        dispatch.assert_not_called()
+        command_dispatch.assert_not_called()
 
 
 @patch("orc.dal.mqtt.paho.command")
@@ -187,17 +195,17 @@ def test_button_ad_hoc_snapshot(ctx, config_ad_hoc, command_dispatch):
     command_dispatch.assert_called_once_with(action.commands, force=True, entry=ANY)
 
 
-def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispatch):
+def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispatch, fake_capture_lights):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
     existing = (em.Command(m.Devices(orc.Light.a), m.ON),)
     snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
     ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap, snap.end)
-    with config_ad_hoc({"r": action}, reset_config=reset), patch.object(api, "capture_lights") as capture:
+    with config_ad_hoc({"r": action}, reset_config=reset):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine is existing
-    capture.assert_not_called()
+    fake_capture_lights.assert_not_called()
     command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
 
 
@@ -322,8 +330,7 @@ class TestRefreshSecrets:
         assert read() == "new"
         assert [e.action for e in api.log_entries()] == ["Secrets refreshed: `TOMTOM_KEY`"]
 
-    def test_unchanged_vault_logs_unchanged(self, monkeypatch):
-        monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: replace(config.secrets, other=dict(config.secrets.other)))
+    def test_unchanged_vault_logs_unchanged(self, unchanged_vault):
         api.refresh_secrets(m.Manual("secrets"))
         assert [e.action for e in api.log_entries()] == ["Secrets unchanged"]
 
@@ -597,27 +604,24 @@ class TestPresence:
         command_dispatch.assert_not_called()
         assert "CLOUDY" in api.log_entries()[0].action
 
-    def test_replay_day_skips_routines_for_absent_people(self, log_entry, command_dispatch):
-        past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
+    def test_replay_day_skips_routines_for_absent_people(self, log_entry, command_dispatch, elapsed_schedule):
         partner = self._routine("partner-r", m.Present("Alice"))
-        with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), partner, "partner-r"))]):
+        with elapsed_schedule(partner, "partner-r"):
             api.replay_day(api.local_now(), log_entry)
         command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
 
-    def test_replay_day_runs_routines_for_present_people(self, log_entry, command_dispatch):
+    def test_replay_day_runs_routines_for_present_people(self, log_entry, command_dispatch, elapsed_schedule):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
-        past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         partner = self._routine("partner-r", m.Present("Alice"))
-        with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), partner, "partner-r"))]):
+        with elapsed_schedule(partner, "partner-r"):
             api.replay_day(api.local_now(), log_entry)
         squished = command_dispatch.call_args.args[0]
         assert [(c.subject.one(), c.value) for c in squished] == [(orc.Light.a, m.OFF)]
 
-    def test_replay_day_skips_skip_replay_routines(self, log_entry, command_dispatch):
+    def test_replay_day_skips_skip_replay_routines(self, log_entry, command_dispatch, elapsed_schedule):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
-        past = datetime(2026, 1, 5, 8, tzinfo=config.settings.tz)
         meeting = replace(self._routine("meeting-r", m.Present("Alice")), tags=frozenset({m.SKIP_REPLAY_TAG}))
-        with patch.object(api, "get_schedule", return_value=[(past, m.ThemeEntry(time(8, 0), meeting, "meeting-r"))]):
+        with elapsed_schedule(meeting, "meeting-r"):
             api.replay_day(api.local_now(), log_entry)
         command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
 
@@ -628,7 +632,14 @@ class TestPresence:
             return "10.0.0.2"
 
         with (
-            patch.object(config, "people", {"Alice": {("alice.local", "aa:aa:aa:aa:aa:aa")}, "Bob": {("bob.local", "bb:bb:bb:bb:bb:bb")}}),
+            patch.object(
+                config,
+                "people",
+                (
+                    m.Person("Alice", (m.Host("alice.local", "aa:aa:aa:aa:aa:aa"),)),
+                    m.Person("Bob", (m.Host("bob.local", "bb:bb:bb:bb:bb:bb"),)),
+                ),
+            ),
             patch.object(net.socket, "gethostbyname", side_effect=resolve),
         ):
             api.check_presence(TRIGGER)
@@ -636,8 +647,8 @@ class TestPresence:
 
     def test_check_presence_with_only_tags_reads_memory(self):
         with (
-            patch.object(config, "people", {}),
-            patch.object(config, "tags", [m.BleTag("Alice", "Alice Tag")]),
+            patch.object(config, "people", ()),
+            patch.object(net.presence, "tags", frozenset({"Alice"})),
         ):
             api.mark_present(["Alice"], api.local_now(), TRIGGER)
             assert api.check_presence(TRIGGER) == {"Alice"}

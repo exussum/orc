@@ -42,7 +42,7 @@ def ctx(ctx, freezegun_clock):
     ctx.api.reader.return_value = _no_world
     ctx.api.present_names.return_value = set()
     ctx.config.registry = orc.config.registry
-    ctx.config.people = {"Rex": []}
+    ctx.config.people = (m.Person("Rex", ()),)
     ctx.config.tags = []
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
     ctx.api.log.return_value = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))

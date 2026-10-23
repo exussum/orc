@@ -56,9 +56,14 @@ _LOG_SOURCES: dict[str, int] = {}
 ORC_SYSTEM_SNAPSHOT = "ORC_SYSTEM_SNAPSHOT"
 
 
-class Person(NamedTuple):
+class Host(NamedTuple):
     host: str
     mac: str
+
+
+class Person(NamedTuple):
+    name: str
+    hosts: tuple[Host, ...]
 
 
 class BleTag(NamedTuple):

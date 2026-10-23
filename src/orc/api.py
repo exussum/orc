@@ -79,7 +79,7 @@ def actions() -> dict[str, Any]:
         "rooms": {name: timing(name) for name in sorted(config.rooms)},
         "routines": {id: {"name": name, **timing(id)} for id, name in sorted(routines.items())},
         "plugins": {p.name: timing(p.name) for p in of_type(config.plugins, m.CallablePlugin)},
-        "people": sorted(config.people),
+        "people": sorted(person.name for person in config.people),
     }
 
 
@@ -257,7 +257,9 @@ def run_action(
         action = _RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.name, plugin.delay)
     elif id in config.schedule_routines:
         rule = config.schedule_routines[id]
-        action = _RunAction(lambda entry: _run_schedule_routine(rule, entry, set(config.people), force=True), rule.name)
+        action = _RunAction(
+            lambda entry: _run_schedule_routine(rule, entry, {person.name for person in config.people}, force=True), rule.name
+        )
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
@@ -427,7 +429,11 @@ def set_theme_override(name: str, start: date, end: date) -> None:
 
 
 def present_names() -> set[str]:
-    return net.presence.present(local_now() - timedelta(hours=config.settings.presence_hours))
+    return net.presence.present(_presence_cutoff())
+
+
+def set_present(names: Iterable[str], trigger: m.Trigger) -> set[str]:
+    return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger)
 
 
 def expire_presence(names: list[str], trigger: m.Trigger, force: bool = False) -> None:
@@ -458,7 +464,7 @@ def start_ble_listener() -> None:
     for person, (key, _clock) in tags.items():
         net.presence.set_key(person, key)
     net.presence.start(
-        {tag.person for tag in config.tags},
+        config.tags,
         config.settings.tz,
         report,
         clocks={person: clock for person, (_key, clock) in tags.items() if clock},
@@ -490,23 +496,21 @@ def schedule_tag_key_refresh(trigger: m.Trigger) -> None:
 def refresh_tag_keys(trigger: m.Trigger) -> None:
     provider = config.providers.findhub
     assert provider is not None
-    rows = sqlite.fetch_tags()
+    known = {person: key for person, (key, _clock) in sqlite.fetch_tags().items()}
     for tag in config.tags:
         try:
             key = provider.identity_key(tag.device, config.secrets, config.settings.http_timeout)
+            if known.get(tag.person) != key:
+                sqlite.upsert_tag_key(tag.person, key)
+                net.presence.set_key(tag.person, key)
+                log(
+                    m.LogSource.SYSTEM,
+                    Log.TAG_KEY_UPDATED.format(name=tag.person),
+                    trigger,
+                    notification=m.Notification(("tag-key", tag.person), "/presence/"),
+                )
         except Exception as exc:
             log(m.LogSource.SYSTEM, Log.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
-            continue
-        if (row := rows.get(tag.person)) and row[0] == key:
-            continue
-        sqlite.upsert_tag_key(tag.person, key)
-        net.presence.set_key(tag.person, key)
-        log(
-            m.LogSource.SYSTEM,
-            Log.TAG_KEY_UPDATED.format(name=tag.person),
-            trigger,
-            notification=m.Notification(("tag-key", tag.person), "/presence/"),
-        )
 
 
 def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
@@ -521,22 +525,18 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
 
 
 def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM, *, probe: bool = False) -> set[str]:
-    pairs = [(name, host, mac) for name, entries in config.people.items() for host, mac in entries]
-    if not pairs and not net.presence.tags:
-        return present_names()
     present = present_names()
-    stale = set(net.presence.seen()) - present
     tags = net.presence.tags
+    if not config.people and not tags:
+        return present
+    stale = set(net.presence.seen()) - present
     net.presence.probe(tags - present if probe else stale & tags, trigger)
-    if lost := stale - present_names():
-        expire_presence(sorted(lost), trigger)
-    present, errors = net.scan_presence(pairs)
+    found, errors = net.scan_presence(config.people)
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
         entry = log(source, msg, trigger, notification=m.Notification(("presence",), "/presence/"))
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-    mark_present(present, local_now(), trigger)
-    return present_names()
+    return set_present(found, trigger)
 
 
 def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
@@ -866,6 +866,10 @@ def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
 @requires_ctx
 def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
     return check_presence(trigger)
+
+
+def _presence_cutoff() -> datetime:
+    return local_now() - timedelta(hours=config.settings.presence_hours)
 
 
 @requires_ctx

@@ -56,7 +56,7 @@ class Presence:
 
     def start(
         self,
-        tags: Iterable[str],
+        tags: Iterable[m.BleTag],
         tz: tzinfo,
         on_change: Callable[[m.Trigger], object],
         clocks: Mapping[str, m.TagClock],
@@ -64,7 +64,7 @@ class Presence:
     ) -> None:
         self._on_change = on_change
         self._on_clock = on_clock
-        self.tags = frozenset(tags)
+        self.tags = frozenset(tag.person for tag in tags)
         if not self.tags:
             return
         self._tz = tz
@@ -92,6 +92,16 @@ class Presence:
             if (heard := self._heard.get(name)) and (before is None or heard < before):
                 self._heard.pop(name)
         self._changed(trigger)
+
+    def set_present(self, names: Iterable[str], when: datetime, cutoff: datetime, trigger: m.Trigger) -> set[str]:
+        found = set(names)
+        for name, heard in self._heard.copy().items():
+            if name not in found and heard < cutoff:
+                self._heard.pop(name)
+        for name in found:
+            self._heard[name] = when
+        self._changed(trigger)
+        return self.present(cutoff)
 
     def pause(self, until: datetime) -> None:
         self._paused = until
@@ -165,21 +175,21 @@ class Presence:
 presence = Presence()
 
 
-def scan_presence(pairs: list[tuple[str, str, str]]) -> tuple[set[str], list[tuple[str, Exception]]]:
+def scan_presence(people: Iterable[m.Person]) -> tuple[set[str], list[tuple[str, Exception]]]:
     """Return the person names that answered on the LAN, plus any scan failures.
 
-    For each (name, host, mac), resolves host to an IP and probes it. A device
+    For each person, resolves the host to an IP and probes it. A device
     counts as present if its IP appears as an ARP reply or an mDNS packet during
     the sniff window.
     """
-    targets, errors = _resolve_targets(pairs)
+    targets, errors = _resolve_targets(people)
     return _probe_lan(targets), errors
 
 
 def _resolve_targets(
-    pairs: list[tuple[str, str, str]],
+    people: Iterable[m.Person],
 ) -> tuple[dict[str, tuple[str, str]], list[tuple[str, Exception]]]:
-    """Resolve each (name, host, mac) to an IP, concurrently.
+    """Resolve each person's host to an IP, concurrently.
 
     gethostbyname blocks on the OS resolver (~5s per unanswered name), so run the
     lookups in parallel: N slow resolutions collapse to one resolver timeout of
@@ -187,13 +197,14 @@ def _resolve_targets(
     Returns (ip -> (person name, MAC), [(name, resolution error)]).
     """
 
-    def resolve(entry: tuple[str, str, str]) -> tuple[str, str, str | Exception]:
-        name, host, mac = entry
+    def resolve(pair: tuple[str, m.Host]) -> tuple[str, str, str | Exception]:
+        name, host = pair
         try:
-            return name, mac, socket.gethostbyname(host)
+            return name, host.mac, socket.gethostbyname(host.host)
         except Exception as exc:
-            return name, mac, exc
+            return name, host.mac, exc
 
+    pairs = [(person.name, host) for person in people for host in person.hosts]
     targets: dict[str, tuple[str, str]] = {}  # resolved IP -> (person name, MAC)
     errors: list[tuple[str, Exception]] = []
     with ThreadPoolExecutor(max_workers=max(1, len(pairs))) as pool:
