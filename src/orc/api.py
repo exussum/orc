@@ -526,11 +526,11 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
 
 def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM, *, probe: bool = False) -> set[str]:
     present = present_names()
-    tags = net.presence.tags
-    if not config.people and not tags:
+    tagged = net.presence.tagged
+    if not config.people and not tagged:
         return present
     stale = set(net.presence.seen()) - present
-    net.presence.probe(tags - present if probe else stale & tags, trigger)
+    net.presence.probe(tagged - present if probe else stale & tagged, trigger)
     found, errors = net.scan_presence(config.people)
     for name, exc in errors:
         msg = Log.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)

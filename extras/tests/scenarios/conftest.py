@@ -101,7 +101,7 @@ class House:
     def advertise(self, name):
         now = api.local_now()
         if name not in net.presence._tags:
-            net.presence.tags |= {name}
+            net.presence.tagged |= {name}
             net.presence.set_key(name, m.BleKey(name.encode().ljust(32, b"\0"), int(now.timestamp()) - 5000))
         key = net.presence._tags[name]
         frame = bytes([0x40]) + security.fmdn_eids(key.eik, int(now.timestamp()) - key.anchor)[1]
