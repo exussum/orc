@@ -1,6 +1,7 @@
 import contextlib
 import math
 import time
+from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor as Pool
 from dataclasses import replace
@@ -39,6 +40,13 @@ ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
 _ROLLUP_WINDOW = timedelta(seconds=5)
 _MQTT_SECRETS = frozenset({"mqtt_user", "mqtt_password"})
+
+# Order of what's most important "feel" wise
+_STATE_SORT_STOP = -2
+_STATE_SORT_INT = -1
+_STATE_SORT_ON = 0
+_STATE_SORT_OTHER = 1
+
 
 _ctx: m.AppContext | None = None
 _ACTIVITY_LOG: LockedDeque[m.LogEntry] = LockedDeque(maxlen=200)
@@ -289,10 +297,10 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
     if state == m.ON:
         commands = room.commands
     elif state == m.OFF:
-        commands = m.squish(room.commands, state_override=m.OFF)
+        commands = squish(room.commands, state_override=m.OFF)
     elif state == m.FOLLOW:
         others = (c for group in config.rooms.values() for c in group.commands)
-        commands = (*m.squish(others, state_override=m.OFF), *room.commands)
+        commands = (*squish(others, state_override=m.OFF), *room.commands)
     else:
         raise ValueError(f"Unknown room state: {state}")
     entry = log(m.LogSource.MANUAL, Log.ROOM_SET.format(id=id, state=state), trigger)
@@ -321,7 +329,7 @@ def restore_scene(key: str, commands: m.Commands, entry: m.LogEntry) -> None:
 
 def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
     assert _ctx is not None
-    commands = m.squish(commands)
+    commands = squish(commands)
     always = em.Action(commands)
     survived = set(_ctx.engine.evaluate((always,), read=engine.nothing, force=force)[0].commands)
 
@@ -572,11 +580,23 @@ def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
     _run_schedule_routine(job.rule, log(m.LogSource.ROUTINE, f"`{job.rule.name}`", m.Scheduled(job.rule.name)), present_names())
 
 
-def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry) -> m.Commands:
-    def log_conflict(what: m.DeviceEnum, states: list[Any]) -> None:
-        entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=", ".join(map(str, states))))
+def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None, *, state_override: Any = None) -> m.Commands:
+    grouped: defaultdict[Any, list[m.DeviceCommand]] = defaultdict(list)
+    for command in commands:
+        for e in command.subject.all():
+            value = command.value if state_override is None else state_override
+            grouped[e].append(em.Command(m.Devices(e), value, command.tag))
 
-    return m.squish(commands, on_conflict=log_conflict)
+    flattened: list[m.DeviceCommand] = []
+    for what, items in grouped.items():
+        squished = _squish(items)
+        if entry and {c.value for c in items} - {c.value for c in squished}:
+            states = ", ".join(str(c.value) for c in items)
+            entry.add(entry.source, Log.CONFLICTING_ARMS.format(device=what.name, states=states))
+        flattened.extend(squished)
+
+    flattened.sort(key=_op_cmp)
+    return tuple(flattened)
 
 
 def rebuild_jobs(ctx: m.AppContext) -> None:
@@ -692,6 +712,27 @@ def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.Log
             config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
         except Exception:
             pass
+
+
+def _op_cmp(k: m.DeviceCommand) -> tuple[float, int]:
+    class_sort = type(k.subject.one())._sort
+    if k.value == m.STOP:
+        sub_sort = _STATE_SORT_STOP
+    elif isinstance(k.value, int):
+        sub_sort = _STATE_SORT_INT
+    elif k.value == m.ON:
+        sub_sort = _STATE_SORT_ON
+    else:
+        sub_sort = _STATE_SORT_OTHER
+    return (class_sort, sub_sort)
+
+
+def _squish(items: list[m.DeviceCommand]) -> tuple[m.DeviceCommand, ...]:
+    # either return the last item, or stop first then adjust the volume
+    last = items[-1]
+    preceding = (lambda c: c.value == m.STOP) if isinstance(last.value, int) else (lambda c: isinstance(c.value, int))
+    match = next((item for item in reversed(items[:-1]) if preceding(item)), None)
+    return (match, last) if match else (last,)
 
 
 def _base_theme(today: date) -> str:

@@ -72,14 +72,14 @@ def nobody_home_ctx(ctx):
 
 def test_day_walk_in_brightens_entrance(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(Light.day_bulb), 20),)), force=True, entry=ANY)
+    ctx.api.dispatch.assert_called_once_with((em.Command(m.Devices(Light.day_bulb), 20),), force=True, entry=ANY)
 
 
 def test_night_walk_in_dims_entrance_and_stops_media(ctx, config_sensor):
     ctx.frozen.move_to(_NIGHTTIME)
     _trigger_sensor(ctx, config_sensor, "16", "active")
     ctx.api.dispatch.assert_called_once_with(
-        m.squish((em.Command(m.Devices(Light.night_bulb), 1), em.Command(m.Devices(Chromecast.cc), m.STOP))),
+        (em.Command(m.Devices(Light.night_bulb), 1), em.Command(m.Devices(Chromecast.cc), m.STOP)),
         force=True,
         entry=ANY,
     )
@@ -96,7 +96,7 @@ def test_walk_in_uses_first_window_that_contains_now(ctx, config_sensor):
 def test_walk_in_outside_any_window_dispatches_nothing(ctx, config_sensor):
     config_sensor.timed = (_window("Morning", time(8), time(9), _cmd(Light.day_bulb, 20)),)
     _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with(m.squish(()), force=True, entry=ANY)
+    ctx.api.dispatch.assert_called_once_with((), force=True, entry=ANY)
 
 
 def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, config_sensor):

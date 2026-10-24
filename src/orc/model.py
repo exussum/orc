@@ -1,6 +1,5 @@
 import importlib
 import math
-from collections import defaultdict
 from collections.abc import Callable, ItemsView, Iterable
 from dataclasses import dataclass, field, fields
 from datetime import date, datetime, time, timedelta
@@ -42,12 +41,6 @@ FOLLOW = "follow"
 THEME_WORK_DAY = "work day"
 THEME_DAY_OFF = "day off"
 UNASSIGNED_ROOM = "Unassigned"
-
-
-_STATE_SORT_STOP = -2
-_STATE_SORT_INT = -1
-_STATE_SORT_ON = 0
-_STATE_SORT_OTHER = 1
 
 
 _LOG_SOURCES: dict[str, int] = {}
@@ -690,48 +683,3 @@ class Registry:
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
     secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
-
-
-def squish(
-    commands: Iterable[DeviceCommand],
-    *,
-    state_override: Any = None,
-    on_conflict: Callable[[Any, list[Any]], object] = lambda what, states: None,
-) -> Commands:
-    """Merge commands as if run sequentially — dedupe per device, handle brightness/stop changes."""
-    grouped: defaultdict[Any, list[DeviceCommand]] = defaultdict(list)
-    for command in commands:
-        for e in command.subject.all():
-            value = command.value if state_override is None else state_override
-            grouped[e].append(em.Command(Devices(e), value, command.tag))
-
-    flattened: list[DeviceCommand] = []
-    for what, items in grouped.items():
-        squished = _squish(items)
-        if {c.value for c in items} - {c.value for c in squished}:
-            on_conflict(what, [c.value for c in items])
-        flattened.extend(squished)
-
-    flattened.sort(key=_op_cmp)
-    return tuple(flattened)
-
-
-def _op_cmp(k: DeviceCommand) -> tuple[float, int]:
-    class_sort = type(k.subject.one())._sort
-    if k.value == STOP:
-        sub_sort = _STATE_SORT_STOP
-    elif isinstance(k.value, int):
-        sub_sort = _STATE_SORT_INT
-    elif k.value == ON:
-        sub_sort = _STATE_SORT_ON
-    else:
-        sub_sort = _STATE_SORT_OTHER
-    return (class_sort, sub_sort)
-
-
-def _squish(items: list[DeviceCommand]) -> tuple[DeviceCommand, ...]:
-    last = items[-1]
-    # a level (int) is preceded by the last STOP; a non-level is preceded by the last level
-    preceding = (lambda c: c.value == STOP) if isinstance(last.value, int) else (lambda c: isinstance(c.value, int))
-    match = next((item for item in reversed(items[:-1]) if preceding(item)), None)
-    return (match, last) if match else (last,)
