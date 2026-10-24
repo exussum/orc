@@ -5,9 +5,8 @@ import json
 import os
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 
+import requests
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import hmac as crypto_hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -29,22 +28,18 @@ def fetch_secrets() -> m.Secrets:
     access_token_id, client_secret, enc_key_raw = _parse_access_token(raw_token)
     derived_key = _derive_key(enc_key_raw)
 
-    # Authenticate and get JWT + encrypted org key + org ID
-    body = urlencode(
-        {
+    response = requests.post(
+        f"{_IDENTITY_URL}/connect/token",
+        data={
             "scope": "api.secrets",
             "client_id": access_token_id,
             "client_secret": client_secret,
             "grant_type": "client_credentials",
-        }
-    ).encode()
-    req = Request(
-        f"{_IDENTITY_URL}/connect/token",
-        data=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        },
+        timeout=orc.config.settings.http_timeout,
     )
-    with urlopen(req, timeout=orc.config.settings.http_timeout) as r:  # nosemgrep: dynamic-urllib-use-detected
-        auth = json.loads(r.read())
+    response.raise_for_status()
+    auth = response.json()
 
     jwt = auth["access_token"]
     org_key = base64.b64decode(json.loads(_decrypt_enc_string(auth["encrypted_payload"], derived_key))["encryptionKey"])
@@ -52,7 +47,6 @@ def fetch_secrets() -> m.Secrets:
     jwt_payload = json.loads(base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)))
     org_id = jwt_payload["organization"]
 
-    # List secret IDs then fetch values
     list_resp = _api_get(f"{_API_URL}/organizations/{org_id}/secrets", jwt)
     ids = [s["id"] for s in list_resp["secrets"]]
 
@@ -73,20 +67,17 @@ def fetch_secrets() -> m.Secrets:
 
 
 def _parse_access_token(token: str) -> tuple[str, str, bytes]:
-    # Format: 0.<access_token_id>.<client_secret>:<b64_enc_key>
     token_part, enc_key_b64 = token.rsplit(":", 1)
     parts = token_part.split(".")
     return parts[1], parts[2], base64.b64decode(enc_key_b64)
 
 
 def _derive_key(enc_key_raw: bytes) -> bytes:
-    # HKDF: extract with "bitwarden-accesstoken" as salt, expand with "sm-access-token" as info
     prk = _hmac.new(b"bitwarden-accesstoken", enc_key_raw, hashlib.sha256).digest()
     return HKDFExpand(algorithm=hashes.SHA256(), length=64, info=b"sm-access-token").derive(prk)
 
 
 def _decrypt_enc_string(enc_string: str, key_64: bytes) -> str:
-    # EncString type 2: "2.<iv_b64>|<ct_b64>|<mac_b64>"
     _, rest = enc_string.split(".", 1)
     iv_b64, ct_b64, mac_b64 = rest.split("|")
 
@@ -106,25 +97,18 @@ def _decrypt_enc_string(enc_string: str, key_64: bytes) -> str:
 
 
 def _api_get(url: str, token: str) -> Any:
-    req = Request(url, headers={"Authorization": f"Bearer {token}"})
-    with urlopen(req, timeout=orc.config.settings.http_timeout) as r:  # nosemgrep: dynamic-urllib-use-detected
-        return json.loads(r.read())
+    response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=orc.config.settings.http_timeout)
+    response.raise_for_status()
+    return response.json()
 
 
 def _api_post(url: str, token: str, body: dict[str, Any]) -> Any:
-    data = json.dumps(body).encode()
-    req = Request(
-        url,
-        data=data,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-    )
-    with urlopen(req, timeout=orc.config.settings.http_timeout) as r:  # nosemgrep: dynamic-urllib-use-detected
-        return json.loads(r.read())
+    response = requests.post(url, json=body, headers={"Authorization": f"Bearer {token}"}, timeout=orc.config.settings.http_timeout)
+    response.raise_for_status()
+    return response.json()
 
 
 def _get_url_value(url: str) -> str:
-    with urlopen(url, timeout=orc.config.settings.http_timeout) as response:  # nosemgrep: dynamic-urllib-use-detected
-        return response.readline().decode("utf-8").strip()
+    response = requests.get(url, timeout=orc.config.settings.http_timeout)
+    response.raise_for_status()
+    return response.text.partition("\n")[0].strip()

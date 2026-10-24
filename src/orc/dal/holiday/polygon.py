@@ -6,7 +6,7 @@ from typing import Any
 import requests
 from orc_engine import cast
 
-from orc import config
+import orc
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {"market_holidays_url": cast.url}
 
@@ -19,7 +19,7 @@ def market_holiday(today: date) -> bool:
 
 @lru_cache(maxsize=2)
 def _fetch_holidays(year: int) -> Any:
-    response = requests.get(config.secrets.market_holidays_url, timeout=config.settings.http_timeout)
+    response = requests.get(orc.config.secrets.market_holidays_url, timeout=orc.config.settings.http_timeout)
     response.raise_for_status()
     result = response.json()
     if "error" in result:

@@ -26,12 +26,13 @@ if TYPE_CHECKING:
     from orc.dal.mqtt import stub as adapter_stub
     from orc.dal.push import stub as push_stub
     from orc.dal.push import webpush
-    from orc.dal.secrets import bws
+    from orc.dal.secrets import bws, keepass
     from orc.dal.secrets import stub as secrets_stub
     from orc.dal.weather import open_meteo
     from orc.dal.weather import stub as weather_stub
 
     _secrets_real: interfaces.SecretsService = bws
+    _secrets_keepass: interfaces.SecretsService = keepass
     _secrets_stub: interfaces.SecretsService = secrets_stub
     _weather_real: interfaces.WeatherService = open_meteo
     _weather_stub: interfaces.WeatherService = weather_stub

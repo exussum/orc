@@ -123,21 +123,22 @@ class TestFindHub:
         with pytest.raises(LookupError, match="no Find Hub device named 'Chipolo POP'"):
             nova.registration("Chipolo POP", self._devices_list(("Galaxy S22", b"x" * 48, 1, "")), self.OWNER_KEY)
 
-    def test_identity_key_authenticates_then_posts(self):
+    def test_identity_key_authenticates_then_posts(self, monkeypatch):
         secrets = m.Secrets(find_hub_username="u", find_hub_aas_token="t", find_hub_android_id="a", find_hub_owner_key=self.OWNER_KEY.hex())
+        monkeypatch.setattr(config, "secrets", secrets)
         iv = bytes(16)
         encryptor = Cipher(algorithms.AES(self.OWNER_KEY), modes.CBC(iv)).encryptor()
         reply = self._devices_list(("Chipolo POP", iv + encryptor.update(self.EIK) + encryptor.finalize(), self.PAIR_DATE, ""))
         with patch.object(nova.gpsoauth, "perform_oauth", return_value={"Auth": "bearer"}) as oauth, patch("requests.post") as post:
             post.return_value.content = reply
-            assert nova.identity_key("Chipolo POP", secrets, 5) == m.BleKey(self.EIK, self.PAIR_DATE)
+            assert nova.identity_key("Chipolo POP") == m.BleKey(self.EIK, self.PAIR_DATE)
         assert oauth.call_args.args[:3] == ("u", "t", "a")
         assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer bearer"
 
     def test_refused_token_is_a_permission_error(self):
         with patch.object(nova.gpsoauth, "perform_oauth", return_value={"Error": "BadAuthentication"}):
             with pytest.raises(PermissionError, match="BadAuthentication"):
-                nova.identity_key("Chipolo POP", m.Secrets(), 5)
+                nova.identity_key("Chipolo POP")
 
 
 def _varint(value):
