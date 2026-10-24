@@ -68,7 +68,7 @@ class Person(NamedTuple):
 
 class BleTag(NamedTuple):
     person: str
-    device: str
+    name: str
 
 
 class BleKey(NamedTuple):

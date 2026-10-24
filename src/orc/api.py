@@ -499,7 +499,7 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
     known = {row.person: row.key for row in sqlite.fetch_tags()}
     for tag in config.tags:
         try:
-            key = provider.identity_key(tag.device, config.secrets, config.settings.http_timeout)
+            key = provider.identity_key(tag.name, config.secrets, config.settings.http_timeout)
             if known.get(tag.person) != key:
                 sqlite.upsert_tag_key(tag.person, key)
                 net.presence.set_key(tag.person, key)
