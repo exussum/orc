@@ -43,7 +43,7 @@ class Presence:
     """
 
     def __init__(self) -> None:
-        self.tags: frozenset[str] = frozenset()
+        self.tagged: frozenset[str] = frozenset()
         self._tags: dict[str, m.BleKey] = {}
         self._tz: tzinfo | None = None
         self._index: dict[bytes, tuple[str, int]] = {}
@@ -64,8 +64,8 @@ class Presence:
     ) -> None:
         self._on_change = on_change
         self._on_clock = on_clock
-        self.tags = frozenset(tag.person for tag in tags)
-        if not self.tags:
+        self.tagged = frozenset(tag.person for tag in tags)
+        if not self.tagged:
             return
         self._tz = tz
         self._clocks = LockedDict(clocks)

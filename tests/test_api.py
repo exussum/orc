@@ -648,7 +648,7 @@ class TestPresence:
     def test_check_presence_with_only_tags_reads_memory(self):
         with (
             patch.object(config, "people", ()),
-            patch.object(net.presence, "tags", frozenset({"Alice"})),
+            patch.object(net.presence, "tagged", frozenset({"Alice"})),
         ):
             api.mark_present(["Alice"], api.local_now(), TRIGGER)
             assert api.check_presence(TRIGGER) == {"Alice"}
@@ -705,7 +705,7 @@ class TestPresence:
         api.mark_present(["Bob"], api.local_now(), TRIGGER)
         api.mark_present(["Alice"], api.local_now() - timedelta(hours=10), TRIGGER)
         with (
-            patch.object(net.presence, "tags", frozenset({"Alice", "Bob", "Carol"})),
+            patch.object(net.presence, "tagged", frozenset({"Alice", "Bob", "Carol"})),
             patch.object(net.presence, "probe") as probe,
             patch.object(net, "scan_presence", return_value=(set(), [])),
         ):
