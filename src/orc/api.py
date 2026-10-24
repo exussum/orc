@@ -169,8 +169,6 @@ def device_state(target: str) -> m.DeviceState | None:
     return next((s for s in device_states() if str(s.device.id) == target or s.device.name == target), None)
 
 
-# A dimmer that's on reports its level, otherwise its switch; a light the broker has
-# never described (virtual, not exported, cache still empty) reads as off.
 @mappable
 def capture_lights() -> m.Commands:
     found = {state.device.id: state.attributes for state in mqtt.snapshot()}
@@ -203,7 +201,7 @@ def capture_acs() -> tuple[m.AcStatus, ...]:
     return tuple(m.AcStatus(w, ac_state(w)) for w in config.devices.AC)
 
 
-# the whole state a command asks for: what it sets, over what the unit holds now
+# default to cool since you can't turn on an ac w/o a mode
 def ac_command(device: m.DeviceEnum, asked: m.AcState) -> m.AcState:
     whole = replace(ac_state(device) or m.AcState(), **{name: v for name, v in vars(asked).items() if v is not None})
     return replace(whole, mode="cool") if whole.power == m.ON and whole.mode is None else whole
