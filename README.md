@@ -354,9 +354,10 @@ orc runs happily on a laptop with nothing attached: the sample config's
 every device and secret integration is faked in memory and the whole UI
 works. A real installation's config names the real backends instead
 (for example, `provider adapter orc.dal.mqtt.hubitat`) — though `secrets`,
-`hubitat`, `adapter`, `chromecast`, `audio`, and `push` default to their real
-backend when the `provider` line is omitted entirely, so a production config
-only needs to name `weather`, `holiday`, and `blaster` explicitly. An
+`hubitat`, `adapter`, `chromecast`, `audio`, `push`, and `findhub` default to
+their real backend when the `provider` line is omitted entirely, so a
+production config only needs to name `weather`, `holiday`, and `blaster`
+explicitly. An
 explicit `provider` line, stub or real, always overrides the default. A
 house with no hub names `provider adapter orc.dal.mqtt.none`: it claims no
 devices, so every `Light`, `Button` and `Sensor` is virtual and dispatch
