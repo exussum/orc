@@ -81,6 +81,10 @@ _MESSAGES = _messages()
 
 
 def identity_key(device: str) -> m.BleKey:
+    return registration(device, devices_list(), bytes.fromhex(orc.config.secrets.find_hub_owner_key))
+
+
+def devices_list() -> bytes:
     secrets = orc.config.secrets
     auth = gpsoauth.perform_oauth(
         secrets.find_hub_username,
@@ -101,11 +105,12 @@ def identity_key(device: str) -> m.BleKey:
     request = _MESSAGES["DevicesListRequest"](deviceListRequestPayload={"type": _SPOT_DEVICE, "id": uuid4().hex})
     reply = requests.post(_NOVA_URL, data=request.SerializeToString(), headers=headers, timeout=orc.config.settings.http_timeout)
     reply.raise_for_status()
-    return registration(device, reply.content, bytes.fromhex(secrets.find_hub_owner_key))
+    return reply.content
 
 
 def registration(device: str, devices_list: bytes, owner_key: bytes) -> m.BleKey:
-    for metadata in _MESSAGES["DevicesList"].FromString(devices_list).deviceMetadata:
+    devices = _MESSAGES["DevicesList"].FromString(devices_list)
+    for metadata in devices.deviceMetadata:
         if metadata.userDefinedDeviceName != device:
             continue
         fields = metadata.information.deviceRegistration
@@ -114,4 +119,5 @@ def registration(device: str, devices_list: bytes, owner_key: bytes) -> m.BleKey
             raise LookupError(f"Find Hub device {device!r} has no identity key registration")
         inverted = fields.fastPairModelId == _MCU_MODEL_ID
         return m.BleKey(security.fmdn_identity_key(owner_key, encrypted, inverted=inverted), fields.pairDate)
-    raise LookupError(f"no Find Hub device named {device!r}")
+    names = ", ".join(sorted(metadata.userDefinedDeviceName for metadata in devices.deviceMetadata))
+    raise LookupError(f"no Find Hub device named {device!r}; the account has: {names}")

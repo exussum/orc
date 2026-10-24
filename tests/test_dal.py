@@ -120,7 +120,7 @@ class TestFindHub:
         assert nova.registration("ESP32", reply, self.OWNER_KEY) == m.BleKey(self.EIK, self.PAIR_DATE)
 
     def test_unknown_device_is_a_lookup_error(self):
-        with pytest.raises(LookupError, match="no Find Hub device named 'Chipolo POP'"):
+        with pytest.raises(LookupError, match="no Find Hub device named 'Chipolo POP'; the account has: Galaxy S22"):
             nova.registration("Chipolo POP", self._devices_list(("Galaxy S22", b"x" * 48, 1, "")), self.OWNER_KEY)
 
     def test_identity_key_authenticates_then_posts(self, monkeypatch):
