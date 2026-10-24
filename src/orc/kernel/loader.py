@@ -50,7 +50,7 @@ routine append <id> <devices> <state> [--trigger-person=<person>] [--trigger-wea
 
 setting <key> <value>
 
-tag <person> <device>
+tag <person> <name>
 
 theme <name> <routine> <time>
 """
