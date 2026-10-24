@@ -164,15 +164,14 @@ Two config surfaces:
 
 ## Built-in plugins
 
-Two listeners on the Hubitat MQTT feed and three System page buttons ship
+Two listeners on the Hubitat MQTT feed and two System page buttons ship
 inside `orc` and are turned on the same way as any plugin, by a `plugin`
-line. The sample config carries all five; drop a line and that listener or
+line. The sample config carries all four; drop a line and that listener or
 button is gone.
 
 ```
 plugin Buttons                 orc.plugins.buttons
 plugin Battery                 orc.plugins.battery
-plugin 'Refresh Secrets'       orc.plugins refresh_secrets --section system --icon arrow-path
 plugin 'Enable Notifications'  orc.plugins                 --section system --icon bell
 plugin 'Disable Notifications' orc.plugins                 --section system --icon bell-slash
 ```
@@ -182,11 +181,6 @@ plugin 'Disable Notifications' orc.plugins                 --section system --ic
   event (`pushed`, `held`, ...) on a `Button` device to an ad hoc id; a
   press with no matching line is ignored, and a line naming an unknown
   action logs and alerts. The log attributes the run to the remote.
-- **Refresh Secrets** fetches the vault again and applies it without a
-  restart: a tag's identity key or a plugin's API key is read from the live
-  secrets on each use, and changed MQTT credentials reconnect the broker
-  client. The log names the secrets that changed. A vault that fails the
-  boot-time check is refused and the running values stay.
 - **Enable Notifications** and **Disable Notifications** have no server
   side; a browser hook handles the press (see Phone notifications).
 
@@ -290,8 +284,8 @@ ephemeral ID (EID) from the key and pair date and hears every advertisement
 the tag sends, so every hearing updates the person's presence directly
 instead of gambling on a scan window. Find Hub can re-key a tag without any
 action on your side, so orc re-reads each tag's key from the account every
-four hours and on **Refresh Secrets**; a changed key reaches the listener
-within five minutes, no restart.
+four hours; a changed key reaches the listener within five minutes, no
+restart.
 
 ## Running
 

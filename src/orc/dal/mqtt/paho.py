@@ -65,12 +65,6 @@ def _connected[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
-def reauth(secrets: m.Secrets) -> None:
-    if _client:
-        _client.username_pw_set(secrets.mqtt_user, secrets.mqtt_password)
-        _client.reconnect()
-
-
 @_connected
 def command(device: m.DeviceEnum, value: Any) -> None:
     adapter = next((c for c in _adapters if device.kind in c.device_types), None)

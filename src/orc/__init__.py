@@ -43,11 +43,6 @@ class Config:
             zigbee_config = mqtt.discover(self.providers.adapter, secrets)
         self._load(secrets, zigbee_config)
 
-    def refresh_secrets(self) -> set[str]:
-        fetched = self.providers.secrets.fetch_secrets()
-        self._check_secrets(fetched)
-        return self.secrets.update(fetched)
-
     def _load(self, secrets: m.Secrets, zigbee_config: dict[Any, tuple[Any, ...]]) -> None:
         self.config_dir = os.getenv("ORC_CONFIG_DIR", "src")
         self.secrets = secrets

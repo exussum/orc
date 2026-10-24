@@ -36,8 +36,8 @@ class Runtime(NamedTuple):
     extras: list[Extra]
     places: list[Place]
     origin: str
-    tomtom_key: m.SecretReader
-    aerodatabox_key: m.SecretReader
+    tomtom_key: str
+    aerodatabox_key: str
 
 
 class Arrival(NamedTuple):

@@ -14,7 +14,6 @@ from orc import model as m
 from orc.dal import net, push, scheduler, sqlite
 from orc.dal.findhub import stub as findhub_stub
 from orc.dal.mqtt import paho as mqtt
-from orc.dal.secrets import stub as secrets_stub
 from orc.model import DeviceEnum
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
@@ -328,26 +327,6 @@ class TestRefreshTagKeys:
         api.refresh_tag_keys(m.Manual("secrets"))
         assert sqlite.fetch_tags() == []
         assert [e.action for e in api.log_entries()] == ["Find Hub lookup failed for `Alice`: boom"]
-
-
-class TestRefreshSecrets:
-    @pytest.fixture(autouse=True)
-    def reset_secrets(self):
-        api._ACTIVITY_LOG.clear()
-        before = replace(config.secrets, other=dict(config.secrets.other))
-        yield
-        config.secrets.update(before)
-
-    def test_refreshed_value_reaches_a_reader(self, monkeypatch):
-        read = config.secrets.TOMTOM_KEY
-        monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: m.Secrets(other={"TOMTOM_KEY": "new"}))
-        api.refresh_secrets(m.Manual("secrets"))
-        assert read() == "new"
-        assert [e.action for e in api.log_entries()] == ["Secrets refreshed: `TOMTOM_KEY`"]
-
-    def test_unchanged_vault_logs_unchanged(self, unchanged_vault):
-        api.refresh_secrets(m.Manual("secrets"))
-        assert [e.action for e in api.log_entries()] == ["Secrets unchanged"]
 
 
 class TestLog:

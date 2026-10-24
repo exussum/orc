@@ -88,7 +88,6 @@ remote     .                         1 held   AD_HOC_SILENCE
 
 plugin Buttons            orc.plugins.buttons
 plugin Battery            orc.plugins.battery
-plugin 'Refresh Secrets'       orc.plugins                refresh_secrets --section system --icon arrow-path
 plugin 'Enable Notifications'  orc.plugins                                --section system --icon bell
 plugin 'Disable Notifications' orc.plugins                                --section system --icon bell-slash
 plugin 'Pair LG TV'       orc_extras.lg_tv           pair_tv     --section device --backend orc_extras.lg_tv.dal.webos

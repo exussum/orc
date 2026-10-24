@@ -142,16 +142,6 @@ def light_capture():
 
 
 @pytest.fixture
-def unchanged_vault(monkeypatch):
-    from dataclasses import replace
-
-    from orc import config
-    from orc.dal.secrets import stub as secrets_stub
-
-    monkeypatch.setattr(secrets_stub, "fetch_secrets", lambda: replace(config.secrets, other=dict(config.secrets.other)))
-
-
-@pytest.fixture
 def config_ad_hoc():
     from unittest.mock import patch
 

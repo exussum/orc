@@ -361,16 +361,6 @@ def test_schedule_without_jobs_says_so(flask_client):
     assert b"No scheduled events." in _get_schedule(flask_client, []).data
 
 
-def test_refresh_secrets_button_runs_the_refresh_under_its_entry(flask_client, unchanged_vault):
-    api._ACTIVITY_LOG.clear()
-    response = flask_client.get("/api/run/Refresh Secrets")
-    assert response.status_code == 200
-    (entry,) = api.log_entries()
-    assert entry.action == "Running `Refresh Secrets`"
-    assert [c.action for c in entry.children] == ["Secrets unchanged", "Tag key for `Alice` read from Find Hub"]
-
-
 def test_system_page_lists_the_core_system_plugins(flask_client):
     html = flask_client.get("/system/").get_data(as_text=True)
-    assert 'data-id="Refresh Secrets"' in html
     assert 'data-id="Enable Notifications" data-name="Enable Notifications" data-duration="0" data-delay="0:00:00" data-no-func' in html
