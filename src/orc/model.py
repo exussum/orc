@@ -1,7 +1,7 @@
 import importlib
 import math
 from collections.abc import Callable, ItemsView, Iterable
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, StrEnum, auto
 from pathlib import Path
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 
 
 type Listener = Callable[[Status], None]
-type SecretReader = Callable[[], str]
 type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
 
@@ -466,21 +465,6 @@ class Secrets:
     # Dynamically named secrets: plugin-consumed keys. A key with a fixed
     # in-repo consumer belongs on a typed field instead.
     other: dict[str, str] = field(default_factory=dict)
-
-    def __getattr__(self, name: str) -> SecretReader:
-        if name.startswith("__"):
-            raise AttributeError(name)
-        return lambda: self.other[name]
-
-    def update(self, new: "Secrets") -> set[str]:
-        typed = {f.name for f in fields(self) if f.name != "other"}
-        changed = {name for name in typed if getattr(self, name) != getattr(new, name)}
-        changed |= {name for name in self.other.keys() | new.other.keys() if self.other.get(name) != new.other.get(name)}
-        for name in typed:
-            setattr(self, name, getattr(new, name))
-        self.other.clear()
-        self.other.update(new.other)
-        return changed
 
 
 class Scheduler(Protocol):

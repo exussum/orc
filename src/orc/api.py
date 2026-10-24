@@ -39,7 +39,6 @@ DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolv
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
 _ROLLUP_WINDOW = timedelta(seconds=5)
-_MQTT_SECRETS = frozenset({"mqtt_user", "mqtt_password"})
 
 # Order of what's most important "feel" wise
 _STATE_SORT_STOP = -2
@@ -475,17 +474,6 @@ def start_ble_listener() -> None:
         clocks={row.person: row.clock for row in rows if row.clock},
         on_clock=sqlite.update_tag_clock,
     )
-
-
-def refresh_secrets(trigger: m.Trigger) -> set[str]:
-    changed = config.refresh_secrets()
-    if changed:
-        log(m.LogSource.SYSTEM, Log.SECRETS_REFRESHED.format(names=", ".join(sorted(changed))), trigger)
-    else:
-        log(m.LogSource.SYSTEM, Log.SECRETS_UNCHANGED, trigger)
-    if changed & _MQTT_SECRETS:
-        mqtt.reauth(config.secrets)
-    return changed
 
 
 def schedule_presence_check(trigger: m.Trigger) -> None:

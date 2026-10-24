@@ -27,8 +27,6 @@ class Log:
     PRESENCE_CHECKED_IN: str = "Presence checked in: `{name}`"
     PRESENCE_RESCAN: str = "Presence rescan"
 
-    SECRETS_UNCHANGED: str = "Secrets unchanged"
-    SECRETS_REFRESHED: str = "Secrets refreshed: `{names}`"
     TAG_KEY_UPDATED: str = "Tag key for `{name}` read from Find Hub"
     TAG_KEY_FAILED: str = "Find Hub lookup failed for `{name}`: {exc}"
 

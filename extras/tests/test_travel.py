@@ -221,8 +221,8 @@ def _runtime(extras, buffer=0):
         extras=extras,
         places=[],
         origin="40.7,-74.0",
-        tomtom_key=lambda: "",
-        aerodatabox_key=lambda: "",
+        tomtom_key="",
+        aerodatabox_key="",
     )
 
 

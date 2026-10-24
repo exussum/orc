@@ -1,5 +1,4 @@
 import re
-from dataclasses import replace
 from datetime import UTC, time, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -187,17 +186,6 @@ def test_check_secrets_reads_typed_fields():
     assert loader.check_secrets(m.Secrets(vapid_private_key="short"), {"vapid_private_key": cast.key32}) == {
         "vapid_private_key": "expected key32"
     }
-
-
-def test_refresh_secrets_keeps_old_values_on_bad_vault(monkeypatch):
-    import orc
-
-    fetch = SimpleNamespace(fetch_secrets=lambda: m.Secrets(other={"TOMTOM_KEY": ""}))
-    monkeypatch.setattr(orc.config, "providers", orc.config.providers._replace(secrets=fetch))
-    before = replace(orc.config.secrets)
-    with pytest.raises(ConfigError, match="TOMTOM_KEY not set"):
-        orc.config.refresh_secrets()
-    assert orc.config.secrets == before
 
 
 def test_secret_needs_gathers_providers_and_plugins():
