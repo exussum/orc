@@ -464,9 +464,8 @@ class Secrets:
     find_hub_android_id: str = ""
     find_hub_owner_key: str = ""
 
-    # Dynamically named secrets: plugin-consumed keys and per-tag BLE EIKs
-    # (named by `tag` config lines). A key with a fixed in-repo consumer
-    # belongs on a typed field instead.
+    # Dynamically named secrets: plugin-consumed keys. A key with a fixed
+    # in-repo consumer belongs on a typed field instead.
     other: dict[str, str] = field(default_factory=dict)
 
     def __getattr__(self, name: str) -> SecretReader:
