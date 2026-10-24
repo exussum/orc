@@ -24,6 +24,7 @@ import requests
 from google.protobuf import descriptor_pb2, message_factory
 from orc_engine import cast
 
+import orc
 from orc import model as m
 from orc import security
 
@@ -79,7 +80,8 @@ def _messages() -> dict[str, Any]:
 _MESSAGES = _messages()
 
 
-def identity_key(device: str, secrets: m.Secrets, timeout: int) -> m.BleKey:
+def identity_key(device: str) -> m.BleKey:
+    secrets = orc.config.secrets
     auth = gpsoauth.perform_oauth(
         secrets.find_hub_username,
         secrets.find_hub_aas_token,
@@ -97,7 +99,7 @@ def identity_key(device: str, secrets: m.Secrets, timeout: int) -> m.BleKey:
         "User-Agent": "fmd/20006320; gzip",
     }
     request = _MESSAGES["DevicesListRequest"](deviceListRequestPayload={"type": _SPOT_DEVICE, "id": uuid4().hex})
-    reply = requests.post(_NOVA_URL, data=request.SerializeToString(), headers=headers, timeout=timeout)
+    reply = requests.post(_NOVA_URL, data=request.SerializeToString(), headers=headers, timeout=orc.config.settings.http_timeout)
     reply.raise_for_status()
     return registration(device, reply.content, bytes.fromhex(secrets.find_hub_owner_key))
 

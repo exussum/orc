@@ -87,7 +87,7 @@ class HubitatService(Backend, Protocol):
 
 
 class FindHubService(Backend, Protocol):
-    def identity_key(self, device: str, secrets: Secrets, timeout: int) -> BleKey: ...
+    def identity_key(self, device: str) -> BleKey: ...
 
 
 class Provider(NamedTuple):

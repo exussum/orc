@@ -5,8 +5,8 @@ from typing import Any, NamedTuple
 
 import requests
 
-from orc import config
-from orc.model import WeatherCondition
+import orc
+from orc import model as m
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
@@ -18,9 +18,9 @@ class Hour(NamedTuple):
     temperature: float
 
 
-def fetch_weather(now: datetime, lat: float, lon: float) -> frozenset[WeatherCondition]:
+def fetch_weather(now: datetime, lat: float, lon: float) -> frozenset[m.WeatherCondition]:
     code = _forecast(now.replace(minute=0, second=0, microsecond=0), lat, lon).code
-    return frozenset({WeatherCondition.SUNNY if code in _SUNNY_CODES else WeatherCondition.CLOUDY})
+    return frozenset({m.WeatherCondition.SUNNY if code in _SUNNY_CODES else m.WeatherCondition.CLOUDY})
 
 
 def fetch_temperature(now: datetime, lat: float, lon: float) -> float:
@@ -39,9 +39,9 @@ def _forecast(now: datetime, lat: float, lon: float) -> Hour:
             "temperature_unit": "fahrenheit",
             "start_date": date_str,
             "end_date": date_str,
-            "timezone": str(config.settings.tz),
+            "timezone": str(orc.config.settings.tz),
         },
-        timeout=config.settings.http_timeout,
+        timeout=orc.config.settings.http_timeout,
     )
     response.raise_for_status()
     hourly = response.json()["hourly"]

@@ -22,8 +22,6 @@ from orc import model as m
 if TYPE_CHECKING:
     from orc.dal.interfaces import Adapter
 
-REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
-
 _log = logging.getLogger(__name__)
 
 _MQTT_PORT = 1883

@@ -5,16 +5,16 @@ from typing import Any
 
 import broadlink as bl
 
-from orc.model import DeviceEnum
+from orc import model as m
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
 
-def tv_toggle(device: DeviceEnum, codes_file: str) -> None:
+def tv_toggle(device: m.DeviceEnum, codes_file: str) -> None:
     _send(_connect(device), _codes(codes_file)["tv"]["commands"]["toggle"])
 
 
-def _connect(device: DeviceEnum) -> Any:
+def _connect(device: m.DeviceEnum) -> Any:
     dev = bl.hello(device.value)
     for _ in range(4):
         if dev.auth():

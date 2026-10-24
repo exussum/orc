@@ -10,6 +10,7 @@ import yt_dlp
 from pychromecast.error import RequestTimeout
 from yarl import URL
 
+import orc
 from orc import model as m
 from orc.dal.chromecast import check_length, tts_url
 
@@ -18,7 +19,7 @@ REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 logging.getLogger("pychromecast.controllers").addFilter(lambda record: "no session is active" not in record.getMessage())
 
 _YDL_OPTS: dict[str, Any] = {
-    "format": "bestaudio/best",  # Request the highest quality audio stream
+    "format": "bestaudio/best",
     "quiet": True,
     "no_warnings": True,
 }
@@ -26,12 +27,10 @@ _YDL_OPTS: dict[str, Any] = {
 
 _PLAYING_STATES: tuple[str, ...] = ("PLAYING", "BUFFERING", "PAUSED")
 
-_CONNECT_TIMEOUT = 5
-
 
 def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     try:
-        with _cast(device, timeout=_CONNECT_TIMEOUT, tries=1) as cast:
+        with _cast(device, tries=1) as cast:
             return _sound_state(device, cast)
     except RequestTimeout:
         return m.SoundState(what=device, content=None, volume=0)
@@ -118,7 +117,7 @@ def _sound_state(device: m.DeviceEnum, cast: Any) -> m.SoundState:
 
 @contextmanager
 def _cast(device: m.DeviceEnum, **kwargs: Any) -> Iterator[Any]:
-    kwargs.setdefault("timeout", _CONNECT_TIMEOUT)
+    kwargs.setdefault("timeout", orc.config.settings.http_timeout)
     ip = socket.gethostbyname(device.value)
     # pychromecast accepts None for uuid/model/name at runtime; its stub declares stricter tuple types
     cast = pychromecast.get_chromecast_from_host((ip, 8009, None, None, None), **kwargs)  # type: ignore[arg-type]

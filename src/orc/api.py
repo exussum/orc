@@ -47,7 +47,6 @@ _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
-
 _ctx: m.AppContext | None = None
 _ACTIVITY_LOG: LockedDeque[m.LogEntry] = LockedDeque(maxlen=200)
 
@@ -507,7 +506,7 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
     known = {row.person: row.key for row in sqlite.fetch_tags()}
     for tag in config.tags:
         try:
-            key = provider.identity_key(tag.name, config.secrets, config.settings.http_timeout)
+            key = provider.identity_key(tag.name)
             if known.get(tag.person) != key:
                 sqlite.upsert_tag_key(tag.person, key)
                 net.presence.set_key(tag.person, key)
