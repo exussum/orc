@@ -72,6 +72,7 @@ class Presence:
         threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
 
     def set_key(self, person: str, key: m.BleKey) -> None:
+        self._clocks.pop(person)
         self._tags[person] = key
 
     def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger) -> None:
@@ -258,7 +259,7 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
 def _eid_index(tags: Mapping[str, m.BleKey], clocks: Mapping[str, m.TagClock], now: datetime) -> dict[bytes, tuple[str, int]]:
     ts = int(now.timestamp())
     index: dict[bytes, tuple[str, int]] = {}
-    for person, key in tags.items():
+    for person, key in dict(tags).items():
         expected = ts - key.anchor
         if (clock := clocks.get(person)) and ts - clock.heard < _BLE_CLOCK_TRUST_SECONDS:
             expected += clock.offset

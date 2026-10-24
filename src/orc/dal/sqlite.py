@@ -34,7 +34,7 @@ _UPSERT_OVERRIDE = (
 _UPDATE_CLOCK = "UPDATE orc_ble_tags SET offset = ?, heard = ? WHERE person = ? AND (offset IS NULL OR abs(? - offset) > ?)"
 _UPSERT_TAG_KEY = (
     "INSERT INTO orc_ble_tags (person, eik, pair_date) VALUES (?, ?, ?) "
-    "ON CONFLICT(person) DO UPDATE SET eik = excluded.eik, pair_date = excluded.pair_date"
+    "ON CONFLICT(person) DO UPDATE SET eik = excluded.eik, pair_date = excluded.pair_date, offset = NULL, heard = NULL"
 )
 _UPSERT_DURATION = (
     "INSERT INTO orc_durations (name, samples, avg) VALUES (?, ?, ?) "
