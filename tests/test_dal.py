@@ -195,6 +195,13 @@ def test_tag_clock_needs_a_key_row():
     assert "Bob" not in sqlite.fetch_tags()
 
 
+def test_a_new_key_clears_the_clock_row():
+    sqlite.upsert_tag_key("Alice", m.BleKey(bytes(32), 5))
+    sqlite.update_tag_clock("Alice", m.TagClock(100, 0))
+    sqlite.upsert_tag_key("Alice", m.BleKey(bytes([1] * 32), 5))
+    assert sqlite.fetch_tags() == {"Alice": (m.BleKey(bytes([1] * 32), 5), None)}
+
+
 class TestPresence:
     EIK = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
@@ -259,6 +266,11 @@ class TestPresence:
         tags = {"Alice": self.KEY}
         clocks = {"Alice": m.TagClock(0, int(self.NOW.timestamp()))}
         assert len(net._eid_index(tags, clocks, self.NOW)) == 9
+
+    def test_a_new_key_forgets_the_clock(self):
+        presence = self._heard()
+        presence.set_key("Alice", BleKey(bytes(32), self.ANCHOR))
+        assert presence._clocks.get("Alice") is None
 
     def test_silence_names_nobody(self):
         presence = self._hear([], {"Alice": self.KEY})
