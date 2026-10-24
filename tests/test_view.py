@@ -70,7 +70,9 @@ def test_console_schedule_routine(flask_client, command_dispatch):
     rule = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()))
     with patch.object(config, "schedule_routines", {"r": rule}):
         flask_client.get("/api/run/r")
-    command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(
+        api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=True, entry=ANY
+    )
 
 
 def test_console_ad_hoc(flask_client, config_ad_hoc, command_dispatch):
@@ -85,7 +87,7 @@ def test_console_ad_hoc_no_reset(flask_client, config_ad_hoc, command_dispatch):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
     with config_ad_hoc({"r": action}):
         flask_client.get("/api/run/r")
-    command_dispatch.assert_called_once_with(m.squish(action.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(api.squish(action.commands), force=True, entry=ANY)
 
 
 def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, config_ad_hoc, command_dispatch):
@@ -118,7 +120,7 @@ def test_console_unknown_returns_404(flask_client, config_ad_hoc):
 def test_room_on(flask_client, config_rooms, command_dispatch):
     config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
     flask_client.get("/api/room/Living Room?state=on")
-    command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
 
 
 def test_room_off_turns_all_off(flask_client, config_rooms, command_dispatch):

@@ -15,10 +15,25 @@ from orc.dal import net, push, scheduler, sqlite
 from orc.dal.findhub import stub as findhub_stub
 from orc.dal.mqtt import paho as mqtt
 from orc.dal.secrets import stub as secrets_stub
+from orc.model import DeviceEnum
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
 TRIGGER = m.Query("test")
 PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
+
+
+class Light(DeviceEnum):
+    a = 1
+    b = 2
+    c = 3
+
+
+class Chromecast(DeviceEnum):
+    x = 1
+
+
+Light._sort = 0
+Chromecast._sort = 1
 
 
 @pytest.fixture
@@ -563,19 +578,19 @@ class TestPresence:
         rule = self._routine("partner-r", m.Present("Alice"))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
-            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Present("Alice")),)), force=False, entry=ANY
+            api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Present("Alice")),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_runs_when_no_presence_required(self, command_dispatch):
         rule = _routine("r", time(8, 0), em.Command(m.Devices(orc.Light.a), m.OFF))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
-        command_dispatch.assert_called_once_with(m.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
+        command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self, command_dispatch):
         rule = self._routine("reset-r", m.Always())
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
-            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=False, entry=ANY
+            api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):
@@ -583,7 +598,7 @@ class TestPresence:
         rule = self._routine("anyone-r", m.Anyone())
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
-            m.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Anyone()),)), force=False, entry=ANY
+            api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Anyone()),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, command_dispatch):
@@ -739,6 +754,68 @@ def test_executor_injects_ctx():
     assert captured[0].kwargs["ctx"] is ctx
 
 
+def test_squish_dim_then_off():
+    cfg = (_cmd(Light.a, 10), _cmd(Light.a, m.ON), _cmd(Light.a, 20), _cmd(Light.a, m.ON), _cmd(Light.a, m.OFF))
+    assert api._squish(list(cfg)) == (_cmd(Light.a, 20), _cmd(Light.a, m.OFF))
+
+
+def test_squish_just_off():
+    cfg = [_cmd(Light.a, m.ON), _cmd(Light.a, m.OFF)]
+    assert api._squish(cfg) == (_cmd(Light.a, m.OFF),)
+
+
+def test_squish_dim_on():
+    cfg = [_cmd(Light.a, 20), _cmd(Light.a, m.ON)]
+    assert api._squish(cfg) == (_cmd(Light.a, 20), _cmd(Light.a, m.ON))
+
+
+def test_squish_just_on():
+    cfg = [_cmd(Light.a, m.OFF), _cmd(Light.a, m.ON)]
+    assert api._squish(cfg) == (_cmd(Light.a, m.ON),)
+
+
+def test_squish_expands_everything_off_start():
+    commands = (_cmd(Light, m.OFF), _cmd(Light.a, m.ON))
+    assert api.squish(commands) == (_cmd(Light.a, m.ON), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF))
+
+
+def test_squish_expands_double_on():
+    commands = (_cmd(Light, m.ON), _cmd(Light.a, m.ON))
+    assert api.squish(commands) == (_cmd(Light.a, m.ON), _cmd(Light.b, m.ON), _cmd(Light.c, m.ON))
+
+
+def test_squish_expands_dim_then_off():
+    commands = (_cmd(Light, m.OFF), _cmd(Light.a, 10), _cmd(Light, m.OFF))
+    assert api.squish(commands) == (_cmd(Light.a, 10), _cmd(Light.a, m.OFF), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF))
+
+
+def test_squish_stop_then_volume():
+    commands = (_cmd(Chromecast, "stop"), _cmd(Chromecast, "stop"), _cmd(Chromecast.x, 10))
+    assert api.squish(commands) == (_cmd(Chromecast.x, "stop"), _cmd(Chromecast.x, 10))
+
+
+def test_op_cmp_dim():
+    assert api._op_cmp(_cmd(Light.a, 50)) == (0, -1)
+
+
+def test_op_cmp_on():
+    assert api._op_cmp(_cmd(Light.a, m.ON)) == (0, 0)
+
+
+def test_op_cmp_off():
+    assert api._op_cmp(_cmd(Light.a, m.OFF)) == (0, 1)
+
+
+def test_op_cmp_sorts_dim_before_on_before_off():
+    commands = [_cmd(Light.a, m.OFF), _cmd(Light.b, m.ON), _cmd(Light.c, 50)]
+    assert sorted(commands, key=api._op_cmp) == [_cmd(Light.c, 50), _cmd(Light.b, m.ON), _cmd(Light.a, m.OFF)]
+
+
+def test_op_cmp_sorts_by_type_sort():
+    commands = [_cmd(Chromecast.x, m.ON), _cmd(Light.a, m.ON)]
+    assert sorted(commands, key=api._op_cmp) == [_cmd(Light.a, m.ON), _cmd(Chromecast.x, m.ON)]
+
+
 def _routine(name, when, *commands, skip_replay=False):
     steps = tuple(em.Step(c.tag or em.And(), c) for c in commands)
     tags = frozenset({m.SKIP_REPLAY_TAG}) if skip_replay else frozenset()
@@ -747,3 +824,7 @@ def _routine(name, when, *commands, skip_replay=False):
 
 def _ac(**attributes):
     return patch.object(mqtt, "snapshot", return_value=[m.DeviceState(m.Device("clip-1", "unit", "lg_ac"), attributes, None)])
+
+
+def _cmd(what, value):
+    return em.Command(m.Devices(what), value)

@@ -46,7 +46,7 @@ DEVICE_ENUMS = {"Light": Light, "AC": Ac, "Chromecast": Chromecast, "Sensor": Se
 def ctx(ctx, freezegun_clock):
     ctx.engine = engine.Runtime(UTC)
     ctx.api.reader.return_value = _world_read(ctx)
-    ctx.api.squish.side_effect = lambda commands, entry: m.squish(commands)
+    ctx.api.squish.side_effect = lambda commands, entry: api.squish(commands)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState(power=m.OFF)),)
     ctx.config.registry = orc.config.registry
     ctx.api.dewpoint.side_effect = api.dewpoint
