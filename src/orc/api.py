@@ -508,12 +508,7 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
             if known.get(tag.person) != key:
                 sqlite.upsert_tag_key(tag.person, key)
                 net.presence.set_key(tag.person, key)
-                log(
-                    m.LogSource.SYSTEM,
-                    Log.TAG_KEY_UPDATED.format(name=tag.person),
-                    trigger,
-                    notification=m.Notification(("tag-key", tag.person), "/presence/"),
-                )
+                log(m.LogSource.SYSTEM, Log.TAG_KEY_UPDATED.format(name=tag.person), trigger)
         except Exception as exc:
             log(m.LogSource.SYSTEM, Log.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
 
