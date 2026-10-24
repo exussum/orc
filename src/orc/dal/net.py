@@ -237,7 +237,7 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
         / UDP(sport=5353, dport=5353)
         / DNS(rd=0, qd=DNSQR(qname="_services._dns-sd._udp.local", qtype="PTR"))
     )
-    sniffer = AsyncSniffer(filter="arp or udp port 5353", store=True, timeout=_WINDOW_SECONDS)
+    sniffer = AsyncSniffer(filter="arp or udp port 5353", store=True)
     sniffer.start()
     # Burst the whole probe list at once, repeat once a second across the window.
     # sendp's `inter` spaces *every* packet, so it would scale with the target
@@ -246,7 +246,7 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
     for _ in range(_WINDOW_SECONDS):
         sendp(probes, verbose=False)
         time.sleep(1)
-    sniffer.join()
+    sniffer.stop()
     responded: set[str] = set()
     for p in sniffer.results or []:
         if ARP in p and p[ARP].op == 2:
