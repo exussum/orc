@@ -14,13 +14,13 @@ _SCHEMA = (
     "(id INTEGER PRIMARY KEY CHECK (id = 0), name TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS orc_durations (name TEXT PRIMARY KEY, samples INTEGER NOT NULL, avg REAL NOT NULL)",
     "CREATE TABLE IF NOT EXISTS orc_ble_tags "
-    "(person TEXT PRIMARY KEY, eik BLOB NOT NULL, pair_date INTEGER NOT NULL, offset INTEGER, heard INTEGER)",
+    "(person TEXT PRIMARY KEY, eik BLOB NOT NULL, anchor INTEGER NOT NULL, offset INTEGER, heard INTEGER)",
     "CREATE TABLE IF NOT EXISTS orc_push_subscriptions (endpoint TEXT PRIMARY KEY, public_key TEXT NOT NULL, auth_secret TEXT NOT NULL)",
 )
 _DELETE_PUSH = "DELETE FROM orc_push_subscriptions WHERE endpoint = ?"
 _DELETE_OVERRIDE = "DELETE FROM orc_theme_override WHERE id = 0"
 _SELECT_PUSH = "SELECT endpoint, public_key, auth_secret FROM orc_push_subscriptions"
-_SELECT_TAGS = "SELECT person, eik, pair_date, offset, heard FROM orc_ble_tags"
+_SELECT_TAGS = "SELECT person, eik, anchor, offset, heard FROM orc_ble_tags"
 _SELECT_OVERRIDE = "SELECT name, start, end FROM orc_theme_override WHERE id = 0"
 _SELECT_DURATIONS = "SELECT name, samples, avg FROM orc_durations ORDER BY name"
 _UPSERT_PUSH = (
@@ -33,8 +33,8 @@ _UPSERT_OVERRIDE = (
 )
 _UPDATE_CLOCK = "UPDATE orc_ble_tags SET offset = ?, heard = ? WHERE person = ? AND (offset IS NULL OR abs(? - offset) > ?)"
 _UPSERT_TAG_KEY = (
-    "INSERT INTO orc_ble_tags (person, eik, pair_date) VALUES (?, ?, ?) "
-    "ON CONFLICT(person) DO UPDATE SET eik = excluded.eik, pair_date = excluded.pair_date, offset = NULL, heard = NULL"
+    "INSERT INTO orc_ble_tags (person, eik, anchor) VALUES (?, ?, ?) "
+    "ON CONFLICT(person) DO UPDATE SET eik = excluded.eik, anchor = excluded.anchor, offset = NULL, heard = NULL"
 )
 _UPSERT_DURATION = (
     "INSERT INTO orc_durations (name, samples, avg) VALUES (?, ?, ?) "
@@ -64,8 +64,8 @@ def fetch_push_subscriptions(conn: sqlite3.Connection) -> list[m.PushSubscriptio
 def fetch_tags(conn: sqlite3.Connection) -> dict[str, tuple[m.BleKey, m.TagClock | None]]:
     rows = conn.execute(_SELECT_TAGS).fetchall()
     return {
-        person: (m.BleKey(bytes(eik), pair_date), m.TagClock(offset, heard) if heard is not None else None)
-        for person, eik, pair_date, offset, heard in rows
+        person: (m.BleKey(bytes(eik), anchor), m.TagClock(offset, heard) if heard is not None else None)
+        for person, eik, anchor, offset, heard in rows
     }
 
 
