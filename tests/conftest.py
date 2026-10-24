@@ -132,7 +132,7 @@ def command_dispatch():
 
 
 @pytest.fixture
-def fake_capture_lights():
+def light_capture():
     from unittest.mock import patch
 
     from orc import api

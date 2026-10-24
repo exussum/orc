@@ -173,14 +173,14 @@ def test_validate_unknown_tag_person():
 @pytest.mark.parametrize(
     ("other", "expected"),
     [
-        ({"EIK_ALICE": "ab" * 32}, {}),
-        ({"EIK_ALICE": "abcd"}, {"EIK_ALICE": "expected hex32"}),
-        ({"EIK_ALICE": ""}, {"EIK_ALICE": "not set"}),
-        ({}, {"EIK_ALICE": "not set"}),
+        ({"PLUGIN_KEY": "ab" * 32}, {}),
+        ({"PLUGIN_KEY": "abcd"}, {"PLUGIN_KEY": "expected hex32"}),
+        ({"PLUGIN_KEY": ""}, {"PLUGIN_KEY": "not set"}),
+        ({}, {"PLUGIN_KEY": "not set"}),
     ],
 )
 def test_check_secrets(other, expected):
-    assert loader.check_secrets(m.Secrets(other=other), {"EIK_ALICE": cast.hex32}) == expected
+    assert loader.check_secrets(m.Secrets(other=other), {"PLUGIN_KEY": cast.hex32}) == expected
 
 
 def test_check_secrets_reads_typed_fields():
