@@ -298,7 +298,7 @@ class TestRefreshTagKeys:
         with patch.object(net.presence, "set_key") as set_key:
             api.refresh_tag_keys(m.Manual("secrets"))
         key = m.BleKey(b"Alice Tag".ljust(32, b"\0"), 0)
-        assert sqlite.fetch_tags() == {"Alice": (key, None)}
+        assert sqlite.fetch_tags() == [m.Tag("Alice", key, None)]
         set_key.assert_called_once_with("Alice", key)
         assert [e.action for e in api.log_entries()] == ["Tag key for `Alice` read from Find Hub"]
 
@@ -311,7 +311,7 @@ class TestRefreshTagKeys:
     def test_a_failed_lookup_logs_and_keeps_going(self, monkeypatch):
         monkeypatch.setattr(findhub_stub, "identity_key", MagicMock(side_effect=RuntimeError("boom")))
         api.refresh_tag_keys(m.Manual("secrets"))
-        assert sqlite.fetch_tags() == {}
+        assert sqlite.fetch_tags() == []
         assert [e.action for e in api.log_entries()] == ["Find Hub lookup failed for `Alice`: boom"]
 
 

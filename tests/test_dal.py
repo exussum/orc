@@ -187,19 +187,19 @@ def test_tag_clock_moves_only_by_more_than_half_a_window(offsets, expected):
     sqlite.upsert_tag_key("Alice", m.BleKey(bytes(32), 5))
     for offset in offsets:
         sqlite.update_tag_clock("Alice", m.TagClock(offset, 0))
-    assert sqlite.fetch_tags() == {"Alice": (m.BleKey(bytes(32), 5), m.TagClock(expected, 0))}
+    assert sqlite.fetch_tags() == [m.Tag("Alice", m.BleKey(bytes(32), 5), m.TagClock(expected, 0))]
 
 
 def test_tag_clock_needs_a_key_row():
     sqlite.update_tag_clock("Bob", m.TagClock(100, 0))
-    assert "Bob" not in sqlite.fetch_tags()
+    assert sqlite.fetch_tags() == []
 
 
 def test_a_new_key_clears_the_clock_row():
     sqlite.upsert_tag_key("Alice", m.BleKey(bytes(32), 5))
     sqlite.update_tag_clock("Alice", m.TagClock(100, 0))
     sqlite.upsert_tag_key("Alice", m.BleKey(bytes([1] * 32), 5))
-    assert sqlite.fetch_tags() == {"Alice": (m.BleKey(bytes([1] * 32), 5), None)}
+    assert sqlite.fetch_tags() == [m.Tag("Alice", m.BleKey(bytes([1] * 32), 5), None)]
 
 
 class TestPresence:

@@ -61,12 +61,11 @@ def fetch_push_subscriptions(conn: sqlite3.Connection) -> list[m.PushSubscriptio
 
 
 @connected
-def fetch_tags(conn: sqlite3.Connection) -> dict[str, tuple[m.BleKey, m.TagClock | None]]:
-    rows = conn.execute(_SELECT_TAGS).fetchall()
-    return {
-        person: (m.BleKey(bytes(eik), anchor), m.TagClock(offset, heard) if heard is not None else None)
-        for person, eik, anchor, offset, heard in rows
-    }
+def fetch_tags(conn: sqlite3.Connection) -> list[m.Tag]:
+    return [
+        m.Tag(person, m.BleKey(bytes(eik), anchor), m.TagClock(offset, heard) if heard is not None else None)
+        for person, eik, anchor, offset, heard in conn.execute(_SELECT_TAGS)
+    ]
 
 
 @connected

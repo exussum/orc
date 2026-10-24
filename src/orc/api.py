@@ -460,14 +460,14 @@ def start_ble_listener() -> None:
             log(m.LogSource.SYSTEM, Log.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
         reported = present
 
-    tags = sqlite.fetch_tags()
-    for person, (key, _clock) in tags.items():
-        net.presence.set_key(person, key)
+    rows = sqlite.fetch_tags()
+    for row in rows:
+        net.presence.set_key(row.person, row.key)
     net.presence.start(
         config.tags,
         config.settings.tz,
         report,
-        clocks={person: clock for person, (_key, clock) in tags.items() if clock},
+        clocks={row.person: row.clock for row in rows if row.clock},
         on_clock=sqlite.update_tag_clock,
     )
 
@@ -496,7 +496,7 @@ def schedule_tag_key_refresh(trigger: m.Trigger) -> None:
 def refresh_tag_keys(trigger: m.Trigger) -> None:
     provider = config.providers.findhub
     assert provider is not None
-    known = {person: key for person, (key, _clock) in sqlite.fetch_tags().items()}
+    known = {row.person: row.key for row in sqlite.fetch_tags()}
     for tag in config.tags:
         try:
             key = provider.identity_key(tag.device, config.secrets, config.settings.http_timeout)

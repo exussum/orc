@@ -82,6 +82,12 @@ class TagClock(NamedTuple):
     eid: bytes | None = None
 
 
+class Tag(NamedTuple):
+    person: str
+    key: BleKey
+    clock: TagClock | None
+
+
 class ThemeOverride(NamedTuple):
     name: str
     start: date
