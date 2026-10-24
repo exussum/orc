@@ -211,7 +211,7 @@ class TestPresence:
     ADDRESS = "11:22:33:44:55:66"
 
     @pytest.fixture(autouse=True)
-    def frozen_now(self):
+    def presence_clock(self):
         with patch.object(net.Presence, "_now", return_value=self.NOW):
             yield
 

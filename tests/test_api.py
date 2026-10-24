@@ -195,7 +195,7 @@ def test_button_ad_hoc_snapshot(ctx, config_ad_hoc, command_dispatch):
     command_dispatch.assert_called_once_with(action.commands, force=True, entry=ANY)
 
 
-def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispatch, fake_capture_lights):
+def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispatch, light_capture):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
     existing = (em.Command(m.Devices(orc.Light.a), m.ON),)
@@ -205,7 +205,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispa
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine is existing
-    fake_capture_lights.assert_not_called()
+    light_capture.assert_not_called()
     command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
 
 
