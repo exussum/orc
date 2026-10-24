@@ -5,6 +5,7 @@ import json
 import os
 from collections.abc import Callable
 from typing import Any
+from urllib.request import urlopen
 
 import requests
 from cryptography.hazmat.primitives import hashes
@@ -109,6 +110,5 @@ def _api_post(url: str, token: str, body: dict[str, Any]) -> Any:
 
 
 def _get_url_value(url: str) -> str:
-    response = requests.get(url, timeout=orc.config.settings.http_timeout)
-    response.raise_for_status()
-    return response.text.partition("\n")[0].strip()
+    with urlopen(url, timeout=orc.config.settings.http_timeout) as response:  # nosemgrep: dynamic-urllib-use-detected
+        return response.readline().decode("utf-8").strip()

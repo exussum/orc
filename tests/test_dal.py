@@ -18,7 +18,7 @@ from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.findhub import nova
 from orc.dal.holiday import polygon
 from orc.dal.push import webpush
-from orc.dal.secrets import keepass
+from orc.dal.secrets import bws, keepass
 from orc.model import BleKey, Query
 
 TRIGGER = Query("test")
@@ -347,6 +347,14 @@ def test_missed_job_is_logged(caplog):
     scheduler._log_missed(JobExecutionEvent(EVENT_JOB_MISSED, "iot-Sunrise", "memory", datetime(2026, 1, 1, tzinfo=config.settings.tz)))
     (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
     assert "iot-Sunrise" in record.getMessage()
+
+
+@pytest.mark.parametrize("scheme", ["file", "data"])
+def test_the_bws_token_url_may_be_a_file_or_data_url(scheme, tmp_path):
+    token_file = tmp_path / "token"
+    token_file.write_text("0.abc.def:AAAA\n")
+    url = f"file://{token_file}" if scheme == "file" else "data:,0.abc.def%3AAAAA%0A"
+    assert bws._get_url_value(url) == "0.abc.def:AAAA"
 
 
 class TestKeepass:
