@@ -43,11 +43,17 @@ class SensorState:
     last_change: datetime | None = None
 
 
+@dataclasses.dataclass
+class State:
+    sensors: LockedDict[str, SensorState]
+    first: bool = True
+
+
 _log = logging.getLogger(__name__)
 
 
-def states_for(leak_devices: Any) -> LockedDict[str, SensorState]:
-    return LockedDict({device.value: SensorState(name=device.label, device_id=device.value) for device in leak_devices})
+def states_for(leak_devices: Any) -> State:
+    return State(LockedDict({device.value: SensorState(name=device.label, device_id=device.value) for device in leak_devices}))
 
 
 def start(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback) -> None:
@@ -83,8 +89,12 @@ def simulate_transition(ctx: m.AppContext, name: str, on_transition: TransitionC
     return True
 
 
+def _state(ctx: m.AppContext) -> State:
+    return cast.instance(ctx.plugin_state[orc_extras.yolink], State)
+
+
 def _states(ctx: m.AppContext) -> LockedDict[str, SensorState]:
-    return cast.instance(ctx.plugin_state[orc_extras.yolink], LockedDict)
+    return _state(ctx).sensors
 
 
 def _leak_devices(ctx: m.AppContext) -> Any:
@@ -206,6 +216,7 @@ def _set_connected(ctx: m.AppContext, on_transition: TransitionCallback, connect
         states.update(device_id, apply)
     for name, old in fired:
         _fire(on_transition, "connection", name, old, "connected" if connected else "disconnected")
+    _state(ctx).first = False
 
 
 def _fire(on_transition: TransitionCallback, kind: TransitionKind, name: str, old: Any, new: Any) -> None:
