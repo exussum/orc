@@ -25,4 +25,4 @@ def test_report_applies_with_or_without_a_battery(ctx, data, battery):
     on_transition = MagicMock()
     yolink.plugins._on_report(ctx, on_transition, "leak-1", data)
     on_transition.assert_any_call("Kitchen", "leak", None, "alert")
-    assert ctx.plugin_state[yolink].get("leak-1").battery is battery
+    assert ctx.plugin_state[yolink].sensors.get("leak-1").battery is battery

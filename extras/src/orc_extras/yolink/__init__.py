@@ -81,9 +81,11 @@ def declare(declarations: Any) -> None:
 def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
     api = ctx.api
     msg = None
-    notification = m.Notification(("yolink", name))
-    if kind == "connection" and old is not None:
+    notification: m.Notification | None = m.Notification(("yolink", name))
+    if kind == "connection":
         msg = (Msg.CONNECTED if new == "connected" else Msg.DISCONNECTED).format(name=name)
+        if cast.instance(ctx.plugin_state[orc_extras.yolink], plugins.State).first:
+            notification = None
     elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         notification = m.Notification(("leak", name))
