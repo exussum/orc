@@ -319,8 +319,9 @@ def test_reader_calls_a_function(ctx):
     ctx.api.device_states.return_value = [m.DeviceState(m.Device("5", "sensor", "hubitat"), {"temperature": "77", "humidity": "60"}, None)]
     assert read(_dewpoint_of(Sensor.living)) == pytest.approx(62.1, abs=0.2)
     ctx.api.device_states.return_value = [m.DeviceState(m.Device("5", "sensor", "hubitat"), {"humidity": 60}, None)]
-    with pytest.raises(KeyError, match="temperature"):
-        read(_dewpoint_of(Sensor.living))
+    assert read(_dewpoint_of(Sensor.living)) is None
+    ctx.api.device_states.return_value = []
+    assert read(_dewpoint_of(Sensor.living)) is None
 
 
 @pytest.mark.parametrize("value, inside", [(65.9, False), (66, True), (119.9, True), (120, False)])
