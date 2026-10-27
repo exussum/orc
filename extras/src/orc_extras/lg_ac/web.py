@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 from flask import Blueprint, current_app, jsonify, request
 from flask.wrappers import Response
+from orc_engine import model as em
 
 import orc_extras.lg_ac as lg_ac
 from orc import model as m
@@ -80,5 +81,5 @@ def command() -> Response:
         if asked.fan_mode is None or asked.temperature is None:
             return jsonify({"error": "a setpoint needs fan_mode and temperature"})
     entry = app.orc.api.log(LogSource.LG_AC, f"AC {device_id[:8]}: {asked}", m.Manual("lg_ac"))
-    app.orc.api.device_command(unit.name, str(asked), entry)
+    app.orc.api.dispatch((em.Command(m.Devices(unit), asked),), force=True, entry=entry)
     return jsonify({"status": "sent", "device": device_id, "command": str(asked)})

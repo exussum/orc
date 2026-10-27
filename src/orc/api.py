@@ -28,7 +28,6 @@ from orc.dal.mqtt import paho as mqtt
 from orc.dal.sqlite import durations as _durations
 from orc.dal.sqlite import init_db, load_durations, update_avg  # noqa: F401
 from orc.decorators import mappable, requires_ctx
-from orc.kernel import cast
 from orc.kernel.declarations import Declarations
 from orc.locale import Log
 
@@ -375,29 +374,6 @@ def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
 
 def tv_toggle(bl_device: m.DeviceEnum) -> None:
     config.providers.blaster.tv_toggle(bl_device, config.settings.broadlink_codes)
-
-
-def device_command(id: str, state: str | None, entry: m.LogEntry) -> bool:
-    # Find the device across dispatch-handled types and run its registered handler
-    # directly (no snapshot interception), so plugin device types work without core
-    # knowing them. state is an int level (brightness/volume), an ON/OFF/STOP string,
-    # or a mode:fan:temp AC command.
-    if state and state.isdigit():
-        parsed: Any = int(state)
-    elif state and ":" in state:
-        parsed = cast.state(state)
-    else:
-        parsed = state
-    for name, cls in config.devices.items():
-        dispatch_handler = config.registry.dispatch_handlers.get(name)
-        if dispatch_handler is not None and id in cls.__members__:
-            member = cls[id]
-            value = m.AcState(power=parsed) if name == "AC" and parsed in (m.ON, m.OFF) else parsed
-            if isinstance(value, m.AcState):
-                value = ac_command(member, value)
-            _dispatch_one((dispatch_handler, member, em.Command(m.Devices(member), value)), stream={}, entry=entry)
-            return True
-    return False
 
 
 def clear_theme_override() -> None:
