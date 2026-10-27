@@ -75,7 +75,7 @@ class House:
         self.lan = lan
         self.probed = probed
         self.pushed = pushed
-        self.reported = {}
+        self.reported = {(light, "switch"): m.OFF for light in orc.Light} | {(sensor, "motion"): "inactive" for sensor in orc.Sensor}
 
     def tick(self, **delta):
         self.frozen.tick(timedelta(**delta))

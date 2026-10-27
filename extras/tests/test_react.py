@@ -133,6 +133,15 @@ def test_switch_on_schedules_reaction(ctx, react_rules, device_report):
     assert _payload(call)[1] == m.Device("1", "lamp", "hubitat")
 
 
+def test_first_report_after_boot_is_not_a_transition(ctx, ruleset, device_report):
+    ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {"1": Light.lamp, "2": Light.desk})
+    ctx.api.device_states.return_value = [m.DeviceState(m.Device("1", "lamp", "hubitat"), {"switch": m.ON}, None)]
+    device_report("2", {"level": 50}, 20)
+    ctx.api.dispatch.assert_not_called()
+    device_report("1", {"switch": m.ON}, m.OFF)
+    ctx.api.dispatch.assert_called_once()
+
+
 def test_switch_already_on_schedules_nothing(ctx, react_rules, device_report):
     device_report("1", {"switch": m.ON}, m.ON)
     ctx.scheduler.once.assert_not_called()
