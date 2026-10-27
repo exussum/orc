@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import paho.mqtt.client as paho
 import pytest
 
 import orc
@@ -30,7 +31,7 @@ def mqtt_events():
 @pytest.fixture
 def mqtt_client(monkeypatch):
     client = SimpleNamespace(published=[], subscribe=lambda *a, **k: None)
-    client.publish = lambda topic, payload=None, retain=False: client.published.append((topic, payload, retain))
+    client.publish = lambda topic, payload=None, retain=False: client.published.append((topic, payload, retain)) or SimpleNamespace(rc=0)
     monkeypatch.setattr(mqtt, "_client", client)
     hubitat.hub_id = HUB
     return client
@@ -208,6 +209,11 @@ class TestRouting:
         assert mqtt_client.published == [("clip/command/clip-1", '{"set": "cool"}', False)]
         with pytest.raises(LookupError):
             mqtt.command(orc.Chromecast.x, 10)
+
+    def test_command_raises_when_the_broker_is_away(self, mqtt_client):
+        mqtt_client.publish = lambda *a, **k: SimpleNamespace(rc=paho.MQTT_ERR_NO_CONN)
+        with pytest.raises(ConnectionError, match="not currently connected"):
+            mqtt.command(orc.Light.a, m.ON)
 
 
 class TestPublishLight:

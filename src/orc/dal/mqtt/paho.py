@@ -94,7 +94,9 @@ def _publish(adapter: "Adapter", message: m.Message) -> None:
     if message.topic.split("/", 1)[0] not in adapter.namespaces:
         raise ValueError(f"mqtt: {type(adapter).__name__} may not publish on {message.topic}")
     payload = json.dumps(message.payload) if isinstance(message.payload, dict) else message.payload
-    _client.publish(message.topic, payload, retain=message.retain)
+    info = _client.publish(message.topic, payload, retain=message.retain)
+    if info.rc != mqtt.MQTT_ERR_SUCCESS:
+        raise ConnectionError(f"mqtt: publish on {message.topic} failed: {mqtt.error_string(info.rc)}")
 
 
 def _new_client(secrets: m.Secrets, on_connect: Callable[..., None], on_message: Callable[..., None], timeout: float) -> mqtt.Client:
