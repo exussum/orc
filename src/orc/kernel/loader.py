@@ -69,7 +69,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         "remote": each(_remote, default=tuple, types={"button": int}),
         "routine": each(_routine, default=dict),
         "group": each(_group, default=tuple),
-        "button": each(_button, default=tuple, types={"stripe_from": cast.when, "stripe_to": cast.when}),
+        "button": each(_button, default=tuple, types={"stripe_from": engine_cast.clock, "stripe_to": engine_cast.clock}),
         "theme": each(_theme, default=dict, types={"time": cast.when}),
         "plugin": each(_plugin, default=list, types={"module": engine_cast.module, "backend": engine_cast.module}),
         "provider": scalar(interfaces.Provider, types={field: engine_cast.module for field in interfaces.Provider._fields}),
