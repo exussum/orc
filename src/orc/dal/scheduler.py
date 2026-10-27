@@ -107,6 +107,8 @@ class Scheduler:
         options |= {"args": args, "name": name, "jobstore": DEFAULT if persist else MEMORY}
         if id:
             options |= {"id": id, "replace_existing": True}
+            if (job := self._inner.get_job(id)) and job.next_run_time is None:
+                options |= {"next_run_time": None}
         return self._inner.add_job(func, trigger, **options)
 
 
