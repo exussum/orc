@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pykeepass import create_database
 from pywebpush import WebPushException
 
+import orc
 from orc import config, security
 from orc import model as m
 from orc.dal import net, push, sqlite
@@ -32,6 +33,15 @@ _HOLIDAYS = [
     {"date": "2026-11-27", "exchange": "NYSE", "status": "early-close"},
     {"date": "2026-12-25", "exchange": "NASDAQ", "status": "closed"},
 ]
+
+
+def test_unresolvable_chromecast_host_reads_as_silent():
+    import socket
+
+    from orc.dal.chromecast import pychromecast
+
+    with patch.object(socket, "gethostbyname", side_effect=socket.gaierror("no such host")):
+        assert pychromecast.fetch_state(orc.Chromecast.x) == m.SoundState(what=orc.Chromecast.x, content=None, volume=0)
 
 
 class TestStripGoogleVideoParams:

@@ -32,7 +32,7 @@ def fetch_state(device: m.DeviceEnum) -> m.SoundState:
     try:
         with _cast(device, tries=1) as cast:
             return _sound_state(device, cast)
-    except RequestTimeout:
+    except RequestTimeout, OSError:
         return m.SoundState(what=device, content=None, volume=0)
 
 
