@@ -111,7 +111,7 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
 
 def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
     if job.iata:
-        when = job.arrive if job.arrive.tzinfo else job.arrive.replace(tzinfo=tz)
+        when = (job.arrive if job.arrive.tzinfo else job.arrive.replace(tzinfo=tz)).astimezone(tz)
         arrive, where, terminal = rt.flight.arrival(rt.aerodatabox_key, job.iata, when, job.airport, rt.settings.http_timeout)
     else:
         arrive, where, terminal = job.arrive, job.destination, None

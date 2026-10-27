@@ -76,6 +76,10 @@ def _running(summary, start_minutes, length_minutes, url):
     return event
 
 
+def test_event_without_summary_is_untitled(rebuild):
+    assert rebuild([_event(uid="A", dtstart=START, dtend=START + timedelta(minutes=30))]) == {"(untitled)": ()}
+
+
 @pytest.fixture
 def rebuild(ctx):
     ctx.api.local_now.return_value = START
