@@ -48,7 +48,7 @@ class Transition(em.Condition):
         if change is None:
             return False
         old, new = change
-        return new == self.to and old != self.to
+        return new == self.to and old not in (None, self.to)
 
 
 class Reaction(NamedTuple):
