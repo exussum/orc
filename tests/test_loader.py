@@ -39,6 +39,7 @@ _PARSE_ERRORS = [
     ("invalid_section", "Invalid parameter section='weird'"),
     ("time_not_hh_mm", "Invalid time 'noon'"),
     ("time_out_of_range", "Invalid time '25:00'"),
+    ("button_stripe_sunrise", "Invalid time 'sunrise'"),
     ("plugin_import_failure", "Cannot load module 'not.a.module'"),
     ("theme_unknown_routine", "Unknown routine 'OTHER'"),
     ("append_unknown_routine", "Unknown routine 'R'"),
