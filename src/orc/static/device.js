@@ -40,7 +40,7 @@ const acGroups = {
         onSelect(id, el) {
             if (el.dataset.state === 'off') setAcOff(id);
             else startAcWizard(id);
-            get(`/api/device/${id}?state=${el.dataset.state}`, el);
+            get(`/api/device/${el.dataset.kind}/${id}?state=${el.dataset.state}`, el);
         },
     },
     mode: {
@@ -76,14 +76,14 @@ document.querySelectorAll('.orc-ac-set').forEach(el => {
         const id = el.dataset.id;
         const temp = document.querySelector(`input.orc-ac-ctrl[data-id="${id}"]`)?.value;
         const { fan = "", mode } = acSelections[id] || {};
-        get(`/api/device/${id}?state=${mode}:${fan}:${temp}`, el);
+        get(`/api/device/${el.dataset.kind}/${id}?state=${mode}:${fan}:${temp}`, el);
         ['power', 'fan', 'mode'].forEach(g => acQuery(g, id).forEach(btn => btn.classList.remove('orc-selected')));
     });
 });
 
 document.querySelectorAll(".orc-ac-power[data-state='off']").forEach(el => setAcOff(el.dataset.id));
 
-wire('.orc-device-slider', 'change', (slider) => get(`/api/device/${slider.dataset.id}?state=${slider.value}`, slider));
+wire('.orc-device-slider', 'change', (slider) => get(`/api/device/${slider.dataset.kind}/${slider.dataset.id}?state=${slider.value}`, slider));
 
 document.querySelectorAll('input.orc-ac-ctrl').forEach(slider => {
     const display = document.querySelector(`.orc-ac-temp[data-id="${slider.dataset.id}"]`);
@@ -93,7 +93,7 @@ document.querySelectorAll('input.orc-ac-ctrl').forEach(slider => {
 document.querySelectorAll('.orc-device-toggle').forEach(btn => {
     btn.addEventListener('click', async () => {
         const on = btn.dataset.on === '1';
-        if (!await get(`/api/device/${btn.dataset.id}?state=${on ? 'off' : 'on'}`, btn)) return;
+        if (!await get(`/api/device/${btn.dataset.kind}/${btn.dataset.id}?state=${on ? 'off' : 'on'}`, btn)) return;
         btn.dataset.on = on ? '' : '1';
         btn.querySelector('use').setAttribute('href', `/static/icons.svg#${btn.dataset.icon}${on ? '-outline' : ''}`);
     });

@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import ANY, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from cryptography import x509
@@ -16,7 +16,7 @@ from orc_extras.lg_ac.dal.capture import Capture
 from orc_extras.lg_ac.dal.mqtt import stub
 from orc_extras.lg_ac.dal.mqtt.thinq import Thinq
 
-from orc.model import OFF, ON, AcMode, AcState, Device, DeviceStatus, Source, Status
+from orc.model import OFF, ON, AcMode, AcState, Device, DeviceEnum, DeviceStatus, Source, Status
 
 MODEL = "WIN_056905_WW"
 DEVICE_ID = "clip-123"
@@ -211,7 +211,8 @@ def reset_thinq_stub():
 @pytest.fixture
 def flask_client():
     app = Flask(__name__)
-    app.orc = _orc(SimpleNamespace(value=DEVICE_ID, name="LIVING", label="Living AC"))  # type: ignore[attr-defined]
+    ac = DeviceEnum("AC", {"LIVING": (DEVICE_ID, frozenset(), None, "Living AC")}, module="orc")  # type: ignore[call-arg,arg-type]
+    app.orc = _orc(ac.LIVING)  # type: ignore[attr-defined]
     app.register_blueprint(web.enroll)
     return app.test_client()
 
@@ -253,7 +254,8 @@ def test_state_endpoint_errors_with_no_device(flask_client):
 def test_command_endpoint_runs_the_device_command(flask_client, body, command):
     stub.reset(states={DEVICE_ID: AcState("on", "dry", "low", 22.0, current_temperature=25.0)}, devices=[DEVICE_ID], default=DEVICE_ID)
     assert flask_client.post("/command", json=body).get_json() == {"status": "sent", "device": DEVICE_ID, "command": command}
-    flask_client.application.orc.api.device_command.assert_called_once_with("LIVING", command, ANY)
+    ((commands,), kwargs) = flask_client.application.orc.api.dispatch.call_args
+    assert (str(commands[0].value), kwargs["force"]) == (command, True)
 
 
 @pytest.mark.parametrize(("default", "body"), [(None, {"mode": "cool"}), (DEVICE_ID, {"mode": "cool"})])

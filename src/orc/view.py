@@ -15,6 +15,7 @@ from flask import Blueprint, Flask, abort, redirect, render_template, request
 from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
+from orc_engine import model as em
 from werkzeug.exceptions import HTTPException
 from werkzeug.wrappers import Response as BaseResponse
 from yarl import URL
@@ -22,6 +23,7 @@ from yarl import URL
 from orc import alerts, api, config
 from orc import model as m
 from orc.collections import Box, ConcaveCorner, boxes, concave_corners, pack, where
+from orc.kernel import cast as kernel_cast
 from orc.locale import Log
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
@@ -307,12 +309,21 @@ def presence() -> str:
     return render_template("presence.html", rows=rows, strip_suffix="." + config.settings.lan_domain)
 
 
-@bp.route("/api/device/<id>")
-def device_api(id: str) -> dict[str, Any]:
+@bp.route("/api/device/<kind>/<name>")
+def device_api(kind: str, name: str) -> dict[str, Any]:
     if (state := request.args.get("state")) is None:
         abort(400, "Missing state")
-    if not api.device_command(id, state, api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), m.Manual(id))):
+    if not (device := config.devices.device(kind, name)):
         abort(404, "Unknown device")
+    try:
+        value = kernel_cast.state(state)
+    except ValueError as exc:
+        abort(400, str(exc))
+    if device.kind == "AC" and value in (m.ON, m.OFF):
+        value = m.AcState(power=value)
+    id = str(device)
+    entry = api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), m.Manual(id))
+    api.dispatch((em.Command(m.Devices(device), value),), force=True, entry=entry)
     return {}
 
 

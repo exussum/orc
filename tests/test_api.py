@@ -288,9 +288,9 @@ def test_capture_sensors_lists_sensors_missing_from_the_cache():
     assert api.capture_sensors() == [m.DeviceStatus(name=orc.Sensor.living.name, details={})]
 
 
-def test_device_command_failure_nests_under_the_entry(log_entry):
+def test_dispatch_failure_nests_under_the_entry(log_entry):
     with patch.object(mqtt, "command", side_effect=RuntimeError("boom")):
-        assert api.device_command(orc.Light.a.name, m.ON, log_entry)
+        api.dispatch((em.Command(m.Devices(orc.Light.a), m.ON),), force=True, entry=log_entry)
     assert log_entry.children[-1].action == "Dispatch failed for `a`: boom"
 
 

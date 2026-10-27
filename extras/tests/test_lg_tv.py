@@ -76,7 +76,3 @@ class TestDispatchLGTV:
         with patch.object(plugins, "is_off", return_value=False):
             api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
         self.ctx.api.tv_toggle.assert_not_called()
-
-    def test_device_command_routes_to_lg_tv_handler(self, webos_off):
-        api.device_command("living_room", m.OFF, self.entry)
-        webos_off.assert_called_once_with(self.ctx, self.webos)

@@ -638,6 +638,12 @@ class DeviceNamespace:
     def __contains__(self, name: str) -> bool:
         return name in vars(self)
 
+    def device(self, kind: str, name: str) -> DeviceEnum | None:
+        try:
+            return vars(self)[kind][name]
+        except KeyError:
+            return None
+
     def items(self) -> ItemsView[str, type[DeviceEnum]]:
         return vars(self).items()
 
