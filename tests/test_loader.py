@@ -171,6 +171,11 @@ def test_validate_unknown_tag_person():
         validate(parse("tag_unknown_person"))
 
 
+def test_validate_push_needs_https():
+    with pytest.raises(ConfigError, match="needs https://, got 'http://orc.test'"):
+        validate(parse("validate_push_http"))
+
+
 @pytest.mark.parametrize(
     ("other", "expected"),
     [

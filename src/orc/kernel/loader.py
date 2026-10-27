@@ -15,6 +15,7 @@ from orc_engine import model as em
 from orc import model as m
 from orc.collections import of_type
 from orc.dal import interfaces
+from orc.dal.push import webpush
 from orc.kernel import cast
 
 _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
@@ -141,6 +142,8 @@ def validate(config: SimpleNamespace) -> None:
     for tag in config.tag:
         if tag.person not in names:
             raise ConfigError(f"Unknown person {tag.person!r} in tag line: expected one of {names}")
+    if config.provider.push is webpush and not config.setting.base_url.startswith("https://"):
+        raise ConfigError(f"Web Push signs with base_url as its contact claim, which needs https://, got {config.setting.base_url!r}")
 
 
 def secret_needs(registry: m.Registry, providers: interfaces.Provider) -> dict[str, Callable[[str], Any]]:

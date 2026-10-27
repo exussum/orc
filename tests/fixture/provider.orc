@@ -6,3 +6,4 @@ provider blaster    orc.dal.blaster.stub
 provider hubitat    orc.dal.hubitat.stub
 provider audio      orc.dal.audio.stub
 
+provider push       orc.dal.push.stub
