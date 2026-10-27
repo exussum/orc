@@ -76,6 +76,18 @@ def _running(summary, start_minutes, length_minutes, url):
     return event
 
 
+def test_floating_event_takes_the_window_timezone():
+    from unittest.mock import patch
+
+    from orc_extras.calendar.dal import ical
+
+    ics = b"BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nSUMMARY:Floating\nDTSTART:20260106T090000\nDURATION:PT30M\nEND:VEVENT\nEND:VCALENDAR\n"
+    start = datetime(2026, 1, 6, 1, tzinfo=TZ)
+    with patch.object(ical.requests, "get", return_value=SimpleNamespace(content=ics)):
+        (event,) = ical.fetch_ical(start, timedelta(hours=20), "https://feed.example/a.ics", 1)
+    assert (event.start, event.end) == (datetime(2026, 1, 6, 9, tzinfo=TZ), datetime(2026, 1, 6, 9, 30, tzinfo=TZ))
+
+
 def test_each_occurrence_gets_its_own_jobs(rebuild, ctx):
     rebuild([_running("A", 0, 30, ZOOM), _running("A", 720, 30, ZOOM)])
     ids = {call.kwargs["id"] for call in ctx.scheduler.once.call_args_list}
