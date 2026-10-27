@@ -76,6 +76,12 @@ def _running(summary, start_minutes, length_minutes, url):
     return event
 
 
+def test_each_occurrence_gets_its_own_jobs(rebuild, ctx):
+    rebuild([_running("A", 0, 30, ZOOM), _running("A", 720, 30, ZOOM)])
+    ids = {call.kwargs["id"] for call in ctx.scheduler.once.call_args_list}
+    assert len(ids) == 4
+
+
 def test_event_without_summary_is_untitled(rebuild):
     assert rebuild([_event(uid="A", dtstart=START, dtend=START + timedelta(minutes=30))]) == {"(untitled)": ()}
 

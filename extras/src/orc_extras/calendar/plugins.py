@@ -35,7 +35,7 @@ class CalendarEvent:
     @staticmethod
     def from_cal(cal: Any, feed: str, type: str, offset: timedelta, tz: Any) -> CalendarEvent:
         return CalendarEvent(
-            feed + " " + cal.uid.to_ical().decode() + " " + type,
+            feed + " " + cal.uid.to_ical().decode() + " " + cal.start.astimezone(tz).isoformat() + " " + type,
             cal.summary.to_ical().decode("utf-8") if cal.summary else "(untitled)",
             cal.start.astimezone(tz) + offset,
             cal.end.astimezone(tz),
