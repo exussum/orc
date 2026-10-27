@@ -209,6 +209,21 @@ def test_flight_lookup_asks_for_the_local_date():
     assert asked[0].date().isoformat() == "2026-01-01"
 
 
+def test_run_job_keeps_the_trip_through_a_lookup_failure(ctx, flight_travel_job):
+    def failing(*a, **k):
+        raise requests.ConnectionError("tomtom down")
+
+    rt = _runtime([])._replace(flight=SimpleNamespace(arrival=failing))
+    _with_runtime(ctx, rt)
+    ctx.config.settings.tz = timezone.utc
+    now = ARRIVE - timedelta(hours=3)
+    ctx.api.local_now.return_value = now
+    plugins.run_job(flight_travel_job, ctx=ctx)
+    ctx.api.log.assert_called_once()
+    assert "Couldn't verify flight AA1" in ctx.api.log.call_args.args[1]
+    assert ctx.scheduler.once.call_args.args[1] == now + timedelta(minutes=10)
+
+
 def test_run_job_syncs_arrive_to_live_verified_time(ctx, monkeypatch, flight_travel_job):
     verified = ARRIVE + timedelta(hours=10)
     rt = _runtime([])._replace(flight=SimpleNamespace(arrival=lambda *a, **k: (verified, "JFK", None)))

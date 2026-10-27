@@ -88,7 +88,12 @@ def evaluate(ctx: AppContext, job: TravelJob, tz: Any, now: datetime) -> tuple[A
 @requires_ctx
 def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     tz, now = ctx.config.settings.tz, ctx.api.local_now()
-    arrival, sched = evaluate(ctx, job, tz, now)
+    try:
+        arrival, sched = evaluate(ctx, job, tz, now)
+    except ValueError as exc:
+        ctx.api.log(Log.TRAVEL, str(exc), m.Integration(job.summary))
+        _reschedule(ctx, job, now + _REFRESH_INTERVAL)
+        return
     if arrival is not None:
         job.arrive = arrival.when
     job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta
