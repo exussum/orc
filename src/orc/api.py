@@ -99,8 +99,8 @@ def set_job_paused(id: str, paused: bool) -> bool:
 
 
 @mappable
-def fetch_jobs_by_type(type: type) -> list[Job]:
-    return _scheduler().matching(type)
+def fetch_jobs_by_type[T](type: type[T], where: Callable[[T], bool] = lambda _: True) -> list[Job]:
+    return [job for job in _scheduler().matching(type) if where(job.args[0])]
 
 
 def local_now() -> datetime:

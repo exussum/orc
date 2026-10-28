@@ -7,7 +7,7 @@ meeting link. Nothing fires on a day off.
 
 ## Quick start
 
-1. Add `plugin Calendar orc_extras.calendar` to `config.orc`.
+1. Add `plugin Calendar orc_extras.calendar --section scene` to `config.orc`.
 2. Create `plugins/orc_extras/calendar.orc` with the settings block and one
    `feed` line per calendar (see below).
 3. Store each feed's secret iCal URL in the secrets provider under the name
@@ -61,9 +61,12 @@ Recurring events are expanded; all-day events are skipped.
 - The warning job plays the default alert sound at `ATTENTION` severity.
   The alarm job logs the title under the `calendar` source, speaks it at
   the same severity, and pushes a notification whose click opens a page at
-  `/api/calendar/choose/` listing every running event as a button; the log
-  line carries a 🔗 to the same page before the title. A button opens the
-  event's Google Meet, Zoom or Teams link when one is found in the event,
-  and that day in Google Calendar otherwise. An event whose location is a
-  street address (a number and a comma, no link) gets a Google Maps embed
-  under its button.
+  `/api/calendar/choose/events` showing that event as a card; the log line
+  carries a 🔗 to the same page before the title. The card's button opens
+  the event's Google Meet, Zoom or Teams link when one is found in the
+  event, and that day in Google Calendar otherwise. An event with no
+  meeting link whose location is a street address (a number and a comma,
+  no link) gets a Google Maps embed above its button.
+- The `Calendar` button on the page its `--section` names opens
+  `/api/calendar/choose/`, a card for every event still to come on the
+  schedule, grouped by day.
