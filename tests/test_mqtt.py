@@ -8,8 +8,9 @@ import pytest
 import orc
 from orc import model as m
 from orc.collections import LockedDict
+from orc.dal import broker
+from orc.dal.broker import paho as mqtt
 from orc.dal.mqtt import hubitat, none
-from orc.dal.mqtt import paho as mqtt
 
 HUB = "05bd449a-6f6d-45a6-b2e6-7ecb91105f7e"
 
@@ -41,7 +42,7 @@ class TestOnMessage:
     def test_device_document_is_cached(self):
         doc = _doc()
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", doc))
-        (state,) = mqtt.snapshot()
+        (state,) = broker.snapshot()
         assert state.device == m.Device("17", "entrance bulb 1", "hubitat")
         assert state.attributes == {"switch": "off", "level": "20"}
         assert state.last_activity == doc["lastActivity"]
@@ -55,12 +56,12 @@ class TestOnMessage:
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/location", {"id": 1, "name": "home"}))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/variables", {"variables": []}))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17/commands/on", b""))
-        assert mqtt.snapshot() == []
+        assert broker.snapshot() == []
 
     def test_bad_payload_ignored(self):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", b"not json"))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", {"unexpected": "shape"}))
-        assert mqtt.snapshot() == []
+        assert broker.snapshot() == []
 
     def test_handler_failure_is_logged_not_raised(self, monkeypatch, caplog):
         monkeypatch.setattr(hubitat, "_document", lambda topic, doc: 1 / 0)
@@ -71,18 +72,18 @@ class TestOnMessage:
     def test_update_replaces_device(self):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc()))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/17", _doc(attributes={"switch": "on", "level": "80"})))
-        (device,) = mqtt.snapshot()
+        (device,) = broker.snapshot()
         assert device.attributes == {"switch": "on", "level": "80"}
 
     def test_snapshot_sorted_by_id(self):
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/54", _doc(id=54, name="kitchen overhead")))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/1", _doc(id=1, name="office floor lamp")))
-        assert [d.device.id for d in mqtt.snapshot()] == ["1", "54"]
+        assert [d.device.id for d in broker.snapshot()] == ["1", "54"]
 
 
 class TestListeners:
     def test_fires_per_attribute_including_unchanged(self, mqtt_events):
-        mqtt.add_status_listener(lambda s: mqtt_events.append((s.device.id, s.attribute, s.old, s.new)))
+        broker.add_status_listener(lambda s: mqtt_events.append((s.device.id, s.attribute, s.old, s.new)))
         _seen(56, name="balcony door", contact="closed", battery="100")
         assert mqtt_events == []
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open", "battery": "100"})])
@@ -90,22 +91,22 @@ class TestListeners:
         assert ("56", "battery", "100", "100") in mqtt_events  # republished unchanged, still delivered
 
     def test_failing_listener_does_not_break_cache_or_others(self, mqtt_events):
-        mqtt.add_status_listener(lambda s: 1 / 0)
-        mqtt.add_status_listener(lambda s: mqtt_events.append(s.attribute))
+        broker.add_status_listener(lambda s: 1 / 0)
+        broker.add_status_listener(lambda s: mqtt_events.append(s.attribute))
         _seen(56, name="balcony door", contact="closed")
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"})])
         assert mqtt_events == ["contact"]
-        assert mqtt.snapshot()[0].attributes == {"contact": "open"}
+        assert broker.snapshot()[0].attributes == {"contact": "open"}
 
     def test_replayed_document_updates_cache_without_events(self, mqtt_events):
-        mqtt.add_status_listener(lambda s: mqtt_events.append(s.attribute))
+        broker.add_status_listener(lambda s: mqtt_events.append(s.attribute))
         doc = _doc(id=56, name="balcony door", attributes={"contact": "open"})
         _receive([doc, doc])  # first sighting, then a replay (reconnect flood, hub republish)
         assert mqtt_events == []
-        assert mqtt.snapshot()[0].attributes == {"contact": "open"}
+        assert broker.snapshot()[0].attributes == {"contact": "open"}
 
     def test_document_differing_only_in_last_activity_fires(self, mqtt_events):
-        mqtt.add_status_listener(lambda s: mqtt_events.append((s.attribute, s.old, s.new)))
+        broker.add_status_listener(lambda s: mqtt_events.append((s.attribute, s.old, s.new)))
         _seen(56, name="balcony door", contact="open")
         _receive([_doc(id=56, name="balcony door", attributes={"contact": "open"}, last_activity="2026-07-29T00:00:05+0000")])
         assert mqtt_events == [("contact", "open", "open")]
@@ -113,42 +114,42 @@ class TestListeners:
 
 class TestButtonEvents:
     def test_fires_listener_as_a_change_with_no_before(self, mqtt_events):
-        mqtt.add_status_listener(lambda s: mqtt_events.append((s.device.id, s.device.name, s.attribute, s.old, s.new)))
+        broker.add_status_listener(lambda s: mqtt_events.append((s.device.id, s.device.name, s.attribute, s.old, s.new)))
         _seen(10, name="remote", pushed="1")
         mqtt._on_message(None, None, _button_msg("held"))
         assert mqtt_events == [("10", "remote", "held", None, 1)]
 
     def test_press_from_a_device_the_hub_never_exported_is_dropped(self, mqtt_events):
-        mqtt.add_status_listener(lambda *a: mqtt_events.append(a))
+        broker.add_status_listener(lambda *a: mqtt_events.append(a))
         mqtt._on_message(None, None, _button_msg("held"))
         assert mqtt_events == []
 
     def test_clearing_publish_ignored(self, mqtt_events):
-        mqtt.add_status_listener(lambda *a: mqtt_events.append(a))
+        broker.add_status_listener(lambda *a: mqtt_events.append(a))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"", retain=False))
         assert mqtt_events == []
 
     def test_command_echo_ignored(self, mqtt_events):
-        mqtt.add_status_listener(lambda *a: mqtt_events.append(a))
+        broker.add_status_listener(lambda *a: mqtt_events.append(a))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/commands/release", b"1", retain=False))
         assert mqtt_events == []
 
     def test_bad_payload_ignored(self, mqtt_events):
-        mqtt.add_status_listener(lambda *a: mqtt_events.append(a))
+        broker.add_status_listener(lambda *a: mqtt_events.append(a))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"not json", retain=False))
         mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", {"unexpected": "shape"}, retain=False))
         assert mqtt_events == []
 
     def test_failing_listener_does_not_break_others(self, mqtt_events):
-        mqtt.add_status_listener(lambda s: 1 / 0)
-        mqtt.add_status_listener(lambda s: mqtt_events.append(s.attribute))
+        broker.add_status_listener(lambda s: 1 / 0)
+        broker.add_status_listener(lambda s: mqtt_events.append(s.attribute))
         _seen(10, name="remote", pushed="1")
         mqtt._on_message(None, None, _button_msg("pushed"))
         assert mqtt_events == ["pushed"]
 
     def test_button_event_does_not_touch_device_cache(self):
         mqtt._on_message(None, None, _button_msg("pushed"))
-        assert mqtt.snapshot() == []
+        assert broker.snapshot() == []
 
 
 class TestRouting:
@@ -180,7 +181,7 @@ class TestRouting:
     def test_connect_subscribes_every_namespace(self):
         mqtt.register(_Adapter())
         subscribed = []
-        mqtt._on_connect(mqtt._adapters, SimpleNamespace(subscribe=lambda topic, qos: subscribed.append(topic)), None, None, 0)
+        mqtt._on_connect(broker.adapters, SimpleNamespace(subscribe=lambda topic, qos: subscribed.append(topic)), None, None, 0)
         assert subscribed == ["hubitat/#", "clip/#"]
 
     def test_start_sends_each_adapter_hello(self, monkeypatch, mqtt_client):
@@ -196,7 +197,7 @@ class TestRouting:
         monkeypatch.setattr(mqtt, "_new_client", lambda *a: pytest.fail("client built"))
 
     def test_start_builds_no_client_without_a_namespace(self, monkeypatch, no_broker):
-        monkeypatch.setattr(mqtt, "_adapters", [none])
+        monkeypatch.setattr(broker, "adapters", [none])
         mqtt.start()
         assert mqtt._client is None
 
@@ -274,7 +275,7 @@ class TestExternalChanges:
     @pytest.fixture(autouse=True)
     def external_statuses(self):
         self.external_statuses = []
-        mqtt.add_status_listener(lambda s: s.source is m.Source.EXTERNAL and self.external_statuses.append((s.attribute, s.old, s.new)))
+        broker.add_status_listener(lambda s: s.source is m.Source.EXTERNAL and self.external_statuses.append((s.attribute, s.old, s.new)))
 
     def test_a_commanded_change_is_not_external(self):
         mqtt.command(orc.Light.a, 42)

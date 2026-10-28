@@ -24,8 +24,7 @@ from yarl import URL
 from orc import config, plugins
 from orc import model as m
 from orc.collections import LockedDeque, of_type
-from orc.dal import net, push, sqlite
-from orc.dal.mqtt import paho as mqtt
+from orc.dal import broker, net, push, sqlite
 from orc.dal.sqlite import durations as _durations
 from orc.dal.sqlite import init_db, load_durations, update_avg  # noqa: F401
 from orc.decorators import mappable, requires_ctx
@@ -147,21 +146,21 @@ def log_entries() -> list[m.LogEntry]:
 
 
 def add_listener(fn: m.Listener) -> None:
-    mqtt.add_status_listener(fn)
+    broker.add_status_listener(fn)
 
 
 def register_adapter(adapter: "Adapter") -> None:
-    mqtt.register(adapter)
+    config.providers.broker.register(adapter)
 
 
 def start_mqtt() -> None:
-    mqtt.register(config.providers.adapter)
-    mqtt.add_status_listener(_log_external)
-    mqtt.start()
+    config.providers.broker.register(config.providers.adapter)
+    broker.add_status_listener(_log_external)
+    config.providers.broker.start()
 
 
 def device_states() -> list[m.DeviceState]:
-    return mqtt.snapshot()
+    return broker.snapshot()
 
 
 def device_state(target: str) -> m.DeviceState | None:
@@ -170,7 +169,7 @@ def device_state(target: str) -> m.DeviceState | None:
 
 @mappable
 def capture_lights() -> m.Commands:
-    found = {state.device.id: state.attributes for state in mqtt.snapshot()}
+    found = {state.device.id: state.attributes for state in broker.snapshot()}
 
     def state(light: m.DeviceEnum) -> int | str:
         attrs = found.get(light.value)
@@ -773,7 +772,7 @@ def _scheduler() -> m.Scheduler:
 
 
 def _dispatch_light(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
-    mqtt.command(w, command.value)
+    config.providers.broker.command(w, command.value)
 
 
 def _dispatch_chromecast(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
@@ -812,7 +811,7 @@ def _dispatch_usb(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], 
 def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], stream: dict[Any, tuple[str, str]]) -> None:
     if not isinstance(command.value, m.AcState):
         raise ValueError(f"AC devices don't support state {command.value!r}")
-    mqtt.command(w, command.value)
+    config.providers.broker.command(w, command.value)
 
 
 def _schedule_push(

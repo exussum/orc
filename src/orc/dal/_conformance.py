@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from orc.dal.audio import stub as audio_stub
     from orc.dal.blaster import broadlink
     from orc.dal.blaster import stub as blaster_stub
+    from orc.dal.broker import paho
+    from orc.dal.broker import stub as broker_stub
     from orc.dal.chromecast import pychromecast
     from orc.dal.chromecast import stub as chromecast_stub
     from orc.dal.findhub import nova
@@ -43,6 +45,8 @@ if TYPE_CHECKING:
     _adapter_real: interfaces.Adapter = hubitat
     _adapter_stub: interfaces.Adapter = adapter_stub
     _adapter_none: interfaces.Adapter = adapter_none
+    _broker_real: interfaces.BrokerService = paho
+    _broker_stub: interfaces.BrokerService = broker_stub
     _chromecast_real: interfaces.ChromecastService = pychromecast
     _chromecast_stub: interfaces.ChromecastService = chromecast_stub
     _blaster_real: interfaces.BlasterService = broadlink

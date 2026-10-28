@@ -66,12 +66,12 @@ def reset_presence():
 
 @pytest.fixture(autouse=True)
 def reset_stubs():
+    from orc.dal import broker
     from orc.dal.audio import stub as audio_stub
     from orc.dal.chromecast import stub as chromecast_stub
-    from orc.dal.mqtt import paho as mqtt
 
-    for name in ("_adapters", "_status_listeners"):
-        getattr(mqtt, name).clear()
+    broker.adapters.clear()
+    broker.status_listeners.clear()
     chromecast_stub.reset()
     audio_stub.reset()
     yield

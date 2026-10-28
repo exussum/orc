@@ -10,7 +10,6 @@ from orc_engine import model as em
 import orc
 from orc import api, config
 from orc import model as m
-from orc.dal.mqtt import paho as mqtt
 from orc.view import bp
 
 MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
@@ -239,7 +238,7 @@ def test_device_unknown_returns_404(flask_client):
 def test_device_kind_picks_the_handler(flask_client):
     from orc.dal.chromecast import stub as chromecast_stub
 
-    with patch.object(mqtt, "command") as command:
+    with patch.object(config.providers.broker, "command") as command:
         response = flask_client.get("/api/device/Chromecast/x?state=35")
     assert response.status_code == 200
     assert chromecast_stub._volumes == {orc.Chromecast.x: 35}

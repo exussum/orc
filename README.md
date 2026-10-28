@@ -348,15 +348,17 @@ orc runs happily on a laptop with nothing attached: the sample config's
 every device and secret integration is faked in memory and the whole UI
 works. A real installation's config names the real backends instead
 (for example, `provider adapter orc.dal.mqtt.hubitat`) — though `secrets`,
-`hubitat`, `adapter`, `chromecast`, `audio`, `push`, and `findhub` default to
-their real backend when the `provider` line is omitted entirely, so a
-production config only needs to name `weather`, `holiday`, and `blaster`
-explicitly. An
+`hubitat`, `adapter`, `broker`, `chromecast`, `audio`, `push`, and `findhub`
+default to their real backend when the `provider` line is omitted entirely,
+so a production config only needs to name `weather`, `holiday`, and
+`blaster` explicitly. An
 explicit `provider` line, stub or real, always overrides the default. A
 house with no hub names `provider adapter orc.dal.mqtt.none`: it claims no
 devices, so every `Light`, `Button` and `Sensor` is virtual and dispatch
-skips them. The MQTT broker connection itself is not a provider: it is
-always `orc.dal.mqtt.paho`, and tests patch its functions directly.
+skips them. The MQTT broker connection is the `broker` provider:
+`orc.dal.broker.paho` by default, and `orc.dal.broker.stub` keeps every
+adapter's routing but opens no connection and drops what they publish, so
+a development boot with a plugin adapter needs no broker.
 
 You'll need:
 
