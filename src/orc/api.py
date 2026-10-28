@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import math
 import time
 from collections import defaultdict
@@ -472,7 +473,9 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
             if known.get(tag.person) != key:
                 sqlite.upsert_tag_key(tag.person, key)
                 net.presence.set_key(tag.person, key)
-                log(m.LogSource.SYSTEM, Log.TAG_KEY_UPDATED.format(name=tag.person), trigger)
+                paired = datetime.fromtimestamp(key.anchor, tz=config.settings.tz)
+                fingerprint = hashlib.sha256(key.eik).hexdigest()[:8]
+                log(m.LogSource.SYSTEM, Log.TAG_KEY_UPDATED.format(name=tag.person, fingerprint=fingerprint, paired=paired), trigger)
         except Exception as exc:
             log(m.LogSource.SYSTEM, Log.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
 
