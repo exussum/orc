@@ -4,7 +4,7 @@
 @source "../orc/static/*.js";
 @source "../orc/static/hooks/*.js";
 @source "../../extras/src/orc_extras/*/static/*.js";
-@source "../../extras/src/orc_extras/*/templates";
+@source "../../extras/src/orc_extras/*/templates/**/*.html";
 @source inline("orc-scoop-tl orc-scoop-tr orc-scoop-bl orc-scoop-br");
 
 @theme {

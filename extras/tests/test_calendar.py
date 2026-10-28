@@ -7,7 +7,7 @@ import icalendar
 import pytest
 from flask import Flask
 from orc_extras.calendar import plugins, web
-from orc_extras.calendar.plugins import ALARM, CalendarJob, Choice, address, link
+from orc_extras.calendar.plugins import ALARM, CalendarJob, EventDestination, address, link
 
 import orc.view
 from orc import model as m
@@ -17,10 +17,10 @@ START = datetime(2026, 1, 6, 1, tzinfo=ZoneInfo("UTC"))
 DAY_LINK = "https://calendar.google.com/calendar/r/day/2026/01/05"
 ZOOM = "https://zoom.us/j/1"
 MEET = "https://meet.google.com/abc-defg-hij"
-A = Choice("A", ZOOM, "")
-B = Choice("B", MEET, "")
+A = EventDestination("A", ZOOM, "")
+B = EventDestination("B", MEET, "")
 ADDRESS = "1 Main St, Springfield, IL 62701"
-CHOOSER_LINK = "/api/calendar/choose/?title=A&url=https://zoom.us/j/1&address=&title=B&url=https://meet.google.com/abc-defg-hij&address="
+CHOOSER_LINK = "/api/calendar/choose/events?title=A&url=https://zoom.us/j/1&address="
 
 
 def _event(**fields):
@@ -86,7 +86,7 @@ def test_address_needs_a_number_and_a_comma(event, expected):
     assert address(event) == expected
 
 
-def _running(summary, start_minutes, length_minutes, url):
+def _timed_event(summary, start_minutes, length_minutes, url):
     start = START + timedelta(minutes=start_minutes)
     event = _event(uid=summary, summary=summary, dtstart=start, location=url)
     if length_minutes:
@@ -107,14 +107,14 @@ def test_floating_event_takes_the_window_timezone():
 
 
 def test_each_occurrence_gets_its_own_jobs(rebuild, ctx):
-    rebuild([_running("A", 0, 30, ZOOM), _running("A", 720, 30, ZOOM)])
+    rebuild([_timed_event("A", 0, 30, ZOOM), _timed_event("A", 720, 30, ZOOM)])
     ids = {call.kwargs["id"] for call in ctx.scheduler.once.call_args_list}
     assert len(ids) == 4
 
 
 def test_event_without_summary_is_untitled(rebuild):
     assert rebuild([_event(uid="A", dtstart=START, dtend=START + timedelta(minutes=30))]) == {
-        "(untitled)": (Choice("(untitled)", DAY_LINK, ""),)
+        "(untitled)": EventDestination("(untitled)", DAY_LINK, "")
     }
 
 
@@ -130,28 +130,13 @@ def rebuild(ctx):
     def run(events):
         plugins._rebuild(SimpleNamespace(fetch_ical=lambda *args: iter(events)), settings, [("work", "ICS_URL")], ctx=ctx)
         jobs = [call.args[2] for call in ctx.scheduler.once.call_args_list]
-        return {job.summary: job.choices for job in jobs if job.event_type == ALARM}
+        return {job.destination.summary: job.destination for job in jobs if job.event_type == ALARM}
 
     return run
 
 
-@pytest.mark.parametrize(
-    ("events", "expected"),
-    [
-        ([_running("A", 0, 30, ZOOM), _running("B", 0, 60, MEET)], {"A": (A, B), "B": (A, B)}),
-        ([_running("A", 0, 60, ZOOM), _running("B", 30, 30, MEET)], {"A": (A,), "B": (A, B)}),
-        ([_running("A", 0, 30, ZOOM), _running("B", 30, 30, MEET)], {"A": (A,), "B": (B,)}),
-        ([_running("A", 0, 0, ZOOM), _running("B", 0, 0, MEET)], {"A": (A, B), "B": (A, B)}),
-        ([_running("A", 0, 30, ZOOM)], {"A": (A,)}),
-    ],
-    ids=["same-start", "staggered", "back-to-back", "no-end", "alone"],
-)
-def test_rebuild_offers_the_running_events_as_choices(rebuild, events, expected):
-    assert rebuild(events) == expected
-
-
 def test_alarm_links_the_choice_page(ctx):
-    plugins._run_event(CalendarJob(ALARM, "A", (A, B)), ctx=ctx)
+    plugins._run_event(CalendarJob(ALARM, A), ctx=ctx)
     assert ctx.api.log.call_args.kwargs == {"notification": m.Notification(("calendar",), CHOOSER_LINK), "link": CHOOSER_LINK}
 
 
@@ -165,12 +150,34 @@ def flask_client(ctx):
 
 
 def test_choose_page_opens_meeting_links_through_push_open(flask_client):
-    html = flask_client.get(f"/api/calendar/choose/?title=A&url={ZOOM}&address=&title=B&url={DAY_LINK}&address=").get_data(as_text=True)
+    html = flask_client.get(f"/api/calendar/choose/events?title=A&url={ZOOM}&address=&title=B&url={DAY_LINK}&address=").get_data(
+        as_text=True
+    )
     assert 'href="/api/push/open?url=https://zoom.us/j/1">A</a>' in html
     assert f'href="{DAY_LINK}">B</a>' in html
     assert "<iframe" not in html
 
 
+def test_choose_page_groups_scheduled_alarms_by_day(flask_client, ctx):
+    def job(kind, destination, hours):
+        return SimpleNamespace(args=(CalendarJob(kind, destination),), trigger=SimpleNamespace(run_date=START + timedelta(hours=hours)))
+
+    ctx.api.fetch_jobs_by_type.return_value = [job(ALARM, B, 30), job(ALARM, A, 1)]
+    html = flask_client.get("/api/calendar/choose/").get_data(as_text=True)
+    assert html.index("Tuesday, January 6") < html.index(">A</a>") < html.index("Wednesday, January 7") < html.index(">B</a>")
+    assert html.count('class="orc-btn" href=') == 2
+
+
+def test_choose_page_says_when_nothing_is_scheduled(flask_client, ctx):
+    ctx.api.fetch_jobs_by_type.return_value = []
+    assert "No calendar events." in flask_client.get("/api/calendar/choose/").get_data(as_text=True)
+
+
 def test_choose_page_maps_an_address(flask_client):
-    html = flask_client.get(f"/api/calendar/choose/?title=A&url={DAY_LINK}&address={ADDRESS}").get_data(as_text=True)
+    html = flask_client.get(f"/api/calendar/choose/events?title=A&url={DAY_LINK}&address={ADDRESS}").get_data(as_text=True)
     assert 'src="https://www.google.com/maps?q=1+Main+St,+Springfield,+IL+62701&amp;output=embed"' in html
+
+
+def test_choose_page_skips_the_map_for_a_meeting_link(flask_client):
+    html = flask_client.get(f"/api/calendar/choose/events?title=A&url={ZOOM}&address={ADDRESS}").get_data(as_text=True)
+    assert "<iframe" not in html
