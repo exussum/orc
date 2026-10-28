@@ -34,7 +34,9 @@ class Log:
     BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
     LOW_BATTERY: str = "Low battery on `{device}` ({level})"
     ROOM_SET: str = "Room: `{id}` {state}"
-    DEVICE_SET: str = "Device: `{id}` {state}"
+    DEVICE_SET: str = "`{name}` {what}"
+    DEVICE_SET_VOLUME: str = "volume {level}"
+    DEVICE_SET_LEVEL: str = "level {level}"
 
     EXTERNAL_CHANGE: str = "`{device}` {attribute}: {old} → {new}"
     CONFLICTING_ARMS: str = "`{device}` given conflicting states in one run: {states}"

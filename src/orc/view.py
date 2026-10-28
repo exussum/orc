@@ -321,8 +321,14 @@ def device_api(kind: str, name: str) -> dict[str, Any]:
         abort(400, str(exc))
     if device.kind == "AC" and value in (m.ON, m.OFF):
         value = m.AcState(power=value)
+    if not isinstance(value, int):
+        what = state
+    elif device.kind in ("Chromecast", "USB"):
+        what = Log.DEVICE_SET_VOLUME.format(level=value)
+    else:
+        what = Log.DEVICE_SET_LEVEL.format(level=value)
     id = str(device)
-    entry = api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(id=id, state=state), m.Manual(id))
+    entry = api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(name=device.label, what=what), m.Manual(id))
     api.dispatch((em.Command(m.Devices(device), value),), force=True, entry=entry)
     return {}
 
