@@ -16,6 +16,7 @@ provider holiday    orc.dal.holiday.stub
 provider chromecast orc.dal.chromecast.stub
 provider blaster    orc.dal.blaster.stub
 provider hubitat    orc.dal.hubitat.stub
+provider broker     orc.dal.broker.stub
 provider audio      orc.dal.audio.stub
 provider push       orc.dal.push.stub
 provider findhub    orc.dal.findhub.stub

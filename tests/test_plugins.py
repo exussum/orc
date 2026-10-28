@@ -5,8 +5,8 @@ import pytest
 import orc
 from orc import api, config
 from orc import model as m
+from orc.dal import broker
 from orc.dal.mqtt import hubitat
-from orc.dal.mqtt import paho as mqtt
 from orc.plugins import battery, buttons
 
 
@@ -79,7 +79,7 @@ class TestBattery:
 
 def _capture(name, fn):
     captured = {}
-    with patch.object(mqtt, name, side_effect=lambda listener: captured.setdefault("fn", listener)):
+    with patch.object(broker, name, side_effect=lambda listener: captured.setdefault("fn", listener)):
         fn()
     return captured["fn"]
 

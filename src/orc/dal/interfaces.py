@@ -3,6 +3,7 @@ from datetime import date, datetime
 from typing import Any, NamedTuple, Protocol
 
 from orc.dal.audio import pyaudio as _audio_default
+from orc.dal.broker import paho as _broker_default
 from orc.dal.chromecast import pychromecast as _chromecast_default
 from orc.dal.findhub import nova as _findhub_default
 from orc.dal.hubitat import http as _hubitat_default
@@ -55,6 +56,13 @@ class Adapter(Backend, Protocol):
     def discover(self, messages: Sequence[Message]) -> dict[str, tuple[str, frozenset[Capability]]]: ...
 
 
+class BrokerService(Backend, Protocol):
+    def register(self, adapter: Adapter) -> None: ...
+    def start(self) -> None: ...
+    def command(self, device: DeviceEnum, value: Any) -> None: ...
+    def discover(self, adapter: Adapter, secrets: Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[Capability]]]: ...
+
+
 class AudioService(Backend, Protocol):
     def speak(self, device: DeviceEnum, text: str) -> None: ...
     def alert(self, device: DeviceEnum, path: str) -> None: ...
@@ -95,6 +103,7 @@ class Provider(NamedTuple):
     weather: WeatherService | None = None
     holiday: HolidayService | None = None
     adapter: Adapter | None = _adapter_default
+    broker: BrokerService | None = _broker_default
     chromecast: ChromecastService | None = _chromecast_default
     blaster: BlasterService | None = None
     hubitat: HubitatService | None = _hubitat_default

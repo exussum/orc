@@ -1,10 +1,4 @@
-"""The broker connection: one paho client shared by every adapter.
-
-Inbound messages are routed by their first topic segment to the adapter that
-declared that namespace; the statuses it decodes fan out to the listeners. Commands route by device type to
-the adapter's ``encode``, and a adapter answers its own protocol through the publisher
-attached at registration. The ``adapter`` provider is registered at boot; plugins register theirs during setup.
-"""
+"""The broker connection: one paho client shared by every adapter."""
 
 import functools
 import json
@@ -18,41 +12,30 @@ import paho.mqtt.client as mqtt
 
 import orc
 from orc import model as m
+from orc.dal import broker
 
 if TYPE_CHECKING:
     from orc.dal.interfaces import Adapter
 
 _log = logging.getLogger(__name__)
 
+REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
+
 _MQTT_PORT = 1883
 
-_adapters: list["Adapter"] = []
 _client: mqtt.Client | None = None  # the standing client, retained for publishing commands
-_status_listeners: list[m.Listener] = []  # run on the mqtt thread; keep them fast and don't block
 
 
 def register(adapter: "Adapter") -> None:
-    for other in _adapters:
-        if taken := set(other.namespaces) & set(adapter.namespaces) or set(other.device_types) & set(adapter.device_types):
-            raise ValueError(f"mqtt: {', '.join(sorted(taken))} already handled by {type(other).__name__}")
-    _adapters.append(adapter)
-    adapter.attach(partial(_publish, adapter))
-
-
-def add_status_listener(fn: m.Listener) -> None:
-    _status_listeners.append(fn)
+    broker.register(adapter, partial(_publish, adapter))
 
 
 def start() -> None:
     global _client
-    if any(adapter.namespaces for adapter in _adapters):
-        _client = _new_client(orc.config.secrets, partial(_on_connect, _adapters), _on_message, 3.0)
-    for adapter in _adapters:
+    if any(adapter.namespaces for adapter in broker.adapters):
+        _client = _new_client(orc.config.secrets, partial(_on_connect, broker.adapters), _on_message, 3.0)
+    for adapter in broker.adapters:
         adapter.start()
-
-
-def snapshot() -> list[m.DeviceState]:
-    return [state for adapter in _adapters for state in adapter.snapshot()]
 
 
 def _connected[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
@@ -67,9 +50,7 @@ def _connected[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
 
 @_connected
 def command(device: m.DeviceEnum, value: Any) -> None:
-    adapter = next((c for c in _adapters if device.kind in c.device_types), None)
-    if adapter is None:
-        raise LookupError(f"mqtt: no adapter speaks for `{device.kind}`")
+    adapter = broker.adapter_for(device)
     for message in adapter.encode(device, value):
         _publish(adapter, message)
 
@@ -81,7 +62,7 @@ def discover(adapter: "Adapter", secrets: m.Secrets, timeout: float = 3.0) -> di
 
     def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
         if msg.topic.split("/", 1)[0] in adapter.namespaces:
-            messages.append(m.Message(msg.topic, _parse(msg.payload), msg.retain))
+            messages.append(m.Message(msg.topic, broker.parse(msg.payload), msg.retain))
 
     client = _new_client(secrets, partial(_on_connect, [adapter]), on_message, timeout)
     client.loop_stop()
@@ -142,33 +123,4 @@ def _wait_settled(count: Callable[[], int], timeout: float) -> bool:
 
 
 def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    namespace = msg.topic.split("/", 1)[0]
-    adapter = next((c for c in _adapters if namespace in c.namespaces), None)
-    if adapter is None:
-        return
-    try:
-        statuses = adapter.decode(msg.topic, _parse(msg.payload))
-    except Exception:
-        _log.exception("mqtt: message handling failed for %s", msg.topic)
-        return
-    for status in statuses:
-        _fire(_status_listeners, msg.topic, status)
-
-
-# The adapter always sees a dict: the parsed object, or {} for an empty payload (the
-# hub's command echoes and button-clearing publishes), a bare value (a setLevel
-# echo), or anything that isn't JSON. The AC appends a null terminator to its JSON.
-def _parse(payload: bytes) -> dict[str, Any]:
-    try:
-        doc = json.loads(payload.rstrip(b"\x00")) if payload else {}
-    except ValueError:
-        return {}
-    return doc if isinstance(doc, dict) else {}
-
-
-def _fire(listeners: Sequence[m.Listener], topic: str, *args: Any) -> None:
-    for listener in list(listeners):
-        try:
-            listener(*args)
-        except Exception:
-            _log.exception("mqtt: listener failed for %s", topic)
+    broker.receive(msg.topic, msg.payload)

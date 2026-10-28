@@ -11,9 +11,8 @@ from orc_engine import model as em
 import orc
 from orc import api, config, plugins
 from orc import model as m
-from orc.dal import net, push, scheduler, sqlite
+from orc.dal import broker, net, push, scheduler, sqlite
 from orc.dal.findhub import stub as findhub_stub
-from orc.dal.mqtt import paho as mqtt
 from orc.model import DeviceEnum
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
@@ -92,7 +91,7 @@ class TestRestoreScene:
         command_dispatch.assert_not_called()
 
 
-@patch("orc.dal.mqtt.paho.command")
+@patch("orc.dal.broker.stub.command")
 class TestIntercepts:
     def test_system_command_overwrites_snapshot(self, update_light, system_snapshot, log_entry):
         command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Always())
@@ -224,7 +223,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispa
 
 
 def test_dispatch_routes_ac_commands_to_the_broker(log_entry):
-    with patch.object(mqtt, "command") as command:
+    with patch.object(config.providers.broker, "command") as command:
         api.dispatch(
             (em.Command(m.Devices(orc.AC.unit), m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75)),), force=True, entry=log_entry
         )
@@ -270,7 +269,7 @@ def test_capture_acs_reads_an_off_unit():
 )
 def test_capture_lights_lists_every_light(attributes, expected):
     states = [m.DeviceState(m.Device(orc.Light.a.value, "lamp", "hubitat"), attributes, None)] if attributes else []
-    with patch.object(mqtt, "snapshot", return_value=states):
+    with patch.object(broker, "snapshot", return_value=states):
         captured = {m.Devices(c.subject).one(): c.value for c in api.capture_lights()}
     assert captured[orc.Light.a] == expected
     assert set(captured) == set(orc.Light)
@@ -278,7 +277,7 @@ def test_capture_lights_lists_every_light(attributes, expected):
 
 def test_capture_sensors_reads_the_device_cache():
     device = m.DeviceState(m.Device(orc.Sensor.living.value, "living room sensor", "hubitat"), {"temperature": 70}, "2026-01-05 12:00:00")
-    with patch.object(mqtt, "snapshot", return_value=[device]):
+    with patch.object(broker, "snapshot", return_value=[device]):
         assert api.capture_sensors() == [
             m.DeviceStatus(name="living room sensor", details={"temperature": 70, "last_activity": "2026-01-05 12:00:00"})
         ]
@@ -289,7 +288,7 @@ def test_capture_sensors_lists_sensors_missing_from_the_cache():
 
 
 def test_dispatch_failure_nests_under_the_entry(log_entry):
-    with patch.object(mqtt, "command", side_effect=RuntimeError("boom")):
+    with patch.object(config.providers.broker, "command", side_effect=RuntimeError("boom")):
         api.dispatch((em.Command(m.Devices(orc.Light.a), m.ON),), force=True, entry=log_entry)
     assert log_entry.children[-1].action == "Dispatch failed for `a`: boom"
 
@@ -802,7 +801,7 @@ def _routine(name, when, *commands, skip_replay=False):
 
 
 def _ac(**attributes):
-    return patch.object(mqtt, "snapshot", return_value=[m.DeviceState(m.Device("clip-1", "unit", "lg_ac"), attributes, None)])
+    return patch.object(broker, "snapshot", return_value=[m.DeviceState(m.Device("clip-1", "unit", "lg_ac"), attributes, None)])
 
 
 def _cmd(what, value):

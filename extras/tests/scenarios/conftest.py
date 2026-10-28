@@ -11,9 +11,8 @@ from freezegun import freeze_time
 import orc
 from orc import api, config, security
 from orc import model as m
-from orc.dal import net, sqlite
+from orc.dal import broker, net, sqlite
 from orc.dal.mqtt import hubitat
-from orc.dal.mqtt import paho as mqtt
 from orc.plugins import battery, buttons
 from orc.view import bp
 
@@ -144,8 +143,8 @@ def house(request, monkeypatch, tmp_path):
         monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
         sqlite.init_db()
         api._ACTIVITY_LOG.clear()
-        for name in ("_adapters", "_status_listeners"):
-            getattr(mqtt, name).clear()
+        broker.adapters.clear()
+        broker.status_listeners.clear()
         net.presence.__init__()
         net.presence._tz = config.settings.tz
         api.start_ble_listener()
@@ -169,7 +168,7 @@ def house(request, monkeypatch, tmp_path):
             dispatched.append(commands)
             return dispatch(commands, *args, **kwargs)
 
-        mqtt.register(
+        config.providers.broker.register(
             SimpleNamespace(
                 namespaces=(),
                 device_types=("AC",),
@@ -178,8 +177,8 @@ def house(request, monkeypatch, tmp_path):
             )
         )
         with (
-            patch.object(mqtt, "add_status_listener", side_effect=listeners.append),
-            patch.object(mqtt, "command"),
+            patch.object(broker, "add_status_listener", side_effect=listeners.append),
+            patch.object(config.providers.broker, "command"),
             patch.object(api, "dispatch", side_effect=record),
             patch.object(net, "scan_presence", side_effect=lambda pairs: (set(lan), [])),
             patch.object(net, "BleakClient", FakeBleakClient),
