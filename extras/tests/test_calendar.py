@@ -7,7 +7,7 @@ import icalendar
 import pytest
 from flask import Flask
 from orc_extras.calendar import plugins, web
-from orc_extras.calendar.plugins import ALARM, CalendarJob, link
+from orc_extras.calendar.plugins import ALARM, CalendarJob, Choice, address, link
 
 import orc.view
 from orc import model as m
@@ -17,7 +17,10 @@ START = datetime(2026, 1, 6, 1, tzinfo=ZoneInfo("UTC"))
 DAY_LINK = "https://calendar.google.com/calendar/r/day/2026/01/05"
 ZOOM = "https://zoom.us/j/1"
 MEET = "https://meet.google.com/abc-defg-hij"
-CHOOSER_LINK = "/api/calendar/choose/?title=A&url=https://zoom.us/j/1&title=B&url=https://meet.google.com/abc-defg-hij"
+A = Choice("A", ZOOM, "")
+B = Choice("B", MEET, "")
+ADDRESS = "1 Main St, Springfield, IL 62701"
+CHOOSER_LINK = "/api/calendar/choose/?title=A&url=https://zoom.us/j/1&address=&title=B&url=https://meet.google.com/abc-defg-hij&address="
 
 
 def _event(**fields):
@@ -68,6 +71,21 @@ def test_link_prefers_a_meeting_host(event, expected):
     assert link(event, TZ) == expected
 
 
+@pytest.mark.parametrize(
+    ("event", "expected"),
+    [
+        (_event(location=ADDRESS), ADDRESS),
+        (_event(location="Room 4"), ""),
+        (_event(location="Microsoft Teams Meeting"), ""),
+        (_event(location=ZOOM), ""),
+        (_event(), ""),
+    ],
+    ids=["street", "room", "teams", "link", "none"],
+)
+def test_address_needs_a_number_and_a_comma(event, expected):
+    assert address(event) == expected
+
+
 def _running(summary, start_minutes, length_minutes, url):
     start = START + timedelta(minutes=start_minutes)
     event = _event(uid=summary, summary=summary, dtstart=start, location=url)
@@ -95,7 +113,9 @@ def test_each_occurrence_gets_its_own_jobs(rebuild, ctx):
 
 
 def test_event_without_summary_is_untitled(rebuild):
-    assert rebuild([_event(uid="A", dtstart=START, dtend=START + timedelta(minutes=30))]) == {"(untitled)": ()}
+    assert rebuild([_event(uid="A", dtstart=START, dtend=START + timedelta(minutes=30))]) == {
+        "(untitled)": (Choice("(untitled)", DAY_LINK, ""),)
+    }
 
 
 @pytest.fixture
@@ -118,11 +138,11 @@ def rebuild(ctx):
 @pytest.mark.parametrize(
     ("events", "expected"),
     [
-        ([_running("A", 0, 30, ZOOM), _running("B", 0, 60, MEET)], {"A": (("A", ZOOM), ("B", MEET)), "B": (("A", ZOOM), ("B", MEET))}),
-        ([_running("A", 0, 60, ZOOM), _running("B", 30, 30, MEET)], {"A": (), "B": (("A", ZOOM), ("B", MEET))}),
-        ([_running("A", 0, 30, ZOOM), _running("B", 30, 30, MEET)], {"A": (), "B": ()}),
-        ([_running("A", 0, 0, ZOOM), _running("B", 0, 0, MEET)], {"A": (("A", ZOOM), ("B", MEET)), "B": (("A", ZOOM), ("B", MEET))}),
-        ([_running("A", 0, 30, ZOOM)], {"A": ()}),
+        ([_running("A", 0, 30, ZOOM), _running("B", 0, 60, MEET)], {"A": (A, B), "B": (A, B)}),
+        ([_running("A", 0, 60, ZOOM), _running("B", 30, 30, MEET)], {"A": (A,), "B": (A, B)}),
+        ([_running("A", 0, 30, ZOOM), _running("B", 30, 30, MEET)], {"A": (A,), "B": (B,)}),
+        ([_running("A", 0, 0, ZOOM), _running("B", 0, 0, MEET)], {"A": (A, B), "B": (A, B)}),
+        ([_running("A", 0, 30, ZOOM)], {"A": (A,)}),
     ],
     ids=["same-start", "staggered", "back-to-back", "no-end", "alone"],
 )
@@ -130,14 +150,9 @@ def test_rebuild_offers_the_running_events_as_choices(rebuild, events, expected)
     assert rebuild(events) == expected
 
 
-@pytest.mark.parametrize(
-    ("choices", "url", "link"),
-    [((("A", ZOOM), ("B", MEET)), CHOOSER_LINK, CHOOSER_LINK), ((), ZOOM, f"/api/push/open?url={ZOOM}")],
-    ids=["overlapping", "alone"],
-)
-def test_alarm_links_the_choice_page(ctx, choices, url, link):
-    plugins._run_event(CalendarJob(ALARM, "A", ZOOM, choices), ctx=ctx)
-    assert ctx.api.log.call_args.kwargs == {"notification": m.Notification(("calendar",), url), "link": link}
+def test_alarm_links_the_choice_page(ctx):
+    plugins._run_event(CalendarJob(ALARM, "A", (A, B)), ctx=ctx)
+    assert ctx.api.log.call_args.kwargs == {"notification": m.Notification(("calendar",), CHOOSER_LINK), "link": CHOOSER_LINK}
 
 
 @pytest.fixture
@@ -150,6 +165,12 @@ def flask_client(ctx):
 
 
 def test_choose_page_opens_meeting_links_through_push_open(flask_client):
-    html = flask_client.get(f"/api/calendar/choose/?title=A&url={ZOOM}&title=B&url={DAY_LINK}").get_data(as_text=True)
+    html = flask_client.get(f"/api/calendar/choose/?title=A&url={ZOOM}&address=&title=B&url={DAY_LINK}&address=").get_data(as_text=True)
     assert 'href="/api/push/open?url=https://zoom.us/j/1">A</a>' in html
     assert f'href="{DAY_LINK}">B</a>' in html
+    assert "<iframe" not in html
+
+
+def test_choose_page_maps_an_address(flask_client):
+    html = flask_client.get(f"/api/calendar/choose/?title=A&url={DAY_LINK}&address={ADDRESS}").get_data(as_text=True)
+    assert 'src="https://www.google.com/maps?q=1+Main+St,+Springfield,+IL+62701&amp;output=embed"' in html

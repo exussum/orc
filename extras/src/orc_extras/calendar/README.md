@@ -60,9 +60,10 @@ Recurring events are expanded; all-day events are skipped.
   there either.
 - The warning job plays the default alert sound at `ATTENTION` severity.
   The alarm job logs the title under the `calendar` source, speaks it at
-  the same severity, and pushes a notification whose click opens the
+  the same severity, and pushes a notification whose click opens a page at
+  `/api/calendar/choose/` listing every running event as a button; the log
+  line carries a 🔗 to the same page before the title. A button opens the
   event's Google Meet, Zoom or Teams link when one is found in the event,
-  and that day in Google Calendar otherwise.
-- When another event is still running as one starts, the notification
-  opens a page at `/api/calendar/choose/` listing every running event as a
-  button, and the log line carries a 🔗 to the same page before the title.
+  and that day in Google Calendar otherwise. An event whose location is a
+  street address (a number and a comma, no link) gets a Google Maps embed
+  under its button.

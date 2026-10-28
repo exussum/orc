@@ -3,8 +3,11 @@
     <div class="orc-surface mb-2">
         <div class="px-4 pt-3 pb-0 text-sm font-semibold">Meetings now</div>
         <div class="p-4 flex flex-col gap-2">
-            {% for title, href in choices %}
+            {% for title, href, map in choices %}
                 <a class="orc-btn" href="{{ href }}">{{ title }}</a>
+                {% if map %}
+                    <iframe class="w-full aspect-video rounded border-0" src="{{ map }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="{{ title }}"></iframe>
+                {% endif %}
             {% endfor %}
         </div>
     </div>
