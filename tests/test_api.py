@@ -314,7 +314,7 @@ class TestRefreshTagKeys:
         key = m.BleKey(b"Alice Tag".ljust(32, b"\0"), 0)
         assert sqlite.fetch_tags() == [m.Tag("Alice", key, None)]
         set_key.assert_called_once_with("Alice", key)
-        assert [e.action for e in api.log_entries()] == ["Tag key for `Alice` read from Find Hub"]
+        assert [e.action for e in api.log_entries()] == ["Tag key for `Alice` read from Find Hub: e595fa93, paired 1969-12-31 19:00"]
 
     def test_an_unchanged_key_is_silent(self):
         api.refresh_tag_keys(m.Manual("secrets"))
