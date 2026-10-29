@@ -3,8 +3,13 @@
 {% block body %}
     {% for day, cards in days %}
         <div class="orc-surface mb-2">
-            {% if day %}
-                <div class="px-4 pt-3 pb-0 text-sm font-semibold">{{ day.strftime("%A, %B %-d") }}</div>
+            {% if day or (refresh and loop.first) %}
+                <div class="px-4 pt-3 pb-0 flex items-center justify-between text-sm font-semibold">
+                    <span>{% if day %}{{ day.strftime("%A, %B %-d") }}{% endif %}</span>
+                    {% if refresh and loop.first %}
+                        <a class="orc-btn orc-btn-sm" href="{{ refresh }}" title="Refresh">{{ icon_svg("arrow-path") }}</a>
+                    {% endif %}
+                </div>
             {% endif %}
             <div class="p-4 grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4">
                 {% for title, href, map in cards %}
@@ -14,14 +19,19 @@
                         {% else %}
                             <div class="w-full aspect-[3/4] rounded bg-white/5 flex items-center justify-center opacity-40">{{ icon_svg("calendar", "w-12 h-12") }}</div>
                         {% endif %}
-                        <a class="orc-btn" href="{{ href }}">{{ title }}</a>
+                        <a class="orc-btn" href="{{ href }}" title="{{ title }}"><span class="truncate">{{ title }}</span></a>
                     </div>
                 {% endfor %}
             </div>
         </div>
     {% else %}
         <div class="orc-surface mb-2">
-            <div class="p-4 text-gray-400">No calendar events.</div>
+            <div class="p-4 flex items-center justify-between text-gray-400">
+                <span>No calendar events.</span>
+                {% if refresh %}
+                    <a class="orc-btn orc-btn-sm" href="{{ refresh }}" title="Refresh">{{ icon_svg("arrow-path") }}</a>
+                {% endif %}
+            </div>
         </div>
     {% endfor %}
 {% endblock %}

@@ -1,9 +1,11 @@
 from itertools import groupby
 from typing import TYPE_CHECKING, cast
 
-from flask import Blueprint, current_app, render_template, request
+from flask import Blueprint, current_app, redirect, render_template, request, url_for
+from werkzeug.wrappers import Response
 from yarl import URL
 
+from orc import model as m
 from orc_extras.calendar import plugins
 from orc_extras.calendar.plugins import ALARM, CalendarJob, EventDestination
 
@@ -24,7 +26,14 @@ def index() -> str:
         (day, [_card(j.args[0].destination) for j in day_jobs])
         for day, day_jobs in groupby(alarms, key=lambda j: j.trigger.run_date.date())
     ]
-    return render_template("calendar/choose.html", days=days)
+    return render_template("calendar/choose.html", days=days, refresh=url_for("calendar.refresh"))
+
+
+@choose.get("/refresh")
+def refresh() -> Response:
+    plugins.schedule_events(ctx=app.orc)
+    app.orc.api.log(plugins.Log.CALENDAR, "Calendar refreshed", m.Manual("calendar"))
+    return redirect(url_for("calendar.index"))
 
 
 @choose.get("/events")

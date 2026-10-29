@@ -128,7 +128,7 @@ def rebuild(ctx):
     settings = SimpleNamespace(window_hours=20, max_events=50, warning_minutes=2, http_timeout=1)
 
     def run(events):
-        plugins._rebuild(SimpleNamespace(fetch_ical=lambda *args: iter(events)), settings, [("work", "ICS_URL")], ctx=ctx)
+        plugins._schedule(SimpleNamespace(fetch_ical=lambda *args: iter(events)), settings, [("work", "ICS_URL")], ctx=ctx)
         jobs = [call.args[2] for call in ctx.scheduler.once.call_args_list]
         return {job.destination.summary: job.destination for job in jobs if job.event_type == ALARM}
 
@@ -153,8 +153,8 @@ def test_choose_page_opens_meeting_links_through_push_open(flask_client):
     html = flask_client.get(f"/api/calendar/choose/events?title=A&url={ZOOM}&address=&title=B&url={DAY_LINK}&address=").get_data(
         as_text=True
     )
-    assert 'href="/api/push/open?url=https://zoom.us/j/1">A</a>' in html
-    assert f'href="{DAY_LINK}">B</a>' in html
+    assert 'href="/api/push/open?url=https://zoom.us/j/1" title="A">' in html
+    assert f'href="{DAY_LINK}" title="B">' in html
     assert "<iframe" not in html
 
 
@@ -164,8 +164,8 @@ def test_choose_page_groups_scheduled_alarms_by_day(flask_client, ctx):
 
     ctx.api.fetch_jobs_by_type.return_value = [job(ALARM, B, 30), job(ALARM, A, 1)]
     html = flask_client.get("/api/calendar/choose/").get_data(as_text=True)
-    assert html.index("Tuesday, January 6") < html.index(">A</a>") < html.index("Wednesday, January 7") < html.index(">B</a>")
-    assert html.count('class="orc-btn" href=') == 2
+    assert html.index("Tuesday, January 6") < html.index(">A</span></a>") < html.index("Wednesday, January 7") < html.index(">B</span></a>")
+    assert html.count('<span class="truncate">') == 2
 
 
 def test_choose_page_says_when_nothing_is_scheduled(flask_client, ctx):
