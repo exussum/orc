@@ -9,7 +9,7 @@ from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, tzinfo
 
-from bleak import BleakClient, BleakScanner
+from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 from scapy.layers.dns import DNS, DNSQR
@@ -22,6 +22,7 @@ from orc.collections import LockedDict
 from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_eids, fmdn_parse
 
 _WINDOW_SECONDS = 3
+_PROBE_SECONDS = 30
 _BLE_INDEX_REFRESH_SECONDS = 300
 _BLE_SEARCH_WINDOWS = 200
 _BLE_CLOCK_TRUST_SECONDS = 24 * 3600
@@ -49,7 +50,8 @@ class Presence:
         self._index: dict[bytes, tuple[str, int]] = {}
         self._clocks: LockedDict[str, m.TagClock] = LockedDict()
         self._heard: LockedDict[str, datetime] = LockedDict()
-        self._addresses: LockedDict[str, str] = LockedDict()
+        self._frames: dict[str, datetime] = {}
+        self._frame_seen = threading.Condition()
         self._paused: datetime | None = None
         self._on_change: Callable[[m.Trigger], object] = lambda trigger: None
         self._on_clock: Callable[[str, m.TagClock], object]
@@ -112,23 +114,15 @@ class Presence:
         self._changed(trigger)
 
     def probe(self, names: Iterable[str], trigger: m.Trigger) -> None:
-        """One connection attempt at each tag's last-advertised address; only success marks.
-
-        The address rotates with the EID (~17 min), so a long-silent tag times out
-        and stays unmarked — no evidence, not absence.
-        """
-
-        async def connect(address: str) -> None:
-            async with BleakClient(address, timeout=_WINDOW_SECONDS):
-                pass
-
-        for person in names:
-            if address := self._addresses.get(person):
-                try:
-                    asyncio.run(connect(address))
-                except Exception:
-                    continue
-                self.mark([person], self._now(), trigger)
+        wanted = set(names)
+        start = self._now()
+        with self._frame_seen:
+            self._frame_seen.wait_for(
+                lambda: all(self._frames.get(name, start) >= start for name in wanted),
+                timeout=_PROBE_SECONDS,
+            )
+            heard = {name for name in wanted if self._frames.get(name, start) >= start}
+        self.mark(heard, self._now(), trigger)
 
     def _changed(self, trigger: m.Trigger) -> None:
         if not self._paused:
@@ -164,8 +158,9 @@ class Presence:
                 self._clocks[person] = clock
                 if known and known.eid:
                     self._on_clock(person, clock)
-            if device:
-                self._addresses[person] = device.address
+            with self._frame_seen:
+                self._frames[person] = now
+                self._frame_seen.notify_all()
             if not self._paused:
                 self.mark([person], now, m.Query("ble"))
 

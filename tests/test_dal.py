@@ -1,5 +1,5 @@
 import json
-from contextlib import asynccontextmanager
+import threading
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -309,42 +309,27 @@ class TestPresence:
         assert self._present(presence) == {"Alice"}
 
     def _forgotten(self):
-        """Heard once, so the tag's address is known, then forgotten: only a probe can mark it again."""
-        presence = self._heard()
+        with patch.object(net.Presence, "_now", return_value=self.NOW - timedelta(seconds=1)):
+            presence = self._heard()
         presence.forget(["Alice"], TRIGGER)
         return presence
 
-    def _probe(self, presence, client):
-        with patch.object(net, "BleakClient", client):
-            presence.probe(["Alice"], TRIGGER)
+    def _advertise(self, presence):
+        frame = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000)[1]
+        presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
 
-    def test_probe_marks_reachable_tag(self):
+    def test_probe_marks_tag_heard_while_waiting(self):
         presence = self._forgotten()
-        connections = []
-
-        @asynccontextmanager
-        async def client(address, timeout):
-            connections.append(address)
-            yield
-
-        self._probe(presence, client)
-        assert connections == [self.ADDRESS]
+        threading.Timer(0.05, self._advertise, [presence]).start()
+        with patch.object(net, "_PROBE_SECONDS", 5):
+            presence.probe(["Alice"], TRIGGER)
         assert self._present(presence) == {"Alice"}
 
-    def test_probe_failure_marks_nothing(self):
+    def test_probe_marks_nothing_when_silent(self):
         presence = self._forgotten()
-
-        def client(address, timeout):
-            raise TimeoutError
-
-        self._probe(presence, client)
+        with patch.object(net, "_PROBE_SECONDS", 0):
+            presence.probe(["Alice"], TRIGGER)
         assert self._present(presence) == set()
-
-    def test_probe_without_known_address_skips(self):
-        presence = net.Presence()
-        client = MagicMock()
-        self._probe(presence, client)
-        client.assert_not_called()
 
 
 def test_missed_job_is_logged(caplog):
