@@ -4,12 +4,20 @@ from datetime import datetime, timedelta
 from itertools import chain, islice
 from typing import Any, NamedTuple
 
+from command_cfg import array, scalar
+from orc_engine import cast
 from yarl import URL
 
 from orc import model as m
+from orc.kernel.loader import load_plugin_config
 from orc.plugins import requires_ctx
 from orc_extras.calendar.dal.interfaces import FeedService
 
+CONFIG = "orc_extras/calendar"
+GRAMMAR = """
+setting <key> <value>
+feed <name> <secret>
+"""
 WARNING = "warning"
 ALARM = "alarm"
 CRON_ID = "cal-cron"
@@ -22,6 +30,20 @@ _ADDRESS = re.compile(r"^(?!.*://)(?=.*\d)(?=.*,)")
 
 class Log(m.LogSourceEnum):
     CALENDAR = "calendar"
+
+
+class Settings(NamedTuple):
+    backend: str
+    cron: str
+    window_hours: int
+    max_events: int
+    warning_minutes: int
+    http_timeout: int
+
+
+class Feed(NamedTuple):
+    name: str
+    secret: str
 
 
 class EventDestination(NamedTuple):
@@ -59,6 +81,14 @@ class CalendarJob:
     destination: EventDestination
 
 
+SERIALIZERS = {
+    "setting": scalar(
+        Settings, types={"window_hours": cast.int, "max_events": cast.int, "warning_minutes": cast.int, "http_timeout": cast.int}
+    ),
+    "feed": array(Feed),
+}
+
+
 def link(cal: Any, tz: Any) -> str:
     hits = (_LINK.search(str(cal.get(field, ""))) for field in _LINK_FIELDS)
     found = next((hit for hit in hits if hit), None)
@@ -84,19 +114,24 @@ def opener(url: str) -> str:
     return url
 
 
-def schedule_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:
+def schedule_cron(ctx: m.AppContext, crontab: str) -> None:
     # api.rebuild_jobs wipes every jobstore and re-adds only core crons; the
     # listener puts this one back whenever that happens.
-    ctx.scheduler.on_rebuild(lambda: _add_cron(ctx, backend, settings, feeds))
-    _add_cron(ctx, backend, settings, feeds)
-
-
-def _add_cron(ctx: m.AppContext, backend: FeedService, settings: Any, feeds: list[tuple[str, str]]) -> None:
-    ctx.scheduler.cron(_rebuild, settings.cron, backend, settings, feeds, id=CRON_ID, name="Calendar Cron")
+    ctx.scheduler.on_rebuild(lambda: _add_cron(ctx, crontab))
+    _add_cron(ctx, crontab)
 
 
 @requires_ctx
-def _rebuild(backend: FeedService, settings: Any, feeds: list[tuple[str, str]], *, ctx: m.AppContext) -> None:
+def schedule_events(*, ctx: m.AppContext) -> None:
+    calendar = load_plugin_config(CONFIG, ctx.config, GRAMMAR, SERIALIZERS)
+    _schedule(cast.module(calendar.setting.backend), calendar.setting, calendar.feed, ctx=ctx)
+
+
+def _add_cron(ctx: m.AppContext, crontab: str) -> None:
+    ctx.scheduler.cron(schedule_events, crontab, id=CRON_ID, name="Calendar Cron")
+
+
+def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ctx: m.AppContext) -> None:
     now: datetime = ctx.api.local_now()
     if not ctx.api.is_working_day(now.date()):
         return

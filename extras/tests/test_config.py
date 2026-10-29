@@ -1,17 +1,17 @@
 from datetime import time, timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 from orc_engine import cast
 from orc_engine import model as em
 from orc_extras import calendar, entrance_sensor
-from orc_extras.calendar import Feed
+from orc_extras.calendar.plugins import CONFIG, GRAMMAR, SERIALIZERS, Feed
 from orc_extras.entrance_sensor import Settings
 
 import orc
 from orc import model as m
 from orc.kernel.declarations import Declarations
+from orc.kernel.loader import load_plugin_config
 from orc.model import DeviceEnum, Devices
 from tests.conftest import plugin_config
 
@@ -92,10 +92,8 @@ def test_calendar_declares_each_feed_as_a_url():
 
 def test_calendar_config_loads(ctx):
     ctx.config.plugin_configs = plugin_config(calendar, "calendar")
-    with patch.object(calendar.plugins, "schedule_cron") as schedule_cron:
-        calendar.setup(ctx)
-    _ctx, _backend, setting, feed = schedule_cron.call_args.args
-    assert setting == calendar.Settings(
+    loaded = load_plugin_config(CONFIG, ctx.config, GRAMMAR, SERIALIZERS)
+    assert loaded.setting == calendar.plugins.Settings(
         backend="orc_extras.calendar.dal.stub",
         cron="10,25,40,55 8-21 * * *",
         window_hours=20,
@@ -103,4 +101,4 @@ def test_calendar_config_loads(ctx):
         warning_minutes=2,
         http_timeout=120,
     )
-    assert feed == [Feed("work", "ICS_URL"), Feed("personal", "ICS_URL_PERSONAL")]
+    assert loaded.feed == [Feed("work", "ICS_URL"), Feed("personal", "ICS_URL_PERSONAL")]
