@@ -47,25 +47,8 @@ class FakeScheduler:
                 job.func(*job.args, ctx=ctx)
 
 
-class FakeBleakClient:
-    probed: list[str] = []
-    reachable: set[str] = set()
-
-    def __init__(self, address, timeout):
-        self.address = address
-        self.probed.append(address)
-
-    async def __aenter__(self):
-        if self.address not in self.reachable:
-            raise TimeoutError(self.address)
-        return self
-
-    async def __aexit__(self, *exc):
-        pass
-
-
 class House:
-    def __init__(self, ctx, client, frozen, listeners, dispatched, lan, probed, pushed):
+    def __init__(self, ctx, client, frozen, listeners, dispatched, lan, probed, reachable, pushed):
         self.ctx = ctx
         self.client = client
         self.frozen = frozen
@@ -73,6 +56,7 @@ class House:
         self.dispatched = dispatched
         self.lan = lan
         self.probed = probed
+        self.reachable = reachable
         self.pushed = pushed
         self.reported = {(light, "switch"): m.OFF for light in orc.Light} | {(sensor, "motion"): "inactive" for sensor in orc.Sensor}
 
@@ -106,10 +90,10 @@ class House:
         frame = bytes([0x40]) + security.fmdn_eids(key.eik, int(now.timestamp()) - key.anchor)[1]
         net.presence._index = net._eid_index(net.presence._tags, net.presence._clocks.copy(), now)
         net.presence._seen(SimpleNamespace(address=f"{name}-tag"), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: frame}))
-        FakeBleakClient.reachable.add(f"{name}-tag")
+        self.reachable.add(name)
 
     def leave(self, name):
-        FakeBleakClient.reachable.discard(f"{name}-tag")
+        self.reachable.discard(name)
 
     def scan(self):
         api.check_presence(m.Query("lan"))
@@ -158,11 +142,17 @@ def house(request, monkeypatch, tmp_path):
         app.orc = ctx
 
         listeners, dispatched, lan, pushed = [], [], {"Alice"}, []
-        FakeBleakClient.probed = []
-        FakeBleakClient.reachable = set()
         api.subscribe_push(m.PushSubscription("https://push.example/house", "public-key", "auth-secret"))
         push = SimpleNamespace(public_key=lambda: "", send=lambda subscription, title, body, tag: pushed.append(body))
         dispatch = api.dispatch
+        probed, reachable = [], set()
+        real_probe = net.Presence.probe
+
+        def probe(presence, names, trigger):
+            probed.extend(sorted(names))
+            for name in sorted(names & reachable):
+                house.advertise(name)
+            real_probe(presence, names, trigger)
 
         def record(commands, *args, **kwargs):
             dispatched.append(commands)
@@ -181,16 +171,18 @@ def house(request, monkeypatch, tmp_path):
             patch.object(config.providers.broker, "command"),
             patch.object(api, "dispatch", side_effect=record),
             patch.object(net, "scan_presence", side_effect=lambda pairs: (set(lan), [])),
-            patch.object(net, "BleakClient", FakeBleakClient),
+            patch.object(net.Presence, "probe", probe),
+            patch.object(net, "_PROBE_SECONDS", 0),
             patch.object(config, "providers", config.providers._replace(push=push)),
             freeze_time(MONDAY_AFTERNOON) as frozen,
         ):
+            house = House(ctx, app.test_client(), frozen, listeners, dispatched, lan, probed, reachable, pushed)
             for plugin in request.node.get_closest_marker("plugins").args:
                 plugin.setup(ctx)
             for listener in (buttons, battery):
                 listener.setup(ctx)
             listeners.append(api._log_external)
-            yield House(ctx, app.test_client(), frozen, listeners, dispatched, lan, FakeBleakClient.probed, pushed)
+            yield house
     finally:
         _load(sample, {})
 

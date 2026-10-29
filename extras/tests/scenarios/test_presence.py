@@ -22,11 +22,10 @@ def test_manual_rescan_clears_and_refinds_everyone(house):
 
     house.press("/api/presence/run")
 
-    assert house.log()[-1] == (
-        m.Manual("presence"),
-        "Presence rescan",
-        ["Presence lost: `Alice, Rex`", "Presence detected: `Rex`", "Presence detected: `Alice`"],
-    )
+    assert house.log()[-2:] == [
+        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice, Rex`", "Presence detected: `Alice`"]),
+        (m.Query("ble"), "Presence detected: `Rex`", []),
+    ]
     assert api.present_names() == {"Alice", "Rex"}
 
 
@@ -39,9 +38,11 @@ def test_two_rescans_an_hour_apart_are_two_rows(house):
     house.tick(hours=1)
     house.press("/api/presence/run")
 
-    assert house.log()[-2:] == [
-        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice`", "Presence detected: `Alice`"]),
-        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice`", "Presence detected: `Alice`"]),
+    assert house.log()[-4:] == [
+        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice`"]),
+        (m.Query("ble"), "Presence detected: `Alice`", []),
+        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice`"]),
+        (m.Query("ble"), "Presence detected: `Alice`", []),
     ]
 
 
@@ -66,7 +67,7 @@ def test_a_tag_unheard_for_the_window_is_probed_before_it_is_lost(house):
 
     api._presence_cron_job(ctx=house.ctx)
 
-    assert house.probed == ["Rex-tag"]
+    assert house.probed == ["Rex"]
     assert house.log() == [(m.Query("ble"), "Presence detected: `Rex`", [])]
     assert api.present_names() == {"Rex"}
 
