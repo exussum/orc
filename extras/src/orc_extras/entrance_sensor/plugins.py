@@ -12,7 +12,6 @@ from orc.plugins import requires_ctx
 SNAPSHOT_NAME = "entrance_sensor"
 JOB_ID = "trigger-sensor"
 TRIGGER_MSG = "Entrance sensor triggered"
-CANCELLED_MSG = "Cleanup cancelled: motion triggered"
 
 
 class Visit(NamedTuple):
@@ -39,8 +38,6 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
             previous = None
         if previous:
             log_entry = previous.entry
-            if new == sensor.setting.active_event:
-                log_entry.add(Log.ENTRANCE, CANCELLED_MSG)
         else:
             log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, m.Broker(id=device.id, source=device.source))
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
