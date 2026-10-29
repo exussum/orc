@@ -17,8 +17,8 @@ START = datetime(2026, 1, 6, 1, tzinfo=ZoneInfo("UTC"))
 DAY_LINK = "https://calendar.google.com/calendar/r/day/2026/01/05"
 ZOOM = "https://zoom.us/j/1"
 MEET = "https://meet.google.com/abc-defg-hij"
-A = EventDestination("A", ZOOM, "")
-B = EventDestination("B", MEET, "")
+A = EventDestination("A", ZOOM, "", "💻")
+B = EventDestination("B", MEET, "", "🎥")
 ADDRESS = "1 Main St, Springfield, IL 62701"
 CHOOSER_LINK = "/api/calendar/choose/events?title=A&url=https://zoom.us/j/1&address="
 
@@ -114,7 +114,7 @@ def test_each_occurrence_gets_its_own_jobs(rebuild, ctx):
 
 def test_event_without_summary_is_untitled(rebuild):
     assert rebuild([_event(uid="A", dtstart=START, dtend=START + timedelta(minutes=30))]) == {
-        "(untitled)": EventDestination("(untitled)", DAY_LINK, "")
+        "(untitled)": EventDestination("(untitled)", DAY_LINK, "", "📅")
     }
 
 

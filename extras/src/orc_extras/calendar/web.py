@@ -39,7 +39,8 @@ def refresh() -> Response:
 @choose.get("/events")
 def events() -> str:
     fields = zip(request.args.getlist("title"), request.args.getlist("url"), request.args.getlist("address"), strict=False)
-    return render_template("calendar/choose.html", days=[(None, [_card(EventDestination(*f)) for f in fields])])
+    destinations = [EventDestination(title, url, address, plugins.glyph(title, url)) for title, url, address in fields]
+    return render_template("calendar/choose.html", days=[(None, [_card(d) for d in destinations])])
 
 
 def _card(destination: EventDestination) -> Card:
