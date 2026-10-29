@@ -34,7 +34,7 @@ dependencies = [
     "pyalsaaudio==0.11.0; sys_platform == 'linux'",
     "recurring-ical-events==3.8.2",
     "requests==2.34.2",
-    "yt-dlp==2026.8.19",
+    "yt-dlp==2026.10.21",
     "yarl==1.25.1",
     "command-cfg==1.1.0",
     "pykeepass==4.2.0",
@@ -52,7 +52,7 @@ test = [
 ]
 lint = [
     "mypy==2.4.0",
-    "ruff==0.17.0",
+    "ruff==0.17.1",
 ]
 
 [project.scripts]
