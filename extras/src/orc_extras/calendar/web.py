@@ -16,7 +16,7 @@ choose = Blueprint("calendar", __name__, template_folder="templates")
 app = cast("OrcFlask", current_app)
 MAP_URL = URL("https://www.google.com/maps")
 
-Card = tuple[str, str, str]
+Card = tuple[str, str, str, str]
 
 
 @choose.get("/")
@@ -44,7 +44,7 @@ def events() -> str:
 
 
 def _card(destination: EventDestination) -> Card:
-    return destination.summary, plugins.opener(destination.url), _map(destination.url, destination.address)
+    return destination.summary, plugins.opener(destination.url), _map(destination.url, destination.address), destination.glyph
 
 
 def _map(url: str, address: str) -> str:
