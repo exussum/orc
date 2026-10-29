@@ -26,6 +26,25 @@ GOOGLE_DAY_URL = URL("https://calendar.google.com/calendar/r/day")
 _LINK_FIELDS = ("X-GOOGLE-CONFERENCE", "X-MICROSOFT-SKYPETEAMSMEETINGURL", "URL", "LOCATION", "DESCRIPTION")
 _LINK = re.compile(r"""https?://([\w-]+\.)*(meet\.google\.com|zoom\.us|teams\.microsoft\.com)/[^\s<>"']*""")
 _ADDRESS = re.compile(r"^(?!.*://)(?=.*\d)(?=.*,)")
+_EMOJI = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]\uFE0F?")
+_GLYPHS = (
+    (re.compile(r"standup|scrum"), "🧍"),
+    (re.compile(r"office hours"), "🙋"),
+    (re.compile(r"hiring|interview|debrief"), "🎤"),
+    (re.compile(r"retro"), "🔁"),
+    (re.compile(r"refinement|planning"), "🧩"),
+    (re.compile(r"demo"), "🎬"),
+    (re.compile(r"all hands"), "📣"),
+    (re.compile(r"tech talk|workshop|enablement|training"), "📚"),
+    (re.compile(r"reminder"), "⏰"),
+    (re.compile(r"holiday"), "🏖️"),
+    (re.compile(r"\bdoc\b|busy|hold|focus"), "📝"),
+    (re.compile(r"happy hour|drinks"), "🍻"),
+    (re.compile(r"lunch|dinner|breakfast"), "🍽️"),
+    (re.compile(r"1:1|^\S+ / \S+"), "👥"),
+    (re.compile(r"sync|weekly|monthly|leadership"), "🔄"),
+)
+_LINK_GLYPHS = {"meet.google.com": "🎥", "zoom.us": "💻", "teams.microsoft.com": "👥"}
 
 
 class Log(m.LogSourceEnum):
@@ -50,6 +69,7 @@ class EventDestination(NamedTuple):
     summary: str
     url: str
     address: str
+    glyph: str
 
 
 @dataclasses.dataclass
@@ -104,6 +124,17 @@ def address(cal: Any) -> str:
     return ""
 
 
+def glyph(summary: str, url: str) -> str:
+    if found := _EMOJI.search(summary):
+        return found.group()
+    title = summary.lower()
+    for pattern, symbol in _GLYPHS:
+        if pattern.search(title):
+            return symbol
+    host = URL(url).host or ""
+    return next((symbol for domain, symbol in _LINK_GLYPHS.items() if host.endswith(domain)), "📅")
+
+
 def is_meeting(url: str) -> bool:
     return bool(_LINK.fullmatch(url))
 
@@ -155,7 +186,7 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
         ctx.scheduler.once(
             _run_event,
             event.start,
-            CalendarJob(event.type, EventDestination(event.summary, event.url, event.address)),
+            CalendarJob(event.type, EventDestination(event.summary, event.url, event.address, glyph(event.summary, event.url))),
             id=id,
             name=event.summary if event.type == ALARM else f"{event.summary} ({event.type})",
         )
