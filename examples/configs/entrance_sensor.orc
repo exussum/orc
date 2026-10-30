@@ -1,10 +1,11 @@
-setting cleanup_delay_minutes 2
-setting entrance              Sensor.ENTRANCE_SENSOR
-setting patio_door            Sensor.PATIO_DOOR
-setting active_event          active
-setting inactive_event        inactive
-setting snapshot              45
-setting listener              Rex
+setting cleanup_delay_minutes  2
+setting presence_delay_minutes 1
+setting entrance               Sensor.ENTRANCE_SENSOR
+setting patio_door             Sensor.PATIO_DOOR
+setting active_event           active
+setting inactive_event         inactive
+setting snapshot               45
+setting listener               Rex
 
 message log_present   'Trigger sensor off: skip (people present)'
 message log_door_open 'Trigger sensor off: skip (patio door open)'

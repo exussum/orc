@@ -10,7 +10,8 @@ from orc import model as m
 from orc.plugins import requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
-JOB_ID = "trigger-sensor"
+CLEANUP_JOB_ID = "trigger-sensor"
+PRESENCE_JOB_ID = "trigger-sensor-presence"
 TRIGGER_MSG = "Entrance sensor triggered"
 
 
@@ -34,8 +35,6 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         # the scheduler's worker; None grace so a busy worker delays, never drops.
 
         previous = ctx.plugin_state[orc_extras.entrance_sensor]
-        if previous and new == sensor.setting.active_event and _expired(ctx, sensor, previous.entry):
-            previous = None
         if previous:
             log_entry = previous.entry
         else:
@@ -55,31 +54,38 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribut
     )
 
 
-def _expired(ctx: m.AppContext, sensor: SimpleNamespace, entry: m.LogEntry) -> bool:
-    last = entry.children[-1].timestamp if entry.children else entry.timestamp
-    return ctx.api.local_now() - last >= timedelta(minutes=sensor.setting.new_entry_minutes)
-
-
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     if new == sensor.setting.active_event:
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(log_entry.trigger)
-        ctx.scheduler.cancel(JOB_ID)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME))
         timed_name, timed_commands = _timed_commands(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
         ctx.api.dispatch((*restore, *timed_commands), force=True, entry=log_entry)
-    elif new == sensor.setting.inactive_event:
+    else:
         ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
-        ctx.scheduler.once(
-            _run_trigger_sensor_off,
-            ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
-            sensor,
-            log_entry,
-            name="Trigger Sensor",
-            id=JOB_ID,
-        )
+    now = ctx.api.local_now()
+    ctx.scheduler.once(
+        _run_trigger_sensor_off,
+        now + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
+        sensor,
+        log_entry,
+        name="Trigger Sensor",
+        id=CLEANUP_JOB_ID,
+    )
+    ctx.scheduler.once(
+        _run_resume_presence,
+        now + timedelta(minutes=sensor.setting.presence_delay_minutes),
+        log_entry,
+        name="Resume Presence",
+        id=PRESENCE_JOB_ID,
+    )
+
+
+@requires_ctx
+def _run_resume_presence(log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
+    ctx.api.resume_presence(log_entry.trigger)
 
 
 @requires_ctx

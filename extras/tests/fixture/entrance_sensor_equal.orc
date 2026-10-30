@@ -1,0 +1,22 @@
+setting cleanup_delay_minutes  2
+setting presence_delay_minutes 2
+setting entrance               Sensor.entrance
+setting patio_door             Sensor.patio
+setting active_event           active
+setting inactive_event         inactive
+setting snapshot               45
+setting listener               Rex
+
+message log_present   'Trigger sensor off: skip (people present)'
+message log_door_open 'Trigger sensor off: skip (patio door open)'
+message log_absent    'Trigger sensor off: skip (listener home)'
+message log_shutdown  'Trigger sensor off: applying OFF'
+message log_nobody    'Entrance motion with nobody tracked before or after'
+
+rules inside   AD_HOC_LIGHTS_OFF
+rules present  AD_HOC_SILENCE
+rules absent   AD_HOC_DOG
+rules shutdown AD_HOC_LAMP_OFF
+
+timed Day   8:00  22:00 AD_HOC_DAY_SCENE
+timed Night 22:00 8:00  AD_HOC_NIGHT_SCENE
