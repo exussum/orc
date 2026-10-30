@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, time, timedelta
-from unittest.mock import ANY
+from unittest.mock import ANY, call
 
 import pytest
 from orc_engine import engine
@@ -115,9 +115,14 @@ def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, config_sensor
     ctx.engine.pop_snapshot.assert_called_once()
 
 
-def test_walk_in_cancels_pending_cleanup(ctx, config_sensor):
-    _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.scheduler.cancel.assert_called_once_with("trigger-sensor")
+@pytest.mark.parametrize("event", ["active", "inactive"])
+def test_motion_pushes_both_jobs(ctx, config_sensor, event):
+    _trigger_sensor(ctx, config_sensor, "16", event)
+    jobs = [(c.args[0], c.args[1], c.kwargs["id"]) for c in ctx.scheduler.once.call_args_list]
+    assert jobs == [
+        (plugins._run_trigger_sensor_off, NOW + timedelta(minutes=2), "trigger-sensor"),
+        (plugins._run_resume_presence, NOW + timedelta(minutes=1), "trigger-sensor-presence"),
+    ]
 
 
 def test_before_set_is_captured_once(ctx, config_sensor):
@@ -142,13 +147,6 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
     ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
-
-
-def test_cleanup_is_scheduled_for_later(ctx, config_sensor):
-    _trigger_sensor(ctx, config_sensor, "16", "inactive")
-    ctx.scheduler.once.assert_called_once()
-    _, kwargs = ctx.scheduler.once.call_args
-    assert kwargs["id"] == "trigger-sensor"
 
 
 def test_someone_home_stops_media(config_sensor, nobody_home_ctx):
@@ -222,10 +220,32 @@ def test_setup_compiles_windows_and_registers_hooks(ctx, config_sensor):
     ctx.api.add_listener.assert_called_once()
 
 
+def test_equal_delays_queue_the_cleanup_first(ctx):
+    ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor_equal")
+    entrance_sensor.setup(ctx)
+    _trigger_sensor(ctx, ctx.api.add_listener.call_args.args[0].args[1], "16", "inactive")
+    jobs = [(c.args[0], c.args[1]) for c in ctx.scheduler.once.call_args_list]
+    assert jobs == [
+        (plugins._run_trigger_sensor_off, NOW + timedelta(minutes=2)),
+        (plugins._run_resume_presence, NOW + timedelta(minutes=2)),
+    ]
+
+
+def test_presence_job_resumes_without_scanning(ctx):
+    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
+    plugins._run_resume_presence.__wrapped__(entry, ctx=ctx)
+    ctx.api.resume_presence.assert_called_once_with(entry.trigger)
+    ctx.api.check_presence.assert_not_called()
+
+
 def test_cleanup_checks_presence_then_resumes(config_sensor, nobody_home_ctx):
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.check_presence.assert_called_once_with(entry.trigger, probe=True)
-    nobody_home_ctx.api.resume_presence.assert_called_once_with(entry.trigger)
+    calls = [
+        c
+        for c in nobody_home_ctx.api.mock_calls
+        if c in (call.check_presence(entry.trigger, probe=True), call.resume_presence(entry.trigger))
+    ]
+    assert calls == [call.check_presence(entry.trigger, probe=True), call.resume_presence(entry.trigger)]
 
 
 def test_walk_in_pauses_and_purges_presence(ctx, config_sensor):
@@ -285,8 +305,8 @@ def _trigger_sensor(ctx, config_sensor, device_id, event):
     )
     queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.now.reset_mock()
-    for call in queued:
-        plugins._run_motion.__wrapped__(*call.args[1:], ctx=ctx)
+    for queued_call in queued:
+        plugins._run_motion.__wrapped__(*queued_call.args[1:], ctx=ctx)
 
 
 def _seed_devices(nobody_home_ctx, *devices):

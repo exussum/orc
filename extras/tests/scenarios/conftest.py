@@ -40,11 +40,15 @@ class FakeScheduler:
     def cancel(self, id):
         return self.jobs.pop(id, None) is not None
 
-    def run_due(self, now, ctx):
-        while due := [j for j in self.jobs.values() if j.run_date <= now]:
-            for job in due:
-                del self.jobs[job.id]
-                job.func(*job.args, ctx=ctx)
+    def run_due(self, now, ctx, clock=None):
+        while due := sorted((j for j in self.jobs.values() if j.run_date <= now), key=lambda j: j.run_date):
+            job = due[0]
+            del self.jobs[job.id]
+            if clock:
+                clock.move_to(max(job.run_date, api.local_now()))
+            job.func(*job.args, ctx=ctx)
+        if clock:
+            clock.move_to(now)
 
 
 class House:
@@ -61,8 +65,7 @@ class House:
         self.reported = {(light, "switch"): m.OFF for light in orc.Light} | {(sensor, "motion"): "inactive" for sensor in orc.Sensor}
 
     def tick(self, **delta):
-        self.frozen.tick(timedelta(**delta))
-        self.ctx.scheduler.run_due(api.local_now(), self.ctx)
+        self.ctx.scheduler.run_due(api.local_now() + timedelta(**delta), self.ctx, clock=self.frozen)
 
     def entrance_sensor(self, event):
         self.report(orc.Sensor.ENTRANCE_SENSOR, "motion", event)
@@ -177,7 +180,10 @@ def house(request, monkeypatch, tmp_path):
             freeze_time(MONDAY_AFTERNOON) as frozen,
         ):
             house = House(ctx, app.test_client(), frozen, listeners, dispatched, lan, probed, reachable, pushed)
-            for plugin in request.node.get_closest_marker("plugins").args:
+            marker = request.node.get_closest_marker("plugins")
+            for name, variant in marker.kwargs.items():
+                config.plugin_configs[f"orc_extras/{name}"] = config.plugin_configs[f"orc_extras/{variant}"]
+            for plugin in marker.args:
                 plugin.setup(ctx)
             for listener in (buttons, battery):
                 listener.setup(ctx)

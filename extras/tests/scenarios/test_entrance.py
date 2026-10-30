@@ -2,10 +2,16 @@ import pytest
 from orc_extras import entrance_sensor
 
 import orc
+from orc import model as m
 
 WALK_IN = [
     "Applying `Day` rules",
     "Running `All Lights Off`",
+]
+LISTENER_HOME = ["Queued: `Dog` (until 04:09)", "Trigger sensor off: skip (listener home)"]
+DELAYS = [
+    pytest.param([], marks=pytest.mark.plugins(entrance_sensor), id="equal"),
+    pytest.param(["Presence lost: `Rex`"], marks=pytest.mark.plugins(entrance_sensor, entrance_sensor="entrance_sensor_split"), id="split"),
 ]
 
 
@@ -38,8 +44,8 @@ def test_a_second_walk_in_starts_its_own_entry(house):
 
 
 @pytest.mark.plugins(entrance_sensor)
-@pytest.mark.parametrize("minutes, entries", [(14, 1), (16, 2)])
-def test_a_stale_visit_starts_a_new_entry(house, minutes, entries):
+@pytest.mark.parametrize("minutes, entries", [(1, 1), (3, 2)])
+def test_a_cleaned_up_visit_starts_a_new_entry(house, minutes, entries):
     house.entrance_sensor("active")
     house.drop(orc.Sensor.ENTRANCE_SENSOR, "motion", "inactive")
     house.tick(minutes=minutes)
@@ -48,18 +54,14 @@ def test_a_stale_visit_starts_a_new_entry(house, minutes, entries):
     assert len(house.log()) == entries
 
 
-@pytest.mark.plugins(entrance_sensor)
-def test_a_broadcast_during_the_pause_is_ignored(house):
+@pytest.mark.parametrize("resumed", DELAYS)
+def test_a_broadcast_during_the_pause_is_ignored(house, resumed):
     house.come_home("Rex")
     house.walk_in(seconds=20)
     house.advertise("Rex")
     house.tick(minutes=2)
 
-    assert house.log()[-1] == (
-        house.broker(orc.Sensor.ENTRANCE_SENSOR),
-        "Entrance sensor triggered",
-        [*WALK_IN, "Queued: `Dog` (until 04:09)", "Trigger sensor off: skip (listener home)"],
-    )
+    assert house.log()[1] == (house.broker(orc.Sensor.ENTRANCE_SENSOR), "Entrance sensor triggered", [*WALK_IN, *resumed, *LISTENER_HOME])
     assert house.pushed == []
 
 
@@ -91,16 +93,12 @@ def test_a_walk_in_with_nobody_tracked_before_or_after_is_pushed(house):
     assert house.pushed == ["Entrance motion with nobody tracked before or after"]
 
 
-@pytest.mark.plugins(entrance_sensor)
-def test_the_probe_finds_a_quiet_tag(house):
+@pytest.mark.parametrize("resumed", DELAYS)
+def test_the_probe_finds_a_quiet_tag(house, resumed):
     house.come_home("Rex")
     house.walk_in()
 
-    assert house.log()[-1] == (
-        house.broker(orc.Sensor.ENTRANCE_SENSOR),
-        "Entrance sensor triggered",
-        [*WALK_IN, "Queued: `Dog` (until 04:09)", "Trigger sensor off: skip (listener home)"],
-    )
+    assert house.log()[1] == (house.broker(orc.Sensor.ENTRANCE_SENSOR), "Entrance sensor triggered", [*WALK_IN, *resumed, *LISTENER_HOME])
 
 
 @pytest.mark.plugins(entrance_sensor)
@@ -151,3 +149,25 @@ def test_a_second_motion_keeps_the_before_set(house):
 
     assert house.log()[-1][2][-1] == "Trigger sensor off: applying OFF"
     assert house.pushed == []
+
+
+@pytest.mark.plugins(entrance_sensor, entrance_sensor="entrance_sensor_split")
+def test_a_tag_checks_itself_in_once_presence_resumes(house):
+    house.come_home("Rex")
+    house.walk_in(seconds=30)
+    house.advertise("Rex")
+    assert house.ctx.api.present_names() == set()
+    house.tick(seconds=30)
+    house.advertise("Rex")
+    assert house.ctx.api.present_names() == {"Rex"}
+    house.tick(minutes=1)
+
+    assert house.log()[1:] == [
+        (
+            house.broker(orc.Sensor.ENTRANCE_SENSOR),
+            "Entrance sensor triggered",
+            [*WALK_IN, "Presence lost: `Rex`", *LISTENER_HOME],
+        ),
+        (m.Query("ble"), "Presence detected: `Rex`", []),
+    ]
+    assert house.probed == []

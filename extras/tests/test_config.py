@@ -62,6 +62,7 @@ def test_entrance_config_loads(entrance_ctx):
     sensor = entrance_ctx.api.add_listener.call_args.args[0].args[1]
     assert sensor.setting == Settings(
         cleanup_delay_minutes=2,
+        presence_delay_minutes=1,
         entrance=Sensor.entrance,
         patio_door=Sensor.patio,
         active_event="active",
@@ -78,9 +79,16 @@ def test_entrance_config_loads(entrance_ctx):
 
 def test_entrance_ble_needs_slower_cleanup(entrance_ctx):
     config = entrance_ctx.config.plugin_configs[entrance_sensor.CONFIG]
-    entrance_ctx.config.plugin_configs[entrance_sensor.CONFIG] = config.replace("cleanup_delay_minutes 2", "cleanup_delay_minutes 0")
+    entrance_ctx.config.plugin_configs[entrance_sensor.CONFIG] = config.replace("cleanup_delay_minutes  2", "cleanup_delay_minutes  0")
     entrance_ctx.config.tags = [m.BleTag("Rex", "Rex Tag")]
     with pytest.raises(ValueError, match="cleanup_delay_minutes"):
+        entrance_sensor.setup(entrance_ctx)
+
+
+def test_entrance_presence_delay_within_cleanup(entrance_ctx):
+    config = entrance_ctx.config.plugin_configs[entrance_sensor.CONFIG]
+    entrance_ctx.config.plugin_configs[entrance_sensor.CONFIG] = config.replace("presence_delay_minutes 1", "presence_delay_minutes 3")
+    with pytest.raises(ValueError, match="presence_delay_minutes"):
         entrance_sensor.setup(entrance_ctx)
 
 

@@ -26,13 +26,13 @@ timed <name> <start> <stop> <routine>
 
 class Settings(NamedTuple):
     cleanup_delay_minutes: int
+    presence_delay_minutes: int
     entrance: DeviceEnum
     patio_door: DeviceEnum
     active_event: str
     inactive_event: str
     snapshot: int
     listener: str
-    new_entry_minutes: int = 15
 
 
 class Messages(NamedTuple):
@@ -70,10 +70,10 @@ def setup(ctx: AppContext) -> None:
                 Settings,
                 types={
                     "cleanup_delay_minutes": engine_cast.int,
+                    "presence_delay_minutes": engine_cast.int,
                     "entrance": cast.device,
                     "patio_door": cast.device,
                     "snapshot": engine_cast.int,
-                    "new_entry_minutes": engine_cast.int,
                 },
             ),
             "message": scalar(Messages),
@@ -88,6 +88,8 @@ def setup(ctx: AppContext) -> None:
         raise ValueError(f"unknown listener {sensor.setting.listener!r} — expected one of {names}")
     if ctx.config.tags and sensor.setting.cleanup_delay_minutes < MIN_BLE_CLEANUP_MINUTES:
         raise ValueError(f"cleanup_delay_minutes {sensor.setting.cleanup_delay_minutes} — BLE tags need at least {MIN_BLE_CLEANUP_MINUTES}")
+    if sensor.setting.presence_delay_minutes > sensor.setting.cleanup_delay_minutes:
+        raise ValueError(f"presence_delay_minutes {sensor.setting.presence_delay_minutes} — must not exceed cleanup_delay_minutes")
     ctx.plugin_state[orc_extras.entrance_sensor] = None
     ctx.api.add_listener(partial(plugins._on_event, ctx, sensor))
 
