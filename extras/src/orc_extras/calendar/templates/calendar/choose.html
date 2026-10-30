@@ -17,7 +17,7 @@
                         {% if map %}
                             <iframe class="w-full aspect-[3/4] rounded border-0" src="{{ map }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="{{ title }}"></iframe>
                         {% else %}
-                            <div class="w-full aspect-[3/4] rounded bg-white/5 flex items-center justify-center text-8xl">{{ glyph }}</div>
+                            <div class="w-full aspect-[3/4] rounded bg-white/5 flex items-center justify-center text-8xl grayscale">{{ glyph }}</div>
                         {% endif %}
                         <a class="orc-btn" href="{{ href }}" title="{{ title }}"><span class="truncate">{{ title }}</span></a>
                     </div>
