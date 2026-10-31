@@ -28,6 +28,13 @@ HUB = {
 class FakeScheduler:
     def __init__(self):
         self.jobs = {}
+        self.held = set()
+
+    def hold(self, type):
+        self.held.add(type)
+
+    def release(self, type):
+        self.held.discard(type)
 
     def once(self, func, when, *args, id=None, name=None, persist=False):
         job = SimpleNamespace(func=func, args=args, id=id or name, name=name, run_date=when)
@@ -40,8 +47,11 @@ class FakeScheduler:
     def cancel(self, id):
         return self.jobs.pop(id, None) is not None
 
+    def _held(self, job):
+        return bool(job.args) and any(isinstance(job.args[0], held) for held in self.held)
+
     def run_due(self, now, ctx, clock=None):
-        while due := sorted((j for j in self.jobs.values() if j.run_date <= now), key=lambda j: j.run_date):
+        while due := sorted((j for j in self.jobs.values() if j.run_date <= now and not self._held(j)), key=lambda j: j.run_date):
             job = due[0]
             del self.jobs[job.id]
             if clock:
