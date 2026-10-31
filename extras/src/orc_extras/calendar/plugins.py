@@ -201,5 +201,5 @@ def _run_event(job: CalendarJob, *, ctx: m.AppContext) -> None:
         ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
     else:
         link = str(CHOOSER_URL.with_query(title=summary, url=job.destination.url, address=job.destination.address))
-        entry = ctx.api.log(Log.CALENDAR, summary, trigger, notification=m.Notification(("calendar",), link), link=link)
+        entry = ctx.log.write(Log.CALENDAR, summary, trigger, notification=m.Notification(("calendar",), link), link=link)
         ctx.api.alert(m.Alarm.ATTENTION, text=summary, entry=entry)

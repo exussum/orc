@@ -18,13 +18,13 @@ def sleep(ctx: m.AppContext, name: str) -> datetime:
     for watch in state.watches:
         if watch in state.groups[name].watches:
             ctx.scheduler.cancel(_job(watch))
-    ctx.api.log(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
+    ctx.log.write(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
     return until
 
 
 def wake(ctx: m.AppContext, name: str) -> None:
     ctx.plugin_state[orc_extras.react].disabled.pop(name, None)
-    ctx.api.log(Log.REACT, f"`{name}` awake", m.Manual("react"))
+    ctx.log.write(Log.REACT, f"`{name}` awake", m.Manual("react"))
 
 
 def disabled_until(state: State, name: str, now: datetime) -> datetime | None:
@@ -96,8 +96,10 @@ def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Sta
             case em.Report(em.Watch() as watch, commands) if commands:
                 fired.append(watch)
     if fired:
-        entries = [_log(ctx, watch, device, "") for watch in fired]
-        ctx.api.dispatch(ctx.api.squish(map(_command, fired), entries[0]), entry=entries[0])
+        entry = _log(ctx, fired[0], device, "")
+        for watch in fired[1:]:
+            entry.add(Log.REACT, _line(ctx, watch, device, ""))
+        ctx.api.dispatch(ctx.api.squish(map(_command, fired), entry), entry=entry)
 
 
 def _job(watch: em.Watch[Any]) -> str:
@@ -113,13 +115,13 @@ def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, n
 
 
 def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: str) -> m.LogEntry:
+    return ctx.log.write(Log.REACT, _line(ctx, watch, device, note), m.Broker(id=device.id, source=device.source))
+
+
+def _line(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: str) -> str:
     state = ctx.plugin_state[orc_extras.react]
     command = watch.rule.steps[0].command
-    return ctx.api.log(
-        Log.REACT,
-        f"`{device.name}` {_trigger_label(watch, state)}{note} → set {_targets(command.subject)} {command.value}",
-        m.Broker(id=device.id, source=device.source),
-    )
+    return f"`{device.name}` {_trigger_label(watch, state)}{note} → set {_targets(command.subject)} {command.value}"
 
 
 def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:

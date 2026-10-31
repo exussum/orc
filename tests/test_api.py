@@ -13,6 +13,7 @@ from orc import api, config, plugins
 from orc import model as m
 from orc.dal import broker, net, push, scheduler, sqlite
 from orc.dal.findhub import stub as findhub_stub
+from orc.log import Log
 from orc.model import DeviceEnum
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
@@ -305,7 +306,7 @@ def test_dispatch_usb_speaks_state_error(log_entry):
 class TestRefreshTagKeys:
     @pytest.fixture(autouse=True)
     def reset_log(self):
-        api._ACTIVITY_LOG.clear()
+        api.context().log.clear()
 
     def test_a_new_key_reaches_the_row_and_the_listener(self):
         with patch.object(net.presence, "set_key") as set_key:
@@ -313,77 +314,78 @@ class TestRefreshTagKeys:
         key = m.BleKey(b"Alice Tag".ljust(32, b"\0"), 0)
         assert sqlite.fetch_tags() == [m.Tag("Alice", key, None)]
         set_key.assert_called_once_with("Alice", key)
-        assert [e.action for e in api.log_entries()] == ["Tag key for `Alice` read from Find Hub: e595fa93, paired 1969-12-31 19:00"]
+        assert [e.action for e in api.context().log.rows()] == ["Tag key for `Alice` read from Find Hub: e595fa93, paired 1969-12-31 19:00"]
 
     def test_an_unchanged_key_is_silent(self):
         api.refresh_tag_keys(m.Manual("secrets"))
-        api._ACTIVITY_LOG.clear()
+        api.context().log.clear()
         api.refresh_tag_keys(m.Manual("secrets"))
-        assert api.log_entries() == []
+        assert api.context().log.rows() == []
 
     def test_a_failed_lookup_logs_and_keeps_going(self, monkeypatch):
         monkeypatch.setattr(findhub_stub, "identity_key", MagicMock(side_effect=RuntimeError("boom")))
         api.refresh_tag_keys(m.Manual("secrets"))
         assert sqlite.fetch_tags() == []
-        assert [e.action for e in api.log_entries()] == ["Find Hub lookup failed for `Alice`: boom"]
+        assert [e.action for e in api.context().log.rows()] == ["Find Hub lookup failed for `Alice`: boom"]
 
 
 class TestLog:
     @pytest.fixture(autouse=True)
     def reset_log(self):
-        api._ACTIVITY_LOG.clear()
+        api.context().log.clear()
 
-    def test_a_burst_from_one_trigger_nests_under_the_entry_it_opened(self):
-        api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        api.log(m.LogSource.PLUGIN, "second", m.Integration("x"))
-        entries = api.log_entries()
-        assert [e.action for e in entries] == ["first"]
-        assert [c.action for c in entries[0].children] == ["second"]
+    def test_an_equal_trigger_within_the_window_nests(self):
+        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
+        api.context().log.write(m.LogSource.PLUGIN, "second", m.Integration("x"))
+        assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [("first", ["second"])]
+
+    def test_an_equal_trigger_after_the_window_starts_its_own_entry(self):
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+            api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
+            frozen.tick(Log.ROLLUP_WINDOW)
+            api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x"))
+        assert [(e.action, e.children) for e in api.context().log.rows()] == [("later", []), ("first", [])]
+
+    def test_an_open_entry_takes_an_equal_trigger_until_it_closes(self):
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+            entry = api.context().log.write(m.LogSource.SYSTEM, "first", m.Integration("x"))
+            with api.context().log.opened(entry):
+                frozen.tick(timedelta(hours=1))
+                api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x"))
+                api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y"))
+            frozen.tick(timedelta(hours=1))
+            api.context().log.write(m.LogSource.PLUGIN, "closed", m.Integration("x"))
+        assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
+            ("closed", []),
+            ("other", []),
+            ("first", ["later"]),
+        ]
 
     def test_a_swarm_of_external_changes_rolls_up(self):
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
             api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
             api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
             api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "on", "off", m.Source.ORC))
-            frozen.tick(api._ROLLUP_WINDOW)
+            frozen.tick(Log.ROLLUP_WINDOW)
             api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off", m.Source.EXTERNAL))
-        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [
+        assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
             ("`lamp a` switch: on → off", []),
             ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
         ]
 
     def test_a_different_trigger_starts_its_own_entry(self):
-        api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        api.log(m.LogSource.PLUGIN, "other", m.Integration("y"))
-        entries = api.log_entries()
+        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
+        api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y"))
+        entries = api.context().log.rows()
         assert [e.action for e in entries] == ["other", "first"]
         assert entries[0].children == []
 
-    def test_sources_differ_but_the_trigger_is_one_so_they_nest(self):
-        api.log(m.LogSource.SYSTEM, "sys", m.Integration("x"))
-        api.log(m.LogSource.PLUGIN, "plug", m.Integration("x"))
-        entries = api.log_entries()
-        assert [e.action for e in entries] == ["sys"]
-        assert [c.action for c in entries[0].children] == ["plug"]
-
-    def test_the_trigger_an_entry_started_with_nests_however_late(self):
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            entry = api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-            frozen.tick(timedelta(hours=1))
-            api.log(m.LogSource.PLUGIN, "later", entry.trigger)
-        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("first", ["later"])]
-
-    def test_an_equal_trigger_after_the_window_starts_its_own_entry(self):
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
-            api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-            frozen.tick(api._ROLLUP_WINDOW)
-            api.log(m.LogSource.PLUGIN, "later", m.Integration("x"))
-        assert [(e.action, [c.action for c in e.children]) for e in api.log_entries()] == [("later", []), ("first", [])]
-
     def test_a_nested_line_still_notifies(self):
-        api.log(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
-            api.log(m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification=m.Notification(("calendar", "dentist")))
+        entry = api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
+        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)), api.context().log.opened(entry):
+            api.context().log.write(
+                m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification=m.Notification(("calendar", "dentist"))
+            )
         assert api._ctx.scheduler.now.call_args.args[1:] == (
             "[Plugin 01/05]",
             "later x",
@@ -395,7 +397,7 @@ class TestLog:
     def test_a_link_rides_the_push_as_given(self):
         notification = m.Notification(("calendar",), "https://meet.google.com/abc?x=1")
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
-            api.log(m.LogSource.PLUGIN, "standup", m.Integration("x"), notification=notification)
+            api.context().log.write(m.LogSource.PLUGIN, "standup", m.Integration("x"), notification=notification)
         assert api._ctx.scheduler.now.call_args.args[3] == notification
 
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider, push_subscriptions):
@@ -426,7 +428,7 @@ class TestLog:
         for subscription in push_subscriptions:
             api.subscribe_push(subscription)
         push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
-        entry = api.log(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification=m.Notification(("leak",)))
+        entry = api.context().log.write(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification=m.Notification(("leak",)))
         api._push_job("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None, ctx=api._ctx)
         assert push_provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in push_subscriptions]
         assert set(sqlite.fetch_push_subscriptions()) == {push_subscriptions[0], push_subscriptions[2]}
@@ -588,14 +590,14 @@ class TestPresence:
         rule = self._routine("sunny-r", m.Weather(m.WeatherCondition.SUNNY))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
-        assert "nobody home" in api.log_entries()[0].action
+        assert "nobody home" in api.context().log.rows()[0].action
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("cloudy-r", m.Weather(m.WeatherCondition.CLOUDY))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
-        assert "CLOUDY" in api.log_entries()[0].action
+        assert "CLOUDY" in api.context().log.rows()[0].action
 
     def test_replay_day_skips_routines_for_absent_people(self, log_entry, command_dispatch, elapsed_schedule):
         partner = self._routine("partner-r", m.Present("Alice"))
@@ -675,24 +677,24 @@ class TestPresence:
 
     def test_mark_reports_detected_once(self):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
-        first = api.log_entries()[0]
+        first = api.context().log.rows()[0]
         assert any("Presence detected: `Alice`" in a for a in self._reported(first))
         before = self._reported(first)
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
-        assert api.log_entries()[0] is first and self._reported(first) == before
+        assert api.context().log.rows()[0] is first and self._reported(first) == before
 
     def test_report_waits_for_resume(self):
         api.pause_presence()
-        entries = len(api.log_entries())
+        entries = len(api.context().log.rows())
         api.mark_present(["Alice"], api.local_now() + timedelta(seconds=1), TRIGGER)
-        assert len(api.log_entries()) == entries
+        assert len(api.context().log.rows()) == entries
         api.resume_presence(TRIGGER)
-        assert any("Presence detected: `Alice`" in a for a in self._reported(api.log_entries()[0]))
+        assert any("Presence detected: `Alice`" in a for a in self._reported(api.context().log.rows()[0]))
 
     def test_report_logs_lost_after_expiry(self):
         api.mark_present(["Alice"], api.local_now(), TRIGGER)
         api.expire_presence(["Alice"], TRIGGER, force=True)
-        assert "Presence lost: `Alice`" in api.log_entries()[0].children[-1].action
+        assert "Presence lost: `Alice`" in api.context().log.rows()[0].children[-1].action
 
     def test_check_probes_stale_tags_by_default_and_every_absent_one_when_asked(self):
         api.mark_present(["Bob"], api.local_now(), TRIGGER)

@@ -45,7 +45,7 @@ def ctx(ctx, freezegun_clock):
     ctx.config.people = (m.Person("Rex", ()),)
     ctx.config.tags = []
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
-    ctx.api.log.return_value = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
+    ctx.log.write.return_value = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
     ctx.plugin_state = {entrance_sensor: None}
     ctx.config.ad_hoc_routines = {
         "AD_HOC_LIGHTS_OFF": m.AdhocAction((_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF)), name="Lights Off", reset=False),
@@ -138,15 +138,15 @@ def test_before_set_is_captured_once(ctx, config_sensor):
 def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
     ctx.plugin_state = {entrance_sensor: None}
     entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
-    ctx.api.log.return_value = entry
+    ctx.log.write.return_value = entry
     _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.api.log.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(id="16", source="hubitat"))
+    ctx.log.write.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(id="16", source="hubitat"))
     assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
 
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.api.log.return_value.trigger, source=plugins.Log.ENTRANCE)
+    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.log.write.return_value.trigger, source=plugins.Log.ENTRANCE)
 
 
 def test_someone_home_stops_media(config_sensor, nobody_home_ctx):
@@ -187,7 +187,7 @@ def test_empty_house_shuts_down_snapshots_and_pushes(config_sensor, nobody_home_
     )
     nobody_home_ctx.api.run_action.assert_not_called()
     assert [c.action for c in entry.children] == [config_sensor.message.log_shutdown]
-    nobody_home_ctx.api.log.assert_called_once_with(
+    nobody_home_ctx.log.write.assert_called_once_with(
         plugins.Log.ENTRANCE, config_sensor.message.log_nobody, entry.trigger, notification=m.Notification(("entrance",), "/presence/")
     )
 
@@ -195,7 +195,7 @@ def test_empty_house_shuts_down_snapshots_and_pushes(config_sensor, nobody_home_
 def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(config_sensor, nobody_home_ctx):
     entry = _cleanup(config_sensor, nobody_home_ctx, present_before={"Rex"})
     assert [c.action for c in entry.children] == [config_sensor.message.log_shutdown]
-    nobody_home_ctx.api.log.assert_not_called()
+    nobody_home_ctx.log.write.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -252,7 +252,7 @@ def test_walk_in_pauses_and_purges_presence(ctx, config_sensor):
     ctx.plugin_state = {entrance_sensor: None}
     _trigger_sensor(ctx, config_sensor, "16", "active")
     ctx.api.pause_presence.assert_called_once_with()
-    ctx.api.delete_all_presence.assert_called_once_with(ctx.api.log.return_value.trigger)
+    ctx.api.delete_all_presence.assert_called_once_with(ctx.log.write.return_value.trigger)
 
 
 def test_walk_out_leaves_presence_alone(ctx, config_sensor):

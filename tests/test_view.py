@@ -96,7 +96,7 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, 
         flask_client.get("/api/run/r")
         frozen.tick(timedelta(minutes=7))
         ctx.scheduler.once.call_args.args[0](ctx=ctx)
-    (queued,) = api.log_entries()
+    (queued,) = api.context().log.rows()
     assert [c.action for c in queued.children] == ["Running `r`"]
     command_dispatch.assert_called_once_with(action.commands, force=True, entry=queued)
 
@@ -268,14 +268,14 @@ def test_schedule_badges(flask_client, kwargs, present, present_badges, absent_b
 
 def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
     trigger = m.Manual("bell")
-    api.log(m.LogSource.SYSTEM, "Walk in", trigger)
-    api.log(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
+    with api.context().log.opened(api.context().log.write(m.LogSource.SYSTEM, "Walk in", trigger)):
+        api.context().log.write(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
     html = flask_client.get("/log/").get_data(as_text=True)
     assert html.count("🔔") == 2
 
 
 def test_log_page_links_a_line_before_its_action(flask_client):
-    api.log(m.LogSource.SYSTEM, "Standup", m.Manual("link"), link="/api/calendar/choose/?title=a")
+    api.context().log.write(m.LogSource.SYSTEM, "Standup", m.Manual("link"), link="/api/calendar/choose/?title=a")
     html = flask_client.get("/log/").get_data(as_text=True)
     assert (
         '<a href="/api/calendar/choose/?title=a">🔗</a>\n                            <div class="orc-log-action truncate min-w-0">Standup'

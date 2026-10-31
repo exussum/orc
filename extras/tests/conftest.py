@@ -12,6 +12,7 @@ import orc
 from orc import api
 from orc import model as m
 from orc.kernel.declarations import Declarations
+from orc.log import Log
 
 FIXTURE = Path(__file__).parent / "fixture"
 NOW = datetime(2024, 1, 1, 15, tzinfo=UTC)
@@ -38,6 +39,7 @@ def ctx():
     mock = MagicMock()
     mock.model = m
     mock.api = create_autospec(api)
+    mock.log = create_autospec(Log, instance=True)
     mock.scheduler = create_autospec(m.Scheduler, instance=True)
     mock.api.device_state.side_effect = lambda target: next(
         (s for s in mock.api.device_states.return_value if str(s.device.id) == target or s.device.name == target), None

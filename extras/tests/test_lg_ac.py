@@ -461,6 +461,7 @@ def _orc(*units):
     return SimpleNamespace(
         plugin_state={lg_ac: lg_ac.State(settings, stub, Capture())},
         api=MagicMock(),
+        log=MagicMock(),
         config=SimpleNamespace(devices=SimpleNamespace(AC=units)),
     )
 

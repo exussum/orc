@@ -37,7 +37,7 @@ def route_certificate() -> Response:
 def device_certificate(device_id: str) -> Response:
     body = request.get_json(force=True)
     signed = api.sign_device_csr(body["csr"].encode(), device_id)
-    app.orc.api.log(LogSource.LG_AC, f"AC {device_id[:8]}: paired", m.Broker(id=device_id, source=SOURCE))
+    app.orc.log.write(LogSource.LG_AC, f"AC {device_id[:8]}: paired", m.Broker(id=device_id, source=SOURCE))
     return jsonify(api.cert_response(signed))
 
 
@@ -80,6 +80,6 @@ def command() -> Response:
         )
         if asked.fan_mode is None or asked.temperature is None:
             return jsonify({"error": "a setpoint needs fan_mode and temperature"})
-    entry = app.orc.api.log(LogSource.LG_AC, f"AC {device_id[:8]}: {asked}", m.Manual("lg_ac"))
+    entry = app.orc.log.write(LogSource.LG_AC, f"AC {device_id[:8]}: {asked}", m.Manual("lg_ac"))
     app.orc.api.dispatch((em.Command(m.Devices(unit), asked),), force=True, entry=entry)
     return jsonify({"status": "sent", "device": device_id, "command": str(asked)})

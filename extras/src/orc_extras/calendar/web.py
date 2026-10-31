@@ -32,7 +32,7 @@ def index() -> str:
 @choose.get("/refresh")
 def refresh() -> Response:
     plugins.schedule_events(ctx=app.orc)
-    app.orc.api.log(plugins.Log.CALENDAR, "Calendar refreshed", m.Manual("calendar"))
+    app.orc.log.write(plugins.Log.CALENDAR, "Calendar refreshed", m.Manual("calendar"))
     return redirect(url_for("calendar.index"))
 
 

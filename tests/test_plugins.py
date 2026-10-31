@@ -11,9 +11,9 @@ from orc.plugins import battery, buttons
 
 
 @pytest.fixture
-def log_call():
-    with patch.object(api, "log") as log:
-        yield log
+def log_call(ctx):
+    with patch.object(ctx.log, "write") as write:
+        yield write
 
 
 @pytest.fixture

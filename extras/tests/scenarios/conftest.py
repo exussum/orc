@@ -119,7 +119,7 @@ class House:
 
     @staticmethod
     def log():
-        return [(entry.trigger, entry.action, [child.action for child in entry.children]) for entry in reversed(api.log_entries())]
+        return [(entry.trigger, entry.action, [child.action for child in entry.children]) for entry in reversed(api.context().log.rows())]
 
 
 @pytest.fixture
@@ -129,7 +129,6 @@ def house(request, monkeypatch, tmp_path):
     try:
         monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
         sqlite.init_db()
-        api._ACTIVITY_LOG.clear()
         broker.adapters.clear()
         broker.status_listeners.clear()
         net.presence.__init__()

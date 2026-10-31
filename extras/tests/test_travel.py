@@ -219,8 +219,8 @@ def test_run_job_keeps_the_trip_through_a_lookup_failure(ctx, flight_travel_job)
     now = ARRIVE - timedelta(hours=3)
     ctx.api.local_now.return_value = now
     plugins.run_job(flight_travel_job, ctx=ctx)
-    ctx.api.log.assert_called_once()
-    assert "Couldn't verify flight AA1" in ctx.api.log.call_args.args[1]
+    ctx.log.write.assert_called_once()
+    assert "Couldn't verify flight AA1" in ctx.log.write.call_args.args[1]
     assert ctx.scheduler.once.call_args.args[1] == now + timedelta(minutes=10)
 
 
