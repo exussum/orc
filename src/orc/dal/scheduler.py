@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, tzinfo
-from typing import Any
+from typing import Any, NamedTuple
 
 from apscheduler.events import EVENT_ALL_JOBS_REMOVED, EVENT_JOB_MISSED, JobExecutionEvent
 from apscheduler.executors.pool import ThreadPoolExecutor
@@ -21,10 +21,25 @@ MEMORY = "memory"
 _DEFAULT_MISFIRE_GRACE = 300
 
 
+class Deferred(NamedTuple):
+    func: Any
+    args: tuple[Any, ...]
+    name: str | None
+    when: datetime
+
+
 class ContextThreadPoolExecutor(ThreadPoolExecutor):
     def __init__(self, ctx: m.AppContext) -> None:
         super().__init__(max_workers=1)
         self.ctx = ctx
+        self.held: set[type] = set()
+        self.deferred: list[Deferred] = []
+
+    def submit_job(self, job: Job, run_times: list[datetime]) -> None:
+        if job.args and any(isinstance(job.args[0], held) for held in self.held):
+            self.deferred.append(Deferred(job.func, job.args, job.name, run_times[0]))
+        else:
+            super().submit_job(job, run_times)
 
     def _do_submit_job(self, job: Job, run_times: list[datetime]) -> Any:
         dispatch_job = job.__class__.__new__(job.__class__)
@@ -48,7 +63,8 @@ class Scheduler:
         )
 
     def start(self, ctx: m.AppContext) -> None:
-        self._inner.add_executor(ContextThreadPoolExecutor(ctx), DEFAULT)
+        self._executor = ContextThreadPoolExecutor(ctx)
+        self._inner.add_executor(self._executor, DEFAULT)
         self._inner.add_listener(_log_missed, EVENT_JOB_MISSED)
         self._inner.start(paused=True)
 
@@ -76,6 +92,20 @@ class Scheduler:
             return False
         job.pause() if paused else job.resume()
         return True
+
+    def hold(self, type: type) -> None:
+        self._executor.held.add(type)
+
+    def release(self, type: type) -> None:
+        # Deferred runs keep their slot as the run time, so they land in slot order, and no grace, so none is dropped.
+        self._executor.held.discard(type)
+        kept: list[Deferred] = []
+        released: list[Deferred] = []
+        for deferred in self._executor.deferred:
+            (released if isinstance(deferred.args[0], type) else kept).append(deferred)
+        self._executor.deferred = kept
+        for func, args, name, when in released:
+            self._add(func, DateTrigger(when, timezone=self._tz), args, None, name, False, misfire_grace_time=None)
 
     def matching(self, type: type) -> list[Job]:
         now = datetime.now(tz=self._tz)
