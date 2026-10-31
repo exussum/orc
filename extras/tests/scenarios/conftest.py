@@ -30,25 +30,25 @@ class FakeScheduler:
         self.jobs = {}
         self.held = set()
 
-    def hold(self, type):
-        self.held.add(type)
+    def hold(self, queue):
+        self.held.add(queue)
 
-    def release(self, type):
-        self.held.discard(type)
+    def release(self, queue):
+        self.held.discard(queue)
 
-    def once(self, func, when, *args, id=None, name=None, persist=False):
-        job = SimpleNamespace(func=func, args=args, id=id or name, name=name, run_date=when)
+    def once(self, func, when, *args, id=None, name=None, persist=False, queue=m.Queue.DEFAULT):
+        job = SimpleNamespace(func=func, args=args, id=id or name, name=name, run_date=when, queue=queue)
         self.jobs[job.id] = job
         return job
 
-    def now(self, func, *args, name=None, skip_if_late=False):
-        return self.once(func, api.local_now(), *args, name=name)
+    def now(self, func, *args, name=None, skip_if_late=False, queue=m.Queue.DEFAULT):
+        return self.once(func, api.local_now(), *args, name=name, queue=queue)
 
     def cancel(self, id):
         return self.jobs.pop(id, None) is not None
 
     def _held(self, job):
-        return bool(job.args) and any(isinstance(job.args[0], held) for held in self.held)
+        return job.queue in self.held
 
     def run_due(self, now, ctx, clock=None):
         while due := sorted((j for j in self.jobs.values() if j.run_date <= now and not self._held(j)), key=lambda j: j.run_date):
