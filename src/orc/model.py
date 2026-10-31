@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from flask import Blueprint
 
     from orc import Config as OrcConfig
+    from orc.log import Log
 
 
 type Listener = Callable[[Status], None]
@@ -326,10 +327,15 @@ class LogSubEntry:
 class LogEntry(LogSubEntry):
     trigger: Trigger
     children: list[LogSubEntry] = field(default_factory=list)
+    touched: datetime = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.touched = self.timestamp
 
     def add(self, source: LogSourceEnum, action: str, *, notified: bool = False, link: str | None = None) -> LogSubEntry:
         entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action, notified=notified, link=link)
         self.children.append(entry)
+        self.touched = entry.timestamp
         return entry
 
 
@@ -482,6 +488,11 @@ class Scheduler(Protocol):
     def delete_stale(self) -> None: ...
 
 
+def _log() -> "Log":
+    api, log = importlib.import_module("orc.api"), importlib.import_module("orc.log")
+    return log.Log(api.local_now, api.notify)
+
+
 @dataclass
 class AppContext:
     """Everything a plugin may touch, so plugins never import orc internals directly.
@@ -491,6 +502,7 @@ class AppContext:
     scheduler: Scheduler
     engine: engine.Runtime
     plugin_state: dict[ModuleType, Any] = field(default_factory=dict)
+    log: "Log" = field(default_factory=_log)
     config: OrcConfig = field(default_factory=lambda: importlib.import_module("orc").config)
     api: ModuleType = field(default_factory=lambda: importlib.import_module("orc.api"))
     orc: ModuleType = field(default_factory=lambda: importlib.import_module("orc"))

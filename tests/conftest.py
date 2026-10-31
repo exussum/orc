@@ -115,7 +115,6 @@ def ctx():
 
     from orc import api
 
-    api._ACTIVITY_LOG.clear()
     context = m.AppContext(create_autospec(m.Scheduler, instance=True), api.runtime())
     api.set_ctx(context)
     return context

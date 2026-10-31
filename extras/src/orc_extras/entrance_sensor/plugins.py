@@ -38,7 +38,8 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         if previous:
             log_entry = previous.entry
         else:
-            log_entry = ctx.api.log(Log.ENTRANCE, TRIGGER_MSG, m.Broker(id=device.id, source=device.source))
+            log_entry = ctx.log.write(Log.ENTRANCE, TRIGGER_MSG, m.Broker(id=device.id, source=device.source))
+            ctx.log.open_row(log_entry)
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
             log_entry, previous.present_before if previous else set(ctx.api.present_names())
         )
@@ -110,9 +111,10 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
         ctx.api.override_scene(SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry)
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
         if not visit.present_before and not present:
-            ctx.api.log(
+            ctx.log.write(
                 Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification=m.Notification(("entrance",), "/presence/")
             )
+    ctx.log.close_row(log_entry)
 
 
 def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:

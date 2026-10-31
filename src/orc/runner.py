@@ -6,7 +6,7 @@ import time
 import traceback
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from urllib.parse import quote
@@ -18,12 +18,13 @@ from orc import _build, api
 from orc import model as m
 from orc.dal.scheduler import Scheduler
 from orc.kernel.loader import check_secrets
-from orc.locale import Log
+from orc.log import Log, Message
 from orc.view import OrcFlask, bp
 
 
 @dataclass
 class Boot:
+    log: Log = field(default_factory=lambda: Log(api.local_now, api.notify))
     entry: m.LogEntry | None = None
     started: float | None = None
 
@@ -103,8 +104,8 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     if boot.entry is None:
-        boot.entry, boot.started = api.log(m.LogSource.SYSTEM, Log.BOOT, m.System("boot")), start
-    boot.entry.add(m.LogSource.SYSTEM, Log.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
+        boot.entry, boot.started = boot.log.write(m.LogSource.SYSTEM, Message.BOOT, m.System("boot")), start
+    boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
 
 
 def _start_services(ctx: m.AppContext, boot: Boot) -> None:
@@ -126,7 +127,7 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     with step("tag key check"):
         api.schedule_tag_key_refresh(m.Cron("findhub"))
     assert boot.entry is not None and boot.started is not None
-    boot.entry.add(m.LogSource.SYSTEM, Log.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
+    boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
@@ -138,7 +139,7 @@ def _build_app(boot: Boot) -> OrcFlask:
         api.init_db()
         api.load_durations()
 
-    ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz), api.runtime())
+    ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz), api.runtime(), log=boot.log)
     api.set_ctx(ctx)
     return _build_flask(ctx)
 

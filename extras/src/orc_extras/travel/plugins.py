@@ -91,7 +91,7 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
     try:
         arrival, sched = evaluate(ctx, job, tz, now)
     except ValueError as exc:
-        ctx.api.log(Log.TRAVEL, str(exc), m.Integration(job.summary))
+        ctx.log.write(Log.TRAVEL, str(exc), m.Integration(job.summary))
         _reschedule(ctx, job, now + _REFRESH_INTERVAL)
         return
     if arrival is not None:
@@ -110,7 +110,7 @@ def run_job(job: TravelJob, *, ctx: AppContext) -> None:
         message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
     else:
         message = f"Time to leave for {target}."
-    entry = ctx.api.log(Log.TRAVEL, message, m.Integration(job.summary))
+    entry = ctx.log.write(Log.TRAVEL, message, m.Integration(job.summary))
     ctx.api.alert(Alarm.WARNING, text=message, entry=entry)
 
 

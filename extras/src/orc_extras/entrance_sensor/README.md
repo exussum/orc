@@ -90,3 +90,5 @@ timed Night 22:00 8:00  AD_HOC_SILENCE
     is logged with a phone notification.
 
 Everything logs under the `entrance` source, nested under the walk-in's row.
+The row stays open until the cleanup decides, so anything else triggered by
+the sensor in the meantime (a `react` rule, say) nests under it too.

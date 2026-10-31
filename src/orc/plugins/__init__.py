@@ -7,14 +7,15 @@ from orc_engine import model as em
 
 from orc import model as m
 from orc.decorators import connected, requires_ctx  # noqa: F401
-from orc.locale import Log
+from orc.log import Message
 
 _LIGHT_TEST_WINDOW = timedelta(minutes=10)
 _LIGHT_TEST_SETTLE_SECONDS = 10
 
 
 def back_on_schedule(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
-    ctx.api.check_presence(entry.trigger)
+    with ctx.log.opened(entry):
+        ctx.api.check_presence(entry.trigger)
     ctx.api.replay_day(ctx.api.local_now(), entry)
 
 
@@ -30,8 +31,8 @@ def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> N
             if (device := c.subject.one()) not in ctx.config.virtual_devices and (c.value != m.OFF) != expect_on
         )
         if wrong:
-            template = Log.LIGHT_TEST_STILL_OFF if expect_on else Log.LIGHT_TEST_STILL_ON
-            ctx.api.log(m.LogSource.PLUGIN, template.format(names=", ".join(wrong)), entry.trigger)
+            template = Message.LIGHT_TEST_STILL_OFF if expect_on else Message.LIGHT_TEST_STILL_ON
+            entry.add(m.LogSource.PLUGIN, template.format(names=", ".join(wrong)))
 
     end = ctx.api.local_now() + _LIGHT_TEST_WINDOW
     ctx.api.override_scene("light_test", (em.Command(m.Devices(ctx.config.devices.Light), m.OFF),), end, "light_test", entry)
@@ -53,4 +54,4 @@ def reboot(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
 
 def sound_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
     for severity in m.Alarm:
-        ctx.api.alert(severity, text=Log.SOUND_TEST_TEXT, entry=entry)
+        ctx.api.alert(severity, text=Message.SOUND_TEST_TEXT, entry=entry)

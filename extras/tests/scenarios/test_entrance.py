@@ -1,5 +1,5 @@
 import pytest
-from orc_extras import entrance_sensor
+from orc_extras import entrance_sensor, react
 
 import orc
 from orc import model as m
@@ -7,6 +7,10 @@ from orc import model as m
 WALK_IN = [
     "Applying `Day` rules",
     "Running `All Lights Off`",
+]
+ARRIVE = [
+    "`ENTRANCE_SENSOR` active → set `Living room AC` cool:low:75",
+    "`ENTRANCE_SENSOR` active → set `LIVING_ROOM` on",
 ]
 LISTENER_HOME = ["Queued: `Dog` (until 04:09)", "Trigger sensor off: skip (listener home)"]
 DELAYS = [
@@ -121,6 +125,28 @@ def test_a_tag_passing_through_mid_visit_counts_for_neither(house):
                 "Snapshot for `entrance_sensor` until 03:48: all off",
                 "Trigger sensor off: applying OFF",
                 "Entrance motion with nobody tracked before or after",
+            ],
+        )
+    ]
+
+
+@pytest.mark.plugins(entrance_sensor, react)
+def test_react_lines_stay_under_the_walk_in_row_until_the_cleanup(house):
+    house.walk_in(seconds=60)
+    house.entrance_sensor("active")
+
+    entrance = house.broker(orc.Sensor.ENTRANCE_SENSOR)
+    assert house.log() == [
+        (
+            entrance,
+            "Entrance sensor triggered",
+            [
+                *ARRIVE,
+                "Applying `Day` rules",
+                "`ENTRANCE_SENSOR` inactive → set `Living room AC` off",
+                "Running `All Lights Off`",
+                *ARRIVE,
+                "Applying `Day` rules",
             ],
         )
     ]

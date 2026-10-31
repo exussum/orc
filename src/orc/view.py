@@ -24,7 +24,7 @@ from orc import alerts, api, config
 from orc import model as m
 from orc.collections import Box, ConcaveCorner, boxes, concave_corners, pack, where
 from orc.kernel import cast as kernel_cast
-from orc.locale import Log
+from orc.log import Message
 
 _DEVICE_TYPE_ORDER = {"Light": 0, "Chromecast": 2, "AC": 3}
 _GRID_WIDTH = 5
@@ -225,16 +225,16 @@ def run_routine(id: str) -> dict[str, Any]:
 @bp.route("/api/presence/<name>/checkin")
 def checkin_presence(name: str) -> dict[str, Any]:
     trigger = m.Manual(_person(name))
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_CHECKED_IN.format(name=name), trigger)
-    api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger)
+    with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_CHECKED_IN.format(name=name), trigger)):
+        api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger)
     return {}
 
 
 @bp.route("/api/presence/<name>/expire")
 def expire_presence(name: str) -> dict[str, Any]:
     trigger = m.Manual(_person(name))
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_EXPIRED.format(name=name), trigger)
-    api.expire_presence([name], trigger, force=True)
+    with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_EXPIRED.format(name=name), trigger)):
+        api.expire_presence([name], trigger, force=True)
     return {}
 
 
@@ -282,7 +282,7 @@ def _scene_layout(durations: dict[str, float]) -> tuple[list[SceneCell], list[Bo
 
 @bp.route("/log/")
 def log() -> str:
-    entries_grouped = [(day, list(day_entries)) for day, day_entries in groupby(api.log_entries(), key=lambda e: e.timestamp.date())]
+    entries_grouped = [(day, list(day_entries)) for day, day_entries in groupby(app.orc.log.rows(), key=lambda e: e.timestamp.date())]
     return render_template("log.html", entries_grouped=entries_grouped)
 
 
@@ -324,11 +324,11 @@ def device_api(kind: str, name: str) -> dict[str, Any]:
     if not isinstance(value, int):
         what = state
     elif device.kind in ("Chromecast", "USB"):
-        what = Log.DEVICE_SET_VOLUME.format(level=value)
+        what = Message.DEVICE_SET_VOLUME.format(level=value)
     else:
-        what = Log.DEVICE_SET_LEVEL.format(level=value)
+        what = Message.DEVICE_SET_LEVEL.format(level=value)
     id = str(device)
-    entry = api.log(m.LogSource.MANUAL, Log.DEVICE_SET.format(name=device.label, what=what), m.Manual(id))
+    entry = app.orc.log.write(m.LogSource.MANUAL, Message.DEVICE_SET.format(name=device.label, what=what), m.Manual(id))
     api.dispatch((em.Command(m.Devices(device), value),), force=True, entry=entry)
     return {}
 
@@ -351,9 +351,9 @@ def presence_state() -> dict[str, Any]:
 @bp.route("/api/presence/run")
 def run_presence_check() -> dict[str, Any]:
     trigger = m.Manual("presence")
-    api.log(m.LogSource.MANUAL, Log.PRESENCE_RESCAN, trigger)
-    api.delete_all_presence(trigger)
-    api.check_presence(trigger, source=m.LogSource.MANUAL, probe=True)
+    with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_RESCAN, trigger)):
+        api.delete_all_presence(trigger)
+        api.check_presence(trigger, source=m.LogSource.MANUAL, probe=True)
     return {}
 
 
@@ -408,7 +408,7 @@ def set_theme() -> dict[str, Any]:
 @bp.route("/api/announce", methods=["POST"])
 def announce() -> dict[str, Any]:
     text = request.form["text"]
-    entry = api.log(m.LogSource.MANUAL, Log.ANNOUNCE.format(text=text), m.Manual("announce"))
+    entry = app.orc.log.write(m.LogSource.MANUAL, Message.ANNOUNCE.format(text=text), m.Manual("announce"))
     api.alert(m.Alarm.WARNING, text=text, entry=entry)
     return {}
 

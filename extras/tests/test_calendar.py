@@ -137,7 +137,7 @@ def rebuild(ctx):
 
 def test_alarm_links_the_choice_page(ctx):
     plugins._run_event(CalendarJob(ALARM, A), ctx=ctx)
-    assert ctx.api.log.call_args.kwargs == {"notification": m.Notification(("calendar",), CHOOSER_LINK), "link": CHOOSER_LINK}
+    assert ctx.log.write.call_args.kwargs == {"notification": m.Notification(("calendar",), CHOOSER_LINK), "link": CHOOSER_LINK}
 
 
 @pytest.fixture

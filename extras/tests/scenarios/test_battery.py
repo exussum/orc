@@ -14,7 +14,7 @@ def test_a_door_battery_crossing_into_critical_is_pushed_once(house):
 
     assert house.log() == [(house.broker(orc.Sensor.ENTRANCE_SENSOR), LOW, [])]
     assert house.pushed == ["Low battery on ENTRANCE_SENSOR (CRITICAL)"]
-    assert api.log_entries()[0].notified
+    assert api.context().log.rows()[0].notified
 
 
 @pytest.mark.plugins()
@@ -35,5 +35,5 @@ def test_a_battery_report_during_a_walk_in_nests_and_flags_the_entry(house):
     assert (trigger, action) == (house.broker(orc.Sensor.ENTRANCE_SENSOR), "Entrance sensor triggered")
     assert children[-1] == LOW
     assert house.pushed == ["Low battery on ENTRANCE_SENSOR (CRITICAL)"]
-    entry = api.log_entries()[0]
+    entry = api.context().log.rows()[0]
     assert entry.notified and entry.children[-1].notified
