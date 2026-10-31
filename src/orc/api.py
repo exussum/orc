@@ -618,7 +618,13 @@ def rebuild_iot_schedule(ctx: m.AppContext) -> None:
         if now <= run_at:
             job = m.IotJob(entry.routine, entry.routine_id)
             ctx.scheduler.once(
-                run_iot_job, run_at, job, name=entry.routine.name, id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}", persist=True
+                run_iot_job,
+                run_at,
+                job,
+                name=entry.routine.name,
+                id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}",
+                persist=True,
+                queue=m.Queue.IOT,
             )
 
 

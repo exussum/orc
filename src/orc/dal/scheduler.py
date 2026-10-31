@@ -26,18 +26,19 @@ class Deferred(NamedTuple):
     args: tuple[Any, ...]
     name: str | None
     when: datetime
+    queue: m.Queue
 
 
 class ContextThreadPoolExecutor(ThreadPoolExecutor):
     def __init__(self, ctx: m.AppContext) -> None:
         super().__init__(max_workers=1)
         self.ctx = ctx
-        self.held: set[type] = set()
+        self.held: set[m.Queue] = set()
         self.deferred: list[Deferred] = []
 
     def submit_job(self, job: Job, run_times: list[datetime]) -> None:
-        if job.args and any(isinstance(job.args[0], held) for held in self.held):
-            self.deferred.append(Deferred(job.func, job.args, job.name, run_times[0]))
+        if job.executor in self.held:
+            self.deferred.append(Deferred(job.func, job.args, job.name, run_times[0], m.Queue(job.executor)))
         else:
             super().submit_job(job, run_times)
 
@@ -64,22 +65,33 @@ class Scheduler:
 
     def start(self, ctx: m.AppContext) -> None:
         self._executor = ContextThreadPoolExecutor(ctx)
-        self._inner.add_executor(self._executor, DEFAULT)
+        for queue in m.Queue:
+            self._inner.add_executor(self._executor, queue)
         self._inner.add_listener(_log_missed, EVENT_JOB_MISSED)
         self._inner.start(paused=True)
 
     def resume(self) -> None:
         self._inner.resume()
 
-    def once(self, func: Any, when: datetime, *args: Any, id: str | None = None, name: str | None = None, persist: bool = False) -> Job:
-        return self._add(func, DateTrigger(when, timezone=self._tz), args, id, name, persist)
+    def once(
+        self,
+        func: Any,
+        when: datetime,
+        *args: Any,
+        id: str | None = None,
+        name: str | None = None,
+        persist: bool = False,
+        queue: m.Queue = m.Queue.DEFAULT,
+    ) -> Job:
+        return self._add(func, DateTrigger(when, timezone=self._tz), args, id, name, persist, queue)
 
-    def now(self, func: Any, *args: Any, name: str | None = None, skip_if_late: bool = False) -> Job:
+    def now(self, func: Any, *args: Any, name: str | None = None, skip_if_late: bool = False, queue: m.Queue = m.Queue.DEFAULT) -> Job:
         grace = _DEFAULT_MISFIRE_GRACE if skip_if_late else None
-        return self._add(func, DateTrigger(datetime.now(tz=self._tz), timezone=self._tz), args, None, name, False, misfire_grace_time=grace)
+        trigger = DateTrigger(datetime.now(tz=self._tz), timezone=self._tz)
+        return self._add(func, trigger, args, None, name, False, queue, misfire_grace_time=grace)
 
-    def cron(self, func: Any, crontab: str, *args: Any, id: str, name: str) -> Job:
-        return self._add(func, CronTrigger.from_crontab(crontab, timezone=self._tz), args, id, name, False)
+    def cron(self, func: Any, crontab: str, *args: Any, id: str, name: str, queue: m.Queue = m.Queue.DEFAULT) -> Job:
+        return self._add(func, CronTrigger.from_crontab(crontab, timezone=self._tz), args, id, name, False, queue)
 
     def cancel(self, id: str) -> bool:
         if job := self._inner.get_job(id):
@@ -93,19 +105,19 @@ class Scheduler:
         job.pause() if paused else job.resume()
         return True
 
-    def hold(self, type: type) -> None:
-        self._executor.held.add(type)
+    def hold(self, queue: m.Queue) -> None:
+        self._executor.held.add(queue)
 
-    def release(self, type: type) -> None:
+    def release(self, queue: m.Queue) -> None:
         # Deferred runs keep their slot as the run time, so they land in slot order, and no grace, so none is dropped.
-        self._executor.held.discard(type)
+        self._executor.held.discard(queue)
         kept: list[Deferred] = []
         released: list[Deferred] = []
         for deferred in self._executor.deferred:
-            (released if isinstance(deferred.args[0], type) else kept).append(deferred)
+            (released if deferred.queue == queue else kept).append(deferred)
         self._executor.deferred = kept
-        for func, args, name, when in released:
-            self._add(func, DateTrigger(when, timezone=self._tz), args, None, name, False, misfire_grace_time=None)
+        for func, args, name, when, _ in released:
+            self._add(func, DateTrigger(when, timezone=self._tz), args, None, name, False, queue, misfire_grace_time=None)
 
     def matching(self, type: type) -> list[Job]:
         now = datetime.now(tz=self._tz)
@@ -133,8 +145,18 @@ class Scheduler:
                 {"today": today},
             )
 
-    def _add(self, func: Any, trigger: Any, args: tuple[Any, ...], id: str | None, name: str | None, persist: bool, **options: Any) -> Job:
-        options |= {"args": args, "name": name, "jobstore": DEFAULT if persist else MEMORY}
+    def _add(
+        self,
+        func: Any,
+        trigger: Any,
+        args: tuple[Any, ...],
+        id: str | None,
+        name: str | None,
+        persist: bool,
+        queue: m.Queue,
+        **options: Any,
+    ) -> Job:
+        options |= {"args": args, "name": name, "jobstore": DEFAULT if persist else MEMORY, "executor": queue}
         if id:
             options |= {"id": id, "replace_existing": True}
             if (job := self._inner.get_job(id)) and job.next_run_time is None:

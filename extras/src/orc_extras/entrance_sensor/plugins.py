@@ -58,7 +58,7 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribut
 @requires_ctx
 def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
     if new == sensor.setting.active_event:
-        ctx.scheduler.hold(m.IotJob)
+        ctx.scheduler.hold(m.Queue.IOT)
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(log_entry.trigger)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME))
@@ -96,7 +96,7 @@ def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, c
     ctx.plugin_state[orc_extras.entrance_sensor] = None
     present = ctx.api.check_presence(log_entry.trigger, probe=True)
     ctx.api.resume_presence(log_entry.trigger)
-    ctx.scheduler.release(m.IotJob)
+    ctx.scheduler.release(m.Queue.IOT)
     people = present - {sensor.setting.listener}
     door_open = not people and _door_open(ctx, sensor)
 
