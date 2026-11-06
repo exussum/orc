@@ -174,7 +174,7 @@ def cfg() -> str:
         sensors=[replace(s, details=_with_dewpoint(s.details)) for s in api.capture_sensors()],
         retry_stats={s.id: s for s in api.fetch_retry_stats()},
         durations=api.fetch_durations(mapper=dict),
-        plugin_states=states,
+        plugin_states=dict(states),
         device_buttons=device_buttons,
         device_plugins=device_plugins,
         registry=config.registry,
