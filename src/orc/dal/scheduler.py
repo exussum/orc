@@ -2,11 +2,12 @@ import asyncio
 import logging
 import signal
 import threading
+from collections.abc import Callable
 from datetime import datetime, tzinfo
 from typing import Any
 
 import orc_queue as oq
-from orc_queue import Coordinator, Events, Job, JobQueue, MemoryStore, SqliteStore, ThreadLane, aware, utcnow
+from orc_queue import Coordinator, Events, Job, JobQueue, MemoryStore, Service, SqliteStore, ThreadLane, ThreadService, aware, utcnow
 from sqlalchemy.engine.url import make_url
 
 from orc import model as m
@@ -33,10 +34,14 @@ class Scheduler:
             ThreadLane([self._queues[m.Queue.ADHOC], self._queues[m.Queue.CALENDAR], self._queues[m.Queue.IOT]]),
             ThreadLane([self._queues[m.Queue.FETCH], self._queues[m.Queue.PRESENCE], self._queues[m.Queue.TRAVEL]]),
         ]
+        self._services: list[Service] = []
         self._thread = threading.Thread(target=self._run, name="orc-queue", daemon=True)
 
+    def service(self, fn: Callable[[threading.Event], None], *, name: str) -> None:
+        self._services.append(ThreadService(fn, name=name))
+
     def start(self, ctx: m.AppContext) -> None:
-        self._coordinator: Coordinator[Any] = Coordinator(self._lanes, [], context=ctx)
+        self._coordinator: Coordinator[Any] = Coordinator(self._lanes, self._services, context=ctx)
         self._thread.start()
 
     def _run(self) -> None:

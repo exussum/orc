@@ -1,7 +1,5 @@
 import dataclasses
 import logging
-import os
-import signal
 import threading
 import time
 from collections.abc import Callable
@@ -60,7 +58,7 @@ def start(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCal
     if not len(_leak_devices(ctx)):
         _log.info("yolink: no Leak devices in config.orc, skipping")
         return
-    threading.Thread(target=partial(_run, ctx, backend, on_transition), name="yolink-mqtt", daemon=True).start()
+    ctx.scheduler.service(partial(_run, ctx, backend, on_transition), name="yolink-mqtt")
 
 
 def snapshot(ctx: m.AppContext) -> list[SensorState]:
@@ -100,35 +98,31 @@ def _leak_devices(ctx: m.AppContext) -> Any:
     return ctx.config.devices.Leak
 
 
-def _run(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback) -> None:
+def _run(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCallback, stop: threading.Event) -> None:
     cfg = ctx.config
     disconnect_times: list[float] = []
     on_connection = partial(_on_connection, ctx, on_transition, disconnect_times)
     on_report = partial(_on_report, ctx, on_transition)
-    try:
-        while True:
-            try:
-                access_token, expires_in = backend.authenticate(cfg.secrets, cfg.settings.http_timeout)
-            except Exception:
-                _log.exception("yolink: auth failed; retrying in 60s")
-                time.sleep(60)
-                continue
-            try:
-                _hydrate_states(ctx, backend, access_token)
-            except Exception:
-                _log.exception("yolink: hydrate failed; continuing without initial state")
-            try:
-                session = backend.connect(access_token, on_connection, on_report, cfg.settings.http_timeout)
-            except Exception:
-                _log.exception("yolink: connect failed; retrying in 60s")
-                time.sleep(60)
-                continue
-            # Re-auth a few minutes before the token expires
-            time.sleep(max(60, expires_in - 300))
-            session.close()
-    finally:
-        _log.error("yolink: thread exiting; signaling SIGTERM to process for restart")
-        os.kill(os.getpid(), signal.SIGTERM)
+    while not stop.is_set():
+        try:
+            access_token, expires_in = backend.authenticate(cfg.secrets, cfg.settings.http_timeout)
+        except Exception:
+            _log.exception("yolink: auth failed; retrying in 60s")
+            stop.wait(60)
+            continue
+        try:
+            _hydrate_states(ctx, backend, access_token)
+        except Exception:
+            _log.exception("yolink: hydrate failed; continuing without initial state")
+        try:
+            session = backend.connect(access_token, on_connection, on_report, cfg.settings.http_timeout)
+        except Exception:
+            _log.exception("yolink: connect failed; retrying in 60s")
+            stop.wait(60)
+            continue
+        # Re-auth a few minutes before the token expires
+        stop.wait(max(60, expires_in - 300))
+        session.close()
 
 
 def _on_connection(ctx: m.AppContext, on_transition: TransitionCallback, disconnect_times: list[float], connected: bool) -> None:

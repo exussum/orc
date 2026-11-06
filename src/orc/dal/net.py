@@ -1,7 +1,7 @@
 import asyncio
+import atexit
+import contextlib
 import logging
-import os
-import signal
 import socket
 import threading
 import time
@@ -26,7 +26,6 @@ _PROBE_SECONDS = 30
 _BLE_INDEX_REFRESH_SECONDS = 300
 _BLE_SEARCH_WINDOWS = 200
 _BLE_CLOCK_TRUST_SECONDS = 24 * 3600
-_BLE_MIN_RUN_SECONDS = 60
 
 _log = logging.getLogger(__name__)
 
@@ -35,12 +34,13 @@ class Presence:
     """Last-heard time per person, fed by BLE hearings, LAN scan results, and
     manual check-ins; a pause narrows presence to evidence heard after it.
 
-    start() runs an FMDN listener in a daemon thread: a tag can't be solicited
-    like the LAN probes' targets - it only broadcasts (every ~6s, with
-    multi-cycle dropouts measured up to 42s), so windowed scans miss it; the
-    listener hears every frame instead. Every frame is one dict lookup against
-    the EID index, rebuilt as the 1024s rotation windows advance. A scanner
-    failure brings the process down — supervisor restarts it.
+    start() configures the FMDN listener and listen() is its body, run as an
+    orc-queue thread service: a tag can't be solicited like the LAN probes'
+    targets - it only broadcasts (every ~6s, with multi-cycle dropouts measured
+    up to 42s), so windowed scans miss it; the listener hears every frame
+    instead. Every frame is one dict lookup against the EID index, rebuilt as
+    the 1024s rotation windows advance. The service restarts a crashed scanner
+    and gives up after three fast failures, which brings the process down.
     """
 
     def __init__(self) -> None:
@@ -53,6 +53,9 @@ class Presence:
         self._frames: dict[str, datetime] = {}
         self._frame_seen = threading.Condition()
         self._paused: datetime | None = None
+        self._stopping = threading.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._stop_scan: asyncio.Event | None = None
         self._on_change: Callable[[m.Trigger], object] = lambda trigger: None
         self._on_clock: Callable[[str, m.TagClock], object]
 
@@ -71,7 +74,18 @@ class Presence:
             return
         self._tz = tz
         self._clocks = LockedDict(clocks)
-        threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
+        atexit.register(self.stop)
+
+    def listen(self, stop: threading.Event) -> None:
+        self._stopping = stop
+        while not stop.is_set():
+            asyncio.run(self._run())
+
+    def stop(self) -> None:
+        self._stopping.set()
+        if self._loop and self._stop_scan:
+            with contextlib.suppress(RuntimeError):
+                self._loop.call_soon_threadsafe(self._stop_scan.set)
 
     def set_key(self, person: str, key: m.BleKey) -> None:
         self._clocks.pop(person)
@@ -128,23 +142,14 @@ class Presence:
         if not self._paused:
             self._on_change(trigger)
 
-    def _listen(self) -> None:
-        while True:
-            started = time.monotonic()
-            try:
-                asyncio.run(self._run())
-            except Exception:
-                _log.exception("ble: listener died")
-            if time.monotonic() - started < _BLE_MIN_RUN_SECONDS:
-                _log.error("ble: listener failed immediately, restarting orc")
-                os.kill(os.getppid(), signal.SIGTERM)
-                return
-
     async def _run(self) -> None:
-        while True:
+        self._loop = asyncio.get_running_loop()
+        self._stop_scan = asyncio.Event()
+        while not self._stop_scan.is_set() and not self._stopping.is_set():
             self._index = _eid_index(self._tags, self._clocks.copy(), self._now())
             async with BleakScanner(self._seen, bluez={"filters": {"DuplicateData": True}}):
-                await asyncio.sleep(_BLE_INDEX_REFRESH_SECONDS)
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._stop_scan.wait(), _BLE_INDEX_REFRESH_SECONDS)
 
     def _seen(self, device: BLEDevice, data: AdvertisementData) -> None:
         frame = data.service_data.get(FMDN_SERVICE_UUID)
