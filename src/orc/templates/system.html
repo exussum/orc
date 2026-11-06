@@ -33,8 +33,10 @@
                     Devices
                 </summary>
                 <div class="p-4">
+                    {% for title in (["Lights", "Sensors", "Sounds"] + plugin_states.keys()|list)|sort %}
                     <details>
-                        <summary class="orc-accordion-summary">Lights</summary>
+                        <summary class="orc-accordion-summary">{{ title }}</summary>
+                        {% if title == "Lights" %}
                         {% call headed_table() %}
                             <tr>
                                 <th class="orc-th">Name</th>
@@ -54,9 +56,7 @@
                                 </tr>
                             {% endfor %}
                         {% endcall %}
-                    </details>
-                    <details>
-                        <summary class="orc-accordion-summary">Sounds</summary>
+                        {% elif title == "Sounds" %}
                         {% call headed_table() %}
                             <tr>
                                 <th class="orc-th">Name</th>
@@ -73,16 +73,12 @@
                                 </tr>
                             {% endfor %}
                         {% endcall %}
-                    </details>
-                    <details>
-                        <summary class="orc-accordion-summary">Sensors</summary>
+                        {% elif title == "Sensors" %}
                         <div class="px-4">{{ status_list(sensors) }}</div>
+                        {% else %}
+                        <div class="px-4">{{ status_list(plugin_states[title]) }}</div>
+                        {% endif %}
                     </details>
-                    {% for title, rows in plugin_states %}
-                        <details>
-                            <summary class="orc-accordion-summary">{{ title }}</summary>
-                            <div class="px-4">{{ status_list(rows) }}</div>
-                        </details>
                     {% endfor %}
                 </div>
             </details>
