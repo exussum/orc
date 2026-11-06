@@ -5,7 +5,6 @@ from orc_engine import model as em
 
 import orc_extras.react
 from orc import model as m
-from orc.plugins import requires_ctx
 from orc_extras.react.model import AcSubject, CastSubject, Device, FormulaSubject, Log, MqttDeviceSubject, State, Transition
 
 JOB_ID = "react"
@@ -92,7 +91,7 @@ def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Sta
             case em.Cancel(watch):
                 ctx.scheduler.cancel(_job(watch))
             case em.Deferred(watch, when):
-                ctx.scheduler.once(_run_react, when, outcome, device, name=f"React {device.name}", id=_job(watch))
+                ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=f"React {device.name}")
             case em.Report(em.Watch() as watch, commands) if commands:
                 fired.append(watch)
     if fired:
@@ -129,8 +128,8 @@ def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
     return em.Command(command.subject, command.value, tag=m.Always())
 
 
-@requires_ctx
-def _run_react(deferred: em.Deferred[m.Devices], device: m.Device, *, ctx: m.AppContext) -> None:
+def _run_react(payload: tuple[em.Deferred[m.Devices], m.Device], *, ctx: m.AppContext) -> None:
+    deferred, device = payload
     watch = deferred.watch
     (report,) = ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True)
     if report.commands:

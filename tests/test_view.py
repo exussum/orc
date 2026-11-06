@@ -1,11 +1,11 @@
 from datetime import date, datetime, timedelta
-from unittest.mock import ANY, MagicMock, create_autospec, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from apscheduler.job import Job
 from flask import Flask
 from freezegun import freeze_time
 from orc_engine import model as em
+from orc_queue import Job
 
 import orc
 from orc import api, config
@@ -209,13 +209,13 @@ def test_actions_lists_what_arrow_can_call(flask_client, config_ad_hoc, config_r
 
 @pytest.mark.parametrize("paused", [True, False])
 def test_pause_sets_the_absolute_state(flask_client, ctx, paused):
-    ctx.scheduler.set_paused.return_value = True
+    ctx.scheduler.pause_job.return_value = True
     flask_client.get(f"/api/schedule/iot-x/pause?paused={int(paused)}")
-    ctx.scheduler.set_paused.assert_called_once_with("iot-x", paused)
+    ctx.scheduler.pause_job.assert_called_once_with("iot-x", paused)
 
 
 def test_pause_unknown_job_returns_404(flask_client, ctx):
-    ctx.scheduler.set_paused.return_value = False
+    ctx.scheduler.pause_job.return_value = False
     response = flask_client.get("/api/schedule/nope/pause?paused=1")
     assert response.status_code == 404
 
@@ -347,19 +347,13 @@ def _room(*commands):
 def _fake_iot_job(name="job", trigger=None, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
     rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger or m.Always()), skip_replay=skip_replay)
-    job = create_autospec(Job, instance=True)
-    job.id = name
-    job.name = name
-    job.next_run_time = run_date
-    job.args = [m.IotJob(rule, name)]
-    job.trigger.run_date = run_date
-    return job
+    return Job(run_date, print, m.IotJob(rule, name), id=name, name=name)
 
 
 def _get_schedule(flask_client, jobs, present_names=()):
     with patch.multiple(
         api,
-        fetch_jobs_by_type=MagicMock(return_value=jobs),
+        fetch_jobs=MagicMock(return_value=jobs),
         current_theme_override=MagicMock(return_value=None),
         present_names=MagicMock(return_value=set(present_names)),
         fetch_durations=MagicMock(side_effect=lambda mapper=None: mapper([]) if mapper else []),

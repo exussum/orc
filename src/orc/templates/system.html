@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import btn, headed_table, icon_svg, status_list %}
+{% from 'macros.html' import btn, headed_table, icon_svg, status_list, titled_card %}
 {% block body %}
     <div>
         <div class="orc-surface mb-2">
@@ -120,21 +120,28 @@
                 </details>
                 <details>
                     <summary class="orc-accordion-summary">Scheduled Jobs</summary>
-                    {% call headed_table() %}
-                            <tr>
-                                <th class="orc-th">Name</th>
-                                <th class="orc-th">Next Run</th>
-                            </tr>
-                            {% for store, jobs in scheduled_jobs %}
-                                <tr><td class="orc-td font-semibold" colspan="2">{{ store }}</td></tr>
-                                {% for job in jobs %}
+                    <div class="px-4 pt-2">
+                        {% for queue, held_since, rows in scheduled_queues %}
+                            {% call titled_card(queue, note=("held since " ~ held_since.strftime("%I:%M %p")) if held_since else "", table_fixed=true, table_class="text-sm") %}
+                                <tr>
+                                    <th class="orc-th w-48">When</th>
+                                    <th class="orc-th">Job</th>
+                                    <th class="orc-th w-40">State</th>
+                                </tr>
+                                {% for when, name, state in rows %}
                                     <tr>
-                                        <td class="orc-td">{{ job.name }}</td>
-                                        <td class="orc-td">{{ job.next_run_time.strftime('%m-%d %H:%M') if job.next_run_time else 'paused' }}</td>
+                                        <td class="orc-td"><span class="whitespace-nowrap">{{ when.strftime("%a %b %-d, %I:%M:%S %p") }}</span></td>
+                                        <td class="orc-td">{{ name }}</td>
+                                        <td class="orc-td text-gray-400"><span class="whitespace-nowrap">{{ state }}</span></td>
                                     </tr>
+                                {% else %}
+                                    <tr><td class="orc-td text-gray-400" colspan="3">No jobs.</td></tr>
                                 {% endfor %}
-                            {% endfor %}
-                    {% endcall %}
+                            {% endcall %}
+                        {% else %}
+                            <div class="pb-3 text-sm text-gray-400">No scheduled jobs.</div>
+                        {% endfor %}
+                    </div>
                 </details>
                 </div>
             </details>

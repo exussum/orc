@@ -122,7 +122,7 @@ def test_event_without_summary_is_untitled(rebuild):
 def rebuild(ctx):
     ctx.api.local_now.return_value = START
     ctx.api.is_working_day.return_value = True
-    ctx.api.fetch_jobs_by_type.return_value = []
+    ctx.api.fetch_jobs.return_value = []
     ctx.config.settings.tz = TZ
     ctx.config.secrets.other = {"ICS_URL": "https://feed.example/a.ics"}
     settings = SimpleNamespace(window_hours=20, max_events=50, warning_minutes=2, http_timeout=1)
@@ -160,16 +160,16 @@ def test_choose_page_opens_meeting_links_through_push_open(flask_client):
 
 def test_choose_page_groups_scheduled_alarms_by_day(flask_client, ctx):
     def job(kind, destination, hours):
-        return SimpleNamespace(args=(CalendarJob(kind, destination),), trigger=SimpleNamespace(run_date=START + timedelta(hours=hours)))
+        return SimpleNamespace(payload=CalendarJob(kind, destination), run_at=START + timedelta(hours=hours))
 
-    ctx.api.fetch_jobs_by_type.return_value = [job(ALARM, B, 30), job(ALARM, A, 1)]
+    ctx.api.fetch_jobs.return_value = [job(ALARM, B, 30), job(ALARM, A, 1)]
     html = flask_client.get("/api/calendar/choose/").get_data(as_text=True)
     assert html.index("Tuesday, January 6") < html.index(">A</span></a>") < html.index("Wednesday, January 7") < html.index(">B</span></a>")
     assert html.count('<span class="truncate">') == 2
 
 
 def test_choose_page_says_when_nothing_is_scheduled(flask_client, ctx):
-    ctx.api.fetch_jobs_by_type.return_value = []
+    ctx.api.fetch_jobs.return_value = []
     assert "No calendar events." in flask_client.get("/api/calendar/choose/").get_data(as_text=True)
 
 

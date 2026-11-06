@@ -7,7 +7,6 @@ from orc_engine import cast
 import orc_extras.travel
 from orc import model as m
 from orc.model import Alarm, AppContext
-from orc.plugins import requires_ctx
 from orc_extras.travel.model import Arrival, Extra, Log, Runtime, Schedule, TravelJob
 
 _FLIGHT_RE = re.compile(r"^(?=.*[A-Za-z])[A-Za-z0-9]{2,3}\s?\d{1,4}$")
@@ -85,32 +84,31 @@ def evaluate(ctx: AppContext, job: TravelJob, tz: Any, now: datetime) -> tuple[A
     return arrival, sched
 
 
-@requires_ctx
-def run_job(job: TravelJob, *, ctx: AppContext) -> None:
+def run_job(payload: TravelJob, *, ctx: AppContext) -> None:
     tz, now = ctx.config.settings.tz, ctx.api.local_now()
     try:
-        arrival, sched = evaluate(ctx, job, tz, now)
+        arrival, sched = evaluate(ctx, payload, tz, now)
     except ValueError as exc:
-        ctx.log.write(Log.TRAVEL, str(exc), m.Integration(job.summary))
-        _reschedule(ctx, job, now + _REFRESH_INTERVAL)
+        ctx.log.write(Log.TRAVEL, str(exc), m.Integration(payload.summary))
+        _reschedule(ctx, payload, now + _REFRESH_INTERVAL)
         return
     if arrival is not None:
-        job.arrive = arrival.when
-    job.leave_at, job.late, job.eta = sched.leave_at, sched.late, sched.eta
+        payload.arrive = arrival.when
+    payload.leave_at, payload.late, payload.eta = sched.leave_at, sched.late, sched.eta
     if sched.next_fire is not None:
-        _reschedule(ctx, job, sched.next_fire)
+        _reschedule(ctx, payload, sched.next_fire)
         return
     assert arrival is not None
-    if job.iata:
+    if payload.iata:
         target = arrival.where + (f", Terminal {arrival.terminal}" if arrival.terminal else "")
     else:
-        target = job.place or job.destination
-    if job.late and sched.eta:
+        target = payload.place or payload.destination
+    if payload.late and sched.eta:
         eta_str = sched.eta.astimezone(tz).strftime("%I:%M %p")
         message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
     else:
         message = f"Time to leave for {target}."
-    entry = ctx.log.write(Log.TRAVEL, message, m.Integration(job.summary))
+    entry = ctx.log.write(Log.TRAVEL, message, m.Integration(payload.summary))
     ctx.api.alert(Alarm.WARNING, text=message, entry=entry)
 
 
@@ -124,4 +122,4 @@ def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
 
 
 def _reschedule(ctx: AppContext, job: TravelJob, when: datetime) -> None:
-    ctx.scheduler.once(run_job, when, job, id=f"{job.summary}@{job.arrive.isoformat()}", persist=True)
+    ctx.scheduler.once(run_job, when, job, id=f"{job.summary}@{job.arrive.isoformat()}", queue=m.Queue.TRAVEL)

@@ -26,12 +26,12 @@
                     </td>
                     <td class="px-2 py-3 align-middle w-16">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" class="orc-enable sr-only peer" data-id="{{ job.id }}" data-name="{{ job.name }}" id="enable-{{ job.id }}" {{ 'checked' if job.next_run_time else ''}}>
+                            <input type="checkbox" class="orc-enable sr-only peer" data-id="{{ job.id }}" data-name="{{ job.name }}" id="enable-{{ job.id }}" {{ '' if job.disable else 'checked' }}>
                             <div class="orc-switch"></div>
                         </label>
                     </td>
                     <td class="px-2 py-3 align-middle w-20 lg:w-40 text-sm">{{ job.name }}</td>
-                    <td class="px-2 py-3 align-middle whitespace-nowrap">{{ job.trigger.run_date.time().strftime("%I:%M %p") }}</td>
+                    <td class="px-2 py-3 align-middle whitespace-nowrap">{{ job.run_at.time().strftime("%I:%M %p") }}</td>
                 </tr>
             {% endfor %}
         {% endcall %}

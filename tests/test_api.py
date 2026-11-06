@@ -3,15 +3,13 @@ from datetime import date, datetime, time, timedelta
 from unittest.mock import ANY, MagicMock, call, create_autospec, patch
 
 import pytest
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.date import DateTrigger
 from freezegun import freeze_time
 from orc_engine import model as em
 
 import orc
 from orc import api, config, plugins
 from orc import model as m
-from orc.dal import broker, net, push, scheduler, sqlite
+from orc.dal import broker, net, push, sqlite
 from orc.dal.findhub import stub as findhub_stub
 from orc.log import Log
 from orc.model import DeviceEnum
@@ -386,7 +384,7 @@ class TestLog:
             api.context().log.write(
                 m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification=m.Notification(("calendar", "dentist"))
             )
-        assert api._ctx.scheduler.now.call_args.args[1:] == (
+        assert api._ctx.scheduler.now.call_args.args[1] == (
             "[Plugin 01/05]",
             "later x",
             m.Notification(("calendar", "dentist")),
@@ -398,7 +396,7 @@ class TestLog:
         notification = m.Notification(("calendar",), "https://meet.google.com/abc?x=1")
         with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
             api.context().log.write(m.LogSource.PLUGIN, "standup", m.Integration("x"), notification=notification)
-        assert api._ctx.scheduler.now.call_args.args[3] == notification
+        assert api._ctx.scheduler.now.call_args.args[1][2] == notification
 
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider, push_subscriptions):
         push_subscriptions = push_subscriptions("ab")
@@ -407,7 +405,7 @@ class TestLog:
             api.subscribe_push(push_subscriptions[1], greet=True)
         now = api._ctx.scheduler.now
         assert now.call_args.args[0] is api._push_job
-        assert now.call_args.args[1:] == (
+        assert now.call_args.args[1] == (
             "[System 01/05]",
             "Notifications enabled on this device",
             m.Notification(("greeting",)),
@@ -429,7 +427,7 @@ class TestLog:
             api.subscribe_push(subscription)
         push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
         entry = api.context().log.write(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification=m.Notification(("leak",)))
-        api._push_job("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None, ctx=api._ctx)
+        api._push_job(("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None), ctx=api._ctx)
         assert push_provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in push_subscriptions]
         assert set(sqlite.fetch_push_subscriptions()) == {push_subscriptions[0], push_subscriptions[2]}
         assert [c.action for c in entry.children] == ["Push failed for `…xample/c`: boom"]
@@ -528,7 +526,7 @@ class TestGetSchedule:
 
 @freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
 class TestPresence:
-    ctx = object()  # run_iot_job never reads it; requires_ctx only rejects None
+    ctx = object()
 
     @staticmethod
     def _routine(name, trigger):
@@ -709,29 +707,6 @@ class TestPresence:
             probe.reset_mock()
             api.check_presence(TRIGGER, probe=True)
         probe.assert_called_once_with({"Alice", "Carol"}, TRIGGER)
-
-
-def test_executor_injects_ctx():
-    """_do_submit_job must not raise for closure callables (Job uses __slots__, not __dict__)."""
-    ctx = object()
-    executor = scheduler.ContextThreadPoolExecutor(ctx)
-
-    def make_closure():
-        def run():
-            pass
-
-        return run
-
-    sched = BackgroundScheduler()
-    sched.start()
-    job = sched.add_job(make_closure(), DateTrigger(FUTURE, timezone=config.settings.tz))
-    sched.shutdown(wait=False)
-
-    captured = []
-    with patch.object(scheduler.ThreadPoolExecutor, "_do_submit_job", lambda s, j, rt: captured.append(j)):
-        executor._do_submit_job(job, [])
-
-    assert captured[0].kwargs["ctx"] is ctx
 
 
 def test_squish_dim_then_off():
