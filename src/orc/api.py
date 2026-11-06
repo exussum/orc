@@ -492,12 +492,12 @@ def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYS
         return present
     stale = set(net.presence.seen()) - present
     net.presence.probe(tagged - present if probe else stale & tagged, trigger)
-    found, errors = net.scan_presence(config.people)
-    for name, exc in errors:
-        msg = Message.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
-        entry = context().log.write(source, msg, trigger, notification=m.Notification(("presence",), "/presence/"))
-        alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-    return set_present(found, trigger)
+    return _scan_lan(trigger, source)
+
+
+def rescan_presence(trigger: m.Trigger) -> set[str]:
+    expire_presence([name for name in net.presence.seen() if name not in net.presence.tagged], trigger)
+    return _scan_lan(trigger, m.LogSource.MANUAL)
 
 
 def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
@@ -845,6 +845,15 @@ def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
 @requires_ctx
 def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
     return check_presence(trigger)
+
+
+def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
+    found, errors = net.scan_presence(config.people)
+    for name, exc in errors:
+        msg = Message.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
+        entry = context().log.write(source, msg, trigger, notification=m.Notification(("presence",), "/presence/"))
+        alert(m.Alarm.ATTENTION, text=msg, entry=entry)
+    return set_present(found, trigger)
 
 
 def _presence_cutoff() -> datetime:
