@@ -133,4 +133,4 @@ def _run_react(payload: tuple[em.Deferred[m.Devices], m.Device], *, ctx: m.AppCo
     watch = deferred.watch
     (report,) = ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True)
     if report.commands:
-        _dispatch(ctx, watch, device, f" {int(watch.delay.total_seconds() // 60)}m ago")
+        _dispatch(ctx, watch, device, f" {int(watch.delay.total_seconds())}s ago")
