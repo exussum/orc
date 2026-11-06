@@ -108,7 +108,7 @@ def dispatches(ctx):
 def deferred_run(ctx):
     def deferred_run():
         deferred, device = _payload(ctx.scheduler.once.call_args)
-        plugins._run_react.__wrapped__(deferred, device, ctx=ctx)
+        plugins._run_react((deferred, device), ctx=ctx)
 
     return deferred_run
 
@@ -567,8 +567,7 @@ def _hub(id):
 
 
 def _payload(call):
-    """call.args is (func, when, *payload) — skip the scheduling positionals."""
-    return call.args[2:]
+    return call.args[2]
 
 
 def _dewpoint_of(sensor):

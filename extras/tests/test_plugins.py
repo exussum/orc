@@ -233,7 +233,7 @@ def test_equal_delays_queue_the_cleanup_first(ctx):
 
 def test_presence_job_resumes_without_scanning(ctx):
     entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
-    plugins._run_resume_presence.__wrapped__(entry, ctx=ctx)
+    plugins._run_resume_presence(entry, ctx=ctx)
     ctx.api.resume_presence.assert_called_once_with(entry.trigger)
     ctx.api.check_presence.assert_not_called()
 
@@ -293,7 +293,7 @@ def _no_world(subject):
 def _cleanup(config_sensor, nobody_home_ctx, present_before=()):
     entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test"))
     nobody_home_ctx.plugin_state = {entrance_sensor: plugins.Visit(entry, set(present_before))}
-    plugins._run_trigger_sensor_off.__wrapped__(config_sensor, entry, ctx=nobody_home_ctx)
+    plugins._run_trigger_sensor_off((config_sensor, entry), ctx=nobody_home_ctx)
     return entry
 
 
@@ -306,7 +306,7 @@ def _trigger_sensor(ctx, config_sensor, device_id, event):
     queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.now.reset_mock()
     for queued_call in queued:
-        plugins._run_motion.__wrapped__(*queued_call.args[1:], ctx=ctx)
+        plugins._run_motion(queued_call.args[1], ctx=ctx)
 
 
 def _seed_devices(nobody_home_ctx, *devices):

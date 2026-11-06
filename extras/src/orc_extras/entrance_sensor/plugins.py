@@ -7,7 +7,6 @@ from orc_engine import model as em
 
 import orc_extras.entrance_sensor
 from orc import model as m
-from orc.plugins import requires_ctx
 
 SNAPSHOT_NAME = "entrance_sensor"
 CLEANUP_JOB_ID = "trigger-sensor"
@@ -32,7 +31,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
         # command behind the chromecast I/O the same dispatch triggers. Run on
-        # the scheduler's worker; None grace so a busy worker delays, never drops.
+        # the scheduler's coordinator; None grace so a busy coordinator delays, never drops.
 
         previous = ctx.plugin_state[orc_extras.entrance_sensor]
         if previous:
@@ -43,7 +42,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
             log_entry, previous.present_before if previous else set(ctx.api.present_names())
         )
-        ctx.scheduler.now(_run_motion, sensor, new, log_entry, name="Entrance Motion")
+        ctx.scheduler.now(_run_motion, (sensor, new, log_entry), name="Entrance Motion")
 
 
 def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribute: str, old: Any, new: Any) -> bool:
@@ -55,9 +54,10 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribut
     )
 
 
-@requires_ctx
-def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
+def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppContext) -> None:
+    sensor, new, log_entry = payload
     if new == sensor.setting.active_event:
+        ctx.scheduler.pause_queue(m.Queue.IOT)
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(log_entry.trigger)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME))
@@ -70,31 +70,30 @@ def _run_motion(sensor: SimpleNamespace, new: Any, log_entry: m.LogEntry, *, ctx
     ctx.scheduler.once(
         _run_trigger_sensor_off,
         now + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
-        sensor,
-        log_entry,
-        name="Trigger Sensor",
+        (sensor, log_entry),
         id=CLEANUP_JOB_ID,
+        name="Trigger Sensor",
     )
     ctx.scheduler.once(
         _run_resume_presence,
         now + timedelta(minutes=sensor.setting.presence_delay_minutes),
         log_entry,
-        name="Resume Presence",
         id=PRESENCE_JOB_ID,
+        name="Resume Presence",
     )
 
 
-@requires_ctx
-def _run_resume_presence(log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
-    ctx.api.resume_presence(log_entry.trigger)
+def _run_resume_presence(payload: m.LogEntry, *, ctx: m.AppContext) -> None:
+    ctx.api.resume_presence(payload.trigger)
 
 
-@requires_ctx
-def _run_trigger_sensor_off(sensor: SimpleNamespace, log_entry: m.LogEntry, *, ctx: m.AppContext) -> None:
+def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx: m.AppContext) -> None:
+    sensor, log_entry = payload
     visit = ctx.plugin_state[orc_extras.entrance_sensor]
     ctx.plugin_state[orc_extras.entrance_sensor] = None
     present = ctx.api.check_presence(log_entry.trigger, probe=True)
     ctx.api.resume_presence(log_entry.trigger)
+    ctx.scheduler.release_queue(m.Queue.IOT)
     people = present - {sensor.setting.listener}
     door_open = not people and _door_open(ctx, sensor)
 

@@ -1,116 +1,110 @@
+import asyncio
 import logging
+import signal
+import threading
 from datetime import datetime, tzinfo
 from typing import Any
 
-from apscheduler.events import EVENT_ALL_JOBS_REMOVED, EVENT_JOB_MISSED, JobExecutionEvent
-from apscheduler.executors.pool import ThreadPoolExecutor
-from apscheduler.job import Job
-from apscheduler.jobstores.memory import MemoryJobStore
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
-from sqlalchemy import text
+import orc_queue as oq
+from orc_queue import Coordinator, Events, Job, JobQueue, MemoryStore, SqliteStore, ThreadLane, aware, utcnow
+from sqlalchemy.engine.url import make_url
 
 from orc import model as m
-
-_log = logging.getLogger(__name__)
-
-DEFAULT = "default"
-MEMORY = "memory"
-_DEFAULT_MISFIRE_GRACE = 300
-
-
-class ContextThreadPoolExecutor(ThreadPoolExecutor):
-    def __init__(self, ctx: m.AppContext) -> None:
-        super().__init__(max_workers=1)
-        self.ctx = ctx
-
-    def _do_submit_job(self, job: Job, run_times: list[datetime]) -> Any:
-        dispatch_job = job.__class__.__new__(job.__class__)
-        for slot in job.__slots__:
-            try:
-                setattr(dispatch_job, slot, getattr(job, slot))
-            except AttributeError:
-                pass
-        dispatch_job._jobstore_alias = job._jobstore_alias
-        dispatch_job.kwargs = {**job.kwargs, "ctx": self.ctx}
-        return super()._do_submit_job(dispatch_job, run_times)
 
 
 class Scheduler:
     def __init__(self, jobs_db: str, tz: tzinfo) -> None:
         self._tz = tz
-        self._inner = BackgroundScheduler(
-            jobstores={DEFAULT: SQLAlchemyJobStore(url=jobs_db), MEMORY: MemoryJobStore()},
-            job_defaults={"misfire_grace_time": _DEFAULT_MISFIRE_GRACE},
-            timezone=tz,
-        )
+        path = make_url(jobs_db).database
+        assert path is not None
+        lock = threading.RLock()
+        wake = threading.Event()
+        self.events = Events()
+        self._queues: dict[m.Queue, JobQueue[Any]] = {
+            m.Queue.ADHOC: JobQueue(lock, wake, MemoryStore(), 0, self.events, name=m.Queue.ADHOC),
+            m.Queue.CALENDAR: JobQueue(lock, wake, MemoryStore(), 0, self.events, name=m.Queue.CALENDAR),
+            m.Queue.FETCH: JobQueue(lock, wake, MemoryStore(), 0, self.events, name=m.Queue.FETCH),
+            m.Queue.IOT: JobQueue(lock, wake, SqliteStore(path, m.Queue.IOT), 0, self.events, name=m.Queue.IOT),
+            m.Queue.PRESENCE: JobQueue(lock, wake, MemoryStore(), 0, self.events, name=m.Queue.PRESENCE),
+            m.Queue.TRAVEL: JobQueue(lock, wake, SqliteStore(path, m.Queue.TRAVEL), 0, self.events, name=m.Queue.TRAVEL),
+        }
+        self._lock = lock
+        self._lanes = [
+            ThreadLane([self._queues[m.Queue.ADHOC], self._queues[m.Queue.CALENDAR], self._queues[m.Queue.IOT]]),
+            ThreadLane([self._queues[m.Queue.FETCH], self._queues[m.Queue.PRESENCE], self._queues[m.Queue.TRAVEL]]),
+        ]
+        self._thread = threading.Thread(target=self._run, name="orc-queue", daemon=True)
 
     def start(self, ctx: m.AppContext) -> None:
-        self._inner.add_executor(ContextThreadPoolExecutor(ctx), DEFAULT)
-        self._inner.add_listener(_log_missed, EVENT_JOB_MISSED)
-        self._inner.start(paused=True)
+        self._coordinator: Coordinator[Any] = Coordinator(self._lanes, [], context=ctx)
+        self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            asyncio.run(self._serve())
+        except BaseException:
+            logging.getLogger(__name__).critical("scheduler died, stopping the server", exc_info=True)
+            signal.raise_signal(signal.SIGTERM)
+
+    async def _serve(self) -> None:
+        self._coordinator.start()
+        await self._coordinator.run()
 
     def resume(self) -> None:
-        self._inner.resume()
+        self._coordinator.resume()
 
-    def once(self, func: Any, when: datetime, *args: Any, id: str | None = None, name: str | None = None, persist: bool = False) -> Job:
-        return self._add(func, DateTrigger(when, timezone=self._tz), args, id, name, persist)
+    def once(
+        self,
+        func: Any,
+        when: datetime,
+        payload: Any = None,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        queue: m.Queue = m.Queue.ADHOC,
+    ) -> Job[Any]:
+        target = self._queues[queue]
+        job = Job(aware(when), func, payload, name=name, **({"id": id} if id else {}))
+        with self._lock:
+            existing = target.get(job.id) if id else None
+            if existing is not None:
+                job.disable = existing.disable
+            target.add(job)
+        return job
 
-    def now(self, func: Any, *args: Any, name: str | None = None, skip_if_late: bool = False) -> Job:
-        grace = _DEFAULT_MISFIRE_GRACE if skip_if_late else None
-        return self._add(func, DateTrigger(datetime.now(tz=self._tz), timezone=self._tz), args, None, name, False, misfire_grace_time=grace)
+    def now(self, func: Any, payload: Any = None, *, name: str | None = None, queue: m.Queue = m.Queue.ADHOC) -> Job[Any]:
+        return self.once(func, utcnow(), payload, name=name, queue=queue)
 
-    def cron(self, func: Any, crontab: str, *args: Any, id: str, name: str) -> Job:
-        return self._add(func, CronTrigger.from_crontab(crontab, timezone=self._tz), args, id, name, False)
+    def cron(self, func: Any, crontab: str, *, id: str, name: str, queue: m.Queue = m.Queue.ADHOC) -> Job[Any]:
+        job = oq.schedule(crontab, self._tz, func, id_template=id, name=name)
+        with self._lock:
+            self._queues[queue].add(job)
+        return job
 
     def cancel(self, id: str) -> bool:
-        if job := self._inner.get_job(id):
-            job.remove()
-            return True
-        return False
+        return self._coordinator.cancel_job(id)
 
-    def set_paused(self, id: str, paused: bool) -> bool:
-        if not (job := self._inner.get_job(id)):
-            return False
-        job.pause() if paused else job.resume()
-        return True
+    def pause_job(self, id: str, disable: bool) -> bool:
+        return self._coordinator.pause_job(id, disable)
 
-    def matching(self, type: type) -> list[Job]:
-        now = datetime.now(tz=self._tz)
-        return [e for e in self._inner.get_jobs() if e.args and isinstance(e.args[0], type) and e.trigger.run_date > now]
+    def pause_queue(self, queue: m.Queue) -> None:
+        self._coordinator.pause_queue(queue)
 
-    def stores(self) -> list[tuple[str, list[Job]]]:
-        return [(store, self._inner.get_jobs(jobstore=store)) for store in (DEFAULT, MEMORY)]
+    def release_queue(self, queue: m.Queue) -> None:
+        with self._lock:
+            self._queues[queue].resume()
 
-    def on_rebuild(self, callback: Any) -> None:
-        self._inner.add_listener(lambda event: callback(), EVENT_ALL_JOBS_REMOVED)
+    def jobs(self, queue: m.Queue) -> list[Job[Any]]:
+        with self._lock:
+            return self._queues[queue].jobs()
+
+    def stores(self) -> list[m.QueueStatus]:
+        with self._lock:
+            return [
+                m.QueueStatus(str(q.name), q.paused_at.astimezone(self._tz) if q.paused_at else None, q.jobs())
+                for q in self._queues.values()
+            ]
 
     def rebuild(self) -> None:
-        self._inner.remove_all_jobs()
-
-    def delete_stale(self) -> None:
-        today = datetime.now(tz=self._tz).date().isoformat()
-        with self._inner._lookup_jobstore(DEFAULT).engine.begin() as conn:
-            conn.execute(
-                text(
-                    "delete from apscheduler_jobs"
-                    " where next_run_time is null"
-                    " and substr(id, -10) glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
-                    " and substr(id, -10) < :today"
-                ),
-                {"today": today},
-            )
-
-    def _add(self, func: Any, trigger: Any, args: tuple[Any, ...], id: str | None, name: str | None, persist: bool, **options: Any) -> Job:
-        options |= {"args": args, "name": name, "jobstore": DEFAULT if persist else MEMORY}
-        if id:
-            options |= {"id": id, "replace_existing": True}
-            if (job := self._inner.get_job(id)) and job.next_run_time is None:
-                options |= {"next_run_time": None}
-        return self._inner.add_job(func, trigger, **options)
-
-
-def _log_missed(event: JobExecutionEvent) -> None:
-    _log.error("scheduler: missed job %s due at %s", event.job_id, event.scheduled_run_time)
+        with self._lock:
+            self._queues[m.Queue.IOT].reset()

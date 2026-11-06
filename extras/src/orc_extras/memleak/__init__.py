@@ -14,7 +14,6 @@ from orc_engine import cast as engine_cast
 import orc_extras.memleak
 from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
-from orc.plugins import requires_ctx
 
 if TYPE_CHECKING:
     from orc.view import OrcFlask
@@ -72,8 +71,7 @@ def setup(ctx: AppContext) -> None:
     settings = load_plugin_config(CONFIG, ctx.config, GRAMMAR, _SERIALIZERS).setting
     state = State(settings, deque([sample(ctx.api.local_now())], maxlen=HISTORY))
     ctx.plugin_state[orc_extras.memleak] = state
-    ctx.scheduler.on_rebuild(lambda: _add_cron(ctx, settings))
-    _add_cron(ctx, settings)
+    ctx.scheduler.cron(_snapshot, f"{settings.snapshot_minute} * * * *", id=CRON_ID, name="Memory Cron")
 
 
 @bp.route("/")
@@ -119,10 +117,6 @@ def rank(history: list[Sample], threshold_kb: float) -> list[Row]:
     return rows[:ROWS]
 
 
-def _add_cron(ctx: AppContext, settings: Settings) -> None:
-    ctx.scheduler.cron(_snapshot, f"{settings.snapshot_minute} * * * *", id=CRON_ID, name="Memory Cron")
-
-
 def _total(history: list[Sample], name: str) -> dict[str, float]:
     first, last = getattr(history[0], name), getattr(history[-1], name)
     return {"mb": last / 1024 / 1024, "since_boot_mb": (last - first) / 1024 / 1024}
@@ -135,7 +129,6 @@ def _next_snapshot(now: datetime, minute: int) -> datetime:
     return at
 
 
-@requires_ctx
 def _snapshot(*, ctx: AppContext) -> None:
     ctx.plugin_state[orc_extras.memleak].history.append(sample(ctx.api.local_now()))
 

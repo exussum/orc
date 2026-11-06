@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, cast
 
 from flask import Blueprint, current_app, request
 
+from orc import model as m
 from orc_extras.travel import plugins
 from orc_extras.travel.model import Submission, TravelJob
 
@@ -15,17 +16,17 @@ app = cast("OrcFlask", current_app)
 
 @travel_bp.route("/", methods=["GET"])
 def upcoming() -> dict:
-    jobs = sorted(app.orc.scheduler.matching(TravelJob), key=lambda j: j.args[0].arrive)
+    jobs = sorted(app.orc.scheduler.jobs(m.Queue.TRAVEL), key=lambda j: j.payload.arrive)
     return {
         "jobs": [
             {
                 "id": j.id,
-                "summary": j.args[0].summary,
-                "arrive": j.args[0].arrive.isoformat(),
-                "airport": j.args[0].airport,
-                "leave_at": j.args[0].leave_at.isoformat() if j.args[0].leave_at else None,
-                "late": j.args[0].late,
-                "eta": j.args[0].eta.isoformat() if j.args[0].eta else None,
+                "summary": j.payload.summary,
+                "arrive": j.payload.arrive.isoformat(),
+                "airport": j.payload.airport,
+                "leave_at": j.payload.leave_at.isoformat() if j.payload.leave_at else None,
+                "late": j.payload.late,
+                "eta": j.payload.eta.isoformat() if j.payload.eta else None,
             }
             for j in jobs[:3]
         ],

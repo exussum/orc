@@ -9,9 +9,9 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self
 from zoneinfo import ZoneInfo
 
-from apscheduler.job import Job
 from orc_engine import cast, engine
 from orc_engine import model as em
+from orc_queue import Job
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -339,6 +339,21 @@ class LogEntry(LogSubEntry):
         return entry
 
 
+class Queue(StrEnum):
+    ADHOC = "adhoc"
+    CALENDAR = "calendar"
+    FETCH = "fetch"
+    IOT = "iot"
+    PRESENCE = "presence"
+    TRAVEL = "travel"
+
+
+class QueueStatus(NamedTuple):
+    name: str
+    paused_since: datetime | None
+    jobs: list[Job[Any]]
+
+
 @dataclass
 class IotJob:
     rule: Routine
@@ -476,16 +491,18 @@ class Secrets:
 class Scheduler(Protocol):
     def start(self, ctx: "AppContext") -> None: ...
     def resume(self) -> None: ...
-    def once(self, func: Any, when: datetime, *args: Any, id: str | None = None, name: str | None = None, persist: bool = False) -> Job: ...
-    def now(self, func: Any, *args: Any, name: str | None = None, skip_if_late: bool = False) -> Job: ...
-    def cron(self, func: Any, crontab: str, *args: Any, id: str, name: str) -> Job: ...
+    def once(
+        self, func: Any, when: datetime, payload: Any = None, *, id: str | None = None, name: str | None = None, queue: Queue = Queue.ADHOC
+    ) -> Job[Any]: ...
+    def now(self, func: Any, payload: Any = None, *, name: str | None = None, queue: Queue = Queue.ADHOC) -> Job[Any]: ...
+    def cron(self, func: Any, crontab: str, *, id: str, name: str, queue: Queue = Queue.ADHOC) -> Job[Any]: ...
     def cancel(self, id: str) -> bool: ...
-    def set_paused(self, id: str, paused: bool) -> bool: ...
-    def matching(self, type: type) -> list[Job]: ...
-    def stores(self) -> list[tuple[str, list[Job]]]: ...
-    def on_rebuild(self, callback: Callable[[], None]) -> None: ...
+    def pause_job(self, id: str, disable: bool) -> bool: ...
+    def jobs(self, queue: Queue) -> list[Job[Any]]: ...
+    def pause_queue(self, queue: Queue) -> None: ...
+    def release_queue(self, queue: Queue) -> None: ...
+    def stores(self) -> list[QueueStatus]: ...
     def rebuild(self) -> None: ...
-    def delete_stale(self) -> None: ...
 
 
 def _log() -> "Log":
@@ -563,7 +580,7 @@ Routine = em.Rule[Devices]
 
 @dataclass(frozen=True)
 class AdhocAction(em.Action[Devices]):
-    name: str = ""
+    name: str | None = None
     delay: timedelta = timedelta()
     snapshot: timedelta | None = None
     section: str | None = None

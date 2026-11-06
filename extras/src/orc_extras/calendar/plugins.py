@@ -10,7 +10,6 @@ from yarl import URL
 
 from orc import model as m
 from orc.kernel.loader import load_plugin_config
-from orc.plugins import requires_ctx
 from orc_extras.calendar.dal.interfaces import FeedService
 
 CONFIG = "orc_extras/calendar"
@@ -146,20 +145,12 @@ def opener(url: str) -> str:
 
 
 def schedule_cron(ctx: m.AppContext, crontab: str) -> None:
-    # api.rebuild_jobs wipes every jobstore and re-adds only core crons; the
-    # listener puts this one back whenever that happens.
-    ctx.scheduler.on_rebuild(lambda: _add_cron(ctx, crontab))
-    _add_cron(ctx, crontab)
+    ctx.scheduler.cron(schedule_events, crontab, id=CRON_ID, name="Calendar Cron", queue=m.Queue.FETCH)
 
 
-@requires_ctx
 def schedule_events(*, ctx: m.AppContext) -> None:
     calendar = load_plugin_config(CONFIG, ctx.config, GRAMMAR, SERIALIZERS)
     _schedule(cast.module(calendar.setting.backend), calendar.setting, calendar.feed, ctx=ctx)
-
-
-def _add_cron(ctx: m.AppContext, crontab: str) -> None:
-    ctx.scheduler.cron(schedule_events, crontab, id=CRON_ID, name="Calendar Cron")
 
 
 def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ctx: m.AppContext) -> None:
@@ -178,7 +169,7 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
         alarm_events = (CalendarEvent.from_cal(e, name, ALARM, timedelta(), tz) for e in events)
         events_by_id.update({e.uuid: e for e in chain(alarm_events, warning_events)})
 
-    for job in ctx.api.fetch_jobs_by_type(CalendarJob):
+    for job in ctx.api.fetch_jobs(m.Queue.CALENDAR):
         if job.id not in events_by_id:
             ctx.scheduler.cancel(job.id)
 
@@ -189,17 +180,17 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
             CalendarJob(event.type, EventDestination(event.summary, event.url, event.address, glyph(event.summary, event.url))),
             id=id,
             name=event.summary if event.type == ALARM else f"{event.summary} ({event.type})",
+            queue=m.Queue.CALENDAR,
         )
 
 
-@requires_ctx
-def _run_event(job: CalendarJob, *, ctx: m.AppContext) -> None:
-    summary = job.destination.summary
+def _run_event(payload: CalendarJob, *, ctx: m.AppContext) -> None:
+    summary = payload.destination.summary
     trigger = m.Integration(summary)
-    if job.event_type == WARNING:
+    if payload.event_type == WARNING:
         entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, summary, trigger)
         ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
     else:
-        link = str(CHOOSER_URL.with_query(title=summary, url=job.destination.url, address=job.destination.address))
+        link = str(CHOOSER_URL.with_query(title=summary, url=payload.destination.url, address=payload.destination.address))
         entry = ctx.log.write(Log.CALENDAR, summary, trigger, notification=m.Notification(("calendar",), link), link=link)
         ctx.api.alert(m.Alarm.ATTENTION, text=summary, entry=entry)

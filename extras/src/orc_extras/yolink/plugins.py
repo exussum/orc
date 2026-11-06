@@ -5,7 +5,7 @@ import signal
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -81,11 +81,10 @@ def simulate_transition(ctx: m.AppContext, name: str, on_transition: TransitionC
     _fire(on_transition, "leak", name, prev, STATE_WET)
 
     def _revert() -> None:
-        time.sleep(5)
         if states.update(device_id, _transition_to(ctx, STATE_DRY, require=STATE_WET)) is not None:
             _fire(on_transition, "leak", name, STATE_WET, STATE_DRY)
 
-    threading.Thread(target=_revert, name=f"yolink-test-revert-{name}", daemon=True).start()
+    ctx.scheduler.once(_revert, ctx.api.local_now() + timedelta(seconds=5), name=f"YoLink test revert {name}")
     return True
 
 

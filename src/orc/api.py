@@ -13,10 +13,10 @@ from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from apscheduler.job import Job
 from orc_engine import cast as engine_cast
 from orc_engine import engine
 from orc_engine import model as em
+from orc_queue import Job
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 from yarl import URL
@@ -27,7 +27,7 @@ from orc.collections import of_type
 from orc.dal import broker, net, push, sqlite
 from orc.dal.sqlite import durations as _durations
 from orc.dal.sqlite import init_db, load_durations, update_avg  # noqa: F401
-from orc.decorators import mappable, requires_ctx
+from orc.decorators import mappable
 from orc.kernel.declarations import Declarations
 from orc.log import Message
 
@@ -44,10 +44,10 @@ _STATE_SORT_ON = 0
 _STATE_SORT_OTHER = 1
 
 _ctx: m.AppContext | None = None
+_retry_stats: tuple[m.RetryStats, ...] = ()
 
 last_seen = net.presence.seen
 mark_present = net.presence.mark
-resume_presence = net.presence.resume
 
 
 type _Job = tuple[Callable[..., None], m.DeviceEnum, em.Command[Any]]
@@ -96,13 +96,13 @@ def action_delays() -> dict[str, timedelta]:
     return ad_hoc | plugins
 
 
-def set_job_paused(id: str, paused: bool) -> bool:
-    return context().scheduler.set_paused(id, paused)
+def set_job_paused(id: str, disable: bool) -> bool:
+    return context().scheduler.pause_job(id, disable)
 
 
 @mappable
-def fetch_jobs_by_type[T](type: type[T], where: Callable[[T], bool] = lambda _: True) -> list[Job]:
-    return [job for job in context().scheduler.matching(type) if where(job.args[0])]
+def fetch_jobs(queue: m.Queue, where: Callable[[Any], bool] = lambda _: True) -> list[Job[Any]]:
+    return [job for job in context().scheduler.jobs(queue) if where(job.payload)]
 
 
 def local_now() -> datetime:
@@ -272,7 +272,6 @@ def run_action(
             when = local_now() + action.delay
             queued = context().log.write(source, Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
 
-            @requires_ctx
             def run(*, ctx: m.AppContext) -> None:
                 queued.add(source, display)
                 action.effect(queued)
@@ -362,7 +361,7 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
 
 
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
-    return config.providers.hubitat.fetch_retry_stats()
+    return _retry_stats
 
 
 def tv_toggle(bl_device: m.DeviceEnum) -> None:
@@ -419,6 +418,12 @@ def delete_all_presence(trigger: m.Trigger) -> None:
 
 def pause_presence() -> None:
     net.presence.pause(local_now())
+    context().scheduler.pause_queue(m.Queue.PRESENCE)
+
+
+def resume_presence(trigger: m.Trigger) -> None:
+    net.presence.resume(trigger)
+    context().scheduler.release_queue(m.Queue.PRESENCE)
 
 
 def start_ble_listener() -> None:
@@ -447,12 +452,12 @@ def start_ble_listener() -> None:
 
 def schedule_presence_check(trigger: m.Trigger) -> None:
     if config.people:
-        context().scheduler.now(_check_presence_job, trigger, name="Presence Boot Check", skip_if_late=True)
+        context().scheduler.now(_check_presence_job, trigger, name="Presence Boot Check", queue=m.Queue.PRESENCE)
 
 
 def schedule_tag_key_refresh(trigger: m.Trigger) -> None:
     if config.tags:
-        context().scheduler.now(_refresh_tag_keys_job, trigger, name="Find Hub Boot Check", skip_if_late=True)
+        context().scheduler.now(_refresh_tag_keys_job, trigger, name="Find Hub Boot Check", queue=m.Queue.PRESENCE)
 
 
 def refresh_tag_keys(trigger: m.Trigger) -> None:
@@ -514,24 +519,23 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
     return result
 
 
-def next_iot_job(present_names: set[str]) -> Job | None:
-    jobs = sorted(fetch_jobs_by_type(m.IotJob), key=lambda e: e.trigger.run_date)
+def next_iot_job(present_names: set[str]) -> Job[Any] | None:
+    jobs = sorted(fetch_jobs(m.Queue.IOT), key=lambda e: e.run_at)
     return next(
         (
             j
             for j in jobs
-            if j.next_run_time
-            and not any(isinstance(step.command.tag, m.Always) for step in j.args[0].rule.steps)
-            and _matching_items(j.args[0].rule, j.next_run_time, present_names)
+            if not j.disable
+            and not any(isinstance(step.command.tag, m.Always) for step in j.payload.rule.steps)
+            and _matching_items(j.payload.rule, j.run_at, present_names)
         ),
         None,
     )
 
 
-@requires_ctx
-def run_iot_job(job: m.IotJob, ctx: m.AppContext) -> None:
+def run_iot_job(payload: m.IotJob, ctx: m.AppContext) -> None:
     _run_schedule_routine(
-        job.rule, context().log.write(m.LogSource.ROUTINE, f"`{job.rule.name}`", m.Scheduled(job.rule.name)), present_names()
+        payload.rule, context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.rule.name)), present_names()
     )
 
 
@@ -560,15 +564,16 @@ def rebuild_jobs(ctx: m.AppContext) -> None:
 
 
 def setup_scheduler(ctx: m.AppContext) -> None:
-    if not fetch_jobs_by_type(m.IotJob):
+    if not fetch_jobs(m.Queue.IOT):
         rebuild_iot_schedule(ctx=ctx)
-    for job_id, func, crontab, name in (
-        ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron"),
-        ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron"),
-        ("findhub-cron", _tag_keys_cron_job, "0 */4 * * *", "Find Hub Cron"),
-        ("jobs-cleanup-cron", _cleanup_stale_jobs, "15 0 * * *", "Jobs Cleanup Cron"),
+    for job_id, func, crontab, name, queue in (
+        ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron", m.Queue.ADHOC),
+        ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron", m.Queue.PRESENCE),
+        ("findhub-cron", _tag_keys_cron_job, "0 */4 * * *", "Find Hub Cron", m.Queue.PRESENCE),
+        ("stats-cron", _retry_stats_job, "*/5 * * * *", "Stats Cron", m.Queue.FETCH),
     ):
-        ctx.scheduler.cron(func, crontab, id=job_id, name=name)
+        ctx.scheduler.cron(func, crontab, id=job_id, name=name, queue=queue)
+    ctx.scheduler.now(_retry_stats_job, name="Stats Boot Check", queue=m.Queue.FETCH)
 
 
 def has_presence(rule: m.Routine) -> bool:
@@ -611,14 +616,18 @@ def runtime() -> engine.Runtime:
     return engine.Runtime(config.settings.tz, bypass=m.Always(), override_key=ORC_SYSTEM_SNAPSHOT)
 
 
-@requires_ctx
 def rebuild_iot_schedule(ctx: m.AppContext) -> None:
     now = local_now()
     for run_at, entry in get_schedule():
         if now <= run_at:
             job = m.IotJob(entry.routine, entry.routine_id)
             ctx.scheduler.once(
-                run_iot_job, run_at, job, name=entry.routine.name, id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}", persist=True
+                run_iot_job,
+                run_at,
+                job,
+                id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}",
+                name=entry.routine.name,
+                queue=m.Queue.IOT,
             )
 
 
@@ -797,19 +806,11 @@ def _dispatch_ac(ctx: m.AppContext, w: m.DeviceEnum, command: em.Command[Any], s
 def _schedule_push(
     title: str, body: str, notification: m.Notification, trigger: m.Trigger, subscriptions: tuple[m.PushSubscription, ...] | None
 ) -> None:
-    context().scheduler.now(_push_job, title, body, notification, trigger, subscriptions, name="Push")
+    context().scheduler.now(_push_job, (title, body, notification, trigger, subscriptions), name="Push")
 
 
-@requires_ctx
-def _push_job(
-    title: str,
-    body: str,
-    notification: m.Notification,
-    trigger: m.Trigger,
-    subscriptions: tuple[m.PushSubscription, ...] | None,
-    *,
-    ctx: m.AppContext,
-) -> None:
+def _push_job(payload: tuple[str, str, m.Notification, m.Trigger, tuple[m.PushSubscription, ...] | None], *, ctx: m.AppContext) -> None:
+    title, body, notification, trigger, subscriptions = payload
     for subscription in subscriptions or sqlite.fetch_push_subscriptions():
         try:
             config.providers.push.send(subscription, title, body, notification)
@@ -837,14 +838,8 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
     return device
 
 
-@requires_ctx
-def _cleanup_stale_jobs(ctx: m.AppContext) -> None:
-    ctx.scheduler.delete_stale()
-
-
-@requires_ctx
-def _check_presence_job(trigger: m.Trigger, *, ctx: m.AppContext) -> set[str]:
-    return check_presence(trigger)
+def _check_presence_job(payload: m.Trigger, *, ctx: m.AppContext) -> set[str]:
+    return check_presence(payload)
 
 
 def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
@@ -860,16 +855,18 @@ def _presence_cutoff() -> datetime:
     return local_now() - timedelta(hours=config.settings.presence_hours)
 
 
-@requires_ctx
 def _presence_cron_job(ctx: m.AppContext) -> set[str]:
     return check_presence(m.Cron("presence"))
 
 
-@requires_ctx
-def _refresh_tag_keys_job(trigger: m.Trigger, *, ctx: m.AppContext) -> None:
-    refresh_tag_keys(trigger)
+def _refresh_tag_keys_job(payload: m.Trigger, *, ctx: m.AppContext) -> None:
+    refresh_tag_keys(payload)
 
 
-@requires_ctx
 def _tag_keys_cron_job(ctx: m.AppContext) -> None:
     refresh_tag_keys(m.Cron("findhub"))
+
+
+def _retry_stats_job(ctx: m.AppContext) -> None:
+    global _retry_stats
+    _retry_stats = config.providers.hubitat.fetch_retry_stats()

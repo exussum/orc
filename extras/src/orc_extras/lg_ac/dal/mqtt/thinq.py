@@ -149,7 +149,9 @@ class Thinq:
             old = self._raw.get(device_id) or {}
             self._raw.update(device_id, lambda cur: {**(cur or {}), **values})
             before, after = api.state_from_raw(fm, old), api.state_from_raw(fm, {**old, **values})
-            if old and before != after:
+            # Until the unit has answered the values query, power is unknown and AcState's
+            # equality treats unknown as never equal, so every temperature packet would log "? → ?".
+            if old and after.power and before != after:
                 source = om.Source.EXTERNAL
                 if (asked := self._asked.get(device_id)) and after == asked:
                     source = om.Source.ORC

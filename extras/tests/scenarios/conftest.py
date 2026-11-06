@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,25 +29,35 @@ HUB = {
 class FakeScheduler:
     def __init__(self):
         self.jobs = {}
+        self.held = set()
 
-    def once(self, func, when, *args, id=None, name=None, persist=False):
-        job = SimpleNamespace(func=func, args=args, id=id or name, name=name, run_date=when)
+    def pause_queue(self, queue):
+        self.held.add(queue)
+
+    def release_queue(self, queue):
+        self.held.discard(queue)
+
+    def once(self, func, when, payload=None, *, id=None, name=None, queue=m.Queue.ADHOC):
+        job = SimpleNamespace(func=func, payload=payload, id=id or str(uuid.uuid4()), run_date=when, queue=queue)
         self.jobs[job.id] = job
         return job
 
-    def now(self, func, *args, name=None, skip_if_late=False):
-        return self.once(func, api.local_now(), *args, name=name)
+    def now(self, func, payload=None, *, name=None, queue=m.Queue.ADHOC):
+        return self.once(func, api.local_now(), payload, name=name, queue=queue)
 
     def cancel(self, id):
         return self.jobs.pop(id, None) is not None
 
+    def _held(self, job):
+        return job.queue in self.held
+
     def run_due(self, now, ctx, clock=None):
-        while due := sorted((j for j in self.jobs.values() if j.run_date <= now), key=lambda j: j.run_date):
+        while due := sorted((j for j in self.jobs.values() if j.run_date <= now and not self._held(j)), key=lambda j: j.run_date):
             job = due[0]
             del self.jobs[job.id]
             if clock:
                 clock.move_to(max(job.run_date, api.local_now()))
-            job.func(*job.args, ctx=ctx)
+            job.func(**({} if job.payload is None else {"payload": job.payload}), ctx=ctx)
         if clock:
             clock.move_to(now)
 

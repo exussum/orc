@@ -5,7 +5,6 @@ from orc_engine import cast
 import example
 from example.model import ExampleJob, Plan, Runtime
 from orc.model import AppContext, DeviceStatus, Scheduler
-from orc.plugins import requires_ctx
 
 
 def runtime(ctx: AppContext) -> Runtime:
@@ -38,7 +37,6 @@ def status() -> list[DeviceStatus]:
     raise NotImplementedError
 
 
-@requires_ctx
 def run_job(job: ExampleJob, *, ctx: AppContext) -> None:
     pass
 
