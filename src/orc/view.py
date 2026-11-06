@@ -352,8 +352,7 @@ def presence_state() -> dict[str, Any]:
 def run_presence_check() -> dict[str, Any]:
     trigger = m.Manual("presence")
     with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_RESCAN, trigger)):
-        api.delete_all_presence(trigger)
-        api.check_presence(trigger, source=m.LogSource.MANUAL, probe=True)
+        api.rescan_presence(trigger)
     return {}
 
 

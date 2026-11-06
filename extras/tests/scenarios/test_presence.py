@@ -22,10 +22,7 @@ def test_manual_rescan_clears_and_refinds_everyone(house):
 
     house.press("/api/presence/run")
 
-    assert house.log()[-2:] == [
-        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice, Rex`", "Presence detected: `Alice`"]),
-        (m.Query("ble"), "Presence detected: `Rex`", []),
-    ]
+    assert house.log()[-1] == (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice`", "Presence detected: `Alice`"])
     assert api.present_names() == {"Alice", "Rex"}
 
 
@@ -38,11 +35,9 @@ def test_two_rescans_an_hour_apart_are_two_rows(house):
     house.tick(hours=1)
     house.press("/api/presence/run")
 
-    assert house.log()[-4:] == [
-        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice`"]),
-        (m.Query("ble"), "Presence detected: `Alice`", []),
-        (m.Manual("presence"), "Presence rescan", ["Presence lost: `Alice`"]),
-        (m.Query("ble"), "Presence detected: `Alice`", []),
+    assert house.log()[-2:] == [
+        (m.Manual("presence"), "Presence rescan", []),
+        (m.Manual("presence"), "Presence rescan", []),
     ]
 
 
