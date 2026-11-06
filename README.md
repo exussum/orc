@@ -356,9 +356,12 @@ explicit `provider` line, stub or real, always overrides the default. A
 house with no hub names `provider adapter orc.dal.mqtt.none`: it claims no
 devices, so every `Light`, `Button` and `Sensor` is virtual and dispatch
 skips them. The MQTT broker connection is the `broker` provider:
-`orc.dal.broker.paho` by default, and `orc.dal.broker.stub` keeps every
+`orc.dal.broker.paho` by default, `orc.dal.broker.stub` keeps every
 adapter's routing but opens no connection and drops what they publish, so
-a development boot with a plugin adapter needs no broker.
+a development boot with a plugin adapter needs no broker, and
+`orc.dal.broker.readonly` connects and subscribes to the real broker named
+by `mqtt_host` but drops every publish, so a development boot can watch
+the house's devices without being able to command them.
 
 You'll need:
 
