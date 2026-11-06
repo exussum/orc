@@ -86,8 +86,8 @@ directly:
 | `ctx.plugin_state` | per-plugin state dict   | Shared live state, keyed by the plugin's module and stored once by `setup()`. Wiring travels as arguments instead.                                                            |
 
 For work scheduled to run later (this plugin queues a follow-up job with
-`ctx.scheduler.once`), decorate the job function with `@requires_ctx` —
-the scheduler injects the context as a `ctx` keyword argument at run time.
+`ctx.scheduler.once`), give the job function a `ctx` keyword parameter —
+the scheduler passes the context to it at run time.
 
 ## 2. Register it in config.orc
 

@@ -332,18 +332,6 @@ class TestPresence:
         assert self._present(presence) == set()
 
 
-def test_missed_job_is_logged(caplog):
-    from datetime import datetime
-
-    from apscheduler.events import EVENT_JOB_MISSED, JobExecutionEvent
-
-    from orc.dal import scheduler
-
-    scheduler._log_missed(JobExecutionEvent(EVENT_JOB_MISSED, "iot-Sunrise", "memory", datetime(2026, 1, 1, tzinfo=config.settings.tz)))
-    (record,) = [r for r in caplog.records if r.levelname == "ERROR"]
-    assert "iot-Sunrise" in record.getMessage()
-
-
 def test_readding_a_paused_job_keeps_it_paused(ctx, tmp_path):
     from datetime import datetime, timedelta
 
@@ -353,9 +341,9 @@ def test_readding_a_paused_job_keeps_it_paused(ctx, tmp_path):
     s.start(ctx)
     when = datetime.now(config.settings.tz) + timedelta(hours=1)
     s.once(print, when, id="iot-x")
-    assert s.set_paused("iot-x", True)
+    assert s.pause_job("iot-x", True)
     job = s.once(print, when, id="iot-x")
-    assert job.next_run_time is None
+    assert job.disable
 
 
 @pytest.mark.parametrize("scheme", ["file", "data"])

@@ -10,12 +10,12 @@ from typing import Any, NamedTuple, cast
 from urllib.parse import urlparse
 
 import psutil
-from apscheduler.job import Job
 from flask import Blueprint, Flask, abort, redirect, render_template, request
 from flask import current_app as _current_app
 from flask.wrappers import Response
 from markupsafe import Markup, escape
 from orc_engine import model as em
+from orc_queue import CronJob, Job
 from werkzeug.exceptions import HTTPException
 from werkzeug.wrappers import Response as BaseResponse
 from yarl import URL
@@ -154,6 +154,7 @@ def cfg() -> str:
     html = Markup("<pre>{}</pre>").format(_config_text(config.config_dir))
 
     states = [(title, fn()) for title, fn in config.registry.state_providers.items()]
+    queues = app.orc.scheduler.stores()
     # One button per device: each actionable state row whose action is a
     # device-section plugin (row.action -> plugin name, row.name -> device).
     device_plugins = {p.name: p for p in config.plugins_in("device")}
@@ -178,7 +179,7 @@ def cfg() -> str:
         device_buttons=device_buttons,
         device_plugins=device_plugins,
         registry=config.registry,
-        scheduled_jobs=app.orc.scheduler.stores(),
+        scheduled_queues=_scheduled_queues(queues, api.local_now()),
         base_url=config.settings.base_url or request.url_root.rstrip("/"),
     )
 
@@ -358,7 +359,7 @@ def run_presence_check() -> dict[str, Any]:
 
 @bp.route("/schedule/")
 def schedule() -> str:
-    jobs = api.fetch_jobs_by_type(m.IotJob, mapper=_by_run_date)
+    jobs = api.fetch_jobs(m.Queue.IOT, mapper=_by_run_date)
     theme_override = api.current_theme_override()
 
     theme = (
@@ -369,19 +370,19 @@ def schedule() -> str:
 
     present_names = api.present_names()
 
-    def row(job: Job) -> JobRow:
-        iot_job = job.args[0]
+    def row(job: Job[Any]) -> JobRow:
+        iot_job = job.payload
         return JobRow(
             routine_id=iot_job.routine_id,
             name=iot_job.rule.name,
             absent=api.is_absent(iot_job.rule, present_names),
-            weather=api.weather_active(iot_job.rule, job.trigger.run_date),
+            weather=api.weather_active(iot_job.rule, job.run_at),
             presence=api.has_presence(iot_job.rule),
             skip_replay=m.SKIP_REPLAY_TAG in iot_job.rule.tags,
         )
 
     job_rows = {j.id: row(j) for j in jobs}
-    jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.trigger.run_date.date())]
+    jobs_grouped = [(day, list(js)) for day, js in groupby(jobs, key=lambda j: j.run_at.date())]
 
     return render_template(
         "schedule.html",
@@ -496,8 +497,29 @@ def _volumes_by_name(sounds: tuple[m.SoundState, ...]) -> dict[str, int]:
     return {s.what.name: s.volume for s in sounds}
 
 
-def _by_run_date(jobs: list[Job]) -> list[Job]:
-    return sorted(jobs, key=lambda job: job.trigger.run_date)
+def _scheduled_queues(queues: list[m.QueueStatus], now: datetime) -> list[tuple[str, datetime | None, list[tuple[datetime, str, str]]]]:
+    cards = []
+    for queue in sorted(queues, key=lambda queue: queue.name):
+        rows = []
+        for job in sorted(queue.jobs, key=lambda job: job.run_at):
+            when = job.run_at.astimezone(config.settings.tz)
+            if job.disable:
+                state = "disabled"
+            elif queue.paused_since and when <= now:
+                state = "held, due"
+            elif queue.paused_since:
+                state = "held"
+            elif isinstance(job, CronJob):
+                state = f"↻ {job.cron}"
+            else:
+                state = ""
+            rows.append((when, job.name or job.id, state))
+        cards.append((queue.name, queue.paused_since, rows))
+    return cards
+
+
+def _by_run_date(jobs: list[Job[Any]]) -> list[Job[Any]]:
+    return sorted(jobs, key=lambda job: job.run_at)
 
 
 def _to_level(state: object) -> int:

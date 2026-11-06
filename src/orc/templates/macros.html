@@ -32,6 +32,17 @@
 </div>
 {% endmacro %}
 
+{% macro titled_card(title, note="", table_fixed=false, table_class="") %}
+<div class="orc-surface mb-2">
+    <div class="px-4 pt-3 pb-0 text-sm font-semibold">{{ title }}{% if note %} <span class="font-normal text-gray-400">({{ note }})</span>{% endif %}</div>
+    <div class="p-4 overflow-x-auto">
+        <table class="w-full{% if table_fixed %} table-fixed{% endif %} text-left{% if table_class %} {{ table_class }}{% endif %}">
+            {{ caller() }}
+        </table>
+    </div>
+</div>
+{% endmacro %}
+
 {% macro headed_table() %}
 <div class="mb-3 px-4 overflow-x-auto">
     <table class="text-left">

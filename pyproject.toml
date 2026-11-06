@@ -7,7 +7,7 @@ requires = [
 [project]
 dependencies = [
     "orc-engine==0.1.2",
-    "APScheduler==3.11.3",
+    "orc-queue==0.0.1",
     "aiowebostv==0.10.0",
     "bleak==3.0.2",
     "broadlink==0.19.0",
@@ -70,7 +70,7 @@ target-version = "py314"
 select = ["B", "E", "F", "I"]
 
 [tool.ruff.lint.isort]
-known-third-party = ["apscheduler"]
+known-third-party = ["orc_queue"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -102,6 +102,7 @@ dev = [
 members = ["extras", "data"]
 
 [tool.uv.sources]
+orc-queue = { git = "https://github.com/exussum/orc-queue", tag = "v0.0.1" }
 orc-engine = { git = "https://github.com/exussum/orc-engine", tag = "v0.1.2" }
 orc = { workspace = true }
 orc_data = { workspace = true, editable = false }

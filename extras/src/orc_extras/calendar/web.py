@@ -7,7 +7,7 @@ from yarl import URL
 
 from orc import model as m
 from orc_extras.calendar import plugins
-from orc_extras.calendar.plugins import ALARM, CalendarJob, EventDestination
+from orc_extras.calendar.plugins import ALARM, EventDestination
 
 if TYPE_CHECKING:
     from orc.view import OrcFlask
@@ -21,11 +21,8 @@ Card = tuple[str, str, str, str]
 
 @choose.get("/")
 def index() -> str:
-    alarms = sorted(app.orc.api.fetch_jobs_by_type(CalendarJob, lambda j: j.event_type == ALARM), key=lambda j: j.trigger.run_date)
-    days = [
-        (day, [_card(j.args[0].destination) for j in day_jobs])
-        for day, day_jobs in groupby(alarms, key=lambda j: j.trigger.run_date.date())
-    ]
+    alarms = sorted(app.orc.api.fetch_jobs(m.Queue.CALENDAR, lambda j: j.event_type == ALARM), key=lambda j: j.run_at)
+    days = [(day, [_card(j.payload.destination) for j in day_jobs]) for day, day_jobs in groupby(alarms, key=lambda j: j.run_at.date())]
     return render_template("calendar/choose.html", days=days, refresh=url_for("calendar.refresh"))
 
 

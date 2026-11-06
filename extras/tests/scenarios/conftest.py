@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,19 +31,19 @@ class FakeScheduler:
         self.jobs = {}
         self.held = set()
 
-    def hold(self, queue):
+    def pause_queue(self, queue):
         self.held.add(queue)
 
-    def release(self, queue):
+    def release_queue(self, queue):
         self.held.discard(queue)
 
-    def once(self, func, when, *args, id=None, name=None, persist=False, queue=m.Queue.DEFAULT):
-        job = SimpleNamespace(func=func, args=args, id=id or name, name=name, run_date=when, queue=queue)
+    def once(self, func, when, payload=None, *, id=None, name=None, queue=m.Queue.ADHOC):
+        job = SimpleNamespace(func=func, payload=payload, id=id or str(uuid.uuid4()), run_date=when, queue=queue)
         self.jobs[job.id] = job
         return job
 
-    def now(self, func, *args, name=None, skip_if_late=False, queue=m.Queue.DEFAULT):
-        return self.once(func, api.local_now(), *args, name=name, queue=queue)
+    def now(self, func, payload=None, *, name=None, queue=m.Queue.ADHOC):
+        return self.once(func, api.local_now(), payload, name=name, queue=queue)
 
     def cancel(self, id):
         return self.jobs.pop(id, None) is not None
@@ -56,7 +57,7 @@ class FakeScheduler:
             del self.jobs[job.id]
             if clock:
                 clock.move_to(max(job.run_date, api.local_now()))
-            job.func(*job.args, ctx=ctx)
+            job.func(**({} if job.payload is None else {"payload": job.payload}), ctx=ctx)
         if clock:
             clock.move_to(now)
 

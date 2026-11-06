@@ -6,7 +6,7 @@ from datetime import timedelta
 from orc_engine import model as em
 
 from orc import model as m
-from orc.decorators import connected, requires_ctx  # noqa: F401
+from orc.decorators import connected  # noqa: F401
 from orc.log import Message
 
 _LIGHT_TEST_WINDOW = timedelta(minutes=10)

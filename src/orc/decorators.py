@@ -36,16 +36,6 @@ def mappable[**P, R](f: Callable[P, R]) -> Mappable[P, R]:
     return Mappable(f)
 
 
-def requires_ctx[**P, R](f: Callable[P, R]) -> Callable[P, R]:
-    @wraps(f)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        if kwargs.get("ctx") is None:
-            raise ValueError("ctx must be injected by the executor")
-        return f(*args, **kwargs)
-
-    return wrapper
-
-
 @contextmanager
 def connection() -> Iterator[sqlite3.Connection]:
     db_path = make_url(orc.config.settings.jobs_db).database
