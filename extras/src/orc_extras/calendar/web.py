@@ -28,7 +28,9 @@ def index() -> str:
 
 @choose.get("/refresh")
 def refresh() -> Response:
-    plugins.schedule_events(ctx=app.orc)
+    app.orc.scheduler.once(
+        plugins.schedule_events, app.orc.api.local_now(), id=plugins.REFRESH_ID, name="Calendar Refresh", queue=m.Queue.FETCH
+    )
     app.orc.log.write(plugins.Log.CALENDAR, "Calendar refreshed", m.Manual("calendar"))
     return redirect(url_for("calendar.index"))
 

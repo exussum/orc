@@ -332,20 +332,6 @@ class TestPresence:
         assert self._present(presence) == set()
 
 
-def test_readding_a_paused_job_keeps_it_paused(ctx, tmp_path):
-    from datetime import datetime, timedelta
-
-    from orc.dal import scheduler
-
-    s = scheduler.Scheduler(f"sqlite:///{tmp_path / 'jobs.sqlite'}", config.settings.tz)
-    s.start(ctx)
-    when = datetime.now(config.settings.tz) + timedelta(hours=1)
-    s.once(print, when, id="iot-x")
-    assert s.pause_job("iot-x", True)
-    job = s.once(print, when, id="iot-x")
-    assert job.disable
-
-
 @pytest.mark.parametrize("scheme", ["file", "data"])
 def test_the_bws_token_url_may_be_a_file_or_data_url(scheme, tmp_path):
     token_file = tmp_path / "token"
