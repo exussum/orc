@@ -20,6 +20,7 @@ feed <name> <secret>
 WARNING = "warning"
 ALARM = "alarm"
 CRON_ID = "cal-cron"
+REFRESH_ID = "cal-refresh"
 CHOOSER_URL = URL("/api/calendar/choose/events")
 GOOGLE_DAY_URL = URL("https://calendar.google.com/calendar/r/day")
 _LINK_FIELDS = ("X-GOOGLE-CONFERENCE", "X-MICROSOFT-SKYPETEAMSMEETINGURL", "URL", "LOCATION", "DESCRIPTION")

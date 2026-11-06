@@ -88,28 +88,36 @@ def run_job(payload: TravelJob, *, ctx: AppContext) -> None:
     tz, now = ctx.config.settings.tz, ctx.api.local_now()
     try:
         arrival, sched = evaluate(ctx, payload, tz, now)
+        if arrival:
+            payload.arrive = arrival.when
     except ValueError as exc:
         ctx.log.write(Log.TRAVEL, str(exc), m.Integration(payload.summary))
         _reschedule(ctx, payload, now + _REFRESH_INTERVAL)
         return
-    if arrival is not None:
-        payload.arrive = arrival.when
     payload.leave_at, payload.late, payload.eta = sched.leave_at, sched.late, sched.eta
-    if sched.next_fire is not None:
+    if sched.next_fire:
         _reschedule(ctx, payload, sched.next_fire)
-        return
-    assert arrival is not None
-    if payload.iata:
-        target = arrival.where + (f", Terminal {arrival.terminal}" if arrival.terminal else "")
-    else:
-        target = payload.place or payload.destination
-    if payload.late and sched.eta:
-        eta_str = sched.eta.astimezone(tz).strftime("%I:%M %p")
-        message = f"You're running late for {target}. Leaving now, you'll arrive around {eta_str}."
-    else:
-        message = f"Time to leave for {target}."
-    entry = ctx.log.write(Log.TRAVEL, message, m.Integration(payload.summary))
+    elif arrival:
+        _alert(ctx, payload, arrival, sched, tz)
+
+
+def _alert(ctx: AppContext, job: TravelJob, arrival: Arrival, sched: Schedule, tz: Any) -> None:
+    message = _leave_message(job, arrival, sched, tz)
+    entry = ctx.log.write(Log.TRAVEL, message, m.Integration(job.summary))
     ctx.api.alert(Alarm.WARNING, text=message, entry=entry)
+
+
+def _leave_message(job: TravelJob, arrival: Arrival, sched: Schedule, tz: Any) -> str:
+    target = _target(job, arrival)
+    if job.late and sched.eta:
+        return f"You're running late for {target}. Leaving now, you'll arrive around {sched.eta.astimezone(tz):%I:%M %p}."
+    return f"Time to leave for {target}."
+
+
+def _target(job: TravelJob, arrival: Arrival) -> str:
+    if job.iata:
+        return arrival.where + (f", Terminal {arrival.terminal}" if arrival.terminal else "")
+    return job.place or job.destination
 
 
 def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:

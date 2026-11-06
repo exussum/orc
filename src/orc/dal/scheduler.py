@@ -53,24 +53,14 @@ class Scheduler:
     def resume(self) -> None:
         self._coordinator.resume()
 
-    def once(
-        self,
-        func: Any,
-        when: datetime,
-        payload: Any = None,
-        *,
-        id: str | None = None,
-        name: str | None = None,
-        queue: m.Queue = m.Queue.ADHOC,
-    ) -> Job[Any]:
-        target = self._queues[queue]
+    # fmt: off
+    def once(self, func: Any, when: datetime, payload: Any = None, *,
+             id: str | None = None, name: str | None = None, queue: m.Queue = m.Queue.ADHOC) -> Job[Any]:
         job = Job(aware(when), func, payload, name=name, **({"id": id} if id else {}))
         with self._lock:
-            existing = target.get(job.id) if id else None
-            if existing is not None:
-                job.disable = existing.disable
-            target.add(job)
+            self._queues[queue].add(job)
         return job
+    # fmt: on
 
     def now(self, func: Any, payload: Any = None, *, name: str | None = None, queue: m.Queue = m.Queue.ADHOC) -> Job[Any]:
         return self.once(func, utcnow(), payload, name=name, queue=queue)
