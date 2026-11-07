@@ -173,7 +173,7 @@ def cfg() -> str:
         lights=api.capture_lights(),
         sounds=api.capture_sounds(),
         sensors=[replace(s, details=_with_dewpoint(s.details)) for s in api.capture_sensors()],
-        retry_stats={s.id: s for s in api.fetch_retry_stats()},
+        retry_stats={s.name: s for s in api.fetch_retry_stats()},
         durations=api.fetch_durations(mapper=dict),
         plugin_states=dict(states),
         device_buttons=device_buttons,

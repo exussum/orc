@@ -150,7 +150,7 @@ class Settings(NamedTuple):
 
 @dataclass(frozen=True)
 class RetryStats:
-    id: int
+    name: str
     failed: int
     clean: int
     retried: int
