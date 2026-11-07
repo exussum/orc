@@ -1,5 +1,6 @@
 import logging
 import socket
+import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
@@ -98,15 +99,10 @@ def _sound_state(device: m.DeviceEnum, cast: Any) -> m.SoundState:
     time.sleep(0.5)
     content = None
     playback = m.Playback.STOPPED
-    mc = cast.media_controller
-    # update_status on a device with no media app running launches one, which chimes
-    if mc.namespace in cast.socket_client.app_namespaces:
-        mc.update_status()
-        time.sleep(0.5)
-        ms = mc.status
-        if ms and ms.player_state in _PLAYING_STATES:
-            content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
-            playback = m.Playback.PAUSED if ms.player_state == "PAUSED" else m.Playback.PLAYING
+    ms = _media_status(cast)
+    if ms and ms.player_state in _PLAYING_STATES:
+        content = ms.title or (_strip_googlevideo_params(ms.content_id) if ms.content_id else None)
+        playback = m.Playback.PAUSED if ms.player_state == "PAUSED" else m.Playback.PLAYING
     return m.SoundState(
         what=device,
         content=content,
@@ -138,8 +134,17 @@ def _strip_googlevideo_params(url: str) -> str:
 
 def _settle(device: m.DeviceEnum, states: tuple[str, ...], act: Callable[[Any], None]) -> None:
     with _cast(device) as cast:
-        mc = cast.media_controller
-        mc.update_status()
-        time.sleep(1)
-        if mc.status.player_state in states:
-            act(mc)
+        ms = _media_status(cast)
+        if ms and ms.player_state in states:
+            act(cast.media_controller)
+
+
+def _media_status(cast: Any) -> Any:
+    mc = cast.media_controller
+    # update_status on a device with no media app running launches one, which chimes
+    if mc.namespace not in cast.socket_client.app_namespaces:
+        return None
+    replied = threading.Event()
+    mc.update_status(callback_function=lambda *_: replied.set())
+    replied.wait(orc.config.settings.http_timeout)
+    return mc.status
