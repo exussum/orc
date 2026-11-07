@@ -92,11 +92,9 @@ def stop(device: m.DeviceEnum) -> None:
 def set_volume(device: m.DeviceEnum, lvl: int) -> None:
     with _cast(device) as cast:
         cast.set_volume(lvl / 100)
-        time.sleep(1)
 
 
 def _sound_state(device: m.DeviceEnum, cast: Any) -> m.SoundState:
-    time.sleep(0.5)
     content = None
     playback = m.Playback.STOPPED
     ms = _media_status(cast)
