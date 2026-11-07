@@ -1,5 +1,6 @@
 import importlib
 import math
+import threading
 from collections.abc import Callable, ItemsView, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -489,6 +490,7 @@ class Secrets:
 
 
 class Scheduler(Protocol):
+    def service(self, fn: Callable[[threading.Event], None], *, name: str) -> None: ...
     def start(self, ctx: "AppContext") -> None: ...
     def resume(self) -> None: ...
     def once(

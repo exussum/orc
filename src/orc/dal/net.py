@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import os
-import signal
 import socket
 import threading
 import time
@@ -26,7 +24,6 @@ _PROBE_SECONDS = 30
 _BLE_INDEX_REFRESH_SECONDS = 300
 _BLE_SEARCH_WINDOWS = 200
 _BLE_CLOCK_TRUST_SECONDS = 24 * 3600
-_BLE_MIN_RUN_SECONDS = 60
 
 _log = logging.getLogger(__name__)
 
@@ -35,12 +32,13 @@ class Presence:
     """Last-heard time per person, fed by BLE hearings, LAN scan results, and
     manual check-ins; a pause narrows presence to evidence heard after it.
 
-    start() runs an FMDN listener in a daemon thread: a tag can't be solicited
-    like the LAN probes' targets - it only broadcasts (every ~6s, with
-    multi-cycle dropouts measured up to 42s), so windowed scans miss it; the
-    listener hears every frame instead. Every frame is one dict lookup against
-    the EID index, rebuilt as the 1024s rotation windows advance. A scanner
-    failure brings the process down — supervisor restarts it.
+    start() configures the FMDN listener and listen() is its body, run as an
+    orc-queue thread service: a tag can't be solicited like the LAN probes'
+    targets - it only broadcasts (every ~6s, with multi-cycle dropouts measured
+    up to 42s), so windowed scans miss it; the listener hears every frame
+    instead. Every frame is one dict lookup against the EID index, rebuilt as
+    the 1024s rotation windows advance. The service restarts a crashed scanner
+    and gives up after three fast failures, which brings the process down.
     """
 
     def __init__(self) -> None:
@@ -71,7 +69,10 @@ class Presence:
             return
         self._tz = tz
         self._clocks = LockedDict(clocks)
-        threading.Thread(target=self._listen, name="ble-listener", daemon=True).start()
+
+    def listen(self, stop: threading.Event) -> None:
+        while not stop.is_set():
+            asyncio.run(self._run(stop))
 
     def set_key(self, person: str, key: m.BleKey) -> None:
         self._clocks.pop(person)
@@ -128,23 +129,11 @@ class Presence:
         if not self._paused:
             self._on_change(trigger)
 
-    def _listen(self) -> None:
-        while True:
-            started = time.monotonic()
-            try:
-                asyncio.run(self._run())
-            except Exception:
-                _log.exception("ble: listener died")
-            if time.monotonic() - started < _BLE_MIN_RUN_SECONDS:
-                _log.error("ble: listener failed immediately, restarting orc")
-                os.kill(os.getppid(), signal.SIGTERM)
-                return
-
-    async def _run(self) -> None:
-        while True:
+    async def _run(self, stop: threading.Event) -> None:
+        while not stop.is_set():
             self._index = _eid_index(self._tags, self._clocks.copy(), self._now())
             async with BleakScanner(self._seen, bluez={"filters": {"DuplicateData": True}}):
-                await asyncio.sleep(_BLE_INDEX_REFRESH_SECONDS)
+                await _wait(stop, _BLE_INDEX_REFRESH_SECONDS)
 
     def _seen(self, device: BLEDevice, data: AdvertisementData) -> None:
         frame = data.service_data.get(FMDN_SERVICE_UUID)
@@ -249,6 +238,12 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
         elif IP in p:
             responded.add(p[IP].src)
     return {name for ip, (name, _) in targets.items() if ip in responded}
+
+
+async def _wait(stop: threading.Event, seconds: float) -> None:
+    deadline = time.monotonic() + seconds
+    while not stop.is_set() and time.monotonic() < deadline:
+        await asyncio.sleep(1)
 
 
 def _eid_index(tags: Mapping[str, m.BleKey], clocks: Mapping[str, m.TagClock], now: datetime) -> dict[bytes, tuple[str, int]]:
