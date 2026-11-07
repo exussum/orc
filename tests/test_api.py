@@ -313,13 +313,22 @@ class TestRefreshTagKeys:
         assert sqlite.fetch_tags() == [m.Tag("Alice", key, None)]
         set_key.assert_called_once_with("Alice", key)
         assert [e.action for e in api.context().log.rows()] == [
-            "Tag key for `Alice` read from Find Hub: e595fa93 paired 1969-12-31 19:00:00, was none"
+            "Tag key for `Alice` read from Find Hub: e595fa93 paired 1969-12-31 19:00:00"
         ]
 
     def test_an_unchanged_key_is_silent(self):
         api.refresh_tag_keys(m.Manual("secrets"))
         api.context().log.clear()
         api.refresh_tag_keys(m.Manual("secrets"))
+        assert api.context().log.rows() == []
+
+    def test_a_moved_pairing_date_keeps_the_stored_key(self, monkeypatch):
+        api.refresh_tag_keys(m.Manual("secrets"))
+        api.context().log.clear()
+        key = m.BleKey(b"Alice Tag".ljust(32, b"\0"), 0)
+        monkeypatch.setattr(findhub_stub, "identity_key", lambda device: m.BleKey(key.eik, 8293))
+        api.refresh_tag_keys(m.Manual("secrets"))
+        assert sqlite.fetch_tags() == [m.Tag("Alice", key, None)]
         assert api.context().log.rows() == []
 
     def test_a_failed_lookup_logs_and_keeps_going(self, monkeypatch):
