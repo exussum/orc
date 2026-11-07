@@ -23,7 +23,7 @@ dependencies = [
     "scapy==2.8.0",
     "orc_data==0.0.1",
     "piper-tts==1.8.0",
-    "pychromecast==14.0.10",
+    "pychromecast==14.1.0",
     "pywebpush==2.5.0",
     "psutil==7.2.2",
     "paho-mqtt==2.1.0",
@@ -33,7 +33,7 @@ dependencies = [
     "pyalsaaudio==0.11.0; sys_platform == 'linux'",
     "recurring-ical-events==3.8.2",
     "requests==2.34.2",
-    "yt-dlp==2026.8.19",
+    "yt-dlp==2026.10.26",
     "yarl==1.25.1",
     "command-cfg==1.1.0",
     "pykeepass==4.2.0",
@@ -47,11 +47,11 @@ requires-python = ">=3.14,<3.15"
 [project.optional-dependencies]
 test = [
     "freezegun==1.5.5",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
 ]
 lint = [
-    "mypy==2.4.0",
-    "ruff==0.17.0",
+    "mypy==2.4.1",
+    "ruff==0.17.3",
 ]
 
 [project.scripts]
@@ -106,6 +106,6 @@ orc-engine = { git = "https://github.com/exussum/orc-engine", tag = "v0.1.4" }
 orc = { workspace = true }
 orc_data = { workspace = true, editable = false }
 orc_extras = { workspace = true }
-command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v1.1.0" }
+command-cfg = { git = "https://github.com/exussum/command-cfg", tag = "v1.1.1" }
 
 
