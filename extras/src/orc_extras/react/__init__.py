@@ -37,7 +37,7 @@ from orc_extras.react.model import (
 from orc_extras.react.web import react_bp
 
 CONFIG = "orc_extras/react"
-_OPTIONS = "[--delay=<minutes>] [--pause=<minutes>]"
+_OPTIONS = "[--delay=<seconds>] [--pause=<minutes>]"
 GRAMMAR = f"""
 phrase <name> <condition>...
 react <name> <devices> turns <to> [if <condition>...] set <action> {_OPTIONS}
@@ -145,7 +145,7 @@ def _phrase(objects: dict[str, Any], args: Any) -> None:
 def _rule(objects: dict[str, Any], args: Any) -> None:
     target, action = _parse_target(args.target, cast.state(args.action), objects)
     types = objects["device"].enums
-    delay = timedelta(minutes=args.delay) if args.delay else timedelta()
+    delay = timedelta(seconds=args.delay) if args.delay else timedelta()
     pause = _pause(args.pause)
     condition = " ".join(args.condition) if args.condition else None
     for source in cast.devices(args.devices, objects).all():

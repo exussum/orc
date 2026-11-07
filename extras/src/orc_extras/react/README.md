@@ -16,8 +16,8 @@ load once at startup.
 
 ```
 phrase <name> <condition>...
-react <name> <devices> turns <to> [if <condition>...] set [<target>] <action> [--delay=<minutes>] [--pause=<minutes>]
-react <name> <devices> if <condition>...            set [<target>] <action> [--delay=<minutes>] [--pause=<minutes>]
+react <name> <devices> turns <to> [if <condition>...] set [<target>] <action> [--delay=<seconds>] [--pause=<minutes>]
+react <name> <devices> if <condition>...            set [<target>] <action> [--delay=<seconds>] [--pause=<minutes>]
 ```
 
 A `phrase` line names a condition once; every `if` can then use it as
@@ -31,7 +31,7 @@ A `phrase` line names a condition once; every `if` can then use it as
 | `if …`        | A condition that must hold when the rule is evaluated, written as one quoted expression (vocabulary below). Without `turns`, it is the trigger.                                |
 | `<target>`    | The devices to set; defaults to the watched device, or to the AC for an AC action.                                                                                             |
 | `<action>`    | `on`, `off`, a Chromecast state (`pause`), or an AC command `mode[:fan[:temp]]` such as `cool:low:72` or `fan_only:low`; an unsaid part keeps what the unit has.               |
-| `--delay`     | Minutes to wait before setting. A `turns` rule drops a pending command if the attribute changes again first.                                                                   |
+| `--delay`     | Seconds to wait before setting. A `turns` rule drops a pending command if the attribute changes again first.                                                                   |
 | `--pause`     | Minutes the System page's sleep switch silences the rule (default 10).                                                                                                         |
 
 A rule without `turns` is evaluated on every report from its device and the
@@ -75,7 +75,7 @@ Names resolve in two layers:
 ## Examples
 
 ```
-react 'Lights off' Light turns on set off --delay=15 --pause=30
+react 'Lights off' Light turns on set off --delay=900 --pause=30
 react 'Cool'       Sensor.LIVING_ROOM if 'Entered(temperature, 68, 75)' set AC cool:low:72
 react 'Dry'        Sensor.LIVING_ROOM if 'And(Present("alice","bob"), Entered(dewpoint(self, "temperature", "humidity"), 50, 60))' set AC fan_only:low:70
 react 'Dry off'    Sensor.LIVING_ROOM if 'And(AcIs(AC.LIVING_ROOM, "on"), Entered(dewpoint(self, "temperature", "humidity"), 0, 56))' set AC off
