@@ -62,7 +62,7 @@ class Scheduler:
     # fmt: off
     def once(self, func: Any, when: datetime, payload: Any = None, *,
              id: str | None = None, name: str | None = None, queue: m.QueueName = m.Queue.ADHOC) -> Job[Any]:
-        job = Job(aware(when), func, payload, name=name, **({"id": id} if id else {}))
+        job = oq.job(aware(when), func, payload, id=id, name=name)
         with self._lock:
             self._queues[queue].add(job)
         return job
