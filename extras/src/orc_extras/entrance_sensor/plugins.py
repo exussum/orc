@@ -72,7 +72,7 @@ def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppC
         now + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
         (sensor, log_entry),
         id=CLEANUP_JOB_ID,
-        name="Trigger Sensor",
+        name="Entrance Cleanup",
     )
     ctx.scheduler.once(
         _run_resume_presence,
