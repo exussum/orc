@@ -6,7 +6,8 @@ from orc_engine import cast
 
 import orc_extras.travel
 from orc.kernel.loader import load_plugin_config
-from orc.model import AppContext
+from orc.model import AppContext, Lane
+from orc_extras.travel import plugins
 from orc_extras.travel.dal import sqlite
 from orc_extras.travel.model import Extra, Place, Runtime, Settings
 from orc_extras.travel.web import travel_bp
@@ -37,6 +38,7 @@ def declare(declarations: Any) -> None:
 
 
 def setup(ctx: AppContext) -> None:
+    ctx.scheduler.queue(plugins.QUEUE, lane=Lane.BACKGROUND, persist=True)
     cfg = load_plugin_config(CONFIG, ctx.config, GRAMMAR, _SERIALIZERS)
     s = cfg.setting
     runtime = Runtime(

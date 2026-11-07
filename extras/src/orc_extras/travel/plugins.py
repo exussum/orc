@@ -12,6 +12,7 @@ from orc_extras.travel.model import Arrival, Extra, Log, Runtime, Schedule, Trav
 _FLIGHT_RE = re.compile(r"^(?=.*[A-Za-z])[A-Za-z0-9]{2,3}\s?\d{1,4}$")
 _REFRESH_INTERVAL = timedelta(minutes=10)
 _REFRESH_HORIZON = timedelta(hours=2)
+QUEUE = m.QueueName("travel")
 
 
 def runtime(ctx: AppContext) -> Runtime:
@@ -130,4 +131,4 @@ def _arrival(rt: Runtime, job: TravelJob, tz: Any) -> Arrival:
 
 
 def _reschedule(ctx: AppContext, job: TravelJob, when: datetime) -> None:
-    ctx.scheduler.once(run_job, when, job, id=f"{job.summary}@{job.arrive.isoformat()}", queue=m.Queue.TRAVEL)
+    ctx.scheduler.once(run_job, when, job, id=f"{job.summary}@{job.arrive.isoformat()}", queue=QUEUE)

@@ -21,6 +21,7 @@ WARNING = "warning"
 ALARM = "alarm"
 CRON_ID = "cal-cron"
 REFRESH_ID = "cal-refresh"
+QUEUE = m.QueueName("calendar")
 CHOOSER_URL = URL("/api/calendar/choose/events")
 GOOGLE_DAY_URL = URL("https://calendar.google.com/calendar/r/day")
 _LINK_FIELDS = ("X-GOOGLE-CONFERENCE", "X-MICROSOFT-SKYPETEAMSMEETINGURL", "URL", "LOCATION", "DESCRIPTION")
@@ -170,7 +171,7 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
         alarm_events = (CalendarEvent.from_cal(e, name, ALARM, timedelta(), tz) for e in events)
         events_by_id.update({e.uuid: e for e in chain(alarm_events, warning_events)})
 
-    for job in ctx.api.fetch_jobs(m.Queue.CALENDAR):
+    for job in ctx.api.fetch_jobs(QUEUE):
         if job.id not in events_by_id:
             ctx.scheduler.cancel(job.id)
 
@@ -181,7 +182,7 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
             CalendarJob(event.type, EventDestination(event.summary, event.url, event.address, glyph(event.summary, event.url))),
             id=id,
             name=event.summary if event.type == ALARM else f"{event.summary} ({event.type})",
-            queue=m.Queue.CALENDAR,
+            queue=QUEUE,
         )
 
 

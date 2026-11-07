@@ -4,7 +4,7 @@ from typing import Any
 from orc_engine import cast
 
 from orc.kernel.loader import load_plugin_config
-from orc.model import AppContext
+from orc.model import AppContext, Lane
 from orc_extras.calendar import plugins, web
 from orc_extras.calendar.plugins import CONFIG, GRAMMAR, SERIALIZERS
 
@@ -20,4 +20,5 @@ def declare(declarations: Any) -> None:
 
 
 def setup(ctx: AppContext) -> None:
+    ctx.scheduler.queue(plugins.QUEUE, lane=Lane.DEVICES)
     plugins.schedule_cron(ctx, load_plugin_config(CONFIG, ctx.config, GRAMMAR, SERIALIZERS).setting.cron)
