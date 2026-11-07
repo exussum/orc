@@ -1,5 +1,4 @@
 import os
-import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,12 +7,14 @@ from unittest.mock import patch
 import pytest
 from flask import Flask
 from freezegun import freeze_time
+from orc_queue import ManualCoordinator
 
 import orc
 from orc import api, config, security
 from orc import model as m
 from orc.dal import broker, net, sqlite
 from orc.dal.mqtt import hubitat
+from orc.dal.scheduler import Scheduler
 from orc.plugins import battery, buttons
 from orc.view import bp
 
@@ -26,40 +27,12 @@ HUB = {
 }
 
 
-class FakeScheduler:
-    def __init__(self):
-        self.jobs = {}
-        self.held = set()
+class ManualScheduler(Scheduler):
+    def start(self, ctx):
+        self._coordinator = ManualCoordinator(*self._queues.values(), context=ctx)
 
-    def pause_queue(self, queue):
-        self.held.add(queue)
-
-    def release_queue(self, queue):
-        self.held.discard(queue)
-
-    def once(self, func, when, payload=None, *, id=None, name=None, queue=m.Queue.ADHOC):
-        job = SimpleNamespace(func=func, payload=payload, id=id or str(uuid.uuid4()), run_date=when, queue=queue)
-        self.jobs[job.id] = job
-        return job
-
-    def now(self, func, payload=None, *, name=None, queue=m.Queue.ADHOC):
-        return self.once(func, api.local_now(), payload, name=name, queue=queue)
-
-    def cancel(self, id):
-        return self.jobs.pop(id, None) is not None
-
-    def _held(self, job):
-        return job.queue in self.held
-
-    def run_due(self, now, ctx, clock=None):
-        while due := sorted((j for j in self.jobs.values() if j.run_date <= now and not self._held(j)), key=lambda j: j.run_date):
-            job = due[0]
-            del self.jobs[job.id]
-            if clock:
-                clock.move_to(max(job.run_date, api.local_now()))
-            job.func(**({} if job.payload is None else {"payload": job.payload}), ctx=ctx)
-        if clock:
-            clock.move_to(now)
+    def run_until(self, when, tick):
+        self._coordinator.run_until(when, tick=tick)
 
 
 class House:
@@ -76,7 +49,7 @@ class House:
         self.reported = {(light, "switch"): m.OFF for light in orc.Light} | {(sensor, "motion"): "inactive" for sensor in orc.Sensor}
 
     def tick(self, **delta):
-        self.ctx.scheduler.run_due(api.local_now() + timedelta(**delta), self.ctx, clock=self.frozen)
+        self.ctx.scheduler.run_until(api.local_now() + timedelta(**delta), self.frozen.move_to)
 
     def entrance_sensor(self, event):
         self.report(orc.Sensor.ENTRANCE_SENSOR, "motion", event)
@@ -118,11 +91,11 @@ class House:
         for listener in self.listeners:
             listener(m.Status(state.device, attribute, old, new, hubitat.HubitatSource.HUBITAT))
         self.reported[(device, attribute)] = new
-        self.ctx.scheduler.run_due(api.local_now(), self.ctx)
+        self.ctx.scheduler.run_until(api.local_now(), self.frozen.move_to)
 
     def press(self, path):
         assert self.client.get(path).status_code == 200
-        self.ctx.scheduler.run_due(api.local_now(), self.ctx)
+        self.ctx.scheduler.run_until(api.local_now(), self.frozen.move_to)
 
     @staticmethod
     def broker(device):
@@ -146,8 +119,9 @@ def house(request, monkeypatch, tmp_path):
         net.presence._tz = config.settings.tz
         api.start_ble_listener()
 
-        scheduler = FakeScheduler()
+        scheduler = ManualScheduler(config.settings.jobs_db, config.settings.tz)
         ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())
+        scheduler.start(ctx)
         api.set_ctx(ctx)
 
         app = Flask(__name__)
