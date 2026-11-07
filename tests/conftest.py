@@ -104,7 +104,7 @@ def jobs_db():
 def config_jobs_db(jobs_db, tmp_path, monkeypatch):
     from orc import config
 
-    monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
+    monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=str(tmp_path / "state.sqlite")))
     yield
     jobs_db.rollback()
 

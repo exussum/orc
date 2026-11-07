@@ -111,7 +111,7 @@ def house(request, monkeypatch, tmp_path):
     sample = os.environ.get("ORC_CONFIG_DIR", "src")
     _load(str(Path(__file__).parent), HUB)
     try:
-        monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=f"sqlite:///{tmp_path / 'state.sqlite'}"))
+        monkeypatch.setattr(config, "settings", config.settings._replace(jobs_db=str(tmp_path / "state.sqlite")))
         sqlite.init_db()
         broker.adapters.clear()
         broker.status_listeners.clear()

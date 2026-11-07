@@ -9,7 +9,6 @@ from typing import Any
 
 import orc_queue as oq
 from orc_queue import Coordinator, Events, Job, JobQueue, MemoryStore, Service, SqliteStore, ThreadLane, ThreadService, aware, utcnow
-from sqlalchemy.engine.url import make_url
 
 from orc import model as m
 
@@ -17,8 +16,7 @@ from orc import model as m
 class Scheduler:
     def __init__(self, jobs_db: str, tz: tzinfo) -> None:
         self._tz = tz
-        self._path = make_url(jobs_db).database
-        assert self._path is not None
+        self._jobs_db = jobs_db
         self._lock = threading.RLock()
         self._wake = threading.Event()
         self.events = Events()
@@ -37,7 +35,7 @@ class Scheduler:
     def queue(self, name: m.QueueName, *, lane: m.Lane, persist: bool = False) -> None:
         if self._thread.is_alive():
             raise RuntimeError(f"queue {name!r} registered after start")
-        store = SqliteStore(self._path, name) if persist else MemoryStore()
+        store = SqliteStore(self._jobs_db, name) if persist else MemoryStore()
         self._queues[name] = JobQueue(self._lock, self._wake, store, 0, self.events, name=name)
         self._lane_queues[lane].append(self._queues[name])
 

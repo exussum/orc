@@ -1,6 +1,6 @@
 setting base_url         http://orc.internal.example
 setting lan_domain       orc.internal.example
-setting jobs_db          sqlite:////tmp/jobs.sqlite
+setting jobs_db          /tmp/jobs.sqlite
 setting lat              40.7143
 setting long             -74.0060
 setting broadlink_codes  /etc/orc/broadlink_codes.json

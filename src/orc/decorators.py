@@ -8,8 +8,6 @@ from contextlib import contextmanager
 from functools import update_wrapper, wraps
 from typing import Any, Concatenate, overload
 
-from sqlalchemy.engine.url import make_url
-
 import orc
 
 audio_lock = threading.Lock()
@@ -38,9 +36,7 @@ def mappable[**P, R](f: Callable[P, R]) -> Mappable[P, R]:
 
 @contextmanager
 def connection() -> Iterator[sqlite3.Connection]:
-    db_path = make_url(orc.config.settings.jobs_db).database
-    assert db_path is not None
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(orc.config.settings.jobs_db)
     try:
         with conn:
             yield conn
