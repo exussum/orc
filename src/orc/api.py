@@ -469,13 +469,14 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
     for tag in config.tags:
         try:
             key = provider.identity_key(tag.name)
-            if known.get(tag.person) != key:
+            stored = known.get(tag.person)
+            if stored != key:
                 sqlite.upsert_tag_key(tag.person, key)
                 net.presence.set_key(tag.person, key)
-                paired = datetime.fromtimestamp(key.anchor, tz=config.settings.tz)
-                fingerprint = hashlib.sha256(key.eik).hexdigest()[:8]
                 context().log.write(
-                    m.LogSource.SYSTEM, Message.TAG_KEY_UPDATED.format(name=tag.person, fingerprint=fingerprint, paired=paired), trigger
+                    m.LogSource.SYSTEM,
+                    Message.TAG_KEY_UPDATED.format(name=tag.person, fetched=_key_summary(key), stored=_key_summary(stored)),
+                    trigger,
                 )
         except Exception as exc:
             context().log.write(m.LogSource.SYSTEM, Message.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
@@ -859,6 +860,13 @@ def _presence_cutoff() -> datetime:
 
 def _presence_cron_job(ctx: m.AppContext) -> set[str]:
     return check_presence(m.Cron("presence"))
+
+
+def _key_summary(key: m.BleKey | None) -> str:
+    if not key:
+        return "none"
+    paired = datetime.fromtimestamp(key.anchor, tz=config.settings.tz)
+    return f"{hashlib.sha256(key.eik).hexdigest()[:8]} paired {paired:%Y-%m-%d %H:%M:%S}"
 
 
 def _refresh_tag_keys_job(payload: m.Trigger, *, ctx: m.AppContext) -> None:

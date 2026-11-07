@@ -40,7 +40,7 @@ class Message:
     PRESENCE_CHECKED_IN: str = "Presence checked in: `{name}`"
     PRESENCE_RESCAN: str = "Presence rescan"
 
-    TAG_KEY_UPDATED: str = "Tag key for `{name}` read from Find Hub: {fingerprint}, paired {paired:%Y-%m-%d %H:%M}"
+    TAG_KEY_UPDATED: str = "Tag key for `{name}` read from Find Hub: {fetched}, was {stored}"
     TAG_KEY_FAILED: str = "Find Hub lookup failed for `{name}`: {exc}"
 
     TASK_QUEUED: str = "Queued: `{id}` (until {when:%I:%M})"
