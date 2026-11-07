@@ -1103,7 +1103,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'lint'", specifier = "==2.4.0" },
     { name = "orc-data", directory = "data" },
     { name = "orc-engine", git = "https://github.com/exussum/orc-engine?tag=v0.1.2" },
-    { name = "orc-queue", editable = "../orc-queue" },
+    { name = "orc-queue", git = "https://github.com/exussum/orc-queue?tag=v0.0.2" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "pillow", specifier = "==13.0.0" },
     { name = "piper-tts", specifier = "==1.8.0" },
@@ -1156,21 +1156,10 @@ requires-dist = [{ name = "orc", editable = "." }]
 [[package]]
 name = "orc-queue"
 version = "0.0.2"
-source = { editable = "../orc-queue" }
+source = { git = "https://github.com/exussum/orc-queue?tag=v0.0.2#47b5eff3529b72e3fc965ab21b34d5166bb66b39" }
 dependencies = [
     { name = "cronsim" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "cronsim", specifier = "==2.7" },
-    { name = "freezegun", marker = "extra == 'test'", specifier = "==1.5.5" },
-    { name = "mypy", marker = "extra == 'lint'", specifier = "==2.4.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = "==9.2.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = "==1.4.1" },
-    { name = "ruff", marker = "extra == 'lint'", specifier = "==0.17.0" },
-]
-provides-extras = ["test", "lint"]
 
 [[package]]
 name = "packaging"
