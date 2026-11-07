@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from orc_engine import cast, engine
 from orc_engine import model as em
-from orc_queue import Job
+from orc_queue import Job, JobQueue
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -355,12 +355,6 @@ class Lane(StrEnum):
     BACKGROUND = "background"
 
 
-class QueueStatus(NamedTuple):
-    name: str
-    paused_since: datetime | None
-    jobs: list[Job[Any]]
-
-
 @dataclass
 class IotJob:
     rule: Routine
@@ -517,7 +511,7 @@ class Scheduler(Protocol):
     def jobs(self, queue: QueueName) -> list[Job[Any]]: ...
     def pause_queue(self, queue: QueueName) -> None: ...
     def release_queue(self, queue: QueueName) -> None: ...
-    def stores(self) -> list[QueueStatus]: ...
+    def queues(self) -> dict[QueueName, JobQueue[Any]]: ...
     def rebuild(self) -> None: ...
 
 

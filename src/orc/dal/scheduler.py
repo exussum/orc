@@ -94,12 +94,8 @@ class Scheduler:
         with self._lock:
             return self._queues[queue].jobs()
 
-    def stores(self) -> list[m.QueueStatus]:
-        with self._lock:
-            return [
-                m.QueueStatus(str(q.name), q.paused_at.astimezone(self._tz) if q.paused_at else None, q.jobs())
-                for q in self._queues.values()
-            ]
+    def queues(self) -> dict[m.QueueName, JobQueue[Any]]:
+        return dict(self._queues)
 
     def rebuild(self) -> None:
         with self._lock:
