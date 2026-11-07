@@ -91,13 +91,13 @@ def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Sta
             case em.Cancel(watch):
                 ctx.scheduler.cancel(_job(watch))
             case em.Deferred(watch, when):
-                ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=f"React {device.name}")
+                ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=watch.rule.name)
             case em.Report(em.Watch() as watch, commands) if commands:
                 fired.append(watch)
     if fired:
-        entry = _log(ctx, fired[0], device, "")
+        entry = _log(ctx, fired[0], device)
         for watch in fired[1:]:
-            entry.add(Log.REACT, _line(ctx, watch, device, ""))
+            entry.add(Log.REACT, _line(ctx, watch, device))
         ctx.api.dispatch(ctx.api.squish(map(_command, fired), entry), entry=entry)
 
 
@@ -109,18 +109,18 @@ def _targets(what: m.Devices) -> str:
     return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
-def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: str) -> None:
-    ctx.api.dispatch((_command(watch),), entry=_log(ctx, watch, device, note))
+def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> None:
+    ctx.api.dispatch((_command(watch),), entry=_log(ctx, watch, device))
 
 
-def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: str) -> m.LogEntry:
-    return ctx.log.write(Log.REACT, _line(ctx, watch, device, note), m.Broker(id=device.id, source=device.source))
+def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> m.LogEntry:
+    return ctx.log.write(Log.REACT, _line(ctx, watch, device), m.Broker(id=device.id, source=device.source))
 
 
-def _line(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, note: str) -> str:
+def _line(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> str:
     state = ctx.plugin_state[orc_extras.react]
     command = watch.rule.steps[0].command
-    return f"`{device.name}` {_trigger_label(watch, state)}{note} → set {_targets(command.subject)} {command.value}"
+    return f"`{device.name}` {_trigger_label(watch, state)} → set {_targets(command.subject)} {command.value}"
 
 
 def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
@@ -133,4 +133,4 @@ def _run_react(payload: tuple[em.Deferred[m.Devices], m.Device], *, ctx: m.AppCo
     watch = deferred.watch
     (report,) = ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True)
     if report.commands:
-        _dispatch(ctx, watch, device, f" {int(watch.delay.total_seconds())}s ago")
+        _dispatch(ctx, watch, device)
