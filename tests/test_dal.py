@@ -325,14 +325,9 @@ class TestPresence:
             presence.probe(["Alice"], TRIGGER)
         assert self._present(presence) == {"Alice"}
 
-    def test_probe_marks_nothing_when_silent(self):
-        presence = self._forgotten()
-        with patch.object(net, "_PROBE_SECONDS", 0):
-            presence.probe(["Alice"], TRIGGER)
-        assert self._present(presence) == set()
-
-    def test_probe_of_a_tag_never_heard_marks_nothing(self):
-        presence = self._hear([], {"Alice": self.KEY})
+    @pytest.mark.parametrize("heard_before", [True, False], ids=["forgotten", "never_heard"])
+    def test_probe_marks_nothing_when_silent(self, heard_before):
+        presence = self._forgotten() if heard_before else self._hear([], {"Alice": self.KEY})
         with patch.object(net, "_PROBE_SECONDS", 0):
             presence.probe(["Alice"], TRIGGER)
         assert self._present(presence) == set()
