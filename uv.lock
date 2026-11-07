@@ -1079,7 +1079,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'lint'", specifier = "==2.4.1" },
     { name = "orc-data", directory = "data" },
     { name = "orc-engine", git = "https://github.com/exussum/orc-engine?tag=v0.1.4" },
-    { name = "orc-queue", git = "https://github.com/exussum/orc-queue?tag=v0.0.3" },
+    { name = "orc-queue", git = "https://github.com/exussum/orc-queue?tag=v0.0.4" },
     { name = "paho-mqtt", specifier = "==2.1.0" },
     { name = "pillow", specifier = "==13.0.0" },
     { name = "piper-tts", specifier = "==1.8.0" },
@@ -1130,8 +1130,8 @@ requires-dist = [{ name = "orc", editable = "." }]
 
 [[package]]
 name = "orc-queue"
-version = "0.0.3"
-source = { git = "https://github.com/exussum/orc-queue?tag=v0.0.3#1a2815858934175329f1c087f1e53ca174f038e6" }
+version = "0.0.4"
+source = { git = "https://github.com/exussum/orc-queue?tag=v0.0.4#94170f570b5e74774d121ff45369ba081c8fead9" }
 dependencies = [
     { name = "cronsim" },
 ]

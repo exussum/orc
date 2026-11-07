@@ -69,6 +69,6 @@ def create() -> tuple[dict, int]:
 
 @travel_bp.route("/<jid>", methods=["DELETE"])
 def delete(jid: str) -> tuple[dict | str, int]:
-    if not app.orc.scheduler.cancel(jid):
+    if not app.orc.scheduler.cancel(jid, plugins.QUEUE):
         return {"error": "not found"}, 404
     return "", 204

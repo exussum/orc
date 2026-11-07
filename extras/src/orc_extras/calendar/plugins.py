@@ -173,7 +173,7 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
 
     for job in ctx.api.fetch_jobs(QUEUE):
         if job.id not in events_by_id:
-            ctx.scheduler.cancel(job.id)
+            ctx.scheduler.cancel(job.id, QUEUE)
 
     for id, event in events_by_id.items():
         ctx.scheduler.once(

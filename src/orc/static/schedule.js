@@ -41,7 +41,7 @@ async function set_theme() {
 }
 
 async function pause(el) {
-    await get(`/api/schedule/${el.dataset.id}/pause?paused=${el.checked ? 0 : 1}`, el, () => {
+    await get(`/api/schedule/${el.dataset.queue}/${el.dataset.id}/pause?paused=${el.checked ? 0 : 1}`, el, () => {
         el.checked = !el.checked;
     });
 }

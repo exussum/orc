@@ -11,12 +11,13 @@
 </div>
 {%- endmacro %}
 
-{% macro btn_stripe(label, id, icon, duration, delay="0:00:00", no_func=false) -%}
+{% macro btn_stripe(label, id, icon, duration, delay="0:00:00", no_func=false, queued=none) -%}
 <div class="orc-button">
     <div class="orc-button-label">{{ label }}</div>
-    <button class="orc-runner orc-btn" data-type="run" data-id="{{ id }}" data-name="{{ label }}" data-duration="{{ duration }}" data-delay="{{ delay }}"{% if no_func %} data-no-func{% endif %}>
+    <button class="orc-runner orc-btn{% if queued %} orc-button-queued{% endif %}" data-type="run" data-id="{{ id }}" data-name="{{ label }}" data-duration="{{ duration }}" data-delay="{{ delay }}"{% if no_func %} data-no-func{% endif %}{% if queued %} data-queued-from="{{ queued.start }}" data-queued-until="{{ queued.until }}"{% endif %}>
         <svg class="orc-ribbon"><use href="/static/icons.svg#ribbon"/></svg>
-        {{ icon_svg(icon) }}
+        {{ icon_svg(icon, "w-5 h-5 orc-icon-idle") }}
+        {{ icon_svg("stop", "w-5 h-5 orc-icon-queued") }}
     </button>
 </div>
 {%- endmacro %}

@@ -13,7 +13,7 @@
                 {% for cell in cells %}
                     <div class="orc-group-cell" style="grid-column: {{ cell.column + 1 }}; grid-row: {{ cell.row + 1 }}">
                         <div class="orc-group-title">{{ cell.title }}</div>
-                        {{ btn_stripe(cell.button.name, cell.button.id, cell.button.icon or "clipboard-check", cell.button.duration, delay=cell.button.delay or "0:00:00", no_func=cell.button.no_func) }}
+                        {{ btn_stripe(cell.button.name, cell.button.id, cell.button.icon or "clipboard-check", cell.button.duration, delay=cell.button.delay or "0:00:00", no_func=cell.button.no_func, queued=queued.get(cell.button.id)) }}
                     </div>
                 {% endfor %}
             </div>
@@ -66,7 +66,7 @@
                         <div>{{ next_routine.name }}</div>
                         <div>At: {{ next_routine.run_at.time().strftime("%I:%M %p") }}</div>
                     </div>
-                    <button class="orc-btn orc-pause" data-id="{{ next_routine.id }}" data-name="{{ next_routine.name }}">Skip</button>
+                    <button class="orc-btn orc-pause" data-queue="iot" data-id="{{ next_routine.id }}" data-name="{{ next_routine.name }}">Skip</button>
                 </div>
             {% endif %}
         </div>

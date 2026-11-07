@@ -183,6 +183,26 @@
     @apply min-h-[2lh] text-[10px] w-full min-w-0 px-1 mb-[5px] flex flex-col-reverse items-stretch text-center break-words hyphens-auto;
 }
 
+@property --orc-queued-sweep {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 18deg;
+}
+
+@utility orc-button-queued {
+    background-image: conic-gradient(var(--orc-btn-color-active) var(--orc-queued-sweep), transparent 0);
+    & .orc-icon-idle {
+        display: none;
+    }
+    & .orc-icon-queued {
+        display: block;
+    }
+}
+
+@utility orc-icon-queued {
+    display: none;
+}
+
 @utility orc-theme-form-date-input {
     @apply col-start-2 col-end-4;
 }

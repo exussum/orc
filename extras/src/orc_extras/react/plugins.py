@@ -16,7 +16,7 @@ def sleep(ctx: m.AppContext, name: str) -> datetime:
     state.disabled[name] = until
     for watch in state.watches:
         if watch in state.groups[name].watches:
-            ctx.scheduler.cancel(_job(watch))
+            ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
     ctx.log.write(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
     return until
 
@@ -89,7 +89,7 @@ def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Sta
     for outcome in ctx.engine.evaluate(awake, read=_reader(ctx), changes=_changes(changed, old, new), force=True):
         match outcome:
             case em.Cancel(watch):
-                ctx.scheduler.cancel(_job(watch))
+                ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
             case em.Deferred(watch, when):
                 ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=watch.rule.name)
             case em.Report(em.Watch() as watch, commands) if commands:

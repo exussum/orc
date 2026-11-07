@@ -59,7 +59,36 @@ export async function get(url, el, onFailure = () => {}) {
 }
 
 
+function clearQueued(el) {
+    el.classList.remove("orc-button-queued");
+    el.style.transition = "none";
+    el.style.removeProperty("--orc-queued-sweep");
+    delete el.dataset.queuedFrom;
+    delete el.dataset.queuedUntil;
+}
+
+function startQueued(el, { start, until }) {
+    const left = new Date(until) - Date.now();
+    if (left <= 0) return clearQueued(el);
+    el.dataset.queuedFrom = start;
+    el.dataset.queuedUntil = until;
+    el.classList.add("orc-button-queued");
+    el.style.transition = "none";
+    el.style.setProperty("--orc-queued-sweep", `${360 - (left / (new Date(until) - new Date(start))) * 342}deg`);
+    void el.offsetWidth;
+    el.style.transition = `--orc-queued-sweep ${left / 1000}s linear`;
+    el.style.setProperty("--orc-queued-sweep", "360deg");
+    setTimeout(() => clearQueued(el), left);
+}
+
 async function runAction(el) {
+    if (el.dataset.queuedUntil) {
+        const left = new Date(el.dataset.queuedUntil) - Date.now();
+        if (left > (new Date(el.dataset.queuedUntil) - new Date(el.dataset.queuedFrom)) * 0.05) {
+            if (await get(`/api/schedule/adhoc/${el.dataset.id}/cancel`)) clearQueued(el);
+        }
+        return;
+    }
     if (!(await orcHooks.onPress(el.dataset.id, el))) return;
     if ("noFunc" in el.dataset) {
         alert(
@@ -72,7 +101,8 @@ async function runAction(el) {
     if (el.dataset.state) params.set("state", el.dataset.state);
     if (el.dataset.device) params.set("device", el.dataset.device);
     const query = params.size ? `?${params}` : "";
-    await get(`/api/${el.dataset.type || "run"}/${el.dataset.id}${query}`, el);
+    const result = await get(`/api/${el.dataset.type || "run"}/${el.dataset.id}${query}`, el);
+    if (result?.queued) startQueued(el, result.queued);
 }
 
 export function wire(selector, event, handler) {
@@ -81,6 +111,8 @@ export function wire(selector, event, handler) {
 
 wire(".orc-config-runner", "click", runAction);
 wire(".orc-runner", "click", runAction);
+
+document.querySelectorAll(".orc-button-queued").forEach((el) => startQueued(el, { start: el.dataset.queuedFrom, until: el.dataset.queuedUntil }));
 
 function revealOverflowCarets(root) {
     for (const action of root.querySelectorAll(".orc-log-action.truncate")) {

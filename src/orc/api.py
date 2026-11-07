@@ -96,8 +96,12 @@ def action_delays() -> dict[str, timedelta]:
     return ad_hoc | plugins
 
 
-def set_job_paused(id: str, disable: bool) -> bool:
-    return context().scheduler.pause_job(id, disable)
+def set_job_paused(id: str, disable: bool, queue: m.QueueName) -> bool:
+    return context().scheduler.pause_job(id, disable, queue)
+
+
+def cancel_job(id: str, queue: m.QueueName) -> bool:
+    return context().scheduler.cancel(id, queue)
 
 
 @mappable
@@ -276,7 +280,7 @@ def run_action(
                 queued.add(source, display)
                 action.effect(queued)
 
-            context().scheduler.once(run, when, id=f"run-{id}")
+            context().scheduler.once(run, when, id=id, queue=m.Queue.ADHOC)
         else:
             action.effect(context().log.write(source, display, trigger))
     return True

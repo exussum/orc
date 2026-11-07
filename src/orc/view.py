@@ -98,6 +98,11 @@ class JobRow(NamedTuple):
     skip_replay: bool
 
 
+class QueuedRow(NamedTuple):
+    start: str
+    until: str
+
+
 app = cast(OrcFlask, _current_app)
 
 bp = Blueprint("controls", __name__)
@@ -219,7 +224,8 @@ def run_routine(id: str) -> dict[str, Any]:
     skip_delay = request.args.get("skip_delay") == "1"
     if not api.run_action(app.orc, id, m.Manual(id), source=m.LogSource.MANUAL, device=request.args.get("device"), skip_delay=skip_delay):
         abort(404, "Unknown routine")
-    return {}
+    queued = _queued_runs().get(id)
+    return {"queued": queued._asdict() if queued else None}
 
 
 @bp.route("/api/presence/<name>/checkin")
@@ -250,6 +256,7 @@ def index() -> str:
             HighlightRow(b.id, b.stripe_from.strftime("%H:%M"), b.stripe_to.strftime("%H:%M")) for b in config.buttons if b.stripe_from
         ],
         cells=cells,
+        queued=_queued_runs(),
         boxes=page_boxes,
         concave_corners=page_concave_corners,
         rooms=config.rooms,
@@ -280,15 +287,31 @@ def _scene_layout(durations: dict[str, float]) -> tuple[list[SceneCell], list[Bo
     return placed, page_boxes, page_concave_corners
 
 
+def _queued_runs() -> dict[str, QueuedRow]:
+    delays = api.action_delays()
+    return {
+        job.id: QueuedRow((job.run_at - delays.get(job.id, timedelta())).isoformat(), job.run_at.isoformat())
+        for job in api.fetch_jobs(m.Queue.ADHOC)
+        if not job.disable
+    }
+
+
 @bp.route("/log/")
 def log() -> str:
     entries_grouped = [(day, list(day_entries)) for day, day_entries in groupby(app.orc.log.rows(), key=lambda e: e.timestamp.date())]
     return render_template("log.html", entries_grouped=entries_grouped)
 
 
-@bp.route("/api/schedule/<id>/pause")
-def pause(id: str) -> dict[str, Any]:
-    if not api.set_job_paused(id, request.args.get("paused") == "1"):
+@bp.route("/api/schedule/<queue>/<id>/pause")
+def pause(queue: str, id: str) -> dict[str, Any]:
+    if not api.set_job_paused(id, request.args.get("paused") == "1", m.QueueName(queue)):
+        abort(404, "Unknown job")
+    return {}
+
+
+@bp.route("/api/schedule/<queue>/<id>/cancel")
+def cancel(queue: str, id: str) -> dict[str, Any]:
+    if not api.cancel_job(id, m.QueueName(queue)):
         abort(404, "Unknown job")
     return {}
 

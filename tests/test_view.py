@@ -207,16 +207,25 @@ def test_actions_lists_what_arrow_can_call(flask_client, config_ad_hoc, config_r
     assert "people" in body and "plugins" in body
 
 
+@pytest.mark.parametrize(("disable", "marked"), [(False, True), (True, False)], ids=["queued", "skipped"])
+def test_the_scene_page_marks_the_queued_run(flask_client, ctx, disable, marked):
+    run_at = datetime(2026, 1, 5, 16, 12, tzinfo=config.settings.tz)
+    queued = Job(run_at, print, id="AD_HOC_DOG", disable=disable)
+    ctx.scheduler.jobs.side_effect = lambda queue: [queued] if queue == m.Queue.ADHOC else []
+    body = flask_client.get("/").get_data(as_text=True)
+    assert (f'data-queued-until="{run_at.isoformat()}"' in body) is marked
+
+
 @pytest.mark.parametrize("paused", [True, False])
 def test_pause_sets_the_absolute_state(flask_client, ctx, paused):
     ctx.scheduler.pause_job.return_value = True
-    flask_client.get(f"/api/schedule/iot-x/pause?paused={int(paused)}")
-    ctx.scheduler.pause_job.assert_called_once_with("iot-x", paused)
+    flask_client.get(f"/api/schedule/iot/iot-x/pause?paused={int(paused)}")
+    ctx.scheduler.pause_job.assert_called_once_with("iot-x", paused, "iot")
 
 
 def test_pause_unknown_job_returns_404(flask_client, ctx):
     ctx.scheduler.pause_job.return_value = False
-    response = flask_client.get("/api/schedule/nope/pause?paused=1")
+    response = flask_client.get("/api/schedule/iot/nope/pause?paused=1")
     assert response.status_code == 404
 
 

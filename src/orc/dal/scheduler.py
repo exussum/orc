@@ -77,11 +77,11 @@ class Scheduler:
             self._queues[queue].add(job)
         return job
 
-    def cancel(self, id: str) -> bool:
-        return self._coordinator.cancel_job(id)
+    def cancel(self, id: str, queue: m.QueueName) -> bool:
+        return self._coordinator.cancel_job(id, queue)
 
-    def pause_job(self, id: str, disable: bool) -> bool:
-        return self._coordinator.pause_job(id, disable)
+    def pause_job(self, id: str, disable: bool, queue: m.QueueName) -> bool:
+        return self._coordinator.pause_job(id, disable, queue)
 
     def pause_queue(self, queue: m.QueueName) -> None:
         self._coordinator.pause_queue(queue)
