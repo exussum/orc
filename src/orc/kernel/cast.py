@@ -43,7 +43,7 @@ def state(value: str) -> Any:
                 case [mode, fan]:
                     return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan)
                 case [mode, fan, temp]:
-                    return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan, temperature=builtins.int(temp))
+                    return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan or None, temperature=builtins.int(temp))
         except ValueError:
             raise ValueError(_ERR_AC_COMMAND.format(value)) from None
         raise ValueError(_ERR_AC_COMMAND.format(value))
