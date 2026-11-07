@@ -222,7 +222,7 @@ def _condition(objects: dict[str, Any], args: SimpleNamespace) -> em.Condition:
     elif person is None:
         return em.And()
     elif person == "SYSTEM":
-        return m.Always()
+        return em.Always()
     elif person == "ANYONE":
         return m.Anyone()
     elif person in objects["person"]:

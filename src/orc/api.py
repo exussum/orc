@@ -529,7 +529,7 @@ def next_iot_job(present_names: set[str]) -> Job[Any] | None:
             j
             for j in jobs
             if not j.disable
-            and not any(isinstance(step.command.tag, m.Always) for step in j.payload.rule.steps)
+            and not any(isinstance(step.command.tag, em.Always) for step in j.payload.rule.steps)
             and _matching_items(j.payload.rule, j.run_at, present_names)
         ),
         None,
@@ -616,7 +616,7 @@ def reader(present: set[str] | None = None, now: datetime | None = None) -> em.R
 
 
 def runtime() -> engine.Runtime:
-    return engine.Runtime(config.settings.tz, bypass=m.Always(), override_key=ORC_SYSTEM_SNAPSHOT)
+    return engine.Runtime(config.settings.tz, override_key=ORC_SYSTEM_SNAPSHOT)
 
 
 def rebuild_iot_schedule(ctx: m.AppContext) -> None:

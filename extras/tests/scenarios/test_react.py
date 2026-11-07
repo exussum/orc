@@ -63,4 +63,4 @@ def test_chromecast_pauses_dispatch_after_the_lights(house):
 
 
 def _cmd(device, value):
-    return em.Command(m.Devices(device), value, tag=m.Always())
+    return em.Command(m.Devices(device), value, tag=em.Always())

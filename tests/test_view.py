@@ -67,11 +67,11 @@ def test_console_plugin(flask_client, ctx):
 
 
 def test_console_schedule_routine(flask_client, command_dispatch):
-    rule = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()))
+    rule = _routine("r", "", em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()))
     with patch.object(config, "schedule_routines", {"r": rule}):
         flask_client.get("/api/run/r")
     command_dispatch.assert_called_once_with(
-        api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=True, entry=ANY
+        api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=True, entry=ANY
     )
 
 
@@ -255,7 +255,7 @@ def test_dry_from_the_device_page_leaves_the_fan_unsaid(flask_client, command_di
 @pytest.mark.parametrize(
     "kwargs, present, present_badges, absent_badges",
     [
-        ({"trigger": m.Always()}, (), (), (b"orc-btn-muted orc-runner", "👤".encode(), "⏩".encode())),
+        ({"trigger": em.Always()}, (), (), (b"orc-btn-muted orc-runner", "👤".encode(), "⏩".encode())),
         ({"trigger": m.Present("me")}, (), (b"orc-btn-muted orc-runner", "👤".encode()), ()),
         ({"trigger": m.Present("me")}, ("me",), (), (b"orc-btn-muted orc-runner",)),
         ({"trigger": m.Anyone()}, ("me",), (), (b"orc-btn-muted orc-runner",)),
@@ -353,7 +353,7 @@ def _room(*commands):
 
 def _fake_iot_job(name="job", trigger=None, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
-    rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger or m.Always()), skip_replay=skip_replay)
+    rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger or em.Always()), skip_replay=skip_replay)
     return Job(run_date, print, m.IotJob(rule, name), id=name, name=name)
 
 

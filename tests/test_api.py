@@ -93,19 +93,19 @@ class TestRestoreScene:
 @patch("orc.dal.broker.stub.command")
 class TestIntercepts:
     def test_system_command_overwrites_snapshot(self, update_light, system_snapshot, log_entry):
-        command = em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Always())
+        command = em.Command(m.Devices(orc.Light.b), m.ON, tag=em.Always())
 
         api.dispatch((command,), entry=log_entry)
         api.dispatch((command,), entry=log_entry)
 
         assert api._ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (
             em.Command(m.Devices(orc.Light.a), m.ON),
-            em.Command(m.Devices(orc.Light.b), m.ON, tag=m.Always()),
+            em.Command(m.Devices(orc.Light.b), m.ON, tag=em.Always()),
         )
         assert update_light.call_args_list == [call(orc.Light.b, m.ON), call(orc.Light.b, m.ON)]
 
     def test_snapshot_update_add(self, update_light, system_snapshot, log_entry):
-        command = em.Command(m.Devices(orc.Light.c), m.ON, tag=m.Always())
+        command = em.Command(m.Devices(orc.Light.c), m.ON, tag=em.Always())
 
         api.dispatch((command,), entry=log_entry)
 
@@ -567,10 +567,10 @@ class TestPresence:
         command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self, command_dispatch):
-        rule = self._routine("reset-r", m.Always())
+        rule = self._routine("reset-r", em.Always())
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
-            api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Always()),)), force=False, entry=ANY
+            api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):

@@ -54,7 +54,7 @@ _PARSE_ERRORS = [
     "person, weather, expected",
     [
         (None, None, em.And()),
-        ("SYSTEM", None, m.Always()),
+        ("SYSTEM", None, em.Always()),
         ("ANYONE", None, m.Anyone()),
         (None, "SUNNY", m.Weather(m.WeatherCondition.SUNNY)),
         ("alice", None, m.Present("alice")),
@@ -107,7 +107,7 @@ def test_routines_append_devices_and_triggers():
     light, cc = parsed.enums["Light"], parsed.enums["Chromecast"]["CC"]
     assert parsed.routine["ROUTINE_RESET"].name == "Reset"
     assert parsed.routine["ROUTINE_RESET"].commands == (
-        em.Command(m.Devices(light), "off", tag=m.Always()),
+        em.Command(m.Devices(light), "off", tag=em.Always()),
         em.Command(m.Devices(cc), "stop", tag=em.And()),
     )
 

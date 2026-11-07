@@ -125,7 +125,7 @@ def _line(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> st
 
 def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
     command = watch.rule.steps[0].command
-    return em.Command(command.subject, command.value, tag=m.Always())
+    return em.Command(command.subject, command.value, tag=em.Always())
 
 
 def _run_react(payload: tuple[em.Deferred[m.Devices], m.Device], *, ctx: m.AppContext) -> None:

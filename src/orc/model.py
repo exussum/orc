@@ -635,12 +635,6 @@ class Present(em.Condition):
 
 
 @dataclass(frozen=True)
-class Always(em.Condition):
-    def holds(self, world: em.World) -> bool:
-        return True
-
-
-@dataclass(frozen=True)
 class Anyone(em.Condition):
     def holds(self, world: em.World) -> bool:
         return world.read(AnyoneSubject()) is True
