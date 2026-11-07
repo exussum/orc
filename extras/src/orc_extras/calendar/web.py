@@ -21,7 +21,7 @@ Card = tuple[str, str, str, str]
 
 @choose.get("/")
 def index() -> str:
-    alarms = sorted(app.orc.api.fetch_jobs(m.Queue.CALENDAR, lambda j: j.event_type == ALARM), key=lambda j: j.run_at)
+    alarms = sorted(app.orc.api.fetch_jobs(plugins.QUEUE, lambda j: j.event_type == ALARM), key=lambda j: j.run_at)
     days = [(day, [_card(j.payload.destination) for j in day_jobs]) for day, day_jobs in groupby(alarms, key=lambda j: j.run_at.date())]
     return render_template("calendar/choose.html", days=days, refresh=url_for("calendar.refresh"))
 

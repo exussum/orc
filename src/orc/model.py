@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, StrEnum, auto
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, NewType, Protocol, Self
 from zoneinfo import ZoneInfo
 
 from orc_engine import cast, engine
@@ -340,13 +340,19 @@ class LogEntry(LogSubEntry):
         return entry
 
 
-class Queue(StrEnum):
-    ADHOC = "adhoc"
-    CALENDAR = "calendar"
-    FETCH = "fetch"
-    IOT = "iot"
-    PRESENCE = "presence"
-    TRAVEL = "travel"
+QueueName = NewType("QueueName", str)
+
+
+class Queue:
+    ADHOC = QueueName("adhoc")
+    FETCH = QueueName("fetch")
+    IOT = QueueName("iot")
+    PRESENCE = QueueName("presence")
+
+
+class Lane(StrEnum):
+    DEVICES = "devices"
+    BACKGROUND = "background"
 
 
 class QueueStatus(NamedTuple):
@@ -491,18 +497,26 @@ class Secrets:
 
 class Scheduler(Protocol):
     def service(self, fn: Callable[[threading.Event], None], *, name: str) -> None: ...
+    def queue(self, name: QueueName, *, lane: Lane, persist: bool = False) -> None: ...
     def start(self, ctx: "AppContext") -> None: ...
     def resume(self) -> None: ...
     def once(
-        self, func: Any, when: datetime, payload: Any = None, *, id: str | None = None, name: str | None = None, queue: Queue = Queue.ADHOC
+        self,
+        func: Any,
+        when: datetime,
+        payload: Any = None,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        queue: QueueName = Queue.ADHOC,
     ) -> Job[Any]: ...
-    def now(self, func: Any, payload: Any = None, *, name: str | None = None, queue: Queue = Queue.ADHOC) -> Job[Any]: ...
-    def cron(self, func: Any, crontab: str, *, id: str, name: str, queue: Queue = Queue.ADHOC) -> Job[Any]: ...
+    def now(self, func: Any, payload: Any = None, *, name: str | None = None, queue: QueueName = Queue.ADHOC) -> Job[Any]: ...
+    def cron(self, func: Any, crontab: str, *, id: str, name: str, queue: QueueName = Queue.ADHOC) -> Job[Any]: ...
     def cancel(self, id: str) -> bool: ...
     def pause_job(self, id: str, disable: bool) -> bool: ...
-    def jobs(self, queue: Queue) -> list[Job[Any]]: ...
-    def pause_queue(self, queue: Queue) -> None: ...
-    def release_queue(self, queue: Queue) -> None: ...
+    def jobs(self, queue: QueueName) -> list[Job[Any]]: ...
+    def pause_queue(self, queue: QueueName) -> None: ...
+    def release_queue(self, queue: QueueName) -> None: ...
     def stores(self) -> list[QueueStatus]: ...
     def rebuild(self) -> None: ...
 

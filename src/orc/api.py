@@ -101,7 +101,7 @@ def set_job_paused(id: str, disable: bool) -> bool:
 
 
 @mappable
-def fetch_jobs(queue: m.Queue, where: Callable[[Any], bool] = lambda _: True) -> list[Job[Any]]:
+def fetch_jobs(queue: m.QueueName, where: Callable[[Any], bool] = lambda _: True) -> list[Job[Any]]:
     return [job for job in context().scheduler.jobs(queue) if where(job.payload)]
 
 

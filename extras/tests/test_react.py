@@ -1,5 +1,6 @@
 from datetime import UTC, timedelta
 from types import SimpleNamespace
+from unittest.mock import ANY
 
 import pytest
 from command_cfg import ConfigError
@@ -107,8 +108,7 @@ def dispatches(ctx):
 @pytest.fixture
 def deferred_run(ctx):
     def deferred_run():
-        deferred, device = _payload(ctx.scheduler.once.call_args)
-        plugins._run_react((deferred, device), ctx=ctx)
+        plugins._run_react(ctx.scheduler.once.call_args.args[2], ctx=ctx)
 
     return deferred_run
 
@@ -130,7 +130,7 @@ def test_switch_on_schedules_reaction(ctx, react_rules, device_report):
     call = ctx.scheduler.once.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"].startswith("react-")
-    assert _payload(call)[1] == m.Device("1", "lamp", "hubitat")
+    assert call.args[2] == (ANY, m.Device("1", "lamp", "hubitat"))
 
 
 def test_first_report_after_boot_is_not_a_transition(ctx, ruleset, device_report):
@@ -564,10 +564,6 @@ def _make(devices, attribute, state, action, target=None, delay=None, cond=None)
 
 def _hub(id):
     return m.Broker(id=id, source="hubitat")
-
-
-def _payload(call):
-    return call.args[2]
 
 
 def _dewpoint_of(sensor):
