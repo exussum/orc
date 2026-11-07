@@ -117,12 +117,13 @@ class Presence:
     def probe(self, names: Iterable[str], trigger: m.Trigger) -> None:
         wanted = set(names)
         start = self._now()
+        never = datetime.min.replace(tzinfo=start.tzinfo)
         with self._frame_seen:
             self._frame_seen.wait_for(
-                lambda: all(self._frames.get(name, start) >= start for name in wanted),
+                lambda: all(self._frames.get(name, never) >= start for name in wanted),
                 timeout=_PROBE_SECONDS,
             )
-            heard = {name for name in wanted if self._frames.get(name, start) >= start}
+            heard = {name for name in wanted if self._frames.get(name, never) >= start}
         self.mark(heard, self._now(), trigger)
 
     def _changed(self, trigger: m.Trigger) -> None:

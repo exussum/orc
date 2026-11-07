@@ -331,6 +331,12 @@ class TestPresence:
             presence.probe(["Alice"], TRIGGER)
         assert self._present(presence) == set()
 
+    def test_probe_of_a_tag_never_heard_marks_nothing(self):
+        presence = self._hear([], {"Alice": self.KEY})
+        with patch.object(net, "_PROBE_SECONDS", 0):
+            presence.probe(["Alice"], TRIGGER)
+        assert self._present(presence) == set()
+
 
 @pytest.mark.parametrize("scheme", ["file", "data"])
 def test_the_bws_token_url_may_be_a_file_or_data_url(scheme, tmp_path):
