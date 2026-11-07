@@ -110,16 +110,17 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
 
 def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     step = partial(_step, boot)
-    with step("scheduler start"):
-        ctx.scheduler.start(ctx)
+    with step("scheduler setup"):
         api.setup_scheduler(ctx)
     for hook in config.config.registry.setup_hooks:
         with step(f"{hook.__module__} setup"):
             hook(ctx)
     with step("mqtt start"):
         api.start_mqtt()
-    with step("ble start"):
+    with step("ble setup"):
         api.start_ble_listener()
+    with step("scheduler start"):
+        ctx.scheduler.start(ctx)
     with step("scheduler resume"):
         ctx.scheduler.resume()
     with step("presence check"):

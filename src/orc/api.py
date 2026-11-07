@@ -448,6 +448,8 @@ def start_ble_listener() -> None:
         clocks={row.person: row.clock for row in rows if row.clock},
         on_clock=sqlite.update_tag_clock,
     )
+    if net.presence.tagged:
+        context().scheduler.service(net.presence.listen, name="ble-listener")
 
 
 def schedule_presence_check(trigger: m.Trigger) -> None:
