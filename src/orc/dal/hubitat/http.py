@@ -26,9 +26,9 @@ def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
     resp = requests.get(f"{base.scheme}://{base.netloc}/logs/past/json", timeout=orc.config.settings.http_timeout)
     resp.raise_for_status()
     cutoff = datetime.now(orc.config.settings.tz).replace(tzinfo=None) - _STATS_WINDOW
-    failed: Counter[int] = Counter()
-    retried: Counter[int] = Counter()
-    changes: Counter[int] = Counter()
+    failed: Counter[str] = Counter()
+    retried: Counter[str] = Counter()
+    changes: Counter[str] = Counter()
     for line in resp.json():
         fields = line.split("\t")
         parts = fields[-1].split("|", 3)
@@ -36,7 +36,7 @@ def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
             continue
         elif datetime.fromisoformat(fields[0]) < cutoff:
             continue
-        device_id, msg = int(parts[1]), parts[3]
+        device_id, msg = parts[1], parts[3]
         if _FAILED in msg:
             failed[device_id] += 1
         elif _RETRIED in msg:
