@@ -278,11 +278,11 @@ def run_action(
 
             def run(*, ctx: m.AppContext) -> None:
                 queued.add(source, display)
-                action.effect(queued)
+                action.fn(queued)
 
             context().scheduler.once(run, when, id=id, queue=m.Queue.ADHOC)
         else:
-            action.effect(context().log.write(source, display, trigger))
+            action.fn(context().log.write(source, display, trigger))
     return True
 
 
@@ -644,7 +644,7 @@ def replay_day(now: datetime, entry: m.LogEntry) -> None:
 
 
 class _RunAction(NamedTuple):
-    effect: Callable[[m.LogEntry], object]
+    fn: Callable[[m.LogEntry], object]
     name: str
     delay: timedelta = timedelta()
 
