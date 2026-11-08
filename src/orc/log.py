@@ -44,6 +44,8 @@ class Message:
     TAG_KEY_FAILED: str = "Find Hub lookup failed for `{name}`: {exc}"
 
     TASK_QUEUED: str = "Queued: `{id}` (until {when:%I:%M})"
+    TASK_EXPIRED: str = "Expired: `{id}` was not run in time"
+    TASK_CANCELLED: str = "Cancelled: `{id}`"
     BUTTON_ACTION_UNKNOWN: str = "Unknown button action: `{id}`"
     LOW_BATTERY: str = "Low battery on `{device}` ({level})"
     ROOM_SET: str = "Room: `{id}` {state}"

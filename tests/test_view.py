@@ -210,7 +210,7 @@ def test_actions_lists_what_arrow_can_call(flask_client, config_ad_hoc, config_r
 @pytest.mark.parametrize(("disable", "marked"), [(False, True), (True, False)], ids=["queued", "skipped"])
 def test_the_scene_page_marks_the_queued_run(flask_client, ctx, disable, marked):
     run_at = datetime(2026, 1, 5, 16, 12, tzinfo=config.settings.tz)
-    queued = Job(run_at, print, id="AD_HOC_DOG", disable=disable)
+    queued = Job(run_at, None, print, id="AD_HOC_DOG", disable=disable)
     ctx.scheduler.jobs.side_effect = lambda queue: [queued] if queue == m.Queue.ADHOC else []
     body = flask_client.get("/").get_data(as_text=True)
     assert (f'data-queued-until="{run_at.isoformat()}"' in body) is marked
@@ -363,7 +363,7 @@ def _room(*commands):
 def _fake_iot_job(name="job", trigger=None, run_date=None, skip_replay=False):
     run_date = run_date or datetime(2100, 1, 1)
     rule = _routine(name, "", em.Command(m.Devices(MagicMock()), "on", tag=trigger or em.Always()), skip_replay=skip_replay)
-    return Job(run_date, print, m.IotJob(rule, name), id=name, name=name)
+    return Job(run_date, None, print, m.IotJob(rule, name), id=name, name=name)
 
 
 def _get_schedule(flask_client, jobs, present_names=()):

@@ -3,12 +3,26 @@ import atexit
 import logging
 import signal
 import threading
+import uuid
 from collections.abc import Callable
 from datetime import datetime, tzinfo
 from typing import Any
 
 import orc_queue as oq
-from orc_queue import Coordinator, Events, Job, JobQueue, MemoryStore, Service, SqliteStore, ThreadLane, ThreadService, aware, utcnow
+from orc_queue import (
+    AnyJob,
+    Coordinator,
+    Events,
+    Job,
+    JobQueue,
+    MemoryStore,
+    Service,
+    SqliteStore,
+    ThreadLane,
+    ThreadService,
+    aware,
+    utcnow,
+)
 
 from orc import model as m
 
@@ -61,17 +75,17 @@ class Scheduler:
 
     # fmt: off
     def once(self, func: Any, when: datetime, payload: Any = None, *,
-             id: str | None = None, name: str | None = None, queue: m.QueueName = m.Queue.ADHOC) -> Job[Any]:
-        job = oq.job(aware(when), func, payload, id=id, name=name)
+             id: str | None = None, name: str | None = None, queue: m.QueueName = m.Queue.ADHOC) -> AnyJob[Any]:
+        job = Job(aware(when), None, func, payload, id=id or str(uuid.uuid4()), name=name)
         with self._lock:
             self._queues[queue].add(job)
         return job
     # fmt: on
 
-    def now(self, func: Any, payload: Any = None, *, name: str | None = None, queue: m.QueueName = m.Queue.ADHOC) -> Job[Any]:
+    def now(self, func: Any, payload: Any = None, *, name: str | None = None, queue: m.QueueName = m.Queue.ADHOC) -> AnyJob[Any]:
         return self.once(func, utcnow(), payload, name=name, queue=queue)
 
-    def cron(self, func: Any, crontab: str, *, id: str, name: str, queue: m.QueueName = m.Queue.ADHOC) -> Job[Any]:
+    def cron(self, func: Any, crontab: str, *, id: str, name: str, queue: m.QueueName = m.Queue.ADHOC) -> AnyJob[Any]:
         job = oq.schedule(crontab, self._tz, func, id_template=id, name=name)
         with self._lock:
             self._queues[queue].add(job)
@@ -90,12 +104,18 @@ class Scheduler:
         with self._lock:
             self._queues[queue].resume()
 
-    def jobs(self, queue: m.QueueName) -> list[Job[Any]]:
+    def jobs(self, queue: m.QueueName) -> list[AnyJob[Any]]:
         with self._lock:
             return self._queues[queue].jobs()
 
     def queues(self) -> dict[m.QueueName, JobQueue[Any]]:
         return dict(self._queues)
+
+    def on_expired(self, fn: Callable[..., None]) -> None:
+        oq.on(self.events, oq.Event.EXPIRED, fn)
+
+    def on_cancelled(self, fn: Callable[..., None]) -> None:
+        oq.on(self.events, oq.Event.CANCELED, fn)
 
     def rebuild(self) -> None:
         with self._lock:

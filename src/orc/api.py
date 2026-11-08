@@ -280,7 +280,7 @@ def run_action(
                 queued.add(source, display)
                 action.fn(queued)
 
-            context().scheduler.once(run, when, id=id, queue=m.Queue.ADHOC)
+            context().scheduler.once(run, when, id=id, name=action.name, queue=m.Queue.ADHOC)
         else:
             action.fn(context().log.write(source, display, trigger))
     return True
@@ -577,6 +577,17 @@ def setup_scheduler(ctx: m.AppContext) -> None:
     ):
         ctx.scheduler.cron(func, crontab, id=job_id, name=name, queue=queue)
     ctx.scheduler.now(_retry_stats_job, name="Stats Boot Check", queue=m.Queue.FETCH)
+    ctx.scheduler.on_expired(partial(_log_expired, ctx))
+    ctx.scheduler.on_cancelled(partial(_log_cancelled, ctx))
+
+
+def _log_expired(ctx: m.AppContext, *, queue: Any, job: Any) -> None:
+    ctx.log.write(m.LogSource.SYSTEM, Message.TASK_EXPIRED.format(id=job.name or job.id), m.System("expired"))
+
+
+def _log_cancelled(ctx: m.AppContext, *, queue: Any, job: Any) -> None:
+    if job.id in config.ad_hoc_routines:
+        ctx.log.write(m.LogSource.MANUAL, Message.TASK_CANCELLED.format(id=job.name or job.id), m.Manual(job.id))
 
 
 def has_presence(rule: m.Routine) -> bool:
