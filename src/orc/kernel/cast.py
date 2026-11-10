@@ -17,9 +17,13 @@ _VALID_SECTIONS = frozenset({"scene", "system", "device"})
 _YOUTUBE_ID = re.compile(r"[0-9A-Za-z_-]{11}")
 _ERR_PARAMS = "Invalid parameter {}={!r}"
 _ERR_STATE = (
-    "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, an 11-character YouTube ID, or mode:fan:temp"
+    "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, "
+    "'youtube:<id>', or 'ac:<mode>[:<fan>[:<temp>]]'"
 )
-_ERR_AC_COMMAND = "Invalid AC command {!r}: expected mode:fan:temp with mode one of 'cool', 'fan_only', 'econ', 'dry', e.g. cool:low:75"
+_ERR_AC_COMMAND = (
+    "Invalid AC command {!r}: expected ac:mode[:fan[:temp]] with mode one of 'cool', 'fan_only', 'econ', 'dry', e.g. ac:cool:low:75"
+)
+_ERR_YOUTUBE_ID = "Invalid YouTube ID {!r}: expected 11 characters of letters, digits, '_' or '-'"
 
 
 # scalar() calls a caster as (value, objects) and each() as (value,), so casters
@@ -35,23 +39,15 @@ def device(value: str, objects: Mapping[str, Any] = _NO_OBJECTS) -> m.DeviceEnum
 def state(value: str) -> Any:
     if value in (m.ON, m.OFF, m.STOP, m.PAUSE, m.RESUME):
         return value
-    elif value in m.AcMode:
-        return m.AcState(power=m.ON, mode=m.AcMode(value))
-    elif ":" in value:
-        try:
-            match value.split(":"):
-                case [mode, fan]:
-                    return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan)
-                case [mode, fan, temp]:
-                    return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan or None, temperature=builtins.int(temp))
-        except ValueError:
-            raise ValueError(_ERR_AC_COMMAND.format(value)) from None
-        raise ValueError(_ERR_AC_COMMAND.format(value))
-    elif _YOUTUBE_ID.fullmatch(value):
-        return m.YouTubeId(value)
     elif value.isdigit():
         return builtins.int(value)
-    raise ValueError(_ERR_STATE.format(value))
+    match value.partition(":"):
+        case ("ac", ":", rest):
+            return _ac(rest)
+        case ("youtube", ":", rest):
+            return _youtube(rest)
+        case _:
+            raise ValueError(_ERR_STATE.format(value))
 
 
 def when(value: str) -> time | str:
@@ -80,3 +76,23 @@ def resolve_device(value: str, devices: Mapping[str, type[m.DeviceEnum]]) -> m.D
         raise ValueError(f"Unknown {type_name} device {member!r}: expected one of {options}") from None
     except SyntaxError as exc:
         raise ValueError(str(exc)) from None
+
+
+def _ac(value: str) -> m.AcState:
+    try:
+        match value.split(":"):
+            case [mode]:
+                return m.AcState(power=m.ON, mode=m.AcMode(mode))
+            case [mode, fan]:
+                return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan)
+            case [mode, fan, temp]:
+                return m.AcState(power=m.ON, mode=m.AcMode(mode), fan_mode=fan or None, temperature=builtins.int(temp))
+    except ValueError:
+        raise ValueError(_ERR_AC_COMMAND.format(value)) from None
+    raise ValueError(_ERR_AC_COMMAND.format(value))
+
+
+def _youtube(value: str) -> m.YouTubeId:
+    if not _YOUTUBE_ID.fullmatch(value):
+        raise ValueError(_ERR_YOUTUBE_ID.format(value))
+    return m.YouTubeId(value)

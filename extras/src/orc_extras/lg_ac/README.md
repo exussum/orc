@@ -146,7 +146,7 @@ back to the single connected device.
 ## Control
 
 - The device card's mode, fan and temperature controls, `routine` lines and
-  react actions (`cool:low:72`) all reach the AC through this plugin;
+  react actions (`ac:cool:low:72`) all reach the AC through this plugin;
   temperatures are Fahrenheit everywhere in orc and converted to the half
   degrees Celsius the AC stores.
 - Direct: `POST /api/lg_ac/enroll/command` with

@@ -1,4 +1,4 @@
-react 'Arrive AC' Sensor.ENTRANCE_SENSOR turns active   set AC cool:low:75
+react 'Arrive AC' Sensor.ENTRANCE_SENSOR turns active   set AC ac:cool:low:75
 react 'Arrive light' Sensor.ENTRANCE_SENSOR turns active   set Light.LIVING_ROOM on
 react 'Leave AC' Sensor.ENTRANCE_SENSOR turns inactive set AC off
 

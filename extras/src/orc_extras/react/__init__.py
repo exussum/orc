@@ -189,7 +189,7 @@ def _attribute(to: str) -> str:
 def _ac_state(value: str) -> AcState:
     state = AcState(power=value) if value in (ON, OFF) else cast.state(value)
     if not isinstance(state, AcState):
-        raise ValueError(f"Invalid AC state {value!r}: expected on, off, or mode[:fan[:temp]]")
+        raise ValueError(f"Invalid AC state {value!r}: expected on, off, or ac:mode[:fan[:temp]]")
     return state
 
 

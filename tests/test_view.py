@@ -255,7 +255,7 @@ def test_device_kind_picks_the_handler(flask_client):
 
 
 def test_dry_from_the_device_page_leaves_the_fan_unsaid(flask_client, command_dispatch):
-    flask_client.get("/api/device/AC/unit?state=dry::75")
+    flask_client.get("/api/device/AC/unit?state=ac:dry::75")
     (commands,), _ = command_dispatch.call_args
     (command,) = commands
     assert command.value.fan_mode is None

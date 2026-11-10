@@ -27,10 +27,10 @@ A `phrase` line names a condition once; every `if` can then use it as
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `<name>`      | Groups rules for the System page's sleep switch; quote names with spaces.                                                                                                      |
 | `<devices>`   | The devices to watch — one, a type, or a set: `Light.desk`, `Light`, `'{Light.a, Light.b}'`, `AC.living`. Each device becomes its own rule.                                    |
-| `turns <to>`  | Fire when the device's attribute becomes `<to>`: `on`/`off` (switch), `open`/`closed` (contact), `active`/`inactive` (motion). An AC takes `on`, `off` or `mode[:fan[:temp]]`. |
+| `turns <to>`  | Fire when the device's attribute becomes `<to>`: `on`/`off` (switch), `open`/`closed` (contact), `active`/`inactive` (motion). An AC takes `on`, `off` or `ac:mode[:fan[:temp]]`. |
 | `if …`        | A condition that must hold when the rule is evaluated, written as one quoted expression (vocabulary below). Without `turns`, it is the trigger.                                |
 | `<target>`    | The devices to set; defaults to the watched device, or to the AC for an AC action.                                                                                             |
-| `<action>`    | `on`, `off`, a Chromecast state (`pause`), or an AC command `mode[:fan[:temp]]` such as `cool:low:72` or `fan_only:low`; an unsaid part keeps what the unit has.               |
+| `<action>`    | `on`, `off`, a Chromecast state (`pause`), or an AC command `ac:mode[:fan[:temp]]` such as `ac:cool:low:72` or `ac:fan_only:low`; an unsaid part keeps what the unit has.               |
 | `--delay`     | Seconds to wait before setting. A `turns` rule drops a pending command if the attribute changes again first.                                                                   |
 | `--pause`     | Minutes the System page's sleep switch silences the rule (default 10).                                                                                                         |
 
@@ -53,7 +53,7 @@ inside it are strings, so use the other quote: `if 'Eq(switch, "on")'`.
 | `Became(<attribute>, "<to>")`   | The attribute just changed to that state (what `turns` uses).                                  |
 | `Range(<measure>, low, high)`   | `low <= measurement < high` (level: holds on every reading in range).                          |
 | `Entered(<measure>, low, high)` | The measurement just crossed into `low <= x < high` (edge: holds on that reading only).        |
-| `AcIs(AC.<member>, "<state>")`  | The AC is in that state: `on`, `off`, or `mode[:fan[:temp]]`; an unsaid part matches anything. |
+| `AcIs(AC.<member>, "<state>")`  | The AC is in that state: `on`, `off`, or `ac:mode[:fan[:temp]]`; an unsaid part matches anything. |
 | `Playing(Chromecast.<member>)`  | That Chromecast is playing.                                                                    |
 | `Present("alice", "bob")`       | Any of the named people is home.                                                               |
 | `Anyone()` / `Nobody()`         | Someone / no one is home.                                                                      |
@@ -76,8 +76,8 @@ Names resolve in two layers:
 
 ```
 react 'Lights off' Light turns on set off --delay=900 --pause=30
-react 'Cool'       Sensor.LIVING_ROOM if 'Entered(temperature, 68, 75)' set AC cool:low:72
-react 'Dry'        Sensor.LIVING_ROOM if 'And(Present("alice","bob"), Entered(dewpoint(self, "temperature", "humidity"), 50, 60))' set AC fan_only:low:70
+react 'Cool'       Sensor.LIVING_ROOM if 'Entered(temperature, 68, 75)' set AC ac:cool:low:72
+react 'Dry'        Sensor.LIVING_ROOM if 'And(Present("alice","bob"), Entered(dewpoint(self, "temperature", "humidity"), 50, 60))' set AC ac:fan_only:low:70
 react 'Dry off'    Sensor.LIVING_ROOM if 'And(AcIs(AC.LIVING_ROOM, "on"), Entered(dewpoint(self, "temperature", "humidity"), 0, 56))' set AC off
 react Arrive Sensor.ENTRANCE_SENSOR turns active set Light      on
 react Arrive Sensor.ENTRANCE_SENSOR turns active set Chromecast pause
@@ -93,7 +93,7 @@ react 'Cool the house when it gets warm'
              Eq(Sensor.PATIO_DOOR.contact, "closed"),
              Entered(dewpoint(self, "temperature", "humidity"), 60, 100)
           )'
-      set AC cool:low:77
+      set AC ac:cool:low:77
       --pause=180
 ```
 

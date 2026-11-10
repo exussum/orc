@@ -1,2 +1,2 @@
 device only Foo A h
-room R Foo.A cool:low:75
+room R Foo.A ac:cool:low:75

@@ -180,7 +180,7 @@ def ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, 
     elif isinstance(state, m.AcState) and len(acs) != len(members):
         raise ValueError(f"AC command {state} applies only to AC devices, got {source!r}")
     elif not isinstance(state, m.AcState) and acs and state not in (m.ON, m.OFF):
-        raise ValueError(f"AC devices take a mode:fan:temp command, 'on', or 'off', got {state!r}")
+        raise ValueError(f"AC devices take an ac:mode[:fan[:temp]] command, 'on', or 'off', got {state!r}")
     elif acs and state in (m.ON, m.OFF):
         return m.AcState(power=state)
     return state

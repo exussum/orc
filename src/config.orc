@@ -62,7 +62,7 @@ routine append ROUTINE_QUIET      Chromecast stop --trigger-person SYSTEM
 
 routine define ROUTINE_DEFAULT    Welcome
 routine append ROUTINE_DEFAULT    Light      on   --trigger-person SYSTEM
-routine append .                  AC         cool:low:75 --trigger-person SYSTEM
+routine append .                  AC         ac:cool:low:75 --trigger-person SYSTEM
 
 routine define ROUTINE_DAYLIGHT   Daylight --skip-replay
 routine append ROUTINE_DAYLIGHT   Light      off  --trigger-weather SUNNY
