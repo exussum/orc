@@ -248,6 +248,25 @@ class TestPublishLight:
         with pytest.raises(RuntimeError):
             mqtt.command(orc.Light.a, m.ON)
 
+    def test_a_state_the_bulb_already_holds_publishes_nothing(self):
+        _seen(1, switch="on", level="20")
+        mqtt.command(orc.Light.a, 20)
+        assert self.published == []
+
+    def test_hue_publishes_set_color_without_brightness(self):
+        mqtt.command(orc.Light.d, m.LightState(switch=m.ON, hue=8, saturation=87, color_mode=m.ColorMode.RGB))
+        ((topic, payload, retain),) = self.published
+        assert (topic, json.loads(payload), retain) == (f"hubitat/{HUB}/devices/4/commands/setColor", {"hue": 8, "saturation": 87}, False)
+
+    def test_color_temperature_publishes_the_kelvin_alone(self):
+        mqtt.command(orc.Light.d, m.LightState(switch=m.ON, color_temperature=2700, color_mode=m.ColorMode.CT))
+        assert self.published == [(f"hubitat/{HUB}/devices/4/commands/setColorTemperature", "2700", False)]
+
+    def test_color_without_capability_raises(self):
+        with pytest.raises(ValueError, match="does not support colour"):
+            mqtt.command(orc.Light.a, m.LightState(switch=m.ON, hue=8, saturation=87, color_mode=m.ColorMode.RGB))
+        assert self.published == []
+
 
 @pytest.mark.usefixtures("mqtt_client")
 class TestStatusSource:
@@ -280,7 +299,7 @@ class TestExternalChanges:
     def test_a_commanded_change_is_not_external(self):
         mqtt.command(orc.Light.a, 42)
         _seen(1, switch="off", level="20")
-        _receive([_doc(id=1, attributes={"switch": "on", "level": "43"})])  # drivers round through 0-254, one off is a match
+        _receive([_doc(id=1, attributes={"switch": "on", "level": "42"})])
         assert self.external_statuses == []
 
     def test_a_value_nobody_asked_for_is_external(self):
@@ -301,6 +320,66 @@ class TestExternalChanges:
         _receive([_doc(id=1, attributes={"switch": "off"})])
         _receive([_doc(id=1, attributes={"switch": "on"})])
         assert self.external_statuses == [("switch", "on", "off"), ("switch", "off", "on")]
+
+    def test_a_colour_nobody_asked_for_is_external(self):
+        _seen(4, switch="on", level="100", hue="8", saturation="57", colorMode="CT", colorTemperature="3003")
+        _receive(
+            [
+                _doc(
+                    id=4,
+                    attributes={
+                        "switch": "on",
+                        "level": "100",
+                        "hue": "50",
+                        "saturation": "100",
+                        "colorMode": "RGB",
+                        "colorTemperature": "3003",
+                    },
+                )
+            ]
+        )
+        assert self.external_statuses == [("hue", "8", "50"), ("saturation", "57", "100")]
+
+    def test_a_hue_one_off_is_external(self):
+        _seen(4, switch="on", level="100", hue="8", saturation="57", colorMode="RGB", colorTemperature="2202")
+        mqtt.command(orc.Light.d, m.LightState(switch=m.ON, hue=8, saturation=87, color_mode=m.ColorMode.RGB))
+        _receive(
+            [
+                _doc(
+                    id=4,
+                    attributes={
+                        "switch": "on",
+                        "level": "100",
+                        "hue": "9",
+                        "saturation": "87",
+                        "colorMode": "RGB",
+                        "colorTemperature": "2202",
+                    },
+                )
+            ]
+        )
+        assert self.external_statuses == [("hue", "8", "9")]
+
+    def test_a_rounded_colour_temperature_confirms_the_command(self):
+        _seen(4, switch="on", level="100", hue="8", saturation="57", colorMode="RGB", colorTemperature="2202")
+        mqtt.command(orc.Light.d, m.LightState(switch=m.ON, color_temperature=3000, color_mode=m.ColorMode.CT))
+        _receive(
+            [
+                _doc(
+                    id=4,
+                    attributes={
+                        "switch": "on",
+                        "level": "100",
+                        "hue": "8",
+                        "saturation": "57",
+                        "colorMode": "CT",
+                        "colorTemperature": "3003",
+                    },
+                )
+            ]
+        )
+        assert self.external_statuses == []
+        assert hubitat._commanded.get("4") is None
 
 
 class TestFetchHubitatConfig:
@@ -340,11 +419,13 @@ class TestFetchHubitatConfig:
         docs = [
             _doc(id=17, name="entrance bulb 1", attributes={"switch": "off", "level": "20"}),
             _doc(id=1, name="office floor lamp", attributes={"switch": "off", "power": "0"}),
+            _doc(id=62, name="overhead 1", attributes={"switch": "on", "level": "100", "hue": "8", "saturation": "57"}),
         ]
         config = self._fetch(monkeypatch, docs)
         assert config == {
             "entrance bulb 1": ("17", frozenset([m.Capability.change_level])),
             "office floor lamp": ("1", frozenset()),
+            "overhead 1": ("62", frozenset([m.Capability.change_level, m.Capability.color])),
         }
 
     def test_empty_flood_fails_boot(self, monkeypatch):

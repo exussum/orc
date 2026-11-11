@@ -166,6 +166,7 @@ class DeviceStatus:
 
 class Capability(Enum):
     change_level = auto()
+    color = auto()
 
 
 class LogSourceEnum(StrEnum):
@@ -419,6 +420,49 @@ class AcState:
         elif self.mode and self.fan_mode and self.temperature is not None:
             return f"{self.mode}:{self.fan_mode}:{round(self.temperature)}"
         return self.mode or self.power or "?"
+
+
+class ColorMode(StrEnum):
+    RGB = "RGB"
+    CT = "CT"
+
+
+@dataclass(frozen=True)
+class LightState:
+    """What a light is doing, or what a command asks of it: a field left None is unsaid."""
+
+    switch: str | None = None
+    level: int | None = None
+    hue: int | None = None
+    saturation: int | None = None
+    color_temperature: int | None = None
+    color_mode: ColorMode | None = None
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, LightState):
+            return NotImplemented
+        elif self.switch == OFF and other.switch == OFF:
+            return True
+        pairs: tuple[tuple[Any, Any, Callable[[Any, Any], bool]], ...] = (
+            (self.switch, other.switch, _same),
+            (self.color_mode, other.color_mode, _same),
+            (self.level, other.level, _same),
+            (self.hue, other.hue, _same),
+            (self.saturation, other.saturation, _same),
+            (self.color_temperature, other.color_temperature, _within_a_mired),
+        )
+        return all(a is None or b is None or close(a, b) for a, b, close in pairs)
+
+    def __str__(self) -> str:
+        if self.switch == OFF:
+            return OFF
+        elif self.hue is not None:
+            return f"hue:{self.hue}:{self.saturation}"
+        elif self.color_temperature is not None:
+            return f"ct:{self.color_temperature}"
+        elif self.level is not None:
+            return str(self.level)
+        return self.switch or "?"
 
 
 class Playback(StrEnum):
@@ -708,3 +752,11 @@ class Registry:
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
     secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
+
+
+def _same(a: Any, b: Any) -> bool:
+    return a == b
+
+
+def _within_a_mired(a: int, b: int) -> bool:
+    return abs(1_000_000 / a - 1_000_000 / b) <= 1  # the wire carries mireds, so 3000K reads back as 3003

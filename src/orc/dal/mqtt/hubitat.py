@@ -8,22 +8,21 @@ configured. Everything but the past-log scrape flows through here.
 
 import logging
 import time
-from abc import ABC, abstractmethod
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 from orc import model as m
 from orc.collections import LockedDict
 from orc.dal import sqlite
-from orc.dal.mqtt import switch_on
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
 _log = logging.getLogger(__name__)
 
-_COMMAND_TTL_SEC = 120.0
 _SOURCE = "hubitat"
+# The commandable attributes, in the hub's spelling: the ones a pending command can
+# explain and an unexplained move of which is reported as external.
+_WATCHED = ("switch", "level", "hue", "saturation", "colorTemperature")
 
 
 class HubitatSource(m.SourceEnum):
@@ -43,9 +42,10 @@ _devices: LockedDict[str, m.DeviceState] = LockedDict()
 # topic's next send. Round trips fold into orc_durations, keyed by command topic.
 _command_sent: LockedDict[str, float] = LockedDict()
 
-# External-control detection: a switch/level change no pending _Command explains
-# is reported as external (Google Home, a physical switch).
-_commanded: LockedDict[str, _Command] = LockedDict()
+# External-control detection: what the last command asked of each light, held until
+# a report shows it, so a change nothing asked for (Google Home, a physical switch)
+# is reported as external. Same shape as the ThinQ adapter's _asked.
+_commanded: LockedDict[str, m.LightState] = LockedDict()
 
 
 def attach(publish: Callable[[m.Message], None]) -> None:
@@ -69,16 +69,15 @@ def decode(topic: str, doc: dict[str, Any]) -> tuple[m.Status, ...]:
 
 
 def encode(device: m.DeviceEnum, command: Any) -> tuple[m.Message, ...]:
-    asked: _Command
-    if isinstance(command, int) and m.Capability.change_level in device.capabilities:
-        asked = _Level(level=command)
-    else:
-        asked = _Switch(on=switch_on(device, command))
     if hub_id is None:
         raise RuntimeError(f"hub not yet seen; cannot command {device.name}")
-    message = asked.message(hub_id, device.value)
-    _command_sent[message.topic] = asked.sent
+    asked = _light_state(device, command)
+    current = _current(device.value)
+    if current is not None and asked == current:
+        return ()
     _commanded[device.value] = asked
+    message = _hub_command(hub_id, device.value, asked)
+    _command_sent[message.topic] = time.monotonic()
     return (message,)
 
 
@@ -97,8 +96,12 @@ def discover(messages: Sequence[m.Message]) -> dict[str, tuple[str, frozenset[m.
         parts = message.topic.split("/")
         state = parse_document(message.payload) if len(parts) == 4 and parts[2] == "devices" and isinstance(message.payload, dict) else None
         if state is not None:
-            dimmable = "level" in state.attributes
-            found[state.device.name] = (state.device.id, frozenset([m.Capability.change_level]) if dimmable else frozenset())
+            capabilities = set()
+            if "level" in state.attributes:
+                capabilities.add(m.Capability.change_level)
+            if "hue" in state.attributes:
+                capabilities.add(m.Capability.color)
+            found[state.device.name] = (state.device.id, frozenset(capabilities))
             if message.retain:
                 retained.add(state.device.name)
     if not found:
@@ -121,65 +124,6 @@ def parse_document(doc: dict[str, Any]) -> m.DeviceState | None:
         return None
 
 
-@dataclass(frozen=True)
-class _Command(ABC):
-    attribute: ClassVar[str]
-    sent: float = field(default_factory=time.monotonic, kw_only=True)
-
-    @abstractmethod
-    def message(self, hub_id: str, device_id: str) -> m.Message: ...
-
-    @abstractmethod
-    def expects(self) -> dict[str, Any]: ...
-
-    @staticmethod
-    def same(a: Any, b: Any) -> bool:
-        return a == b
-
-    def explains(self, attribute: str, reported: Any, now: float) -> bool:
-        asked = self.expects().get(attribute)
-        return asked is not None and reported is not None and now - self.sent <= _COMMAND_TTL_SEC and _kind(attribute).same(asked, reported)
-
-    # an attribute the report leaves out is not held against the command
-    def satisfied_by(self, attributes: dict[str, Any], now: float) -> bool:
-        return all(attributes.get(a) is None or self.explains(a, attributes.get(a), now) for a in self.expects())
-
-
-@dataclass(frozen=True)
-class _Switch(_Command):
-    attribute = "switch"
-    on: bool
-
-    def message(self, hub_id: str, device_id: str) -> m.Message:
-        return m.Message(f"hubitat/{hub_id}/devices/{device_id}/commands/{m.ON if self.on else m.OFF}", None)
-
-    def expects(self) -> dict[str, Any]:
-        return {"switch": m.ON if self.on else m.OFF}
-
-
-@dataclass(frozen=True)
-class _Level(_Command):
-    attribute = "level"
-    level: int
-
-    def message(self, hub_id: str, device_id: str) -> m.Message:
-        return m.Message(f"hubitat/{hub_id}/devices/{device_id}/commands/setLevel", str(self.level))
-
-    def expects(self) -> dict[str, Any]:
-        return {"switch": m.ON, "level": self.level} if self.level else {"switch": m.OFF}
-
-    @staticmethod
-    def same(a: Any, b: Any) -> bool:
-        return abs(int(a) - int(b)) <= 1  # drivers round through the 0-254 scale
-
-
-_COMMANDS = (_Switch, _Level)
-
-
-def _kind(attribute: str) -> type[_Command]:
-    return next((kind for kind in _COMMANDS if kind.attribute == attribute), _Command)
-
-
 # State is never an event: first sightings (the retained flood at boot) and replays
 # (a document identical to the cached one — reconnect floods, hub republish after
 # reboot) update the cache but yield nothing. No other dedup: the hub regenerates
@@ -196,15 +140,15 @@ def _document(topic: str, doc: dict[str, Any]) -> tuple[m.Status, ...]:
     old, _devices[id] = _devices.get(id), state
     if old is None or old == state:
         return ()
-    now, expected = time.monotonic(), _commanded.get(id)
+    asked = _commanded.get(id)
     sources: dict[str, m.SourceEnum] = {}
-    for kind in _COMMANDS:
-        before, after = old.attributes.get(kind.attribute), state.attributes.get(kind.attribute)
-        if expected is not None and expected.explains(kind.attribute, after, now):
-            sources[kind.attribute] = m.Source.ORC
-        elif before is not None and after is not None and not kind.same(before, after):
-            sources[kind.attribute] = m.Source.EXTERNAL
-    if expected is not None and expected.satisfied_by(state.attributes, now):
+    for attribute in _WATCHED:
+        before, after = old.attributes.get(attribute), state.attributes.get(attribute)
+        if asked is not None and _explains(asked, attribute, after):
+            sources[attribute] = m.Source.ORC
+        elif before is not None and after is not None and _record({attribute: before}) != _record({attribute: after}):
+            sources[attribute] = m.Source.EXTERNAL
+    if asked is not None and asked == _record(state.attributes):
         _commanded.pop(id)
     return tuple(
         m.Status(state.device, a, old.attributes.get(a), v, sources.get(a, HubitatSource.HUBITAT)) for a, v in state.attributes.items()
@@ -229,3 +173,66 @@ def _echo(topic: str) -> None:
     sent = _command_sent.pop(topic)
     if sent is not None:
         sqlite.update_avg(topic, time.monotonic() - sent)
+
+
+def _light_state(device: m.DeviceEnum, command: Any) -> m.LightState:
+    if isinstance(command, m.LightState):
+        if command.color_mode and m.Capability.color not in device.capabilities:
+            raise ValueError(f"{device.name} does not support colour; cannot set {command}")
+        return command
+    elif command == m.ON:
+        return m.LightState(switch=m.ON)
+    elif command == m.OFF:
+        return m.LightState(switch=m.OFF)
+    elif isinstance(command, int) and m.Capability.change_level in device.capabilities:
+        return m.LightState(switch=m.ON, level=command) if command else m.LightState(switch=m.OFF)
+    elif command in (0, 100):
+        return m.LightState(switch=m.ON if command else m.OFF)
+    raise ValueError(f"{device.name} does not support ChangeLevel; cannot set brightness {command}")
+
+
+def _current(device_id: str) -> m.LightState | None:
+    known = _devices.get(device_id)
+    return _record(known.attributes) if known is not None else None
+
+
+def _hub_command(hub_id: str, device_id: str, state: m.LightState) -> m.Message:
+    base = f"hubitat/{hub_id}/devices/{device_id}/commands/"
+    if state.hue is not None:
+        return m.Message(base + "setColor", {"hue": state.hue, "saturation": state.saturation})
+    elif state.color_temperature is not None:
+        return m.Message(base + "setColorTemperature", str(state.color_temperature))
+    elif state.level is not None:
+        return m.Message(base + "setLevel", str(state.level))
+    return m.Message(base + (m.OFF if state.switch == m.OFF else m.ON), None)
+
+
+def _explains(asked: m.LightState, attribute: str, reported: Any) -> bool:
+    wanted = _hub_attributes(asked).get(attribute)
+    return wanted is not None and reported is not None and _record({attribute: wanted}) == _record({attribute: reported})
+
+
+def _record(attributes: Mapping[str, Any]) -> m.LightState:
+    mode = attributes.get("colorMode")
+    return m.LightState(
+        switch=attributes.get("switch"),
+        level=_int(attributes.get("level")),
+        hue=_int(attributes.get("hue")),
+        saturation=_int(attributes.get("saturation")),
+        color_temperature=_int(attributes.get("colorTemperature")),
+        color_mode=m.ColorMode(mode) if isinstance(mode, str) and mode in m.ColorMode else None,
+    )
+
+
+def _hub_attributes(state: m.LightState) -> dict[str, Any]:
+    return {
+        "switch": state.switch,
+        "level": state.level,
+        "hue": state.hue,
+        "saturation": state.saturation,
+        "colorTemperature": state.color_temperature,
+    }
+
+
+def _int(value: Any) -> int | None:
+    return None if value is None else int(value)

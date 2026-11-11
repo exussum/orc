@@ -18,8 +18,10 @@ _YOUTUBE_ID = re.compile(r"[0-9A-Za-z_-]{11}")
 _ERR_PARAMS = "Invalid parameter {}={!r}"
 _ERR_STATE = (
     "Invalid state {!r}: expected one of 'on', 'off', 'stop', 'pause', 'resume', an integer, "
-    "'youtube:<id>', or 'ac:<mode>[:<fan>[:<temp>]]'"
+    "'youtube:<id>', 'ac:<mode>[:<fan>[:<temp>]]', 'hue:<hue>:<saturation>', or 'ct:<kelvin>'"
 )
+_ERR_HUE = "Invalid colour {!r}: expected hue:<hue>:<saturation>, each 0 to 100, e.g. hue:8:87"
+_ERR_CT = "Invalid colour temperature {!r}: expected ct:<kelvin>, e.g. ct:3000"
 _ERR_AC_COMMAND = (
     "Invalid AC command {!r}: expected ac:mode[:fan[:temp]] with mode one of 'cool', 'fan_only', 'econ', 'dry', e.g. ac:cool:low:75"
 )
@@ -46,6 +48,10 @@ def state(value: str) -> Any:
             return _ac(rest)
         case ("youtube", ":", rest):
             return _youtube(rest)
+        case ("hue", ":", rest):
+            return _hue(rest)
+        case ("ct", ":", rest):
+            return _ct(rest)
         case _:
             raise ValueError(_ERR_STATE.format(value))
 
@@ -96,3 +102,31 @@ def _youtube(value: str) -> m.YouTubeId:
     if not _YOUTUBE_ID.fullmatch(value):
         raise ValueError(_ERR_YOUTUBE_ID.format(value))
     return m.YouTubeId(value)
+
+
+def _hue(value: str) -> m.LightState:
+    try:
+        match [_percent(part) for part in value.split(":")]:
+            case [hue, saturation]:
+                return m.LightState(switch=m.ON, hue=hue, saturation=saturation, color_mode=m.ColorMode.RGB)
+    except ValueError:
+        raise ValueError(_ERR_HUE.format(value)) from None
+    raise ValueError(_ERR_HUE.format(value))
+
+
+def _ct(value: str) -> m.LightState:
+    try:
+        match value.split(":"):
+            case [kelvin]:
+                if (number := builtins.int(kelvin)) == 0:
+                    return m.LightState(switch=m.OFF)
+                return m.LightState(switch=m.ON, color_temperature=number, color_mode=m.ColorMode.CT)
+    except ValueError:
+        raise ValueError(_ERR_CT.format(value)) from None
+    raise ValueError(_ERR_CT.format(value))
+
+
+def _percent(value: str) -> int:
+    if not 0 <= (number := builtins.int(value)) <= 100:
+        raise ValueError(value)
+    return number

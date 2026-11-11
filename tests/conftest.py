@@ -22,6 +22,7 @@ def core_registry(monkeypatch):
         a = ("1", frozenset([m.Capability.change_level]))
         b = ("2", frozenset())
         c = ("3", frozenset())
+        d = ("4", frozenset([m.Capability.change_level, m.Capability.color]))
 
     class Chromecast(DeviceEnum):
         x = 1

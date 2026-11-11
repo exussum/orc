@@ -23,16 +23,16 @@ react <name> <devices> if <condition>...            set [<target>] <action> [--d
 A `phrase` line names a condition once; every `if` can then use it as
 `Phrase.<name>`. A phrase may use phrases defined above it.
 
-| Part          | Meaning                                                                                                                                                                        |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `<name>`      | Groups rules for the System page's sleep switch; quote names with spaces.                                                                                                      |
-| `<devices>`   | The devices to watch — one, a type, or a set: `Light.desk`, `Light`, `'{Light.a, Light.b}'`, `AC.living`. Each device becomes its own rule.                                    |
-| `turns <to>`  | Fire when the device's attribute becomes `<to>`: `on`/`off` (switch), `open`/`closed` (contact), `active`/`inactive` (motion). An AC takes `on`, `off` or `ac:mode[:fan[:temp]]`. |
-| `if …`        | A condition that must hold when the rule is evaluated, written as one quoted expression (vocabulary below). Without `turns`, it is the trigger.                                |
-| `<target>`    | The devices to set; defaults to the watched device, or to the AC for an AC action.                                                                                             |
-| `<action>`    | `on`, `off`, a Chromecast state (`pause`), or an AC command `ac:mode[:fan[:temp]]` such as `ac:cool:low:72` or `ac:fan_only:low`; an unsaid part keeps what the unit has.               |
-| `--delay`     | Seconds to wait before setting. A `turns` rule drops a pending command if the attribute changes again first.                                                                   |
-| `--pause`     | Minutes the System page's sleep switch silences the rule (default 10).                                                                                                         |
+| Part         | Meaning                                                                                                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `<name>`     | Groups rules for the System page's sleep switch; quote names with spaces.                                                                                                                                                |
+| `<devices>`  | The devices to watch — one, a type, or a set: `Light.desk`, `Light`, `'{Light.a, Light.b}'`, `AC.living`. Each device becomes its own rule.                                                                              |
+| `turns <to>` | Fire when the device's attribute becomes `<to>`: `on`/`off` (switch), `open`/`closed` (contact), `active`/`inactive` (motion). An AC takes `on`, `off` or `ac:mode[:fan[:temp]]`.                                        |
+| `if …`       | A condition that must hold when the rule is evaluated, written as one quoted expression (vocabulary below). Without `turns`, it is the trigger.                                                                          |
+| `<target>`   | The devices to set; defaults to the watched device, or to the AC for an AC action.                                                                                                                                       |
+| `<action>`   | `on`, `off`, a brightness, a Chromecast state (`pause`), a colour `hue:<hue>:<saturation>` or `ct:<kelvin>`, or an AC command `ac:mode[:fan[:temp]]` such as `ac:cool:low:72`; an unsaid part keeps what the device has. |
+| `--delay`    | Seconds to wait before setting. A `turns` rule drops a pending command if the attribute changes again first.                                                                                                             |
+| `--pause`    | Minutes the System page's sleep switch silences the rule (default 10).                                                                                                                                                   |
 
 A rule without `turns` is evaluated on every report from its device and the
 `if` decides; write a measurement condition as `Entered(...)` so it fires once

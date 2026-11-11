@@ -31,6 +31,10 @@ _PARSE_ERRORS = [
     ("duplicate_device_ids", "Duplicate device id in 'Foo': {'h'}"),
     ("invalid_state", "Invalid state 'wibble'"),
     ("invalid_ac_command", "Invalid AC command 'chill:low:75'"),
+    ("invalid_hue", "Invalid colour '8'"),
+    ("invalid_ct", "Invalid colour temperature 'warm'"),
+    ("hue_with_level", "Invalid colour '8:87:60'"),
+    ("colour_with_level", "Invalid colour temperature '3000:60'"),
     ("ac_command_non_ac", "AC command cool:low:75 applies only to AC devices, got 'Foo.A'"),
     ("mixed_ac_set", "AC devices take their own line, got '{Light.LAMP, AC.UNIT}'"),
     ("ac_device_bad_state", "AC devices take an ac:mode[:fan[:temp]] command, 'on', or 'off', got 'stop'"),
@@ -249,6 +253,18 @@ def test_routines_accept_ac_commands():
         m.AcState(m.ON, m.AcMode.COOL, "low", temperature=75),
         m.AcState(power=m.OFF),
     ]
+
+
+def test_lights_accept_color_tokens():
+    parsed = parse("light_color")
+    states = {name: cfg.commands[0].value for name, cfg in parsed.ad_hoc.items()}
+    assert states == {
+        "AD_HOC_WARM": m.LightState(switch=m.ON, color_temperature=3000, color_mode=m.ColorMode.CT),
+        "AD_HOC_DIM": m.LightState(switch=m.ON, color_temperature=2700, color_mode=m.ColorMode.CT),
+        "AD_HOC_AMBER": m.LightState(switch=m.ON, hue=8, saturation=87, color_mode=m.ColorMode.RGB),
+        "AD_HOC_PINK": m.LightState(switch=m.ON, hue=92, saturation=40, color_mode=m.ColorMode.RGB),
+        "AD_HOC_DARK": m.LightState(switch=m.OFF),
+    }
 
 
 def test_state_youtube_ids_stay_strings():
