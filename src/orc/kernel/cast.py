@@ -21,7 +21,7 @@ _ERR_STATE = (
     "'youtube:<id>', 'ac:<mode>[:<fan>[:<temp>]]', 'hue:<hue>:<saturation>', or 'ct:<kelvin>'"
 )
 _ERR_HUE = "Invalid colour {!r}: expected hue:<hue>:<saturation>, each 0 to 100, e.g. hue:8:87"
-_ERR_CT = "Invalid colour temperature {!r}: expected ct:<kelvin>, e.g. ct:3000"
+_ERR_CT = "Invalid colour temperature {!r}: expected ct:<kelvin>[:<level>], e.g. ct:3000 or ct:3000:100"
 _ERR_AC_COMMAND = (
     "Invalid AC command {!r}: expected ac:mode[:fan[:temp]] with mode one of 'cool', 'fan_only', 'econ', 'dry', e.g. ac:cool:low:75"
 )
@@ -121,6 +121,10 @@ def _ct(value: str) -> m.LightState:
                 if (number := builtins.int(kelvin)) == 0:
                     return m.LightState(switch=m.OFF)
                 return m.LightState(switch=m.ON, color_temperature=number, color_mode=m.ColorMode.CT)
+            case [kelvin, level]:
+                if (number := builtins.int(kelvin)) == 0:
+                    return m.LightState(switch=m.OFF)
+                return m.LightState(switch=m.ON, level=_percent(level), color_temperature=number, color_mode=m.ColorMode.CT)
     except ValueError:
         raise ValueError(_ERR_CT.format(value)) from None
     raise ValueError(_ERR_CT.format(value))

@@ -76,9 +76,10 @@ def encode(device: m.DeviceEnum, command: Any) -> tuple[m.Message, ...]:
     if current is not None and asked == current:
         return ()
     _commanded[device.value] = asked
-    message = _hub_command(hub_id, device.value, asked)
-    _command_sent[message.topic] = time.monotonic()
-    return (message,)
+    messages = _hub_commands(hub_id, device.value, asked)
+    for message in messages:
+        _command_sent[message.topic] = time.monotonic()
+    return messages
 
 
 def snapshot() -> tuple[m.DeviceState, ...]:
@@ -196,15 +197,16 @@ def _current(device_id: str) -> m.LightState | None:
     return _record(known.attributes) if known is not None else None
 
 
-def _hub_command(hub_id: str, device_id: str, state: m.LightState) -> m.Message:
+def _hub_commands(hub_id: str, device_id: str, state: m.LightState) -> tuple[m.Message, ...]:
     base = f"hubitat/{hub_id}/devices/{device_id}/commands/"
     if state.hue is not None:
-        return m.Message(base + "setColor", {"hue": state.hue, "saturation": state.saturation})
+        return (m.Message(base + "setColor", {"hue": state.hue, "saturation": state.saturation}),)
     elif state.color_temperature is not None:
-        return m.Message(base + "setColorTemperature", str(state.color_temperature))
+        temperature = (m.Message(base + "setColorTemperature", str(state.color_temperature)),)
+        return temperature + (m.Message(base + "setLevel", str(state.level)),) if state.level is not None else temperature
     elif state.level is not None:
-        return m.Message(base + "setLevel", str(state.level))
-    return m.Message(base + (m.OFF if state.switch == m.OFF else m.ON), None)
+        return (m.Message(base + "setLevel", str(state.level)),)
+    return (m.Message(base + (m.OFF if state.switch == m.OFF else m.ON), None),)
 
 
 def _explains(asked: m.LightState, attribute: str, reported: Any) -> bool:

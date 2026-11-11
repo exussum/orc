@@ -34,7 +34,7 @@ _PARSE_ERRORS = [
     ("invalid_hue", "Invalid colour '8'"),
     ("invalid_ct", "Invalid colour temperature 'warm'"),
     ("hue_with_level", "Invalid colour '8:87:60'"),
-    ("colour_with_level", "Invalid colour temperature '3000:60'"),
+    ("invalid_ct_level", "Invalid colour temperature '3000:101'"),
     ("ac_command_non_ac", "AC command cool:low:75 applies only to AC devices, got 'Foo.A'"),
     ("mixed_ac_set", "AC devices take their own line, got '{Light.LAMP, AC.UNIT}'"),
     ("ac_device_bad_state", "AC devices take an ac:mode[:fan[:temp]] command, 'on', or 'off', got 'stop'"),
@@ -264,6 +264,7 @@ def test_lights_accept_color_tokens():
         "AD_HOC_AMBER": m.LightState(switch=m.ON, hue=8, saturation=87, color_mode=m.ColorMode.RGB),
         "AD_HOC_PINK": m.LightState(switch=m.ON, hue=92, saturation=40, color_mode=m.ColorMode.RGB),
         "AD_HOC_DARK": m.LightState(switch=m.OFF),
+        "AD_HOC_FULL": m.LightState(switch=m.ON, level=100, color_temperature=3000, color_mode=m.ColorMode.CT),
     }
 
 

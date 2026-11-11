@@ -262,6 +262,13 @@ class TestPublishLight:
         mqtt.command(orc.Light.d, m.LightState(switch=m.ON, color_temperature=2700, color_mode=m.ColorMode.CT))
         assert self.published == [(f"hubitat/{HUB}/devices/4/commands/setColorTemperature", "2700", False)]
 
+    def test_color_temperature_with_level_publishes_both(self):
+        mqtt.command(orc.Light.d, m.LightState(switch=m.ON, level=100, color_temperature=3000, color_mode=m.ColorMode.CT))
+        assert self.published == [
+            (f"hubitat/{HUB}/devices/4/commands/setColorTemperature", "3000", False),
+            (f"hubitat/{HUB}/devices/4/commands/setLevel", "100", False),
+        ]
+
     def test_color_without_capability_raises(self):
         with pytest.raises(ValueError, match="does not support colour"):
             mqtt.command(orc.Light.a, m.LightState(switch=m.ON, hue=8, saturation=87, color_mode=m.ColorMode.RGB))
