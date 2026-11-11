@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, tzinfo
+from typing import NamedTuple
 
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
@@ -161,6 +162,12 @@ class Presence:
 presence = Presence()
 
 
+class _Target(NamedTuple):
+    name: str
+    ip: str
+    mac: str
+
+
 def scan_presence(people: Iterable[m.Person]) -> tuple[set[str], list[tuple[str, Exception]]]:
     """Return the person names that answered on the LAN, plus any scan failures.
 
@@ -174,13 +181,13 @@ def scan_presence(people: Iterable[m.Person]) -> tuple[set[str], list[tuple[str,
 
 def _resolve_targets(
     people: Iterable[m.Person],
-) -> tuple[dict[str, tuple[str, str]], list[tuple[str, Exception]]]:
+) -> tuple[list[_Target], list[tuple[str, Exception]]]:
     """Resolve each person's host to an IP, concurrently.
 
     gethostbyname blocks on the OS resolver (~5s per unanswered name), so run the
     lookups in parallel: N slow resolutions collapse to one resolver timeout of
     wall-clock instead of summing. Threads run only stdlib DNS, never scapy.
-    Returns (ip -> (person name, MAC), [(name, resolution error)]).
+    Returns ([target], [(name, resolution error)]).
     """
 
     def resolve(pair: tuple[str, m.Host]) -> tuple[str, str, str | Exception]:
@@ -191,18 +198,18 @@ def _resolve_targets(
             return name, host.mac, exc
 
     pairs = [(person.name, host) for person in people for host in person.hosts]
-    targets: dict[str, tuple[str, str]] = {}  # resolved IP -> (person name, MAC)
+    targets: list[_Target] = []
     errors: list[tuple[str, Exception]] = []
     with ThreadPoolExecutor(max_workers=max(1, len(pairs))) as pool:
         for name, mac, res in pool.map(resolve, pairs):
             if isinstance(res, Exception):
                 errors.append((name, res))
             else:
-                targets[res] = (name, mac)
+                targets.append(_Target(name, res, mac))
     return targets, errors
 
 
-def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
+def _probe_lan(targets: list[_Target]) -> set[str]:
     """Probe the given IPs and return the names of those that answer on the LAN.
 
     A device counts as present if its IP appears as an ARP reply or an mDNS
@@ -215,7 +222,7 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
     # a power-save iPhone that ignores ARP will often still answer Bonjour. Sniff both
     # passively, so any ARP or mDNS the device emits also counts. Re-send once a second
     # across the window: a single probe or reply is easily dropped, so repeat.
-    probes: list = [Ether(dst=mac) / ARP(pdst=ip, hwdst=mac) for ip, (_, mac) in targets.items()]
+    probes: list = [Ether(dst=t.mac) / ARP(pdst=t.ip, hwdst=t.mac) for t in targets]
     probes.append(
         Ether(dst="01:00:5e:00:00:fb")
         / IP(dst="224.0.0.251", ttl=255)
@@ -238,7 +245,7 @@ def _probe_lan(targets: dict[str, tuple[str, str]]) -> set[str]:
             responded.add(p[ARP].psrc)
         elif IP in p:
             responded.add(p[IP].src)
-    return {name for ip, (name, _) in targets.items() if ip in responded}
+    return {t.name for t in targets if t.ip in responded}
 
 
 async def _wait(stop: threading.Event, seconds: float) -> None:

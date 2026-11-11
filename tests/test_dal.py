@@ -341,6 +341,26 @@ def test_the_bws_token_url_may_be_a_file_or_data_url(scheme, tmp_path):
     assert bws._get_url_value(url) == "0.abc.def:AAAA"
 
 
+class TestLanTargets:
+    def _resolve(self, people, addresses):
+        with patch.object(net.socket, "gethostbyname", side_effect=lambda host: addresses[host]):
+            return net._resolve_targets(people)
+
+    def test_two_people_on_one_ip_both_kept(self):
+        people = [
+            m.Person("name1", (m.Host("phone1.local", "aa:aa"),)),
+            m.Person("name2", (m.Host("phone2.local", "bb:bb"),)),
+        ]
+        targets, errors = self._resolve(people, {"phone1.local": "10.0.0.5", "phone2.local": "10.0.0.5"})
+        assert targets == [net._Target("name1", "10.0.0.5", "aa:aa"), net._Target("name2", "10.0.0.5", "bb:bb")]
+        assert errors == []
+
+    def test_one_person_two_hosts_both_kept(self):
+        person = m.Person("name1", (m.Host("phone.local", "aa:aa"), m.Host("watch.local", "cc:cc")))
+        targets, _ = self._resolve([person], {"phone.local": "10.0.0.5", "watch.local": "10.0.0.6"})
+        assert targets == [net._Target("name1", "10.0.0.5", "aa:aa"), net._Target("name1", "10.0.0.6", "cc:cc")]
+
+
 class TestKeepass:
     @pytest.fixture(scope="session")
     def keepass_db(self, tmp_path_factory):
