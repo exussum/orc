@@ -121,18 +121,36 @@ def test_event_without_summary_is_untitled(rebuild):
 @pytest.fixture
 def rebuild(ctx):
     ctx.api.local_now.return_value = START
-    ctx.api.is_working_day.return_value = True
+    ctx.api.calculate_theme.return_value = "work day"
     ctx.api.fetch_jobs.return_value = []
     ctx.config.settings.tz = TZ
     ctx.config.secrets.other = {"ICS_URL": "https://feed.example/a.ics"}
     settings = SimpleNamespace(window_hours=20, max_events=50, warning_minutes=2, http_timeout=1)
 
     def run(events):
-        plugins._schedule(SimpleNamespace(fetch_ical=lambda *args: iter(events)), settings, [("work", "ICS_URL")], ctx=ctx)
+        plugins._schedule(SimpleNamespace(fetch_ical=lambda *args: iter(events)), settings, [("work", "ICS_URL", "work day")], ctx=ctx)
         jobs = [call.args[2] for call in ctx.scheduler.once.call_args_list]
         return {job.destination.summary: job.destination for job in jobs if job.event_type == ALARM}
 
     return run
+
+
+def test_alarm_skipped_outside_its_theme(ctx):
+    ctx.api.calculate_theme.return_value = "day off"
+    plugins._run_event(CalendarJob(ALARM, A, "work day"), ctx=ctx)
+    ctx.log.write.assert_not_called()
+
+
+def test_alarm_runs_under_its_theme(ctx):
+    ctx.api.calculate_theme.return_value = "work day"
+    plugins._run_event(CalendarJob(ALARM, A, "work day"), ctx=ctx)
+    ctx.log.write.assert_called_once()
+
+
+def test_feed_without_theme_runs_under_any_theme(ctx):
+    ctx.api.calculate_theme.return_value = "day off"
+    plugins._run_event(CalendarJob(ALARM, A), ctx=ctx)
+    ctx.log.write.assert_called_once()
 
 
 def test_alarm_links_the_choice_page(ctx):

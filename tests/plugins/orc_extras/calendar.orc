@@ -5,5 +5,6 @@ setting max_events      50
 setting warning_minutes 2
 setting http_timeout    120
 
-feed work     ICS_URL
-feed personal ICS_URL_PERSONAL
+feed work     ICS_URL          'work day'
+feed personal ICS_URL_PERSONAL 'day off'
+feed backup   ICS_URL

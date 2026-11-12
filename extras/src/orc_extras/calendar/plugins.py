@@ -15,7 +15,7 @@ from orc_extras.calendar.dal.interfaces import FeedService
 CONFIG = "orc_extras/calendar"
 GRAMMAR = """
 setting <key> <value>
-feed <name> <secret>
+feed <name> <secret> [<theme>]
 """
 WARNING = "warning"
 ALARM = "alarm"
@@ -64,6 +64,7 @@ class Settings(NamedTuple):
 class Feed(NamedTuple):
     name: str
     secret: str
+    theme: str | None = None
 
 
 class EventDestination(NamedTuple):
@@ -82,9 +83,10 @@ class CalendarEvent:
     type: str
     url: str
     address: str
+    theme: str | None
 
     @staticmethod
-    def from_cal(cal: Any, feed: str, type: str, offset: timedelta, tz: Any) -> CalendarEvent:
+    def from_cal(cal: Any, feed: str, type: str, offset: timedelta, tz: Any, theme: str | None) -> CalendarEvent:
         return CalendarEvent(
             feed + " " + cal.uid.to_ical().decode() + " " + cal.start.astimezone(tz).isoformat() + " " + type,
             cal.summary.to_ical().decode("utf-8") if cal.summary else "(untitled)",
@@ -93,6 +95,7 @@ class CalendarEvent:
             type,
             link(cal, tz),
             address(cal),
+            theme,
         )
 
 
@@ -100,6 +103,7 @@ class CalendarEvent:
 class CalendarJob:
     event_type: str
     destination: EventDestination
+    theme: str | None = None
 
 
 SERIALIZERS = {
@@ -157,18 +161,15 @@ def schedule_events(*, ctx: m.AppContext) -> None:
 
 def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ctx: m.AppContext) -> None:
     now: datetime = ctx.api.local_now()
-    if not ctx.api.is_working_day(now.date()):
-        return
-
     tz = ctx.config.settings.tz
     events_by_id: dict[str, CalendarEvent] = {}
-    for name, secret in feeds:
+    for name, secret, theme in feeds:
         url = ctx.config.secrets.other[secret]
         events = list(
             islice(backend.fetch_ical(now, timedelta(hours=settings.window_hours), url, settings.http_timeout), settings.max_events)
         )
-        warning_events = (CalendarEvent.from_cal(e, name, WARNING, timedelta(minutes=-settings.warning_minutes), tz) for e in events)
-        alarm_events = (CalendarEvent.from_cal(e, name, ALARM, timedelta(), tz) for e in events)
+        warning_events = (CalendarEvent.from_cal(e, name, WARNING, timedelta(minutes=-settings.warning_minutes), tz, theme) for e in events)
+        alarm_events = (CalendarEvent.from_cal(e, name, ALARM, timedelta(), tz, theme) for e in events)
         events_by_id.update({e.uuid: e for e in chain(alarm_events, warning_events)})
 
     for job in ctx.api.fetch_jobs(QUEUE):
@@ -179,7 +180,11 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
         ctx.scheduler.once(
             _run_event,
             event.start,
-            CalendarJob(event.type, EventDestination(event.summary, event.url, event.address, glyph(event.summary, event.url))),
+            CalendarJob(
+                event.type,
+                EventDestination(event.summary, event.url, event.address, glyph(event.summary, event.url)),
+                event.theme,
+            ),
             id=id,
             name=event.summary if event.type == ALARM else f"{event.summary} ({event.type})",
             queue=QUEUE,
@@ -187,6 +192,8 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
 
 
 def _run_event(payload: CalendarJob, *, ctx: m.AppContext) -> None:
+    if payload.theme and payload.theme != ctx.api.calculate_theme(ctx.api.local_now().date()):
+        return
     summary = payload.destination.summary
     trigger = m.Integration(summary)
     if payload.event_type == WARNING:

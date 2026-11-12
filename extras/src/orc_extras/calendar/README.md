@@ -3,7 +3,7 @@
 Turns the next few hours of one or more iCal feeds into spoken alerts: a
 short attention tone a couple of minutes before each event and the event's
 title read aloud when it starts, with a phone notification that opens the
-meeting link. Nothing fires on a day off.
+meeting link. A feed with a `theme` fires only while that theme is active.
 
 ## Quick start
 
@@ -19,7 +19,7 @@ meeting link. Nothing fires on a day off.
 
 ```
 setting <key> <value>
-feed <name> <secret>
+feed <name> <secret> [<theme>]
 ```
 
 | Part       | Meaning                                                                                |
@@ -27,6 +27,7 @@ feed <name> <secret>
 | `setting`  | One of the keys below; every key is required.                                          |
 | `<name>`   | The feed's name, prefixed to each event id so two feeds can share an event.            |
 | `<secret>` | The secret holding the feed's iCal URL; declared as a URL, so a bad one fails startup. |
+| `<theme>`  | Optional, default none. The theme the feed's events may run in, e.g. `'work day'`. Without one, they run under any theme. |
 
 | Setting           | Meaning                                                                        |
 | ----------------- | ------------------------------------------------------------------------------ |
@@ -55,9 +56,9 @@ Recurring events are expanded; all-day events are skipped.
 ## Behaviour
 
 - A refresh replaces the scheduled set: events that left the feed are
-  cancelled, new ones are added, and the rest keep their jobs. Refreshes
-  are skipped on non-working days, so nothing already scheduled changes
-  there either.
+  cancelled, new ones are added, and the rest keep their jobs. Every feed is
+  scheduled whatever the theme. When a job runs, it returns without doing
+  anything if its feed has a theme that isn't the current one.
 - The warning job plays the default alert sound at `ATTENTION` severity.
   The alarm job logs the title under the `calendar` source, speaks it at
   the same severity, and pushes a notification whose click opens a page at

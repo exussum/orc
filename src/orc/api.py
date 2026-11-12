@@ -395,11 +395,6 @@ def calculate_theme(today: date) -> str:
     return _base_theme(today)
 
 
-def is_working_day(today: date) -> bool:
-    """Whether the day's theme is the working one — asked by plugins so a theme name stays out of them."""
-    return calculate_theme(today) == m.THEME_WORK_DAY
-
-
 def set_theme_override(name: str, start: date, end: date) -> None:
     sqlite.insert_theme_override(m.ThemeOverride(name, start, end))
 

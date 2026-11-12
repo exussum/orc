@@ -109,4 +109,8 @@ def test_calendar_config_loads(ctx):
         warning_minutes=2,
         http_timeout=120,
     )
-    assert loaded.feed == [Feed("work", "ICS_URL"), Feed("personal", "ICS_URL_PERSONAL")]
+    assert loaded.feed == [
+        Feed("work", "ICS_URL", "work day"),
+        Feed("personal", "ICS_URL_PERSONAL", "day off"),
+        Feed("backup", "ICS_URL", None),
+    ]
