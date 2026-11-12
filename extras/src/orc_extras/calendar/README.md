@@ -63,7 +63,9 @@ Recurring events are expanded; all-day events are skipped.
   The alarm job logs the title under the `calendar` source, speaks it at
   the same severity, and pushes a notification whose click opens a page at
   `/api/calendar/choose/events` showing that event as a card; the log line
-  carries a 🔗 to the same page before the title. The card's button opens
+  carries a 🔗 to the same page before the title. The alarm also records the
+  event in memory, and it stays on the choose page under
+  `Last hour` for an hour. Events skipped by their theme are not recorded. The card's button opens
   the event's Google Meet, Zoom or Teams link when one is found in the
   event, and that day in Google Calendar otherwise. An event with no
   meeting link whose location is a street address (a number and a comma,

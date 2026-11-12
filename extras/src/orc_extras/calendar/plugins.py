@@ -10,6 +10,7 @@ from yarl import URL
 
 from orc import model as m
 from orc.kernel.loader import load_plugin_config
+from orc_extras.calendar.api import MEETING_LINK, EventDestination, RecentEvent, glyph, record
 from orc_extras.calendar.dal.interfaces import FeedService
 
 CONFIG = "orc_extras/calendar"
@@ -25,27 +26,7 @@ QUEUE = m.QueueName("calendar")
 CHOOSER_URL = URL("/api/calendar/choose/events")
 GOOGLE_DAY_URL = URL("https://calendar.google.com/calendar/r/day")
 _LINK_FIELDS = ("X-GOOGLE-CONFERENCE", "X-MICROSOFT-SKYPETEAMSMEETINGURL", "URL", "LOCATION", "DESCRIPTION")
-_LINK = re.compile(r"""https?://([\w-]+\.)*(meet\.google\.com|zoom\.us|teams\.microsoft\.com)/[^\s<>"']*""")
 _ADDRESS = re.compile(r"^(?!.*://)(?=.*\d)(?=.*,)")
-_EMOJI = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]\uFE0F?")
-_GLYPHS = (
-    (re.compile(r"standup|scrum"), "🧍"),
-    (re.compile(r"office hours"), "🙋"),
-    (re.compile(r"hiring|interview|debrief"), "🎤"),
-    (re.compile(r"retro"), "🔁"),
-    (re.compile(r"refinement|planning"), "🧩"),
-    (re.compile(r"demo"), "🎬"),
-    (re.compile(r"all hands"), "📣"),
-    (re.compile(r"tech talk|workshop|enablement|training"), "📚"),
-    (re.compile(r"reminder"), "⏰"),
-    (re.compile(r"holiday"), "🏖️"),
-    (re.compile(r"\bdoc\b|busy|hold|focus"), "📝"),
-    (re.compile(r"happy hour|drinks"), "🍻"),
-    (re.compile(r"lunch|dinner|breakfast"), "🍽️"),
-    (re.compile(r"1:1|^\S+ / \S+"), "👥"),
-    (re.compile(r"sync|weekly|monthly|leadership"), "🔄"),
-)
-_LINK_GLYPHS = {"meet.google.com": "🎥", "zoom.us": "💻", "teams.microsoft.com": "👥"}
 
 
 class Log(m.LogSourceEnum):
@@ -65,13 +46,6 @@ class Feed(NamedTuple):
     name: str
     secret: str
     theme: str | None = None
-
-
-class EventDestination(NamedTuple):
-    summary: str
-    url: str
-    address: str
-    glyph: str
 
 
 @dataclasses.dataclass
@@ -115,7 +89,7 @@ SERIALIZERS = {
 
 
 def link(cal: Any, tz: Any) -> str:
-    hits = (_LINK.search(str(cal.get(field, ""))) for field in _LINK_FIELDS)
+    hits = (MEETING_LINK.search(str(cal.get(field, ""))) for field in _LINK_FIELDS)
     found = next((hit for hit in hits if hit), None)
     if found:
         return found.group()
@@ -127,27 +101,6 @@ def address(cal: Any) -> str:
     if _ADDRESS.match(location):
         return location
     return ""
-
-
-def glyph(summary: str, url: str) -> str:
-    if found := _EMOJI.search(summary):
-        return found.group()
-    title = summary.lower()
-    for pattern, symbol in _GLYPHS:
-        if pattern.search(title):
-            return symbol
-    host = URL(url).host or ""
-    return next((symbol for domain, symbol in _LINK_GLYPHS.items() if host.endswith(domain)), "📅")
-
-
-def is_meeting(url: str) -> bool:
-    return bool(_LINK.fullmatch(url))
-
-
-def opener(url: str) -> str:
-    if is_meeting(url):
-        return str(URL("/api/push/open").with_query(url=url))
-    return url
 
 
 def schedule_cron(ctx: m.AppContext, crontab: str) -> None:
@@ -200,6 +153,8 @@ def _run_event(payload: CalendarJob, *, ctx: m.AppContext) -> None:
         entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, summary, trigger)
         ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
     else:
-        link = str(CHOOSER_URL.with_query(title=summary, url=payload.destination.url, address=payload.destination.address))
+        destination = payload.destination
+        record(RecentEvent(*destination, ctx.api.local_now().timestamp()))
+        link = str(CHOOSER_URL.with_query(title=summary, url=destination.url, address=destination.address))
         entry = ctx.log.write(Log.CALENDAR, summary, trigger, notification=m.Notification(("calendar",), link), link=link)
         ctx.api.alert(m.Alarm.ATTENTION, text=summary, entry=entry)

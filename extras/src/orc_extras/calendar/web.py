@@ -6,8 +6,9 @@ from werkzeug.wrappers import Response
 from yarl import URL
 
 from orc import model as m
-from orc_extras.calendar import plugins
-from orc_extras.calendar.plugins import ALARM, EventDestination
+from orc_extras.calendar import api, plugins
+from orc_extras.calendar.api import EventDestination
+from orc_extras.calendar.plugins import ALARM
 
 if TYPE_CHECKING:
     from orc.view import OrcFlask
@@ -21,8 +22,14 @@ Card = tuple[str, str, str, str]
 
 @choose.get("/")
 def index() -> str:
+    last_hour = [_card(EventDestination(e.title, e.url, e.address, e.glyph)) for e in api.fetch_recent(app.orc.api.local_now().timestamp())]
     alarms = sorted(app.orc.api.fetch_jobs(plugins.QUEUE, lambda j: j.event_type == ALARM), key=lambda j: j.run_at)
-    days = [(day, [_card(j.payload.destination) for j in day_jobs]) for day, day_jobs in groupby(alarms, key=lambda j: j.run_at.date())]
+    days = [
+        (f"{day:%A, %B %-d}", [_card(j.payload.destination) for j in day_jobs])
+        for day, day_jobs in groupby(alarms, key=lambda j: j.run_at.date())
+    ]
+    if last_hour:
+        days.insert(0, ("Last hour", last_hour))
     return render_template("calendar/choose.html", days=days, refresh=url_for("calendar.refresh"))
 
 
@@ -38,15 +45,15 @@ def refresh() -> Response:
 @choose.get("/events")
 def events() -> str:
     fields = zip(request.args.getlist("title"), request.args.getlist("url"), request.args.getlist("address"), strict=False)
-    destinations = [EventDestination(title, url, address, plugins.glyph(title, url)) for title, url, address in fields]
+    destinations = [EventDestination(title, url, address, api.glyph(title, url)) for title, url, address in fields]
     return render_template("calendar/choose.html", days=[(None, [_card(d) for d in destinations])])
 
 
 def _card(destination: EventDestination) -> Card:
-    return destination.summary, plugins.opener(destination.url), _map(destination.url, destination.address), destination.glyph
+    return destination.summary, api.opener(destination.url), _map(destination.url, destination.address), destination.glyph
 
 
 def _map(url: str, address: str) -> str:
-    if address and not plugins.is_meeting(url):
+    if address and not api.is_meeting(url):
         return str(MAP_URL.with_query(q=address, output="embed"))
     return ""

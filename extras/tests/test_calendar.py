@@ -6,8 +6,9 @@ from zoneinfo import ZoneInfo
 import icalendar
 import pytest
 from flask import Flask
-from orc_extras.calendar import plugins, web
-from orc_extras.calendar.plugins import ALARM, CalendarJob, EventDestination, address, link
+from orc_extras.calendar import api, plugins, web
+from orc_extras.calendar.api import EventDestination, RecentEvent
+from orc_extras.calendar.plugins import ALARM, WARNING, CalendarJob, address, link
 
 import orc.view
 from orc import model as m
@@ -158,6 +159,39 @@ def test_alarm_links_the_choice_page(ctx):
     assert ctx.log.write.call_args.kwargs == {"notification": m.Notification(("calendar",), CHOOSER_LINK), "link": CHOOSER_LINK}
 
 
+@pytest.fixture(autouse=True)
+def calendar_events(ctx, monkeypatch):
+    ctx.api.local_now.return_value = START
+    monkeypatch.setattr(api, "_events", [])
+
+
+def test_recorded_events_drop_after_an_hour():
+    api.record(RecentEvent("Old", ZOOM, "", "💻", (START - timedelta(hours=2)).timestamp()))
+    api.record(RecentEvent("New", ZOOM, "", "💻", START.timestamp()))
+    assert [e.title for e in api.fetch_recent(START.timestamp())] == ["New"]
+
+
+def test_fetch_hides_events_older_than_an_hour():
+    api.record(RecentEvent("Late", ZOOM, "", "💻", (START - timedelta(minutes=30)).timestamp()))
+    assert api.fetch_recent((START + timedelta(minutes=31)).timestamp()) == []
+
+
+def test_alarm_is_recorded(ctx):
+    plugins._run_event(CalendarJob(ALARM, A), ctx=ctx)
+    assert api.fetch_recent(START.timestamp()) == [RecentEvent("A", ZOOM, "", "💻", START.timestamp())]
+
+
+def test_warning_is_not_recorded(ctx):
+    plugins._run_event(CalendarJob(WARNING, A), ctx=ctx)
+    assert api.fetch_recent(START.timestamp()) == []
+
+
+def test_alarm_skipped_by_theme_is_not_recorded(ctx):
+    ctx.api.calculate_theme.return_value = "day off"
+    plugins._run_event(CalendarJob(ALARM, A, "work day"), ctx=ctx)
+    assert api.fetch_recent(START.timestamp()) == []
+
+
 @pytest.fixture
 def flask_client(ctx):
     app = Flask(__name__, template_folder=str(Path(orc.view.__file__).parent / "templates"))
@@ -165,6 +199,13 @@ def flask_client(ctx):
     app.register_blueprint(web.choose, url_prefix="/api/calendar/choose")
     app.orc = ctx  # type: ignore[attr-defined]
     return app.test_client()
+
+
+def test_choose_page_lists_recent_events_above_upcoming(flask_client, ctx):
+    api.record(RecentEvent("Fired", ZOOM, "", "💻", START.timestamp()))
+    ctx.api.fetch_jobs.return_value = [SimpleNamespace(payload=CalendarJob(ALARM, B), run_at=START + timedelta(hours=1))]
+    html = flask_client.get("/api/calendar/choose/").get_data(as_text=True)
+    assert html.index("Last hour") < html.index(">Fired</span></a>") < html.index("Tuesday, January 6") < html.index(">B</span></a>")
 
 
 def test_choose_page_opens_meeting_links_through_push_open(flask_client):
