@@ -99,6 +99,29 @@ document.querySelectorAll('.orc-device-toggle').forEach(btn => {
     });
 });
 
+const colourDialog = document.getElementById('orc-colour-dialog');
+const colourWheel = new iro.ColorPicker('#orc-colour-wheel', { width: 200, color: '#ffffff', layout: [{ component: iro.ui.Wheel }] });
+let colourTarget = null;
+
+function sendColour(state) {
+    get(`/api/device/${colourTarget.dataset.kind}/${colourTarget.dataset.id}?state=${state}`, colourTarget);
+}
+
+document.querySelectorAll('.orc-colour-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+        colourTarget = swatch;
+        document.getElementById('orc-colour-title').textContent = swatch.dataset.name;
+        colourDialog.showModal();
+    });
+});
+
+colourWheel.on('input:end', (color) => {
+    colourTarget.style.background = color.hexString;
+    sendColour(`hue:${Math.round(color.hue / 3.6)}:${Math.round(color.saturation)}`);
+});
+
+document.getElementById('orc-colour-kelvin').addEventListener('change', (e) => sendColour(`ct:${e.currentTarget.value}`));
+
 const sliderTip = document.createElement('div');
 sliderTip.className = 'fixed z-50 -translate-x-1/2 -translate-y-full px-1.5 py-0.5 text-xs rounded bg-black/80 text-white pointer-events-none hidden';
 document.body.appendChild(sliderTip);

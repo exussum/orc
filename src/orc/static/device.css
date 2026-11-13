@@ -1,0 +1,6 @@
+.orc-colour-swatch {
+    width: 2.5rem;
+    height: var(--orc-control-height);
+    border-radius: 0.375rem;
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+}

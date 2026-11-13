@@ -87,6 +87,7 @@ class DeviceRow(NamedTuple):
     on: bool
     volume: int
     temperature: int | None
+    color: bool
 
 
 class JobRow(NamedTuple):
@@ -208,6 +209,7 @@ def device() -> str:
             on=level > 0,
             volume=sound_states.get(d.name, 0),
             temperature=ac_temperatures.get(d.name),
+            color="color" in capabilities,
         )
 
     def sort_key(d: Any) -> tuple[int, bool, str]:

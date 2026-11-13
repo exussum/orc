@@ -1,6 +1,10 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon_svg %}
-{% block head_scripts %}<script type="module" src="/static/device.js"></script>{% endblock %}
+{% block head_scripts %}
+<link rel="stylesheet" href="/static/device.css">
+<script src="/static/vendor/iro.min.js" defer></script>
+<script type="module" src="/static/device.js"></script>
+{% endblock %}
 {% block body %}
     {% for (title, devices) in devices_grouped.items() %}
         {% set other = devices | selectattr('type', 'ne', 'AC') | list %}
@@ -69,7 +73,13 @@
                             <div class="flex gap-4 orc-device-box"><input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span></div>
                         {% else %}
                             <div class="text-sm">{{ device.name }}</div>
-                            <div class="flex gap-4 orc-device-box"><input type="range" min="0" max="100" step="10" value="{{ device.level }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span></div>
+                            <div class="flex gap-4 orc-device-box"><input type="range" min="0" max="100" step="10" value="{{ device.level }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
+                                {% if device.color %}
+                                    <button type="button" class="orc-colour-swatch shrink-0" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" aria-label="Set colour for {{ device.name }}"></button>
+                                {% else %}
+                                    <span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span>
+                                {% endif %}
+                            </div>
                         {% endif %}
                     {% endfor %}
                 </div>
@@ -77,4 +87,15 @@
         </div>
         {% endfor %}
     {% endfor %}
+<dialog id="orc-colour-dialog" class="orc-dialog w-80">
+    <form method="dialog" class="flex flex-col gap-3 items-center">
+        <div class="text-sm font-semibold self-start" id="orc-colour-title"></div>
+        <div id="orc-colour-wheel"></div>
+        <label class="flex items-center gap-2 w-full text-sm">
+            <span class="shrink-0">White</span>
+            <input type="range" min="2000" max="6500" step="100" value="4000" class="w-full" id="orc-colour-kelvin"/>
+        </label>
+        <button class="orc-btn">Done</button>
+    </form>
+</dialog>
 {% endblock %}

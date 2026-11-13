@@ -1,4 +1,6 @@
+import os
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 import orc
@@ -11,6 +13,8 @@ namespaces: tuple[str, ...] = ()
 device_types: tuple[str, ...] = ("Light", "Button", "Sensor")
 
 warn_stub("adapter")
+
+_LIGHT_CAPABILITIES = frozenset({m.Capability.change_level, m.Capability.color})
 
 
 class StubSource(m.SourceEnum):
@@ -41,8 +45,20 @@ def start() -> None:
     pass
 
 
+class _EveryLight(dict[str, Any]):
+    def __bool__(self) -> bool:
+        return True
+
+    def get(self, key: str, default: Any = None) -> tuple[str, frozenset[m.Capability]]:
+        return key, _LIGHT_CAPABILITIES
+
+
 def discover(messages: Sequence[m.Message]) -> dict[str, tuple[str, frozenset[m.Capability]]]:
-    return {}
+    from orc.kernel.loader import parse_config
+
+    text = (Path(os.environ["ORC_CONFIG_DIR"]) / "config.orc").read_text()
+    lights = parse_config(text, _EveryLight()).enums.get("Light", ())
+    return {light.value: (light.value, light.capabilities) for light in lights}
 
 
 def _state(device: m.DeviceEnum, attributes: dict[str, Any]) -> m.DeviceState:
