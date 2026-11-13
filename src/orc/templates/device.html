@@ -5,8 +5,8 @@
 <script src="/static/vendor/iro.min.js" defer></script>
 <script type="module" src="/static/device.js"></script>
 {% endblock %}
-{% macro lock(group) %}{% if group | length > 1 %}<div class="flex items-center gap-1"><button type="button" class="orc-link inline-flex" aria-pressed="false" aria-label="Link {{ group[0].name }}"><svg class="w-4 h-4"><use href="/static/icons.svg#lock-open"/></svg></button><span class="text-xs text-gray-400">×{{ group | length }}</span></div>{% endif %}{% endmacro %}
-{% macro name_cell(group, first) %}<div class="text-sm{% if not first %} orc-link-follower{% endif %}">{% if first %}{{ group[0].name }}{{ lock(group) }}{% endif %}</div>{% endmacro %}
+{% macro lock(group) %}{% if group.rows | length > 1 %}<div class="flex items-center gap-1"><button type="button" class="orc-link inline-flex" aria-pressed="{{ 'true' if group.locked else 'false' }}" aria-label="Link {{ group.rows[0].name }}"><svg class="w-4 h-4"><use href="/static/icons.svg#lock-{{ 'closed' if group.locked else 'open' }}"/></svg></button><span class="text-xs text-gray-400">×{{ group.rows | length }}</span></div>{% endif %}{% endmacro %}
+{% macro name_cell(group, first) %}<div class="text-sm{% if not first %} orc-link-follower{% if group.locked %} hidden{% endif %}{% endif %}">{% if first %}{{ group.rows[0].name }}{{ lock(group) }}{% endif %}</div>{% endmacro %}
 {% block body %}
     {% for card in cards %}
         <div class="orc-surface mb-2">
@@ -17,9 +17,9 @@
                         <div class="text-sm">Switches</div>
                         <div class="flex overflow-x-auto gap-1 orc-device-box">
                             {% for group in card.toggles %}
-                                <div class="flex gap-1 orc-link-group">
-                                    {% for device in group %}
-                                        <div class="flex flex-col items-center gap-1.5 shrink-0{% if not loop.first %} orc-link-follower{% endif %}">
+                                <div class="flex gap-1 orc-link-group"{% if group.locked %} data-linked="1"{% endif %}>
+                                    {% for device in group.rows %}
+                                        <div class="flex flex-col items-center gap-1.5 shrink-0{% if not loop.first %} orc-link-follower{% if group.locked %} hidden{% endif %}{% endif %}">
                                             <div class="text-[10px] leading-tight text-center w-16 line-clamp-2" title="{{ device.name }}">{% if loop.first %}{{ device.name }}{% endif %}</div>
                                             {% if loop.first %}{{ lock(group) }}{% endif %}
                                             <button class="orc-btn orc-btn-sm orc-device-toggle" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" data-icon="{{ device.icon }}"{% if device.on %} data-on="1"{% endif %}>
@@ -34,9 +34,9 @@
                 {% endif %}
                 <div class="orc-device-grid">
                     {% for group in card.rows %}
-                        <div class="col-span-full orc-device-grid orc-link-group{% if group | length > 1 %} orc-link-bar{% endif %}">
-                        {% for device in group %}
-                            {% set follower = '' if loop.first else ' orc-link-follower' %}
+                        <div class="col-span-full orc-device-grid orc-link-group{% if group.rows | length > 1 %} orc-link-bar{% endif %}"{% if group.locked %} data-linked="1"{% endif %}>
+                        {% for device in group.rows %}
+                            {% set follower = '' if loop.first else ' orc-link-follower hidden' if group.locked else ' orc-link-follower' %}
                             {% if device.type == "AC" %}
                                 <div class="col-span-full text-sm font-medium">{{ device.name }}</div>
                                 <div class="col-span-full orc-device-grid relative py-4 pr-4">

@@ -94,10 +94,15 @@ class DeviceRow(NamedTuple):
     kelvin: int | None
 
 
+class DeviceGroup(NamedTuple):
+    rows: list[DeviceRow]
+    locked: bool
+
+
 class DeviceCard(NamedTuple):
     title: str
-    toggles: list[list[DeviceRow]]
-    rows: list[list[DeviceRow]]
+    toggles: list[DeviceGroup]
+    rows: list[DeviceGroup]
 
 
 class JobRow(NamedTuple):
@@ -232,11 +237,11 @@ def device() -> str:
         has_level = "change_level" in {c.name for c in d.capabilities}
         return (_DEVICE_TYPE_ORDER.get(d.kind, 99), has_level, d.name)
 
-    def by_name(rows: Iterable[DeviceRow]) -> list[list[DeviceRow]]:
+    def by_name(rows: Iterable[DeviceRow]) -> list[DeviceGroup]:
         groups: dict[str, list[DeviceRow]] = {}
         for row in rows:
             groups.setdefault(row.name, []).append(row)
-        return list(groups.values())
+        return [DeviceGroup(group, len(group) > 1 and len({row._replace(id="") for row in group}) == 1) for group in groups.values()]
 
     cards = []
     for room in sorted({d.room for d in all_devices}):
