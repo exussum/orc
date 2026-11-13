@@ -108,9 +108,15 @@ function sendColour(state) {
 }
 
 document.querySelectorAll('.orc-colour-swatch').forEach(swatch => {
+    const { hue, saturation } = swatch.dataset;
+    if (hue && saturation) {
+        swatch.style.background = new iro.Color({ h: hue * 3.6, s: saturation, v: 100 }).hexString;
+    }
     swatch.addEventListener('click', () => {
         colourTarget = swatch;
         document.getElementById('orc-colour-title').textContent = swatch.dataset.name;
+        colourWheel.color.hsv = hue && saturation ? { h: hue * 3.6, s: saturation, v: 100 } : { h: 0, s: 0, v: 100 };
+        document.getElementById('orc-colour-kelvin').value = swatch.dataset.kelvin || 4000;
         colourDialog.showModal();
     });
 });

@@ -88,6 +88,9 @@ class DeviceRow(NamedTuple):
     volume: int
     temperature: int | None
     color: bool
+    hue: int | None
+    saturation: int | None
+    kelvin: int | None
 
 
 class JobRow(NamedTuple):
@@ -192,6 +195,7 @@ def cfg() -> str:
 @bp.route("/device/")
 def device() -> str:
     light_states = api.capture_lights(mapper=_states_by_name)
+    light_attributes = {s.device.id: s.attributes for s in api.device_states()}
     sound_states = api.capture_sounds(mapper=_volumes_by_name)
     ac_temperatures = {s.what.name: round(s.state.temperature) for s in api.capture_acs() if s.state and s.state.temperature is not None}
     all_devices = list(chain.from_iterable(cls for name, cls in config.devices.items() if name in config.registry.controllable_devices))
@@ -199,6 +203,7 @@ def device() -> str:
     def make_device(d: Any) -> DeviceRow:
         level = _to_level(light_states.get(d.name))
         capabilities = {c.name for c in d.capabilities}
+        attributes = light_attributes.get(d.value, {})
         return DeviceRow(
             name=d.label,
             id=d.name,
@@ -210,6 +215,9 @@ def device() -> str:
             volume=sound_states.get(d.name, 0),
             temperature=ac_temperatures.get(d.name),
             color="color" in capabilities,
+            hue=_int_or_none(attributes.get("hue")),
+            saturation=_int_or_none(attributes.get("saturation")),
+            kelvin=_int_or_none(attributes.get("colorTemperature")) if attributes.get("colorMode") == "CT" else None,
         )
 
     def sort_key(d: Any) -> tuple[int, bool, str]:
@@ -545,6 +553,10 @@ def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datet
 
 def _by_run_date(jobs: list[Job[Any]]) -> list[Job[Any]]:
     return sorted(jobs, key=lambda job: job.run_at)
+
+
+def _int_or_none(value: Any) -> int | None:
+    return None if value is None else int(value)
 
 
 def _to_level(state: object) -> int:

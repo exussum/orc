@@ -75,7 +75,7 @@
                             <div class="text-sm">{{ device.name }}</div>
                             <div class="flex gap-4 orc-device-box"><input type="range" min="0" max="100" step="10" value="{{ device.level }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
                                 {% if device.color %}
-                                    <button type="button" class="orc-colour-swatch shrink-0" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" aria-label="Set colour for {{ device.name }}"></button>
+                                    <button type="button" class="orc-colour-swatch shrink-0" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" data-hue="{{ '' if device.hue is none else device.hue }}" data-saturation="{{ '' if device.saturation is none else device.saturation }}" data-kelvin="{{ '' if device.kelvin is none else device.kelvin }}" aria-label="Set colour for {{ device.name }}"></button>
                                 {% else %}
                                     <span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span>
                                 {% endif %}
