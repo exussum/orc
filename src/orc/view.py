@@ -204,6 +204,7 @@ def device() -> str:
         level = _to_level(light_states.get(d.name))
         capabilities = {c.name for c in d.capabilities}
         attributes = light_attributes.get(d.value, {})
+        mode = attributes.get("colorMode")
         return DeviceRow(
             name=d.label,
             id=d.name,
@@ -215,9 +216,9 @@ def device() -> str:
             volume=sound_states.get(d.name, 0),
             temperature=ac_temperatures.get(d.name),
             color="color" in capabilities,
-            hue=_int_or_none(attributes.get("hue")),
-            saturation=_int_or_none(attributes.get("saturation")),
-            kelvin=_int_or_none(attributes.get("colorTemperature")) if attributes.get("colorMode") == "CT" else None,
+            hue=_int_or_none(attributes.get("hue")) if mode == "RGB" else None,
+            saturation=_int_or_none(attributes.get("saturation")) if mode == "RGB" else None,
+            kelvin=_int_or_none(attributes.get("colorTemperature")) if mode == "CT" else None,
         )
 
     def sort_key(d: Any) -> tuple[int, bool, str]:

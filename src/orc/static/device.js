@@ -111,6 +111,8 @@ document.querySelectorAll('.orc-colour-swatch').forEach(swatch => {
     const { hue, saturation } = swatch.dataset;
     if (hue && saturation) {
         swatch.style.background = new iro.Color({ h: hue * 3.6, s: saturation, v: 100 }).hexString;
+    } else if (swatch.dataset.kelvin) {
+        swatch.style.background = '#ffffff';
     }
     swatch.addEventListener('click', () => {
         colourTarget = swatch;
