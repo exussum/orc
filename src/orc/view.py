@@ -1,6 +1,6 @@
 import json
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import replace
 from datetime import date, datetime, timedelta
 from functools import cache
@@ -91,6 +91,7 @@ class DeviceRow(NamedTuple):
     hue: int | None
     saturation: int | None
     kelvin: int | None
+    lockable: bool
 
 
 class JobRow(NamedTuple):
@@ -200,6 +201,8 @@ def device() -> str:
     ac_temperatures = {s.what.name: round(s.state.temperature) for s in api.capture_acs() if s.state and s.state.temperature is not None}
     all_devices = list(chain.from_iterable(cls for name, cls in config.devices.items() if name in config.registry.controllable_devices))
 
+    shared_labels = {label for label, count in Counter(d.label for d in all_devices if d.kind != "AC").items() if count > 1}
+
     def make_device(d: Any) -> DeviceRow:
         level = _to_level(light_states.get(d.name))
         capabilities = {c.name for c in d.capabilities}
@@ -219,6 +222,7 @@ def device() -> str:
             hue=_int_or_none(attributes.get("hue")) if mode == "RGB" else None,
             saturation=_int_or_none(attributes.get("saturation")) if mode == "RGB" else None,
             kelvin=_int_or_none(attributes.get("colorTemperature")) if mode == "CT" else None,
+            lockable=d.kind != "AC" and d.label in shared_labels,
         )
 
     def sort_key(d: Any) -> tuple[int, bool, str]:

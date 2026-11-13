@@ -83,19 +83,38 @@ document.querySelectorAll('.orc-ac-set').forEach(el => {
 
 document.querySelectorAll(".orc-ac-power[data-state='off']").forEach(el => setAcOff(el.dataset.id));
 
-wire('.orc-device-slider', 'change', (slider) => get(`/api/device/${slider.dataset.kind}/${slider.dataset.id}?state=${slider.value}`, slider));
+const lockedNames = new Set();
+
+function lockGroup(el, selector) {
+    if (!lockedNames.has(el.dataset.name)) return [el];
+    return document.querySelectorAll(`${selector}[data-name="${CSS.escape(el.dataset.name)}"]`);
+}
+
+wire('.orc-device-slider', 'change', (slider) => {
+    lockGroup(slider, '.orc-device-slider').forEach(member => {
+        member.value = slider.value;
+        get(`/api/device/${member.dataset.kind}/${member.dataset.id}?state=${slider.value}`, member);
+    });
+});
 
 document.querySelectorAll('input.orc-ac-ctrl').forEach(slider => {
     const display = document.querySelector(`.orc-ac-temp[data-id="${slider.dataset.id}"]`);
     if (display) slider.addEventListener('input', () => display.textContent = slider.value);
 });
 
+function showToggle(btn, on) {
+    btn.dataset.on = on ? '1' : '';
+    btn.querySelector('use').setAttribute('href', `/static/icons.svg#${btn.dataset.icon}${on ? '' : '-outline'}`);
+}
+
+async function setToggle(btn, on) {
+    if (await get(`/api/device/${btn.dataset.kind}/${btn.dataset.id}?state=${on ? 'on' : 'off'}`, btn)) showToggle(btn, on);
+}
+
 document.querySelectorAll('.orc-device-toggle').forEach(btn => {
-    btn.addEventListener('click', async () => {
-        const on = btn.dataset.on === '1';
-        if (!await get(`/api/device/${btn.dataset.kind}/${btn.dataset.id}?state=${on ? 'off' : 'on'}`, btn)) return;
-        btn.dataset.on = on ? '' : '1';
-        btn.querySelector('use').setAttribute('href', `/static/icons.svg#${btn.dataset.icon}${on ? '-outline' : ''}`);
+    btn.addEventListener('click', () => {
+        const on = btn.dataset.on !== '1';
+        lockGroup(btn, '.orc-device-toggle').forEach(member => setToggle(member, on));
     });
 });
 
@@ -104,7 +123,9 @@ const colourWheel = new iro.ColorPicker('#orc-colour-wheel', { width: 200, color
 let colourTarget = null;
 
 function sendColour(state) {
-    get(`/api/device/${colourTarget.dataset.kind}/${colourTarget.dataset.id}?state=${state}`, colourTarget);
+    lockGroup(colourTarget, '.orc-colour-swatch').forEach(swatch => {
+        get(`/api/device/${swatch.dataset.kind}/${swatch.dataset.id}?state=${state}`, swatch);
+    });
 }
 
 document.querySelectorAll('.orc-colour-swatch').forEach(swatch => {
@@ -124,11 +145,19 @@ document.querySelectorAll('.orc-colour-swatch').forEach(swatch => {
 });
 
 colourWheel.on('input:end', (color) => {
-    colourTarget.style.background = color.hexString;
+    lockGroup(colourTarget, '.orc-colour-swatch').forEach(swatch => { swatch.style.background = color.hexString; });
     sendColour(`hue:${Math.round(color.hue / 3.6)}:${Math.round(color.saturation)}`);
 });
 
 document.getElementById('orc-colour-kelvin').addEventListener('change', (e) => sendColour(`ct:${e.currentTarget.value}`));
+
+document.querySelectorAll('.orc-lock').forEach(box => {
+    box.addEventListener('change', () => {
+        if (box.checked) lockedNames.add(box.dataset.name);
+        else lockedNames.delete(box.dataset.name);
+        document.querySelectorAll(`.orc-lock[data-name="${CSS.escape(box.dataset.name)}"]`).forEach(other => { other.checked = box.checked; });
+    });
+});
 
 const sliderTip = document.createElement('div');
 sliderTip.className = 'fixed z-50 -translate-x-1/2 -translate-y-full px-1.5 py-0.5 text-xs rounded bg-black/80 text-white pointer-events-none hidden';
