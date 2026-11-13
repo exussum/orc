@@ -83,15 +83,17 @@ document.querySelectorAll('.orc-ac-set').forEach(el => {
 
 document.querySelectorAll(".orc-ac-power[data-state='off']").forEach(el => setAcOff(el.dataset.id));
 
-const lockedNames = new Set();
-
-function lockGroup(el, selector) {
-    if (!lockedNames.has(el.dataset.name)) return [el];
-    return document.querySelectorAll(`${selector}[data-name="${CSS.escape(el.dataset.name)}"]`);
+function linkGroup(el, selector) {
+    const group = el.closest('.orc-link-group');
+    return group.dataset.linked ? group.querySelectorAll(selector) : [el];
 }
 
+document.querySelectorAll('.orc-device-slider').forEach(slider => {
+    slider.addEventListener('input', () => linkGroup(slider, '.orc-device-slider').forEach(member => { member.value = slider.value; }));
+});
+
 wire('.orc-device-slider', 'change', (slider) => {
-    lockGroup(slider, '.orc-device-slider').forEach(member => {
+    linkGroup(slider, '.orc-device-slider').forEach(member => {
         member.value = slider.value;
         get(`/api/device/${member.dataset.kind}/${member.dataset.id}?state=${slider.value}`, member);
     });
@@ -114,7 +116,7 @@ async function setToggle(btn, on) {
 document.querySelectorAll('.orc-device-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
         const on = btn.dataset.on !== '1';
-        lockGroup(btn, '.orc-device-toggle').forEach(member => setToggle(member, on));
+        linkGroup(btn, '.orc-device-toggle').forEach(member => setToggle(member, on));
     });
 });
 
@@ -123,7 +125,7 @@ const colourWheel = new iro.ColorPicker('#orc-colour-wheel', { width: 200, color
 let colourTarget = null;
 
 function sendColour(state) {
-    lockGroup(colourTarget, '.orc-colour-swatch').forEach(swatch => {
+    linkGroup(colourTarget, '.orc-colour-swatch').forEach(swatch => {
         get(`/api/device/${swatch.dataset.kind}/${swatch.dataset.id}?state=${state}`, swatch);
     });
 }
@@ -145,17 +147,21 @@ document.querySelectorAll('.orc-colour-swatch').forEach(swatch => {
 });
 
 colourWheel.on('input:end', (color) => {
-    lockGroup(colourTarget, '.orc-colour-swatch').forEach(swatch => { swatch.style.background = color.hexString; });
+    linkGroup(colourTarget, '.orc-colour-swatch').forEach(swatch => { swatch.style.background = color.hexString; });
     sendColour(`hue:${Math.round(color.hue / 3.6)}:${Math.round(color.saturation)}`);
 });
 
 document.getElementById('orc-colour-kelvin').addEventListener('change', (e) => sendColour(`ct:${e.currentTarget.value}`));
 
-document.querySelectorAll('.orc-lock').forEach(box => {
-    box.addEventListener('change', () => {
-        if (box.checked) lockedNames.add(box.dataset.name);
-        else lockedNames.delete(box.dataset.name);
-        document.querySelectorAll(`.orc-lock[data-name="${CSS.escape(box.dataset.name)}"]`).forEach(other => { other.checked = box.checked; });
+document.querySelectorAll('.orc-link').forEach(button => {
+    button.addEventListener('click', () => {
+        const group = button.closest('.orc-link-group');
+        const linked = button.getAttribute('aria-pressed') !== 'true';
+        button.setAttribute('aria-pressed', linked);
+        button.querySelector('use').setAttribute('href', `/static/icons.svg#lock-${linked ? 'closed' : 'open'}`);
+        if (linked) group.dataset.linked = '1';
+        else delete group.dataset.linked;
+        group.querySelectorAll('.orc-link-follower').forEach(follower => follower.classList.toggle('hidden', linked));
     });
 });
 

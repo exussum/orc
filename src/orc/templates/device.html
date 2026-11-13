@@ -5,89 +5,94 @@
 <script src="/static/vendor/iro.min.js" defer></script>
 <script type="module" src="/static/device.js"></script>
 {% endblock %}
-{% macro lock(device) %}{% if device.lockable %}<label class="inline-flex items-center gap-1 text-[10px]"><input type="checkbox" class="orc-lock" data-name="{{ device.name }}"> Lock</label>{% endif %}{% endmacro %}
+{% macro lock(group) %}{% if group | length > 1 %}<div class="flex items-center gap-1"><button type="button" class="orc-link inline-flex" aria-pressed="false" aria-label="Link {{ group[0].name }}"><svg class="w-4 h-4"><use href="/static/icons.svg#lock-open"/></svg></button><span class="text-xs text-gray-400">×{{ group | length }}</span></div>{% endif %}{% endmacro %}
+{% macro name_cell(group, first) %}<div class="text-sm{% if not first %} orc-link-follower{% endif %}">{% if first %}{{ group[0].name }}{{ lock(group) }}{% endif %}</div>{% endmacro %}
 {% block body %}
-    {% for (title, devices) in devices_grouped.items() %}
-        {% set other = devices | selectattr('type', 'ne', 'AC') | list %}
-        {% set ac = devices | selectattr('type', 'eq', 'AC') | list %}
-        {% for card in [other, ac] if card %}
+    {% for card in cards %}
         <div class="orc-surface mb-2">
             <div class="p-4">
-                <div class="text-sm font-semibold mb-2">{{ title }}</div>
-                {% set toggles = card | selectattr('toggle') | list %}
-                {% if toggles %}
+                <div class="text-sm font-semibold mb-2">{{ card.title }}</div>
+                {% if card.toggles %}
                     <div class="orc-device-grid mb-3">
                         <div class="text-sm">Switches</div>
                         <div class="flex overflow-x-auto gap-1 orc-device-box">
-                            {% for device in toggles %}
-                                <div class="flex flex-col items-center gap-1.5 shrink-0">
-                                    <div class="text-[10px] leading-tight text-center w-16 line-clamp-2" title="{{ device.name }}">{{ device.name }}</div>
-                                    {{ lock(device) }}
-                                    <button class="orc-btn orc-btn-sm orc-device-toggle" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" data-icon="{{ device.icon }}"{% if device.on %} data-on="1"{% endif %}>
-                                        <svg class="w-4 h-4"><use href="/static/icons.svg#{{ device.icon }}{% if not device.on %}-outline{% endif %}"/></svg>
-                                    </button>
+                            {% for group in card.toggles %}
+                                <div class="flex gap-1 orc-link-group">
+                                    {% for device in group %}
+                                        <div class="flex flex-col items-center gap-1.5 shrink-0{% if not loop.first %} orc-link-follower{% endif %}">
+                                            <div class="text-[10px] leading-tight text-center w-16 line-clamp-2" title="{{ device.name }}">{% if loop.first %}{{ device.name }}{% endif %}</div>
+                                            {% if loop.first %}{{ lock(group) }}{% endif %}
+                                            <button class="orc-btn orc-btn-sm orc-device-toggle" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" data-icon="{{ device.icon }}"{% if device.on %} data-on="1"{% endif %}>
+                                                <svg class="w-4 h-4"><use href="/static/icons.svg#{{ device.icon }}{% if not device.on %}-outline{% endif %}"/></svg>
+                                            </button>
+                                        </div>
+                                    {% endfor %}
                                 </div>
                             {% endfor %}
                         </div>
                     </div>
                 {% endif %}
                 <div class="orc-device-grid">
-                    {% for device in card | rejectattr('toggle') %}
-                        {% if device.type == "AC" %}
-                            <div class="col-span-full text-sm font-medium">{{ device.name }}</div>
-                            <div class="col-span-full orc-device-grid relative py-4 pr-4">
-                                <div class="absolute inset-y-0 right-0 left-20 orc-group-box pointer-events-none"></div>
-                                <div class="text-sm">Power</div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <button class="orc-btn orc-ac-power" data-state="off" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}">Off</button>
-                                    <button class="orc-btn orc-ac-power" data-state="on" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}">On</button>
+                    {% for group in card.rows %}
+                        <div class="col-span-full orc-device-grid orc-link-group{% if group | length > 1 %} orc-link-bar{% endif %}">
+                        {% for device in group %}
+                            {% set follower = '' if loop.first else ' orc-link-follower' %}
+                            {% if device.type == "AC" %}
+                                <div class="col-span-full text-sm font-medium">{{ device.name }}</div>
+                                <div class="col-span-full orc-device-grid relative py-4 pr-4">
+                                    <div class="absolute inset-y-0 right-0 left-20 orc-group-box pointer-events-none"></div>
+                                    <div class="text-sm">Power</div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button class="orc-btn orc-ac-power" data-state="off" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}">Off</button>
+                                        <button class="orc-btn orc-ac-power" data-state="on" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}">On</button>
+                                    </div>
+                                    <div class="text-sm">Temp</div>
+                                    <div class="flex gap-4 items-center">
+                                        {% set setpoint = device.temperature or 75 %}
+                                        <div class="inline-flex items-center justify-center w-12 h-[var(--orc-control-height)] text-sm orc-ac-temp" data-id="{{ device.id }}" data-name="{{ device.name }}">{{ setpoint }}</div>
+                                        <input type="range" min="70" max="80" value="{{ setpoint }}" class="w-full orc-ac-ctrl" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
+                                    </div>
+                                    <div class="text-sm">Mode</div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        {% for (value, label) in [("cool", "Cool"), ("fan_only", "Fan"), ("dry", "Dry"), ("econ", "Econ")] %}
+                                            <button class="orc-btn orc-ac-mode" data-value="{{ value }}" data-id="{{ device.id }}" data-name="{{ device.name }}">{{ label }}</button>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="text-sm">Fan</div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        {% for speed in ["low", "mid", "high"] %}
+                                            <button class="orc-btn orc-ac-fan" data-value="{{ speed }}" data-id="{{ device.id }}" data-name="{{ device.name }}" disabled>{{ speed | title }}</button>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="col-start-2"><button class="orc-btn orc-ac-set" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" disabled>Set</button></div>
                                 </div>
-                                <div class="text-sm">Temp</div>
-                                <div class="flex gap-4 items-center">
-                                    {% set setpoint = device.temperature or 75 %}
-                                    <div class="inline-flex items-center justify-center w-12 h-[var(--orc-control-height)] text-sm orc-ac-temp" data-id="{{ device.id }}" data-name="{{ device.name }}">{{ setpoint }}</div>
-                                    <input type="range" min="70" max="80" value="{{ setpoint }}" class="w-full orc-ac-ctrl" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
+                            {% elif device.type == "Chromecast" %}
+                                {{ name_cell(group, loop.first) }}
+                                <div class="flex gap-4 orc-device-box items-center{{ follower }}">
+                                    <input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
+                                    <button class="orc-runner orc-btn" data-state="stop" data-type="device/{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}">
+                                        {{ icon_svg("stop") }}
+                                    </button>
                                 </div>
-                                <div class="text-sm">Mode</div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    {% for (value, label) in [("cool", "Cool"), ("fan_only", "Fan"), ("dry", "Dry"), ("econ", "Econ")] %}
-                                        <button class="orc-btn orc-ac-mode" data-value="{{ value }}" data-id="{{ device.id }}" data-name="{{ device.name }}">{{ label }}</button>
-                                    {% endfor %}
+                            {% elif device.type == "USB" %}
+                                {{ name_cell(group, loop.first) }}
+                                <div class="flex gap-4 orc-device-box{{ follower }}"><input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span></div>
+                            {% else %}
+                                {{ name_cell(group, loop.first) }}
+                                <div class="flex gap-4 orc-device-box{{ follower }}"><input type="range" min="0" max="100" step="10" value="{{ device.level }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
+                                    {% if device.color %}
+                                        <button type="button" class="orc-colour-swatch shrink-0" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" data-hue="{{ '' if device.hue is none else device.hue }}" data-saturation="{{ '' if device.saturation is none else device.saturation }}" data-kelvin="{{ '' if device.kelvin is none else device.kelvin }}" aria-label="Set colour for {{ device.name }}"></button>
+                                    {% else %}
+                                        <span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span>
+                                    {% endif %}
                                 </div>
-                                <div class="text-sm">Fan</div>
-                                <div class="grid grid-cols-3 gap-2">
-                                    {% for speed in ["low", "mid", "high"] %}
-                                        <button class="orc-btn orc-ac-fan" data-value="{{ speed }}" data-id="{{ device.id }}" data-name="{{ device.name }}" disabled>{{ speed | title }}</button>
-                                    {% endfor %}
-                                </div>
-                                <div class="col-start-2"><button class="orc-btn orc-ac-set" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" disabled>Set</button></div>
-                            </div>
-                        {% elif device.type == "Chromecast" %}
-                            <div class="text-sm">{{ device.name }}{{ lock(device) }}</div>
-                            <div class="flex gap-4 orc-device-box items-center">
-                                <input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
-                                <button class="orc-runner orc-btn" data-state="stop" data-type="device/{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}">
-                                    {{ icon_svg("stop") }}
-                                </button>
-                            </div>
-                        {% elif device.type == "USB" %}
-                            <div class="text-sm">{{ device.name }}{{ lock(device) }}</div>
-                            <div class="flex gap-4 orc-device-box"><input type="range" min="0" max="100" value="{{ device.volume }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/><span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span></div>
-                        {% else %}
-                            <div class="text-sm">{{ device.name }}{{ lock(device) }}</div>
-                            <div class="flex gap-4 orc-device-box"><input type="range" min="0" max="100" step="10" value="{{ device.level }}" class="w-full orc-device-slider" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}"/>
-                                {% if device.color %}
-                                    <button type="button" class="orc-colour-swatch shrink-0" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" data-hue="{{ '' if device.hue is none else device.hue }}" data-saturation="{{ '' if device.saturation is none else device.saturation }}" data-kelvin="{{ '' if device.kelvin is none else device.kelvin }}" aria-label="Set colour for {{ device.name }}"></button>
-                                {% else %}
-                                    <span class="invisible shrink-0 inline-block w-12" aria-hidden="true"></span>
-                                {% endif %}
-                            </div>
-                        {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                        </div>
                     {% endfor %}
                 </div>
             </div>
         </div>
-        {% endfor %}
     {% endfor %}
 <dialog id="orc-colour-dialog" class="orc-dialog w-80">
     <form method="dialog" class="flex flex-col gap-3 items-center">
