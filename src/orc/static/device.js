@@ -151,7 +151,12 @@ colourWheel.on('input:end', (color) => {
     sendColour(`hue:${Math.round(color.hue / 3.6)}:${Math.round(color.saturation)}`);
 });
 
-document.getElementById('orc-colour-kelvin').addEventListener('change', (e) => sendColour(`ct:${e.currentTarget.value}`));
+document.getElementById('orc-colour-kelvin').addEventListener('input', (e) => {
+    colourWheel.color.kelvin = e.currentTarget.value;
+    linkGroup(colourTarget, '.orc-colour-swatch').forEach(swatch => { swatch.style.background = colourWheel.color.hexString; });
+});
+
+document.getElementById('orc-colour-kelvin').addEventListener('change',(e) => sendColour(`ct:${e.currentTarget.value}`));
 
 document.querySelectorAll('.orc-link').forEach(button => {
     button.addEventListener('click', () => {
