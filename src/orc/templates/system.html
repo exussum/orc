@@ -122,7 +122,7 @@
                     <summary class="orc-accordion-summary">Scheduled Jobs</summary>
                     <div class="px-4 pt-2">
                         {% for queue, held_since, rows in scheduled_queues %}
-                            {% call titled_card(queue, note=("held since " ~ held_since.strftime("%I:%M %p")) if held_since else "", table_fixed=true, table_class="text-sm") %}
+                            {% call titled_card(queue, note=("held since " ~ held_since.strftime("%I:%M %p")) if held_since else "", table_fixed=true, table_class="text-sm min-w-[30rem]") %}
                                 <tr>
                                     <th class="orc-th w-48">When</th>
                                     <th class="orc-th">Job</th>
@@ -132,7 +132,7 @@
                                     <tr>
                                         <td class="orc-td"><span class="whitespace-nowrap">{{ when.strftime("%a %b %-d, %I:%M:%S %p") }}</span></td>
                                         <td class="orc-td">{{ name }}</td>
-                                        <td class="orc-td text-gray-400"><span class="whitespace-nowrap">{{ state }}</span></td>
+                                        <td class="orc-td text-gray-400 break-words">{{ state }}</td>
                                     </tr>
                                 {% else %}
                                     <tr><td class="orc-td text-gray-400" colspan="3">No jobs.</td></tr>

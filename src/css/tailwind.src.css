@@ -107,11 +107,11 @@
 }
 
 @utility orc-room-buttons {
-    @apply grid grid-cols-4 px-2;
+    @apply grid grid-cols-4 items-end px-2;
 }
 
 @utility orc-device-grid {
-    @apply grid items-center gap-4 max-w-[600px];
+    @apply grid items-end gap-4 max-w-[600px];
     grid-template-columns: 80px 1fr;
 }
 
@@ -172,7 +172,7 @@
 }
 
 @utility orc-routine-grid {
-    @apply grid grid-cols-5 justify-items-center gap-y-2;
+    @apply grid grid-cols-5 items-end justify-items-center gap-y-2;
 }
 
 @utility orc-button {
@@ -280,7 +280,7 @@
 }
 
 @utility orc-theme-form-grid {
-    @apply grid items-center gap-1;
+    @apply grid items-end gap-1;
     grid-template-columns: 2fr 2fr 1fr;
 }
 

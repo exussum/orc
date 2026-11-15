@@ -14,7 +14,11 @@ device_types: tuple[str, ...] = ("Light", "Button", "Sensor")
 
 warn_stub("adapter")
 
-_LIGHT_CAPABILITIES = frozenset({m.Capability.change_level, m.Capability.color})
+_DIMMABLE = frozenset({m.Capability.change_level, m.Capability.color})
+
+
+def _capabilities(n: int) -> frozenset[m.Capability]:
+    return frozenset() if n % 3 == 2 else _DIMMABLE
 
 
 class StubSource(m.SourceEnum):
@@ -50,7 +54,7 @@ class _EveryLight(dict[str, Any]):
         return True
 
     def get(self, key: str, default: Any = None) -> tuple[str, frozenset[m.Capability]]:
-        return key, _LIGHT_CAPABILITIES
+        return key, _DIMMABLE
 
 
 def discover(messages: Sequence[m.Message]) -> dict[str, tuple[str, frozenset[m.Capability]]]:
@@ -58,7 +62,7 @@ def discover(messages: Sequence[m.Message]) -> dict[str, tuple[str, frozenset[m.
 
     text = (Path(os.environ["ORC_CONFIG_DIR"]) / "config.orc").read_text()
     lights = parse_config(text, _EveryLight()).enums.get("Light", ())
-    return {light.value: (light.value, light.capabilities) for light in lights}
+    return {light.value: (light.value, _capabilities(n)) for n, light in enumerate(lights)}
 
 
 def _state(device: m.DeviceEnum, attributes: dict[str, Any]) -> m.DeviceState:
@@ -68,7 +72,10 @@ def _state(device: m.DeviceEnum, attributes: dict[str, Any]) -> m.DeviceState:
 
 def _light_attributes(n: int) -> dict[str, Any]:
     on = n % 3 == 0
-    return {"switch": m.ON if on else m.OFF, "level": 70 if on else 100}
+    attributes: dict[str, Any] = {"switch": m.ON if on else m.OFF}
+    if _capabilities(n):
+        attributes["level"] = 70 if on else 100
+    return attributes
 
 
 def _sensor_attributes(name: str) -> dict[str, Any]:

@@ -19,3 +19,15 @@
     border-radius: 2px;
     background: var(--color-orc-primary);
 }
+
+.orc-device-box[data-more-right] {
+    mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
+}
+
+.orc-device-box[data-more-left] {
+    mask-image: linear-gradient(to left, black calc(100% - 1.5rem), transparent);
+}
+
+.orc-device-box[data-more-left][data-more-right] {
+    mask-image: linear-gradient(to right, transparent, black 1.5rem, black calc(100% - 1.5rem), transparent);
+}

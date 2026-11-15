@@ -19,7 +19,7 @@
                             {% for group in card.toggles %}
                                 <div class="flex gap-1 orc-link-group"{% if group.locked %} data-linked="1"{% endif %}>
                                     {% for device in group.rows %}
-                                        <div class="flex flex-col items-center gap-1.5 shrink-0{% if not loop.first %} orc-link-follower{% if group.locked %} hidden{% endif %}{% endif %}">
+                                        <div class="flex flex-col items-center gap-1.5 justify-end shrink-0{% if not loop.first %} orc-link-follower{% if group.locked %} hidden{% endif %}{% endif %}">
                                             <div class="text-[10px] leading-tight text-center w-16 line-clamp-2" title="{{ device.name }}">{% if loop.first %}{{ device.name }}{% endif %}</div>
                                             {% if loop.first %}{{ lock(group) }}{% endif %}
                                             <button class="orc-btn orc-btn-sm orc-device-toggle" data-kind="{{ device.type }}" data-id="{{ device.id }}" data-name="{{ device.name }}" data-icon="{{ device.icon }}"{% if device.on %} data-on="1"{% endif %}>

@@ -85,7 +85,7 @@ document.querySelectorAll(".orc-ac-power[data-state='off']").forEach(el => setAc
 
 function linkGroup(el, selector) {
     const group = el.closest('.orc-link-group');
-    return group.dataset.linked ? group.querySelectorAll(selector) : [el];
+    return group.hasAttribute('data-linked') ? group.querySelectorAll(selector) : [el];
 }
 
 document.querySelectorAll('.orc-device-slider').forEach(slider => {
@@ -105,7 +105,7 @@ document.querySelectorAll('input.orc-ac-ctrl').forEach(slider => {
 });
 
 function showToggle(btn, on) {
-    btn.dataset.on = on ? '1' : '';
+    btn.toggleAttribute('data-on', on);
     btn.querySelector('use').setAttribute('href', `/static/icons.svg#${btn.dataset.icon}${on ? '' : '-outline'}`);
 }
 
@@ -115,7 +115,7 @@ async function setToggle(btn, on) {
 
 document.querySelectorAll('.orc-device-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
-        const on = btn.dataset.on !== '1';
+        const on = !btn.hasAttribute('data-on');
         linkGroup(btn, '.orc-device-toggle').forEach(member => setToggle(member, on));
     });
 });
@@ -164,8 +164,7 @@ document.querySelectorAll('.orc-link').forEach(button => {
         const linked = button.getAttribute('aria-pressed') !== 'true';
         button.setAttribute('aria-pressed', linked);
         button.querySelector('use').setAttribute('href', `/static/icons.svg#lock-${linked ? 'closed' : 'open'}`);
-        if (linked) group.dataset.linked = '1';
-        else delete group.dataset.linked;
+        group.toggleAttribute('data-linked', linked);
         group.querySelectorAll('.orc-link-follower').forEach(follower => follower.classList.toggle('hidden', linked));
     });
 });
@@ -188,4 +187,15 @@ function showSliderTip(slider) {
 document.querySelectorAll('input[type="range"]').forEach(slider => {
     slider.addEventListener('input', () => showSliderTip(slider));
     ['change', 'pointerup', 'blur'].forEach(ev => slider.addEventListener(ev, () => sliderTip.classList.add('hidden')));
+});
+
+function markScrollEdges(box) {
+    const max = box.scrollWidth - box.clientWidth;
+    box.toggleAttribute('data-more-left', box.scrollLeft > 1);
+    box.toggleAttribute('data-more-right', box.scrollLeft < max - 1);
+}
+
+document.querySelectorAll('.orc-device-box').forEach(box => {
+    box.addEventListener('scroll', () => markScrollEdges(box));
+    new ResizeObserver(() => markScrollEdges(box)).observe(box);
 });
