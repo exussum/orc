@@ -60,15 +60,10 @@
                     {% endfor %}
                 </div>
             </div>
-            {% if next_routine %}
-                <div class="orc-button-next">
-                    <div class="text-xs">
-                        <div>{{ next_routine.name }}</div>
-                        <div>At: {{ next_routine.run_at.time().strftime("%I:%M %p") }}</div>
-                    </div>
-                    <button class="orc-btn orc-pause" data-queue="iot" data-id="{{ next_routine.id }}" data-name="{{ next_routine.name }}">Skip</button>
-                </div>
-            {% endif %}
+            <div class="text-xs text-right">
+                <div>Last run: {% if last_run %}{{ last_run.action|codespan }} at {{ last_run.timestamp.strftime("%I:%M %p") }}{% else %}none{% endif %}</div>
+                <div>Present: {{ present }} · Lights on: {{ lights_on }} · Sounds playing: {{ sounds_playing }}</div>
+            </div>
         </div>
     </div>
 {% endblock %}

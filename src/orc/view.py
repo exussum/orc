@@ -279,8 +279,6 @@ def expire_presence(name: str) -> dict[str, Any]:
 
 @bp.route("/")
 def index() -> str:
-    present_names = api.present_names()
-    next_schedule = api.next_iot_job(present_names)
     cells, page_boxes, page_concave_corners = _scene_layout(api.fetch_durations(mapper=dict))
 
     return render_template(
@@ -293,8 +291,11 @@ def index() -> str:
         boxes=page_boxes,
         concave_corners=page_concave_corners,
         rooms=config.rooms,
+        last_run=app.orc.log.last,
+        present=len(api.present_names()),
+        lights_on=api.lights_on(),
+        sounds_playing=api.sounds_playing(),
         schedule_routines=config.schedule_routines,
-        next_routine=next_schedule,
         durations=api.fetch_durations(mapper=dict),
     )
 

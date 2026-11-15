@@ -73,6 +73,7 @@ class Log:
         self._lock = threading.Lock()
         self._rows: deque[m.LogEntry] = deque(maxlen=self.SIZE)
         self._open_rows: list[m.LogEntry] = []
+        self.last: m.LogSubEntry | None = None
 
     def write(
         self,

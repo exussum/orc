@@ -207,10 +207,6 @@
     @apply col-start-2 col-end-4;
 }
 
-@utility orc-button-next {
-    @apply flex gap-2.5;
-}
-
 @utility orc-ribbon {
     @apply w-7 h-7 absolute top-0 left-0 hidden;
 }

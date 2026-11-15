@@ -188,6 +188,15 @@ def capture_sounds() -> tuple[m.SoundState, ...]:
         return tuple(ex.map(fetch, devices))
 
 
+def lights_on() -> int:
+    on = {state.device.id for state in broker.snapshot() if state.attributes.get("switch", m.OFF) != m.OFF}
+    return sum(light.value in on for light in config.devices.Light)
+
+
+def sounds_playing() -> int:
+    return sum(sound.playback == m.Playback.PLAYING for sound in capture_sounds())
+
+
 def capture_acs() -> tuple[m.AcStatus, ...]:
     return tuple(m.AcStatus(w, ac_state(w)) for w in config.devices.AC)
 
@@ -277,12 +286,17 @@ def run_action(
             queued = context().log.write(source, Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
 
             def run(*, ctx: m.AppContext) -> None:
-                queued.add(source, display)
+                started = queued.add(source, display)
+                if id != ORC_SYSTEM_SNAPSHOT:
+                    context().log.last = started
                 action.fn(queued)
 
             context().scheduler.once(run, when, id=id, name=action.name, queue=m.Queue.ADHOC)
         else:
-            action.fn(context().log.write(source, display, trigger))
+            entry = context().log.write(source, display, trigger)
+            if id != ORC_SYSTEM_SNAPSHOT:
+                context().log.last = entry
+            action.fn(entry)
     return True
 
 
@@ -298,6 +312,7 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
     else:
         raise ValueError(f"Unknown room state: {state}")
     entry = context().log.write(m.LogSource.MANUAL, Message.ROOM_SET.format(id=id, state=state), trigger)
+    context().log.last = entry
     with _record_duration(id):
         dispatch(commands, force=True, entry=entry)
 
@@ -517,24 +532,10 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
     return result
 
 
-def next_iot_job(present_names: set[str]) -> Job[Any] | None:
-    jobs = sorted(fetch_jobs(m.Queue.IOT), key=lambda e: e.run_at)
-    return next(
-        (
-            j
-            for j in jobs
-            if not j.disable
-            and not any(isinstance(step.command.tag, em.Always) for step in j.payload.rule.steps)
-            and _matching_items(j.payload.rule, j.run_at, present_names)
-        ),
-        None,
-    )
-
-
 def run_iot_job(payload: m.IotJob, ctx: m.AppContext) -> None:
-    _run_schedule_routine(
-        payload.rule, context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.rule.name)), present_names()
-    )
+    entry = context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.rule.name))
+    context().log.last = entry
+    _run_schedule_routine(payload.rule, entry, present_names())
 
 
 def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None, *, state_override: Any = None) -> m.Commands:
