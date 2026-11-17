@@ -123,6 +123,10 @@
     @apply flex overflow-auto justify-between;
 }
 
+@utility orc-fade-end {
+    mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
+}
+
 @utility orc-scene-grid {
     @apply grid gap-[5px];
     grid-template-columns: repeat(5, minmax(0, 1fr));

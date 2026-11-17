@@ -15,3 +15,6 @@ function highlight() {
 
 highlight();
 setInterval(highlight, 60000);
+
+const lastRun = document.getElementById("orc-last-run");
+lastRun.classList.toggle("orc-fade-end", lastRun.scrollWidth > lastRun.clientWidth);
