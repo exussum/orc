@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -5,6 +6,7 @@ from orc_engine import model as em
 
 import orc_extras.react
 from orc import model as m
+from orc.collections import partition
 from orc_extras.react.model import AcSubject, CastSubject, Device, FormulaSubject, Log, MqttDeviceSubject, State, Transition
 
 JOB_ID = "react"
@@ -77,6 +79,10 @@ def _reader(ctx: m.AppContext) -> em.Read:
 
 
 def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status) -> None:
+    _react(ctx, sources, status, ctx.plugin_state[orc_extras.react].watches)
+
+
+def _react(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, watches: list[em.Watch[m.Devices]]) -> None:
     device, attribute, old, new = status.device, status.attribute, status.old, status.new
     source = sources.get(device.id)
     if source is None:
@@ -84,7 +90,9 @@ def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Sta
     changed = MqttDeviceSubject(source, attribute)
     state = ctx.plugin_state[orc_extras.react]
     now = ctx.api.local_now()
-    awake = [watch for watch in state.watches if not is_disabled(state, watch, now)]
+
+    awake, paused = partition(watches, lambda e: is_disabled(state, e, now))
+
     fired: list[em.Watch[m.Devices]] = []
     for outcome in ctx.engine.evaluate(awake, read=_reader(ctx), changes=_changes(changed, old, new), force=True):
         match outcome:
@@ -94,11 +102,21 @@ def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Sta
                 ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=watch.rule.name)
             case em.Report(em.Watch() as watch, commands) if commands:
                 fired.append(watch)
+
+    for watch in paused:
+        name = state.name_of[watch]
+        ctx.scheduler.once(_recheck, state.disabled[name], (ctx, sources, status, watch), id=f"{JOB_ID}-recheck-{name}", name=name)
+
     if fired:
         entry = _log(ctx, fired[0], device)
         for watch in fired[1:]:
             entry.add(Log.REACT, _line(ctx, watch, device))
         ctx.api.dispatch(ctx.api.squish(map(_command, fired), entry), entry=entry)
+
+
+def _recheck(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, watch: em.Watch[m.Devices]) -> None:
+    current = _reader(ctx)(MqttDeviceSubject(sources[status.device.id], status.attribute))
+    _react(ctx, sources, replace(status, new=current), [watch])
 
 
 def _job(watch: em.Watch[Any]) -> str:

@@ -125,6 +125,11 @@ def test_config_compiles_rules(ctx, react_rules):
     assert ctx.api.add_listener.call_args.args[0].args[1] == {"1": Light.lamp, "2": Light.desk, "5": Sensor.living}
 
 
+def test_cooldown_option_overrides_default(react_rules):
+    assert react_rules[0].cooldown == model.COOLDOWN
+    assert react_rules[2].cooldown == timedelta(seconds=60)
+
+
 def test_switch_on_schedules_reaction(ctx, react_rules, device_report):
     device_report("1", {"switch": m.ON}, m.OFF)
     call = ctx.scheduler.once.call_args
@@ -152,10 +157,10 @@ def test_switch_off_cancels_pending_jobs(ctx, pending_jobs, device_report):
     assert ctx.scheduler.cancel.called
 
 
-def test_sleeping_rule_schedules_nothing(ctx, react_rules, device_report):
+def test_sleeping_rule_schedules_only_a_recheck(ctx, react_rules, device_report):
     plugins.sleep(ctx, "Lights off")
     device_report("1", {"switch": m.ON}, m.OFF)
-    ctx.scheduler.once.assert_not_called()
+    assert {call.args[0] for call in ctx.scheduler.once.call_args_list} == {plugins._recheck}
 
 
 def test_sleep_cancels_a_pending_job(ctx, pending_jobs):

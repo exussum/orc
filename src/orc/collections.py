@@ -209,3 +209,11 @@ def _compactness_key(cells: _Cells) -> tuple[int, int, tuple[tuple[int, int], ..
 
 def _dimensions(cells: _Cells) -> tuple[int, int]:
     return max(x for x, _ in cells) + 1, max(y for _, y in cells) + 1
+
+
+def partition[T](x: Iterable[T], f: Callable[[T], bool]) -> tuple[list[T], list[T]]:
+    a: list[T] = []
+    b: list[T] = []
+    for e in x:
+        (a, b)[f(e)].append(e)
+    return a, b

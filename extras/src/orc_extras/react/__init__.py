@@ -37,7 +37,7 @@ from orc_extras.react.model import (
 from orc_extras.react.web import react_bp
 
 CONFIG = "orc_extras/react"
-_OPTIONS = "[--delay=<seconds>] [--pause=<minutes>]"
+_OPTIONS = "[--delay=<seconds>] [--pause=<minutes>] [--cooldown=<seconds>]"
 GRAMMAR = f"""
 phrase <name> <condition>...
 react <name> <devices> turns <to> [if <condition>...] set <action> {_OPTIONS}
@@ -61,7 +61,7 @@ def setup(ctx: AppContext) -> tuple[em.Watch[Devices], ...]:
         GRAMMAR,
         serializers={
             "phrase": each(_phrase, default=dict),
-            "react": each(_rule, default=list, types={"delay": int, "pause": int}),
+            "react": each(_rule, default=list, types={"delay": int, "pause": int, "cooldown": int}),
         },
     )
     watches = tuple(reaction.watch for reaction in cfg.react)
@@ -147,6 +147,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
     types = objects["device"].enums
     delay = timedelta(seconds=args.delay) if args.delay else timedelta()
     pause = _pause(args.pause)
+    cooldown = model.COOLDOWN if args.cooldown is None else timedelta(seconds=args.cooldown)
     condition = " ".join(args.condition) if args.condition else None
     for source in cast.devices(args.devices, objects).all():
         guards = [_build(source, condition, types, objects["phrase"])] if condition else []
@@ -165,7 +166,7 @@ def _rule(objects: dict[str, Any], args: Any) -> None:
             cancel = em.Changed(subject)
         command = em.Command(target or Devices(source), action)
         rule = em.Rule((em.Step(em.And(*guards), command),))
-        watch = em.Watch(trigger, rule, delay, model.COOLDOWN, cancel)
+        watch = em.Watch(trigger, rule, delay, cooldown, cancel)
         objects["react"].append(model.Reaction(watch, pause, args.name, source))
 
 
