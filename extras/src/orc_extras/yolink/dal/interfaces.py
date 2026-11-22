@@ -5,7 +5,6 @@ from orc import model as m
 
 # on_connection receives raw connect/disconnect events; flap suppression is the caller's job
 type ConnectionCallback = Callable[[bool], None]
-# on_report receives (device_id, report data)
 type ReportCallback = Callable[[str, dict[str, Any]], None]
 
 

@@ -14,7 +14,6 @@ from orc import model as m
 from orc.collections import LockedDict
 from orc_extras.yolink.dal.interfaces import CloudBackend
 
-# callback (name, kind, old, new); old/new are arbitrary field values
 TransitionKind = Literal["connection", "leak", "battery", "signal", "interval", "online"]
 type TransitionCallback = Callable[[str, TransitionKind, Any, Any], None]
 

@@ -171,7 +171,6 @@ def check_secrets(secrets: m.Secrets, needs: Mapping[str, Callable[[str], Any]])
     return problems
 
 
-# An AC is always commanded with an AcState; a bare on/off aimed at one becomes one here.
 def ac_state(members: tuple[m.DeviceEnum, ...], state: Any, enums: Mapping[str, type[m.DeviceEnum]], *, source: str) -> Any:
     ac_cls = enums.get("AC")
     acs = tuple(of_type(members, ac_cls)) if ac_cls else ()

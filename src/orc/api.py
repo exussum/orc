@@ -37,7 +37,6 @@ if TYPE_CHECKING:
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
 
-# Order of what's most important "feel" wise
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
 _STATE_SORT_ON = 0
