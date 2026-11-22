@@ -67,7 +67,7 @@ def react_rules(ctx):
 def ruleset(ctx):
     def ruleset(watches, sources):
         ctx.plugin_state[react].watches = tuple(watches)
-        ctx.plugin_state[react].name_of = {w: w.rule.name or "rule" for w in watches}
+        ctx.plugin_state[react].name_of = {w: w.rule.name for w in watches}
         ctx.sources = sources
 
     return ruleset
@@ -598,7 +598,7 @@ def _make(devices, attribute, state, action, target=None, delay=None, cond=None)
     for source in devices.all():
         command = em.Command(target or m.Devices(source), action)
         trigger = model.Transition(model.MqttDeviceSubject(source, attribute), state)
-        watches.append(em.Watch(trigger, em.Rule((em.Step(cond, command),)), span, model.COOLDOWN))
+        watches.append(em.Watch(trigger, em.Rule((em.Step(cond, command),), name="rule"), span, model.COOLDOWN))
     return watches
 
 
@@ -618,7 +618,7 @@ def _make_range(sensor, subject, low, high, target, action, people=None, cooldow
         watched.append(model.Present(people))
     watched.append(model.Range(subject, low, high, edge=True))
     command = em.Command(target, action)
-    rule = em.Rule((em.Step(em.And(*watched), command),))
+    rule = em.Rule((em.Step(em.And(*watched), command),), name="rule")
     return [em.Watch(em.Changed(model.Device(sensor)), rule, cooldown=cooldown)]
 
 
