@@ -90,7 +90,7 @@ def _react(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status
             case em.Cancel(watch):
                 ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
             case em.Defer(watch, when):
-                ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=watch.rule.name)
+                ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=state.name_of[watch])
             case em.Report(em.Watch() as watch, commands) if commands:
                 fired.append(watch)
 

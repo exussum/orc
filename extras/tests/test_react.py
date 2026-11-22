@@ -67,6 +67,7 @@ def react_rules(ctx):
 def ruleset(ctx):
     def ruleset(watches, sources):
         ctx.plugin_state[react].watches = tuple(watches)
+        ctx.plugin_state[react].name_of = {w: w.rule.name or "rule" for w in watches}
         ctx.sources = sources
 
     return ruleset
