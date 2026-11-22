@@ -384,3 +384,23 @@ def test_schedule_without_jobs_says_so(flask_client):
 def test_system_page_lists_the_core_system_plugins(flask_client):
     html = flask_client.get("/system/").get_data(as_text=True)
     assert 'data-id="Enable Notifications" data-name="Enable Notifications" data-duration="0" data-delay="0:00:00" data-no-func' in html
+
+
+def test_system_jobs_show_each_date_once_with_a_run_button(flask_client):
+    day = datetime(2030, 1, 2, tzinfo=config.settings.tz)
+    rows = [(day.replace(hour=1), "a", "First", ""), (day.replace(hour=2), "b", "Second", ""), (day.replace(day=3), "c", "Third", "")]
+    with patch("orc.view._scheduled_queues", return_value=[("adhoc", None, rows)]):
+        html = flask_client.get("/system/").get_data(as_text=True)
+    assert html.count("Wed Jan 2") == 1 and html.count("Thu Jan 3") == 1
+    assert 'class="orc-btn orc-btn-sm orc-job-run" data-queue="adhoc" data-id="b"' in html
+
+
+def test_run_job_queues_a_copy_now(flask_client):
+    with patch.object(api, "run_job_now", return_value=True) as run:
+        assert flask_client.get("/api/schedule/adhoc/b/run").status_code == 200
+    run.assert_called_once_with("b", "adhoc")
+
+
+def test_run_unknown_job_is_404(flask_client):
+    with patch.object(api, "run_job_now", return_value=False):
+        assert flask_client.get("/api/schedule/adhoc/nope/run").status_code == 404

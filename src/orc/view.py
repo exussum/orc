@@ -343,6 +343,13 @@ def pause(queue: str, id: str) -> dict[str, Any]:
     return {}
 
 
+@bp.route("/api/schedule/<queue>/<id>/run")
+def run_job(queue: str, id: str) -> dict[str, Any]:
+    if not api.run_job_now(id, m.QueueName(queue)):
+        abort(404, "Unknown job")
+    return {}
+
+
 @bp.route("/api/schedule/<queue>/<id>/cancel")
 def cancel(queue: str, id: str) -> dict[str, Any]:
     if not api.cancel_job(id, m.QueueName(queue)):
@@ -553,8 +560,8 @@ def _volumes_by_name(sounds: tuple[m.SoundState, ...]) -> dict[str, int]:
     return {s.what.name: s.volume for s in sounds}
 
 
-def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datetime | None, list[tuple[datetime, str, str]]]]:
-    cards: list[tuple[str, datetime | None, list[tuple[datetime, str, str]]]] = []
+def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datetime | None, list[tuple[datetime, str, str, str]]]]:
+    cards: list[tuple[str, datetime | None, list[tuple[datetime, str, str, str]]]] = []
     for name, queue in sorted(ctx.scheduler.queues().items()):
         paused_since = queue.paused_at.astimezone(config.settings.tz) if queue.paused_at else None
         rows = []
@@ -570,7 +577,7 @@ def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datet
                 state = f"↻ {job.cron}"
             else:
                 state = ""
-            rows.append((when, job.name or job.id, state))
+            rows.append((when, job.id, job.name or job.id, state))
         cards.append((name, paused_since, rows))
     return cards
 

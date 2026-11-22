@@ -100,6 +100,10 @@ def set_job_paused(id: str, disable: bool, queue: m.QueueName) -> bool:
     return context().scheduler.pause_job(id, disable, queue)
 
 
+def run_job_now(id: str, queue: m.QueueName) -> bool:
+    return context().scheduler.run_now(id, queue)
+
+
 def cancel_job(id: str, queue: m.QueueName) -> bool:
     return context().scheduler.cancel(id, queue)
 

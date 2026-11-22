@@ -124,18 +124,23 @@
                         {% for queue, held_since, rows in scheduled_queues %}
                             {% call titled_card(queue, note=("held since " ~ held_since.strftime("%I:%M %p")) if held_since else "", table_fixed=true, table_class="text-sm min-w-[30rem]") %}
                                 <tr>
-                                    <th class="orc-th w-48">When</th>
+                                    <th class="orc-th w-28">When</th>
                                     <th class="orc-th">Job</th>
                                     <th class="orc-th w-40">State</th>
+                                    <th class="orc-th w-12"></th>
                                 </tr>
-                                {% for when, name, state in rows %}
+                                {% for when, id, name, state in rows %}
+                                    {% if loop.first or when.date() != loop.previtem[0].date() %}
+                                        <tr><td class="orc-td font-semibold" colspan="4">{{ when.strftime("%a %b %-d") }}</td></tr>
+                                    {% endif %}
                                     <tr>
-                                        <td class="orc-td"><span class="whitespace-nowrap">{{ when.strftime("%a %b %-d, %I:%M:%S %p") }}</span></td>
+                                        <td class="orc-td"><span class="whitespace-nowrap">{{ when.strftime("%I:%M:%S %p") }}</span></td>
                                         <td class="orc-td">{{ name }}</td>
                                         <td class="orc-td text-gray-400 break-words">{{ state }}</td>
+                                        <td class="orc-td"><button class="orc-btn orc-btn-sm orc-job-run" data-queue="{{ queue }}" data-id="{{ id }}" data-name="{{ name }}" title="Run now">{{ icon_svg("arrow-path") }}</button></td>
                                     </tr>
                                 {% else %}
-                                    <tr><td class="orc-td text-gray-400" colspan="3">No jobs.</td></tr>
+                                    <tr><td class="orc-td text-gray-400" colspan="4">No jobs.</td></tr>
                                 {% endfor %}
                             {% endcall %}
                         {% else %}
@@ -170,4 +175,7 @@
             </details>
         </div>
     </div>
+{% endblock %}
+{% block head_scripts %}
+    <script type="module" src="/static/system.js"></script>
 {% endblock %}

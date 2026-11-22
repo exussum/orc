@@ -97,6 +97,14 @@ class Scheduler:
     def pause_job(self, id: str, disable: bool, queue: m.QueueName) -> bool:
         return self._coordinator.pause_job(id, disable, queue)
 
+    def run_now(self, id: str, queue: m.QueueName) -> bool:
+        with self._lock:
+            job = next((job for job in self._queues[queue].jobs() if job.id == id), None)
+            if job is None:
+                return False
+            self._queues[queue].add(Job(utcnow(), None, job.fn, job.payload, id=str(uuid.uuid4()), name=job.name))
+        return True
+
     def pause_queue(self, queue: m.QueueName) -> None:
         self._coordinator.pause_queue(queue)
 
