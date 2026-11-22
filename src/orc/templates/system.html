@@ -122,22 +122,27 @@
                     <summary class="orc-accordion-summary">Scheduled Jobs</summary>
                     <div class="px-4 pt-2">
                         {% for queue, held_since, rows in scheduled_queues %}
-                            {% call titled_card(queue, note=("held since " ~ held_since.strftime("%I:%M %p")) if held_since else "", table_fixed=true, table_class="text-sm min-w-[30rem]") %}
+                            {% call titled_card(queue, note=("held since " ~ held_since.strftime("%I:%M %p")) if held_since else "", table_fixed=true, table_class="min-w-[24rem]") %}
                                 <tr>
-                                    <th class="orc-th w-28">When</th>
+                                    <th class="orc-th w-16">Run</th>
+                                    <th class="orc-th w-16">Enabled</th>
                                     <th class="orc-th">Job</th>
-                                    <th class="orc-th w-40">State</th>
-                                    <th class="orc-th w-12"></th>
+                                    <th class="orc-th w-24 whitespace-nowrap">When</th>
                                 </tr>
-                                {% for when, id, name, state in rows %}
+                                {% for when, id, name, state, enabled in rows %}
                                     {% if loop.first or when.date() != loop.previtem[0].date() %}
-                                        <tr><td class="orc-td font-semibold" colspan="4">{{ when.strftime("%a %b %-d") }}</td></tr>
+                                        <tr><td class="px-2 pt-3 text-sm font-semibold" colspan="4">{{ when.strftime("%A, %B %-d") }}</td></tr>
                                     {% endif %}
                                     <tr>
-                                        <td class="orc-td"><span class="whitespace-nowrap">{{ when.strftime("%I:%M:%S %p") }}</span></td>
-                                        <td class="orc-td">{{ name }}</td>
-                                        <td class="orc-td text-gray-400 break-words">{{ state }}</td>
-                                        <td class="orc-td"><button class="orc-btn orc-btn-sm orc-job-run" data-queue="{{ queue }}" data-id="{{ id }}" data-name="{{ name }}" title="Run now">{{ icon_svg("arrow-path") }}</button></td>
+                                        <td class="px-2 py-3 align-middle w-16"><button class="orc-btn orc-job-run w-8 h-8 p-0" data-queue="{{ queue }}" data-id="{{ id }}" data-name="{{ name }}" title="Run now">&nbsp;</button></td>
+                                        <td class="px-2 py-3 align-middle w-16">
+                                            <label class="inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" class="orc-enable sr-only peer" data-queue="{{ queue }}" data-id="{{ id }}" data-name="{{ name }}" {{ 'checked' if enabled }}>
+                                                <div class="orc-switch"></div>
+                                            </label>
+                                        </td>
+                                        <td class="px-2 py-3 align-middle text-sm break-words">{{ name }}<div class="orc-job-state text-xs text-gray-400 min-h-4" data-state="{{ state }}">{{ state if enabled else "disabled" }}</div></td>
+                                        <td class="px-2 py-3 align-middle whitespace-nowrap">{{ when.strftime("%I:%M %p") }}</td>
                                     </tr>
                                 {% else %}
                                     <tr><td class="orc-td text-gray-400" colspan="4">No jobs.</td></tr>

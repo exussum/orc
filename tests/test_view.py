@@ -388,11 +388,17 @@ def test_system_page_lists_the_core_system_plugins(flask_client):
 
 def test_system_jobs_show_each_date_once_with_a_run_button(flask_client):
     day = datetime(2030, 1, 2, tzinfo=config.settings.tz)
-    rows = [(day.replace(hour=1), "a", "First", ""), (day.replace(hour=2), "b", "Second", ""), (day.replace(day=3), "c", "Third", "")]
+    rows = [
+        (day.replace(hour=1), "a", "First", "", True),
+        (day.replace(hour=2), "b", "Second", "", True),
+        (day.replace(day=3), "c", "Third", "", False),
+    ]
     with patch("orc.view._scheduled_queues", return_value=[("adhoc", None, rows)]):
         html = flask_client.get("/system/").get_data(as_text=True)
-    assert html.count("Wed Jan 2") == 1 and html.count("Thu Jan 3") == 1
-    assert 'class="orc-btn orc-btn-sm orc-job-run" data-queue="adhoc" data-id="b"' in html
+    assert html.count("Wednesday, January 2") == 1 and html.count("Thursday, January 3") == 1
+    assert 'class="orc-btn orc-job-run w-8 h-8 p-0" data-queue="adhoc" data-id="b"' in html
+    assert html.count('class="orc-enable sr-only peer"') == 3 and 'data-id="a" data-name="First" checked' in html
+    assert 'data-id="c" data-name="Third" checked' not in html
 
 
 def test_run_job_queues_a_copy_now(flask_client):

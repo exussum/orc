@@ -560,16 +560,14 @@ def _volumes_by_name(sounds: tuple[m.SoundState, ...]) -> dict[str, int]:
     return {s.what.name: s.volume for s in sounds}
 
 
-def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datetime | None, list[tuple[datetime, str, str, str]]]]:
-    cards: list[tuple[str, datetime | None, list[tuple[datetime, str, str, str]]]] = []
+def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datetime | None, list[tuple[datetime, str, str, str, bool]]]]:
+    cards: list[tuple[str, datetime | None, list[tuple[datetime, str, str, str, bool]]]] = []
     for name, queue in sorted(ctx.scheduler.queues().items()):
         paused_since = queue.paused_at.astimezone(config.settings.tz) if queue.paused_at else None
         rows = []
         for job in sorted(ctx.scheduler.jobs(name), key=lambda job: job.run_at):
             when = job.run_at.astimezone(config.settings.tz)
-            if job.disable:
-                state = "disabled"
-            elif paused_since and when <= now:
+            if paused_since and when <= now:
                 state = "held, due"
             elif paused_since:
                 state = "held"
@@ -577,7 +575,7 @@ def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datet
                 state = f"↻ {job.cron}"
             else:
                 state = ""
-            rows.append((when, job.id, job.name or job.id, state))
+            rows.append((when, job.id, job.name or job.id, state, not job.disable))
         cards.append((name, paused_since, rows))
     return cards
 
