@@ -19,7 +19,12 @@ def rules() -> dict:
     now = ctx.api.local_now()
     return {
         "rules": [
-            {"name": name, "sleeping_until": until.isoformat() if (until := plugins.disabled_until(state, name, now)) else None}
+            {
+                "name": name,
+                "sleeping_until": until.isoformat() if (until := plugins.disabled_until(state, name, now)) else None,
+                "delayed_until": delayed.isoformat() if (delayed := plugins.delayed_until(state, name, now)) else None,
+                "cooling_until": cool.isoformat() if (cool := plugins.cooling_until(state, name, now)) else None,
+            }
             for name in state.groups
         ]
     }

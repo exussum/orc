@@ -624,3 +624,24 @@ def _make_range(sensor, subject, low, high, target, action, people=None, cooldow
 
 def _past_cooldown(steps):
     return NOW + timedelta(seconds=steps * (model.COOLDOWN.total_seconds() + 1))
+
+
+def test_rules_endpoint_reports_the_cooldown_of_a_rule_that_just_fired(flask_client, react_rules, device_report):
+    device_report("1", {"switch": m.ON}, m.OFF)
+    rules = {r["name"]: r for r in flask_client.get("/").get_json()["rules"]}
+    assert rules["Lights off"]["cooling_until"] == (NOW + timedelta(minutes=10)).isoformat()
+    assert rules["Desk cools"]["cooling_until"] is None
+
+
+def test_cooldown_ends_once_its_window_has_passed(ctx, react_rules, device_report):
+    device_report("1", {"switch": m.ON}, m.OFF)
+    state = ctx.plugin_state[react]
+    assert plugins.cooling_until(state, "Lights off", NOW + timedelta(minutes=11)) is None
+
+
+def test_rules_endpoint_reports_a_pending_delayed_run_until_it_runs(flask_client, ctx, react_rules, device_report, deferred_run):
+    device_report("1", {"switch": m.ON}, m.OFF)
+    rules = {r["name"]: r for r in flask_client.get("/").get_json()["rules"]}
+    assert rules["Lights off"]["delayed_until"] == (NOW + timedelta(minutes=10)).isoformat()
+    deferred_run()
+    assert flask_client.get("/").get_json()["rules"][0]["delayed_until"] is None

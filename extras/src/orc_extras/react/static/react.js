@@ -1,5 +1,12 @@
 const API = "/api/react/rules/";
-const fmtTime = (iso) => new Date(iso).toLocaleString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+const timeFormat = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", hour12: true });
+const fmtTime = (iso) =>
+    timeFormat
+        .formatToParts(new Date(iso))
+        .filter((part) => part.type !== "dayPeriod")
+        .map((part) => part.value)
+        .join("")
+        .trim();
 
 const TEMPLATES = `
 <template id="react-dialog-tpl">
@@ -62,7 +69,13 @@ function renderRules(rules) {
         li.querySelector("[data-name]").textContent = rule.name;
         const until = li.querySelector("[data-until]");
         if (rule.sleeping_until) {
-            until.textContent = `Sleeping until ${fmtTime(rule.sleeping_until)}`;
+            until.textContent = `Paused until ${fmtTime(rule.sleeping_until)}`;
+            until.classList.remove("hidden");
+        } else if (rule.delayed_until) {
+            until.textContent = `Delayed until ${fmtTime(rule.delayed_until)}`;
+            until.classList.remove("hidden");
+        } else if (rule.cooling_until) {
+            until.textContent = `On cooldown until ${fmtTime(rule.cooling_until)}`;
             until.classList.remove("hidden");
         }
         const toggle = li.querySelector("input");

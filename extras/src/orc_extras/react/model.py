@@ -69,6 +69,8 @@ class State:
     groups: dict[str, Group]
     name_of: dict[em.Watch[Any], str]
     disabled: dict[str, datetime] = field(default_factory=dict)
+    delayed: dict[em.Watch[Any], datetime] = field(default_factory=dict)
+    fired: dict[em.Watch[Any], datetime] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -19,6 +19,7 @@ def sleep(ctx: m.AppContext, name: str) -> datetime:
     for watch in state.watches:
         if watch in state.groups[name].watches:
             ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
+            state.delayed.pop(watch, None)
     ctx.log.write(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
     return until
 
@@ -34,6 +35,18 @@ def disabled_until(state: State, name: str, now: datetime) -> datetime | None:
         return until
     state.disabled.pop(name, None)
     return None
+
+
+def delayed_until(state: State, name: str, now: datetime) -> datetime | None:
+    ends = [state.delayed[w] for w in state.groups[name].watches if w in state.delayed]
+    until = max(ends, default=None)
+    return until if until and until > now else None
+
+
+def cooling_until(state: State, name: str, now: datetime) -> datetime | None:
+    ends = [state.fired[w] + max(w.cooldown, w.delay) for w in state.groups[name].watches if w in state.fired]
+    until = max(ends, default=None)
+    return until if until and until > now else None
 
 
 def is_disabled(state: State, watch: em.Watch[Any], now: datetime) -> bool:
@@ -88,10 +101,14 @@ def _react(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status
     for outcome in ctx.engine.evaluate(awake, read=_reader(ctx), changes=changes, force=True):
         match outcome:
             case em.Cancel(watch):
+                state.delayed.pop(watch, None)
                 ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
             case em.Defer(watch, when):
+                state.fired[watch] = now
+                state.delayed[watch] = when
                 ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=state.name_of[watch])
             case em.Report(em.Watch() as watch, commands) if commands:
+                state.fired[watch] = now
                 fired.append(watch)
 
     for watch in paused:
@@ -139,6 +156,8 @@ def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
 
 def _run_react(payload: tuple[em.Defer[m.Devices], m.Device], *, ctx: m.AppContext) -> None:
     deferred, device = payload
+    ctx.plugin_state[orc_extras.react].delayed.pop(deferred.watch, None)
     match ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True):
         case (em.Report(em.Watch() as watch, commands),) if commands:
+            ctx.plugin_state[orc_extras.react].fired[watch] = ctx.api.local_now()
             _dispatch(ctx, watch, device)
