@@ -1,0 +1,24 @@
+if [ ! -f scripts/deploy.env ]; then
+    echo "scripts/deploy.env missing — copy scripts/deploy.env.example and set your hosts" >&2
+    exit 1
+fi
+. scripts/deploy.env
+FULL=
+NO_RESTART=
+for arg in "$@"; do
+    case "$arg" in
+        --full) FULL=--full ;;
+        --no-restart) NO_RESTART=--no-restart ;;
+        *) echo "unknown option: $arg" >&2; exit 1 ;;
+    esac
+done
+
+DEPLOY="${ORC_DEPLOY_USER:-root}@$ORC_DEPLOY_HOST"
+CTRL="-o ControlMaster=auto -o ControlPath=/tmp/orc-ssh-%r@%h:%p -o ControlPersist=60"
+sh scripts/upload.sh $FULL \
+    && ssh $CTRL "$DEPLOY" true \
+    && scp $CTRL pyproject.toml "$DEPLOY:/tmp/pyproject.toml" \
+    && scp $CTRL extras/pyproject.toml "$DEPLOY:/tmp/extras-pyproject.toml" \
+    && scp $CTRL data/pyproject.toml "$DEPLOY:/tmp/data-pyproject.toml" \
+    && ssh $CTRL "$DEPLOY" "ORC_REGISTRY_URL='$ORC_REGISTRY_URL' ORC_TRUSTED_HOST='$ORC_TRUSTED_HOST' bash -s -- $NO_RESTART" < scripts/install.sh
+
