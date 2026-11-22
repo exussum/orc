@@ -2,7 +2,6 @@ from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, NamedTuple
 
-from orc_engine import cast
 from orc_engine import model as em
 
 import orc_extras.entrance_sensor
@@ -125,9 +124,11 @@ def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:
 
 
 def _timed_commands(ctx: m.AppContext, sensor: SimpleNamespace) -> tuple[str, m.Commands]:
-    reports = ctx.engine.evaluate(sensor.timed, read=ctx.api.reader(), force=True)
-    hit = next((report for report in reports if report.commands), None)
-    return (cast.instance(hit.item, em.Rule).name, hit.commands) if hit else ("(no window found)", ())
+    for outcome in ctx.engine.evaluate(sensor.timed, read=ctx.api.reader(), force=True):
+        match outcome:
+            case em.Report(em.Rule(name=name), commands) if commands:
+                return name, commands
+    return "(no window found)", ()
 
 
 def _restorable(ctx: m.AppContext, sensor: SimpleNamespace, snapshot: m.SnapShot | None) -> m.Commands:

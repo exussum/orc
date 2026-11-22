@@ -6,12 +6,12 @@ requires = [
 
 [project]
 dependencies = [
-    "orc-engine==0.1.4",
+    "orc-engine==0.1.7",
     "orc-queue==0.0.5",
     "aiowebostv==0.10.0",
     "bleak==3.0.2",
     "broadlink==0.19.0",
-    "cryptography==50.0.1",
+    "cryptography==50.0.2",
     "dlx==1.0.4",
     "ecdsa==0.19.2",
     "Flask==3.1.3",
@@ -102,7 +102,7 @@ members = ["extras", "data"]
 
 [tool.uv.sources]
 orc-queue = { git = "https://github.com/exussum/orc-queue", tag = "v0.0.5" }
-orc-engine = { git = "https://github.com/exussum/orc-engine", tag = "v0.1.4" }
+orc-engine = { git = "https://github.com/exussum/orc-engine", tag = "v0.1.7" }
 orc = { workspace = true }
 orc_data = { workspace = true, editable = false }
 orc_extras = { workspace = true }

@@ -320,7 +320,7 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
 def override_scene(key: str, commands: m.Commands, end: datetime, label: str, entry: m.LogEntry) -> None:
     if not context().engine.snapshot_active(key):
         captured = capture_lights()
-        context().engine.save_snapshot(key, m.SnapShot(captured, end, label), end)
+        context().engine.save_snapshot(key, m.SnapShot(captured, end, label))
         items = ", ".join(f"`{c.subject.one().name}`={c.value}" for c in captured if c.value != m.OFF)
         entry.add(entry.source, Message.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Message.SNAPSHOT_ALL_OFF))
     dispatch(commands, force=True, entry=entry)
@@ -336,8 +336,7 @@ def restore_scene(key: str, commands: m.Commands, entry: m.LogEntry) -> None:
 
 def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
     commands = squish(commands)
-    always = em.Action(commands)
-    survived = set(context().engine.evaluate((always,), read=engine.nothing, force=force)[0].commands)
+    survived = set(commands) if force else set(context().engine.apply_override(commands))
 
     stream: dict[Any, tuple[str, str]] = {}
     todo: list[_Job] = []
@@ -622,7 +621,7 @@ def reader(present: set[str] | None = None, now: datetime | None = None) -> em.R
     return read
 
 
-def runtime() -> engine.Runtime:
+def runtime() -> engine.Runtime[m.Devices]:
     return engine.Runtime(config.settings.tz, override_key=ORC_SYSTEM_SNAPSHOT)
 
 
@@ -762,8 +761,16 @@ def _presence(rule: m.Routine) -> m.Routine:
     return rule.where(lambda command: isinstance(command.tag, m.Present | m.Anyone))
 
 
+def _commands(outcomes: tuple[em.Outcome[m.Devices], ...]) -> m.Commands:
+    match outcomes:
+        case (em.Report(_, commands),):
+            return commands
+        case _:
+            return ()
+
+
 def _matching_items(rule: m.Routine, now: datetime, pnames: set[str]) -> m.Commands:
-    return context().engine.evaluate((rule,), read=reader(pnames, now), force=True)[0].commands
+    return _commands(context().engine.evaluate((rule,), read=reader(pnames, now), force=True))
 
 
 def _fetch_weather(now: datetime) -> frozenset[m.WeatherCondition]:

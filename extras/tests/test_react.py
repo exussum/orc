@@ -102,7 +102,7 @@ def ac_report(ctx):
 
 @pytest.fixture
 def dispatches(ctx):
-    return lambda: [(c.subject.one(), c.value) for c in ctx.api.dispatch.call_args.args[0]]
+    return lambda: [(e.subject.one(), e.value) for c in ctx.api.dispatch.call_args_list for e in c.args[0]]
 
 
 @pytest.fixture
@@ -177,6 +177,7 @@ def test_unwatched_device_is_ignored(ctx, react_rules, device_report):
 def test_run_react_dispatches_the_action(ctx, ruleset, dispatches, deferred_run, device_report):
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10), {"1": Light.lamp})
     device_report("1", {"switch": m.ON}, m.OFF)
+    ctx.frozen.move_to(ctx.scheduler.once.call_args.args[1])
     deferred_run()
     assert dispatches() == [(Light.lamp, m.OFF)]
 
@@ -283,6 +284,7 @@ def test_if_ac_is_cool_gates_the_delayed_rule(ctx, ac_state, fires, ruleset, def
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ac_report(ac_state)
     device_report("1", {"switch": m.ON}, m.OFF)
+    ctx.frozen.move_to(ctx.scheduler.once.call_args.args[1])
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
@@ -293,6 +295,7 @@ def test_if_chromecast_is_playing_gates_the_delayed_rule(ctx, playback, fires, r
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, None, 30, playback),)
     device_report("1", {"switch": m.ON}, m.OFF)
+    ctx.frozen.move_to(ctx.scheduler.once.call_args.args[1])
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
@@ -303,6 +306,7 @@ def test_if_light_is_on_gates_the_delayed_rule(ctx, desk, fires, ruleset, deferr
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
     ctx.api.device_states.return_value = [m.DeviceState(m.Device("2", "desk", "hubitat"), {"switch": desk}, None)]
     device_report("1", {"switch": m.ON}, m.OFF)
+    ctx.frozen.move_to(ctx.scheduler.once.call_args.args[1])
     deferred_run()
     assert ctx.api.dispatch.called is fires
 
@@ -415,6 +419,36 @@ def test_range_fires_only_on_entry(ctx, ruleset, dispatches, device_report):
     ctx.frozen.move_to(_past_cooldown(3))
     device_report(Sensor.living.value, {"temperature": 71})  # and re-enters
     assert dispatches() == [(Ac.living, ac)]
+
+
+def test_range_fires_after_cooldown(ctx, ruleset, dispatches, device_report):
+    ac_on = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
+    ac_off = m.AcState(m.OFF)
+
+    subject = model.MqttDeviceSubject(Sensor.living, "temperature")
+    ruleset(
+        (
+            _make_range(Sensor.living, subject, 68, 75, m.Devices(Ac), ac_on, cooldown=timedelta(seconds=5))
+            + _make_range(Sensor.living, subject, 76, 100, m.Devices(Ac), ac_off, cooldown=timedelta(seconds=5))
+        ),
+        {"5": Sensor.living},
+    )
+
+    ctx.frozen.move_to(NOW)
+    device_report(Sensor.living.value, {"temperature": 70}, 60)
+    device_report(Sensor.living.value, {"temperature": 80}, 70)
+    assert dispatches() == [(Ac.living, ac_on), (Ac.living, ac_off)]
+    ctx.scheduler.once.assert_not_called()
+
+    ctx.api.dispatch.reset_mock()
+    ctx.frozen.move_to(NOW + timedelta(seconds=4))
+    device_report(Sensor.living.value, {"temperature": 70}, 80)
+    ctx.api.dispatch.assert_not_called()  # still inside the cooldown: nothing fires, nothing is scheduled
+    ctx.scheduler.once.assert_not_called()
+
+    ctx.frozen.move_to(NOW + timedelta(seconds=6))
+    device_report(Sensor.living.value, {"temperature": 70}, 80)
+    assert dispatches() == [(Ac.living, ac_on)]
 
 
 @pytest.mark.parametrize("humidity, fires", [(60, True), (20, False)])
@@ -575,7 +609,7 @@ def _dewpoint_of(sensor):
     return model.FormulaSubject(react.FUNCTIONS["dewpoint"], (m.Devices(sensor), "temperature", "humidity"))
 
 
-def _make_range(sensor, subject, low, high, target, action, people=None):
+def _make_range(sensor, subject, low, high, target, action, people=None, cooldown=model.COOLDOWN):
     watched = []
     if isinstance(people, m.Anyone):
         watched.append(em.Eq(m.AnyoneSubject(), True))
@@ -584,7 +618,7 @@ def _make_range(sensor, subject, low, high, target, action, people=None):
     watched.append(model.Range(subject, low, high, edge=True))
     command = em.Command(target, action)
     rule = em.Rule((em.Step(em.And(*watched), command),))
-    return [em.Watch(em.Changed(model.Device(sensor)), rule, cooldown=model.COOLDOWN)]
+    return [em.Watch(em.Changed(model.Device(sensor)), rule, cooldown=cooldown)]
 
 
 def _past_cooldown(steps):

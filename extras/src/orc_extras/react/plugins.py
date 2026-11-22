@@ -47,15 +47,6 @@ def _trigger_label(watch: em.Watch[Any], state: State) -> Any:
     return state.name_of.get(watch, "")
 
 
-def _changes(changed: MqttDeviceSubject, old: Any, new: Any) -> em.Changes:
-    def changes(subject: em.Subject) -> tuple[em.Value, em.Value]:
-        if subject == changed or subject == Device(changed.device):
-            return (old, new)
-        raise KeyError(subject)
-
-    return changes
-
-
 def _reader(ctx: m.AppContext) -> em.Read:
     world_read = ctx.api.reader()
 
@@ -87,18 +78,18 @@ def _react(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status
     source = sources.get(device.id)
     if source is None:
         return
-    changed = MqttDeviceSubject(source, attribute)
+    changes = (em.Change(MqttDeviceSubject(source, attribute), old, new), em.Change(Device(source), old, new))
     state = ctx.plugin_state[orc_extras.react]
     now = ctx.api.local_now()
 
     awake, paused = partition(watches, lambda e: is_disabled(state, e, now))
 
     fired: list[em.Watch[m.Devices]] = []
-    for outcome in ctx.engine.evaluate(awake, read=_reader(ctx), changes=_changes(changed, old, new), force=True):
+    for outcome in ctx.engine.evaluate(awake, read=_reader(ctx), changes=changes, force=True):
         match outcome:
             case em.Cancel(watch):
                 ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
-            case em.Deferred(watch, when):
+            case em.Defer(watch, when):
                 ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=watch.rule.name)
             case em.Report(em.Watch() as watch, commands) if commands:
                 fired.append(watch)
@@ -146,9 +137,8 @@ def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
     return em.Command(command.subject, command.value, tag=em.Always())
 
 
-def _run_react(payload: tuple[em.Deferred[m.Devices], m.Device], *, ctx: m.AppContext) -> None:
+def _run_react(payload: tuple[em.Defer[m.Devices], m.Device], *, ctx: m.AppContext) -> None:
     deferred, device = payload
-    watch = deferred.watch
-    (report,) = ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True)
-    if report.commands:
-        _dispatch(ctx, watch, device)
+    match ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True):
+        case (em.Report(em.Watch() as watch, commands),) if commands:
+            _dispatch(ctx, watch, device)

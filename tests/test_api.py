@@ -49,7 +49,7 @@ def elapsed_schedule():
 
 @pytest.fixture
 def system_snapshot(snapshot_commands):
-    api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+    api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_commands, end=FUTURE))
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def push_subscriptions():
 
 class TestRestoreScene:
     def test_restore_with_snapshot(self, command_dispatch, snapshot_commands, log_entry):
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE))
         api.restore_scene("test", (), log_entry)
         assert command_dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
 
@@ -76,16 +76,16 @@ class TestRestoreScene:
         assert command_dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
 
     def test_restore_drops_expired_snapshot(self, command_dispatch, snapshot_commands, log_entry):
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST))
         api.restore_scene("test", snapshot_commands, log_entry)
         assert command_dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
         assert not api._ctx.engine.snapshots()
 
     def test_pop_snapshot_once_and_never_expired(self, command_dispatch, snapshot_commands):
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE))
         assert api._ctx.engine.pop_snapshot("test").routine is snapshot_commands
         assert api._ctx.engine.pop_snapshot("test") is None
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
+        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST))
         assert api._ctx.engine.pop_snapshot("test") is None
         command_dispatch.assert_not_called()
 
@@ -130,7 +130,7 @@ class TestIntercepts:
     def test_expired_snapshot_drops(self, update_light, snapshot_commands, log_entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
-        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_commands, end=PAST), PAST)
+        api._ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, m.SnapShot(routine=snapshot_commands, end=PAST))
         api.dispatch((command,), entry=log_entry)
 
         assert not api._ctx.engine.snapshots()
@@ -139,7 +139,7 @@ class TestIntercepts:
     def test_unrelated_plugin_snapshot_does_not_suppress(self, update_light, snapshot_commands, log_entry):
         command = em.Command(m.Devices(orc.Light.c), m.ON)
 
-        api._ctx.engine.save_snapshot("entrance_sensor", m.SnapShot(routine=snapshot_commands, end=FUTURE), FUTURE)
+        api._ctx.engine.save_snapshot("entrance_sensor", m.SnapShot(routine=snapshot_commands, end=FUTURE))
         api.dispatch((command,), entry=log_entry)
 
         assert update_light.call_args_list == [call(orc.Light.c, m.ON)]
@@ -212,7 +212,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispa
     reset = _routine("reset", "", em.Command(m.Devices(orc.Light.a), m.OFF))
     existing = (em.Command(m.Devices(orc.Light.a), m.ON),)
     snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
-    ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap, snap.end)
+    ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap)
     with config_ad_hoc({"r": action}, reset_config=reset):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
