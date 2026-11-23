@@ -15,7 +15,7 @@ from orc.dal.push import webpush
 from orc.dal.secrets import bws
 from orc.dal.secrets import stub as secrets_stub
 from orc.kernel import loader
-from orc.kernel.loader import ConfigError, parse_config, validate
+from orc.kernel.loader import CONFIG_VERSION, ConfigError, parse_config, validate
 
 FIXTURE = Path(__file__).parent / "fixture"
 
@@ -415,3 +415,18 @@ def test_validate_requires_reset_routine_name():
 
 def _condition(person=None, weather=None):
     return loader._condition({"person": {"alice": None, "bob": None}}, SimpleNamespace(trigger_person=person, trigger_weather=weather))
+
+
+def test_validate_requires_version():
+    with pytest.raises(ConfigError, match="Missing required line: version 1"):
+        validate(parse_config(""))
+
+
+def test_version_accepted():
+    assert parse_config(f"version {CONFIG_VERSION}").version == CONFIG_VERSION
+
+
+@pytest.mark.parametrize("text", ["version 99", "version 1\nversion 1", "version abc"])
+def test_version_rejected(text):
+    with pytest.raises(ConfigError):
+        parse_config(text)

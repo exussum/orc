@@ -23,6 +23,8 @@ _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 
 _POLAR_LATITUDE = 65.7
 
+CONFIG_VERSION = 1
+
 _INCLUDE = re.compile(r"(\w+)(?:\s+-\s+(.+))?")
 
 GRAMMAR = """
@@ -62,6 +64,8 @@ setting <key> <value>
 tag <person> <name>
 
 theme <name> <routine> <time>
+
+version <number>
 """
 
 
@@ -99,6 +103,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
             },
         ),
         "tag": array(m.BleTag),
+        "version": each(_version, default=dict, types={"number": int}),
     }
     objects = command_cfg.load(text, GRAMMAR, serializers, variables=os.environ)
     if unsealed := objects["device"].members.keys() - objects["device"].enums.keys():
@@ -119,10 +124,13 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
         setting=objects["setting"] or m.Settings.build(),
         tag=objects["tag"],
         theme=objects["theme"],
+        version=objects["version"].get("number"),
     )
 
 
 def validate(config: SimpleNamespace) -> None:
+    if config.version is None:
+        raise ConfigError(f"Missing required line: version {CONFIG_VERSION}")
     for label, present, required in (
         ("routines", config.routine.keys(), ("ROUTINE_DEFAULT", "ROUTINE_RESET")),
         ("routine names", {r.name for r in config.routine.values()}, ("Reset",)),
@@ -277,6 +285,14 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
         enums[args.type] = _build_enum(objects, args.type, zigbee_config)
     else:
         members[args.type].append((args.id, args.target, args.room, args.name or args.id))
+
+
+def _version(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    if "number" in objects["version"]:
+        raise ValueError("Config version is already set")
+    if args.number != CONFIG_VERSION:
+        raise ValueError(f"Unsupported config version {args.number}: this orc reads version {CONFIG_VERSION}")
+    objects["version"]["number"] = args.number
 
 
 def _named_command(objects: dict[str, Any], args: SimpleNamespace) -> None:

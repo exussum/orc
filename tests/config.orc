@@ -1,3 +1,5 @@
+version 1
+
 setting base_url         http://orc.internal.example
 setting lan_domain       orc.internal.example
 setting jobs_db          /tmp/jobs.sqlite

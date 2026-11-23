@@ -1,3 +1,5 @@
+version 1
+
 setting base_url         http://orc.test
 setting lan_domain       orc.test
 setting jobs_db          /tmp/jobs.sqlite
