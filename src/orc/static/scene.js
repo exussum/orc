@@ -9,7 +9,8 @@ function highlight() {
     now.setFullYear(2000, 0, 1);
     highlight_configs.forEach(([id, start, finish]) => {
         const element = document.querySelector(`.orc-runner[data-id='${id}'] .orc-ribbon`);
-        if (element) element.style.display = start <= now && now <= finish ? "block" : "none";
+        const shown = start <= finish ? start <= now && now <= finish : now >= start || now <= finish;
+        if (element) element.style.display = shown ? "block" : "none";
     });
 }
 
