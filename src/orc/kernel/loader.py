@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, replace
@@ -22,9 +23,15 @@ _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 
 _POLAR_LATITUDE = 65.7
 
+_INCLUDE = re.compile(r"(\w+)(?:\s+-\s+(.+))?")
+
 GRAMMAR = """
 ad_hoc define <id> <name> [--snapshot=<minutes>] [--delay=<minutes>] [--section=<section>] [--no-reset] [<devices> <state>]
 ad_hoc append <id> <devices> <state>
+ad_hoc include <id> <command>
+
+command define <name>
+command append <name> <devices> <state>
 
 remote <device> <button> <event> <action>
 
@@ -48,6 +55,7 @@ room <name> <devices> <state>
 
 routine define <id> <name> [--skip-replay]
 routine append <id> <devices> <state> [--trigger-person=<person>] [--trigger-weather=<weather>]
+routine include <id> <command> [--trigger-person=<person>] [--trigger-weather=<weather>]
 
 setting <key> <value>
 
@@ -65,6 +73,7 @@ def parse_config(text: str, zigbee_config: dict[Any, tuple[Any, ...]] | None = N
             default=lambda: SimpleNamespace(members={}, enums={}, sorts={}, virtual_devices=set()),
             types={"sort": int},
         ),
+        "command": each(_named_command, default=dict),
         "room": each(_room, default=dict),
         "ad_hoc": each(_ad_hoc, default=dict, types={"snapshot": int, "delay": int}),
         "remote": each(_remote, default=tuple, types={"button": int}),
@@ -270,6 +279,36 @@ def _device(zigbee_config: dict[Any, tuple[Any, ...]], objects: dict[str, Any], 
         members[args.type].append((args.id, args.target, args.room, args.name or args.id))
 
 
+def _named_command(objects: dict[str, Any], args: SimpleNamespace) -> None:
+    named = objects["command"]
+    if args.define:
+        if not re.fullmatch(r"\w+", args.name):
+            raise ValueError(f"Invalid command name {args.name!r}: expected letters, digits and underscores")
+        elif args.name in named:
+            raise ValueError(f"Command {args.name!r} is already defined")
+        named[args.name] = ()
+    elif args.name not in named:
+        raise ValueError(f"Unknown command {args.name!r}: expected one of {tuple(named)}")
+    else:
+        named[args.name] = (*named[args.name], _command(objects, args))
+
+
+def _include(objects: dict[str, Any], spec: str) -> tuple[em.Command[em.Condition, m.Devices], ...]:
+    if (match := _INCLUDE.fullmatch(spec.strip())) is None:
+        raise ValueError(f"Invalid include {spec!r}: expected NAME or NAME - <devices>")
+    name, minus = match.groups()
+    named = objects["command"]
+    if (commands := named.get(name)) is None:
+        raise ValueError(f"Unknown command {name!r}: expected one of {tuple(named)}")
+    if minus:
+        removed = set(cast.devices(minus, objects).all())
+        kept = [(command, tuple(d for d in command.subject.all() if d not in removed)) for command in commands]
+        commands = tuple(replace(command, subject=m.Devices(members)) for command, members in kept if members)
+    if not commands:
+        raise ValueError(f"Include {spec!r} leaves no commands")
+    return commands
+
+
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
     rooms = objects["room"]
     base = rooms.get(args.name, em.Action())
@@ -288,7 +327,9 @@ def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
         )
     elif (config := ad_hoc_routines.get(args.id)) is None:
         raise ValueError(f"Unknown ad-hoc routine {args.id!r}: expected one of {tuple(ad_hoc_routines)}")
-    if args.devices is not None:
+    if args.include:
+        config = replace(config, commands=(*config.commands, *_include(objects, args.command)))
+    elif args.devices is not None:
         config = replace(config, commands=(*config.commands, _command(objects, args)))
     ad_hoc_routines[args.id] = config
 
@@ -329,8 +370,11 @@ def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
         raise ValueError(f"Unknown routine {args.id!r}: expected one of {tuple(routines)}")
     else:
         condition = _condition(objects, args)
-        step = em.Step(condition, _command(objects, args, condition))
-        routines[args.id] = replace(routine, steps=(*routine.steps, step))
+        if args.include:
+            steps = tuple(em.Step(condition, replace(command, tag=condition)) for command in _include(objects, args.command))
+        else:
+            steps = (em.Step(condition, _command(objects, args, condition)),)
+        routines[args.id] = replace(routine, steps=(*routine.steps, *steps))
 
 
 def _theme(objects: dict[str, Any], args: SimpleNamespace) -> None:

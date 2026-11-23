@@ -51,6 +51,11 @@ _PARSE_ERRORS = [
     ("append_unknown_ad_hoc", "Unknown ad-hoc routine 'AD_HOC_X'"),
     ("invalid_button_event", "Invalid button event 'clicked'"),
     ("non_numeric_button", "invalid literal for int() with base 10: 'one'"),
+    ("command_duplicate", "Command 'X' is already defined"),
+    ("command_append_unknown", "Unknown command 'X'"),
+    ("include_unknown_command", "Unknown command 'NOPE'"),
+    ("include_leaves_nothing", "Include 'X - Light' leaves no commands"),
+    ("include_bad_syntax", "Invalid include 'X + Light.B'"),
 ]
 
 
@@ -314,6 +319,36 @@ def test_plugin_command_imports_callable():
     assert plugin.section == "device"
     assert plugin.icon == "tv"
     assert plugin.delay == timedelta()
+
+
+def test_ad_hoc_include_copies_steps_in_order_even_before_definition():
+    parsed = parse("command_include")
+    light, cc = parsed.enums["Light"], parsed.enums["Chromecast"]["CC"]
+    night = (
+        em.Command(m.Devices((light["A"], light["B"])), 1),
+        em.Command(m.Devices(light["C"]), "on"),
+        em.Command(m.Devices(cc), "stop"),
+    )
+    expected = (*night, em.Command(m.Devices(light["C"]), 5))
+    assert [(set(c.subject.all()), c.value) for c in parsed.ad_hoc["AD_HOC_ALL"].commands] == [
+        (set(c.subject.all()), c.value) for c in expected
+    ]
+
+
+def test_include_minus_removes_devices_and_drops_emptied_steps():
+    parsed = parse("command_include")
+    light, cc = parsed.enums["Light"], parsed.enums["Chromecast"]["CC"]
+    assert parsed.ad_hoc["AD_HOC_MINUS"].commands == (
+        em.Command(m.Devices((light["B"],)), 1),
+        em.Command(m.Devices(light["C"]), "on"),
+        em.Command(m.Devices(cc), "stop"),
+    )
+
+
+def test_routine_include_applies_trigger_to_every_step():
+    steps = parse("command_include").routine["R"].steps
+    assert [s.condition for s in steps] == [em.Always()] * 3 + [em.And()]
+    assert all(s.command.tag == s.condition for s in steps)
 
 
 @pytest.mark.parametrize("case, error", _PARSE_ERRORS, ids=[case for case, _ in _PARSE_ERRORS])
