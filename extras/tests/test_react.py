@@ -294,7 +294,7 @@ def test_if_ac_is_cool_gates_the_delayed_rule(ctx, ac_state, fires, ruleset, def
 def test_if_chromecast_is_playing_gates_the_delayed_rule(ctx, playback, fires, ruleset, deferred_run, device_report):
     cond = em.Eq(model.CastSubject(Chromecast.tv), "playing")
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10, cond=cond), {"1": Light.lamp})
-    ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, None, 30, playback),)
+    ctx.api.sound_states.return_value = (m.SoundState(Chromecast.tv, None, 30, playback),)
     device_report("1", {"switch": m.ON}, m.OFF)
     ctx.frozen.move_to(ctx.scheduler.once.call_args.args[1])
     deferred_run()
@@ -314,7 +314,7 @@ def test_if_light_is_on_gates_the_delayed_rule(ctx, desk, fires, ruleset, deferr
 
 def test_reader_resolves_ac_playback_and_attr(ctx, ac_report):
     ac_report(m.AcState(m.ON, "cool"))
-    ctx.api.capture_sounds.return_value = (m.SoundState(Chromecast.tv, "s", 30, m.Playback.PLAYING),)
+    ctx.api.sound_states.return_value = (m.SoundState(Chromecast.tv, "s", 30, m.Playback.PLAYING),)
     ctx.api.device_states.return_value = [m.DeviceState(m.Device("2", "desk", "hubitat"), {"switch": m.ON}, None)]
     read = plugins._reader(ctx)
     assert read(model.AcSubject(Ac.living)) == m.AcState(m.ON, "cool")

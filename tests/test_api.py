@@ -199,12 +199,79 @@ def test_back_on_schedule_checks_presence_then_replays(log_entry):
 def test_button_ad_hoc_snapshot(ctx, config_ad_hoc, command_dispatch):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), snapshot=timedelta(hours=3))
     captured = (em.Command(m.Devices(orc.Light.a), m.ON),)
-    with config_ad_hoc({"r": action}), patch.object(api, "capture_lights", return_value=captured):
+    with (
+        config_ad_hoc({"r": action}),
+        patch.object(api, "capture_lights", return_value=captured),
+        patch.object(api, "capture_sounds", return_value=()),
+    ):
         api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
     snap = ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT]
-    assert snap.routine is captured
+    assert snap.routine == captured
     assert snap.end > api.local_now()
     command_dispatch.assert_called_once_with(action.commands, force=True, entry=ANY)
+
+
+def test_button_ad_hoc_snapshot_pauses_chromecasts_and_captures_them(ctx, config_ad_hoc, command_dispatch):
+    cast = m.Devices(orc.Chromecast.x)
+    action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON), em.Command(cast, m.STOP)), snapshot=timedelta(hours=3))
+    lights = (em.Command(m.Devices(orc.Light.a), m.ON),)
+    devices = (em.Command(cast, 40), em.Command(cast, m.RESUME))
+    with (
+        config_ad_hoc({"r": action}),
+        patch.object(api, "capture_lights", return_value=lights),
+        patch.object(api, "capture_sounds", return_value=devices),
+    ):
+        api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
+    assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (*lights, *devices)
+    command_dispatch.assert_called_once_with((action.commands[0], em.Command(cast, m.PAUSE)), force=True, entry=ANY)
+
+
+def test_override_scene_snapshots_lights_and_sounds_for_any_key(ctx, command_dispatch, log_entry):
+    lights = (em.Command(m.Devices(orc.Light.a), m.ON),)
+    sounds = (em.Command(m.Devices(orc.Chromecast.x), 40),)
+    with patch.object(api, "capture_lights", return_value=lights), patch.object(api, "capture_sounds", return_value=sounds):
+        api.override_scene("entrance_sensor", (), api.local_now() + timedelta(hours=1), "entrance", log_entry)
+    assert ctx.engine.snapshots()["entrance_sensor"].routine == (*lights, *sounds)
+
+
+def test_pause_not_stop_only_changes_chromecast_stop():
+    cast, light = m.Devices(orc.Chromecast.x), m.Devices(orc.Light.a)
+    commands = (em.Command(cast, m.STOP), em.Command(cast, 30), em.Command(light, m.OFF), em.Command(cast, m.RESUME))
+    assert api._pause_not_stop(commands) == (em.Command(cast, m.PAUSE), *commands[1:])
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        (m.SoundState(what=None, content="song", volume=40, playback=m.Playback.PLAYING), (40, m.RESUME)),
+        (m.SoundState(what=None, content="song", volume=40, playback=m.Playback.PAUSED), (40,)),
+        (m.SoundState(what=None, content=None, volume=25, playback=m.Playback.STOPPED), (25,)),
+        (m.SoundState(what=None, content=None, volume=0), ()),
+    ],
+)
+def test_capture_sounds_records_volume_and_whether_a_chromecast_was_playing(state, expected):
+    with patch.object(api, "sound_states", return_value=(replace(state, what=orc.Chromecast.x),)):
+        captured = api.capture_sounds()
+    assert captured == tuple(em.Command(m.Devices(orc.Chromecast.x), value) for value in expected)
+
+
+def test_capture_sounds_leaves_out_usb_devices():
+    usb = m.SoundState(what=orc.USB.speaker, content="song", volume=40, playback=m.Playback.PLAYING)
+    with patch.object(api, "sound_states", return_value=(usb,)):
+        assert api.capture_sounds() == ()
+
+
+def test_sound_states_logs_and_skips_a_device_it_cannot_read(caplog):
+    usb = m.SoundState(what=orc.USB.speaker, content="song", volume=40)
+
+    def read(w):
+        if w is orc.Chromecast.x:
+            raise OSError("offline")
+        return usb
+
+    with patch.object(api, "_fetch_sound", side_effect=read):
+        assert api.sound_states() == (usb,)
+    assert f"could not read the state of {orc.Chromecast.x.name}" in caplog.text
 
 
 def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispatch, light_capture):
@@ -794,3 +861,8 @@ def _ac(**attributes):
 
 def _cmd(what, value):
     return em.Command(m.Devices(what), value)
+
+
+def test_fetch_sound_refuses_a_device_with_no_sound_provider():
+    with pytest.raises(ValueError, match="no sound provider"):
+        api._fetch_sound(orc.Light.a)

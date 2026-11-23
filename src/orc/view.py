@@ -191,7 +191,7 @@ def cfg() -> str:
         tomorrow_theme=api.calculate_theme(tomorrow),
         theme_override=api.current_theme_override(),
         lights=api.capture_lights(),
-        sounds=api.capture_sounds(),
+        sounds=api.sound_states(),
         sensors=[replace(s, details=_with_dewpoint(s.details)) for s in api.capture_sensors()],
         retry_stats={s.id: s for s in api.fetch_retry_stats()},
         durations=api.fetch_durations(mapper=dict),
@@ -208,7 +208,7 @@ def cfg() -> str:
 def device() -> str:
     light_states = api.capture_lights(mapper=_states_by_name)
     light_attributes = {s.device.id: s.attributes for s in api.device_states()}
-    sound_states = api.capture_sounds(mapper=_volumes_by_name)
+    sound_states = api.sound_states(mapper=_volumes_by_name)
     ac_temperatures = {s.what.name: round(s.state.temperature) for s in api.capture_acs() if s.state and s.state.temperature is not None}
     all_devices = list(chain.from_iterable(cls for name, cls in config.devices.items() if name in config.registry.controllable_devices))
 

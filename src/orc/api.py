@@ -1,5 +1,6 @@
 import contextlib
 import hashlib
+import logging
 import math
 import time
 from collections import defaultdict
@@ -36,6 +37,8 @@ if TYPE_CHECKING:
 
 DEFAULT_ALERT_PATH = str((Path(__file__).parent / "static" / "alert.wav").resolve())
 ORC_SYSTEM_SNAPSHOT = m.ORC_SYSTEM_SNAPSHOT
+
+_log = logging.getLogger(__name__)
 
 _STATE_SORT_STOP = -2
 _STATE_SORT_INT = -1
@@ -177,18 +180,40 @@ def capture_lights() -> m.Commands:
     return tuple(em.Command(m.Devices(light), state(light)) for light in config.devices.Light)
 
 
+def _fetch_sound(w: m.DeviceEnum) -> m.SoundState:
+    match w:
+        case config.devices.Chromecast():
+            return config.providers.chromecast.fetch_state(w)
+        case config.devices.USB():
+            return config.providers.audio.fetch_state(w)
+        case _:
+            raise ValueError(f"{w.name}: no sound provider for {w.kind} devices")
+
+
 @mappable
-def capture_sounds() -> tuple[m.SoundState, ...]:
+def sound_states() -> tuple[m.SoundState, ...]:
+    def read(w: m.DeviceEnum) -> m.SoundState | None:
+        try:
+            return _fetch_sound(w)
+        except Exception:  # one unreadable device must not hide the others
+            _log.warning("could not read the state of %s", w.name, exc_info=True)
+            return None
+
     devices: tuple[m.DeviceEnum, ...] = (*config.devices.Chromecast, *config.devices.USB)
     if not devices:
         return ()
-
-    def fetch(w: m.DeviceEnum) -> m.SoundState:
-        provider = config.providers.chromecast if isinstance(w, config.devices.Chromecast) else config.providers.audio
-        return provider.fetch_state(w)
-
     with Pool(max_workers=len(devices)) as ex:
-        return tuple(ex.map(fetch, devices))
+        return tuple(sound for sound in ex.map(read, devices) if sound is not None)
+
+
+@mappable
+def capture_sounds() -> m.Commands:
+    def restore(sound: m.SoundState) -> tuple[Any, ...]:
+        return (sound.volume, m.RESUME) if sound.playback == m.Playback.PLAYING else (sound.volume,)
+
+    # a cast that cannot be reached reads as volume 0 with no content; restoring it would mute something we never read
+    casts = [s for s in sound_states() if s.what.kind == "Chromecast" and (s.volume or s.content)]
+    return tuple(em.Command(m.Devices(s.what), value) for s in casts for value in restore(s))
 
 
 def lights_on() -> int:
@@ -197,7 +222,7 @@ def lights_on() -> int:
 
 
 def sounds_playing() -> int:
-    return sum(sound.playback == m.Playback.PLAYING for sound in capture_sounds())
+    return sum(sound.playback == m.Playback.PLAYING for sound in sound_states())
 
 
 def capture_acs() -> tuple[m.AcStatus, ...]:
@@ -274,7 +299,8 @@ def run_action(
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
-            action = _RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, routine.commands, end, routine.name, entry), routine.name)
+            commands = _pause_not_stop(routine.commands)
+            action = _RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, commands, end, routine.name, entry), routine.name)
         else:
             base = config.reset_config.commands if routine.reset else ()
             commands = (*base, *routine.commands)
@@ -320,9 +346,16 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
         dispatch(commands, force=True, entry=entry)
 
 
+def _pause_not_stop(commands: m.Commands) -> m.Commands:
+    # A stop quits the cast app, which a snapshot restore cannot bring back; a pause can be resumed.
+    return tuple(
+        replace(c, value=m.PAUSE) if c.value == m.STOP and all(w.kind == "Chromecast" for w in c.subject.all()) else c for c in commands
+    )
+
+
 def override_scene(key: str, commands: m.Commands, end: datetime, label: str, entry: m.LogEntry) -> None:
     if not context().engine.snapshot_active(key):
-        captured = capture_lights()
+        captured = capture_lights() + capture_sounds()
         context().engine.save_snapshot(key, m.SnapShot(captured, end, label))
         items = ", ".join(f"`{c.subject.one().name}`={c.value}" for c in captured if c.value != m.OFF)
         entry.add(entry.source, Message.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Message.SNAPSHOT_ALL_OFF))

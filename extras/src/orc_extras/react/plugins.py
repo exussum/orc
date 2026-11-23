@@ -72,7 +72,7 @@ def _reader(ctx: m.AppContext) -> em.Read:
                 status = next((s for s in ctx.api.capture_acs() if s.what is device), None)
                 return status.state if status else None
             case CastSubject(device):
-                sound = next((s for s in ctx.api.capture_sounds() if s.what is device), None)
+                sound = next((s for s in ctx.api.sound_states() if s.what is device), None)
                 return sound.playback.value if sound else None
             case FormulaSubject(function, args):
                 return function(ctx, *args)
