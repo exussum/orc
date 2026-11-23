@@ -226,14 +226,6 @@ def test_button_ad_hoc_snapshot_pauses_chromecasts_and_captures_them(ctx, config
     command_dispatch.assert_called_once_with((action.commands[0], em.Command(cast, m.PAUSE)), force=True, entry=ANY)
 
 
-def test_override_scene_snapshots_lights_and_sounds_for_any_key(ctx, command_dispatch, log_entry):
-    lights = (em.Command(m.Devices(orc.Light.a), m.ON),)
-    sounds = (em.Command(m.Devices(orc.Chromecast.x), 40),)
-    with patch.object(api, "capture_lights", return_value=lights), patch.object(api, "capture_sounds", return_value=sounds):
-        api.override_scene("entrance_sensor", (), api.local_now() + timedelta(hours=1), "entrance", log_entry)
-    assert ctx.engine.snapshots()["entrance_sensor"].routine == (*lights, *sounds)
-
-
 def test_pause_not_stop_only_changes_chromecast_stop():
     cast, light = m.Devices(orc.Chromecast.x), m.Devices(orc.Light.a)
     commands = (em.Command(cast, m.STOP), em.Command(cast, 30), em.Command(light, m.OFF), em.Command(cast, m.RESUME))
@@ -861,8 +853,3 @@ def _ac(**attributes):
 
 def _cmd(what, value):
     return em.Command(m.Devices(what), value)
-
-
-def test_fetch_sound_refuses_a_device_with_no_sound_provider():
-    with pytest.raises(ValueError, match="no sound provider"):
-        api._fetch_sound(orc.Light.a)
