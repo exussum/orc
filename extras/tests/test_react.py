@@ -660,7 +660,7 @@ def _crossings(condition, values):
 def test_crossed_up_fires_once_per_rise_and_ignores_a_wobble_in_the_dead_band():
     up = model.CrossedUp(m.OutsideTemperatureSubject(), 55, 52)
     assert _crossings(up, [50, 53, 56, 54, 56, 57]) == [False, False, True, False, False, False]
-    assert _crossings(up, [50, 56, 51, 56]) == [False, True, False, True]  # re-arms after dropping below low
+    assert _crossings(up, [50, 56, 51, 56]) == [False, True, False, True]
 
 
 def test_crossed_down_fires_once_per_fall_and_ignores_a_wobble_in_the_dead_band():
@@ -671,7 +671,7 @@ def test_crossed_down_fires_once_per_fall_and_ignores_a_wobble_in_the_dead_band(
 
 def test_crossed_waits_to_be_armed():
     up = model.CrossedUp(m.OutsideTemperatureSubject(), 55, 52)
-    assert _crossings(up, [53, 56]) == [False, False]  # first seen inside the dead band: not armed
+    assert _crossings(up, [53, 56]) == [False, False]  # starts undecided inside the dead band
     assert _crossings(model.CrossedUp(m.OutsideTemperatureSubject(), 55, 52), [None, "x", 51, 56]) == [False, False, False, True]
 
 
@@ -711,4 +711,4 @@ def test_crossed_up_held_back_by_the_cooldown_is_dropped_until_the_next_rise(ctx
 
     device_report(Sensor.living.value, {"temperature": 50}, 57)
     device_report(Sensor.living.value, {"temperature": 56}, 50)
-    assert dispatches() == [(Ac.living, ac)]  # the next rise fires
+    assert dispatches() == [(Ac.living, ac)]

@@ -124,11 +124,10 @@ def _number(value: Any) -> float | None:
 
 @dataclass(eq=False)
 class _HysteresisEdge(em.Condition):
-    """A Schmitt trigger edge: true on the reading that flips it, then not again until it has flipped back.
+    """A Schmitt trigger that is true only on the reading that flips it.
 
-    It flips up at `high` and down below `low`, and a reading in the dead band between leaves it as it was.
-    It starts undecided, so a restart inside the dead band fires nothing. The state is remembered, so each
-    instance is identified by object, not by value. A crossing a rule's cooldown holds back is not offered again.
+    It starts undecided, so a restart inside the dead band fires nothing. It remembers its state, so each instance
+    is identified by object, not by value. A crossing a rule's cooldown holds back is dropped, not offered again.
     """
 
     subject: em.Subject
@@ -140,7 +139,7 @@ class _HysteresisEdge(em.Condition):
     def __post_init__(self) -> None:
         if self.high == self.low:
             raise ValueError(f"{type(self).__name__}: high and low are both {self.high}; they need a dead band between them")
-        self.high, self.low = max(self.high, self.low), min(self.high, self.low)  # either order works
+        self.high, self.low = max(self.high, self.low), min(self.high, self.low)
 
     def holds(self, world: em.World) -> bool:
         value = _number(world.read(self.subject))
