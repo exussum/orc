@@ -96,15 +96,9 @@
                             <li>Snapshot State:
                                 {% if snapshots %}
                                     <ul class="list-disc pl-5">
-                                        {% for name, snap in snapshots.items() %}
+                                        {% for name, (snap, counts) in snapshots.items() %}
                                             <li>{{ name }} until {{ snap.end.strftime('%H:%M') }}
-                                                <ul class="list-disc pl-5">
-                                                    {% for c in snap.routine if c.value != "off" %}
-                                                        <li>{{ c.subject.one().name }}={{ c.value }}</li>
-                                                    {% else %}
-                                                        <li>all off</li>
-                                                    {% endfor %}
-                                                </ul>
+                                                <div>💡 {{ counts[0] }} · 🔊 {{ counts[1] }}</div>
                                             </li>
                                         {% endfor %}
                                     </ul>

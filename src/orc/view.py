@@ -186,7 +186,7 @@ def cfg() -> str:
         plugin_htmls=plugin_htmls,
         plugins=config.plugins_in("system"),
         ad_hoc_routines=where(config.ad_hoc_routines, section="system"),
-        snapshots=app.orc.engine.snapshots(),
+        snapshots={name: (snap, _snapshot_counts(snap.routine)) for name, snap in app.orc.engine.snapshots().items()},
         today_theme=api.calculate_theme(today),
         tomorrow_theme=api.calculate_theme(tomorrow),
         theme_override=api.current_theme_override(),
@@ -528,6 +528,14 @@ def durations() -> tuple[dict[str, Any], int]:
 def _app_name() -> str:
     internal = urlparse(config.settings.base_url).hostname if config.settings.base_url else None
     return "Orc Remote" if internal and request.host.split(":")[0] != internal else "Orc"
+
+
+def _snapshot_counts(routine: Iterable[Any]) -> tuple[int, int]:
+    commands = [(c.subject.one().kind, c.value) for c in routine]
+    return (
+        sum(kind == "Light" and value != m.OFF for kind, value in commands),
+        sum(value == m.RESUME for _, value in commands),
+    )
 
 
 @cache

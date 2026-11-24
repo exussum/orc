@@ -222,7 +222,7 @@ def lights_on() -> int:
 
 
 def sounds_playing() -> int:
-    return sum(sound.playback == m.Playback.PLAYING for sound in sound_states())
+    return sum(sound.playback != m.Playback.STOPPED for sound in sound_states())
 
 
 def capture_acs() -> tuple[m.AcStatus, ...]:
