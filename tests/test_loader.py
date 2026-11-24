@@ -418,7 +418,7 @@ def _condition(person=None, weather=None):
 
 
 def test_validate_requires_version():
-    with pytest.raises(ConfigError, match="Missing required line: version 1"):
+    with pytest.raises(ConfigError, match="Missing required line: version 2"):
         validate(parse_config(""))
 
 
@@ -426,7 +426,7 @@ def test_version_accepted():
     assert parse_config(f"version {CONFIG_VERSION}").version == CONFIG_VERSION
 
 
-@pytest.mark.parametrize("text", ["version 99", "version 1\nversion 1", "version abc"])
+@pytest.mark.parametrize("text", ["version 99", "version 2\nversion 2", "version abc"])
 def test_version_rejected(text):
     with pytest.raises(ConfigError):
         parse_config(text)

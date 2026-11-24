@@ -1,4 +1,4 @@
-version 1
+version 2
 
 setting base_url         http://orc.internal.example
 setting lan_domain       orc.internal.example
