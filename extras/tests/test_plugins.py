@@ -231,10 +231,10 @@ def test_equal_delays_queue_the_cleanup_first(ctx):
     ]
 
 
-def test_presence_job_resumes_without_scanning(ctx):
+def test_presence_job_probes_the_tags_as_it_resumes_without_scanning(ctx):
     entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
     plugins._run_resume_presence(entry, ctx=ctx)
-    ctx.api.resume_presence.assert_called_once_with(entry.trigger)
+    ctx.api.resume_presence.assert_called_once_with(entry.trigger, probe=True)
     ctx.api.check_presence.assert_not_called()
 
 

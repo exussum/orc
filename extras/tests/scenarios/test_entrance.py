@@ -2,7 +2,6 @@ import pytest
 from orc_extras import entrance_sensor, react
 
 import orc
-from orc import model as m
 
 WALK_IN = [
     "Applying `Day` rules",
@@ -15,7 +14,11 @@ ARRIVE = [
 LISTENER_HOME = ["Queued: `Dog` (until 04:09)", "Trigger sensor off: skip (listener home)"]
 DELAYS = [
     pytest.param([], marks=pytest.mark.plugins(entrance_sensor), id="equal"),
-    pytest.param(["Presence lost: `Rex`"], marks=pytest.mark.plugins(entrance_sensor, entrance_sensor="entrance_sensor_split"), id="split"),
+    pytest.param(
+        [],
+        marks=pytest.mark.plugins(entrance_sensor, entrance_sensor="entrance_sensor_split"),
+        id="split",
+    ),
 ]
 
 
@@ -192,8 +195,7 @@ def test_a_tag_checks_itself_in_once_presence_resumes(house):
         (
             house.broker(orc.Sensor.ENTRANCE_SENSOR),
             "Entrance sensor triggered",
-            [*WALK_IN, "Presence lost: `Rex`", *LISTENER_HOME],
+            [*WALK_IN, *LISTENER_HOME],
         ),
-        (m.Query("ble"), "Presence detected: `Rex`", []),
     ]
-    assert house.probed == []
+    assert house.probed == ["Rex"]

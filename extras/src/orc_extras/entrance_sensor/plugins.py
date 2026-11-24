@@ -83,7 +83,7 @@ def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppC
 
 
 def _run_resume_presence(payload: m.LogEntry, *, ctx: m.AppContext) -> None:
-    ctx.api.resume_presence(payload.trigger)
+    ctx.api.resume_presence(payload.trigger, probe=True)
 
 
 def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx: m.AppContext) -> None:

@@ -470,7 +470,9 @@ def pause_presence() -> None:
     context().scheduler.pause_queue(m.Queue.PRESENCE)
 
 
-def resume_presence(trigger: m.Trigger) -> None:
+def resume_presence(trigger: m.Trigger, *, probe: bool = False) -> None:
+    if probe:
+        net.presence.probe(net.presence.tagged, trigger)
     net.presence.resume(trigger)
     context().scheduler.release_queue(m.Queue.PRESENCE)
 
