@@ -90,7 +90,9 @@ def device_report(ctx):
 @pytest.fixture
 def pending_jobs(ctx, react_rules, device_report):
     device_report("1", {"switch": m.ON}, m.OFF)  # rule 0 has --delay, so it goes pending
+    job_id = ctx.scheduler.once.call_args.kwargs["id"]
     ctx.scheduler.reset_mock()
+    return job_id
 
 
 @pytest.fixture
@@ -155,7 +157,7 @@ def test_switch_already_on_schedules_nothing(ctx, react_rules, device_report):
 
 def test_switch_off_cancels_pending_jobs(ctx, pending_jobs, device_report):
     device_report("1", {"switch": m.OFF}, m.ON)  # reverse edge cancels the pending
-    assert ctx.scheduler.cancel.called
+    ctx.scheduler.cancel.assert_called_once_with(pending_jobs, m.Queue.ADHOC)
 
 
 def test_sleeping_rule_schedules_only_a_recheck(ctx, react_rules, device_report):
@@ -166,7 +168,7 @@ def test_sleeping_rule_schedules_only_a_recheck(ctx, react_rules, device_report)
 
 def test_sleep_cancels_a_pending_job(ctx, pending_jobs):
     plugins.sleep(ctx, "Lights off")
-    assert ctx.scheduler.cancel.called
+    ctx.scheduler.cancel.assert_any_call(pending_jobs, m.Queue.ADHOC)
 
 
 def test_unwatched_device_is_ignored(ctx, react_rules, device_report):

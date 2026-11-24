@@ -134,7 +134,7 @@ def test_arrival_flight_uses_backend(flight_travel_job):
 def test_evaluate_destination_schedules(ctx, home_travel_job):
     arrival, sched = plugins.evaluate(_with_runtime(ctx, _runtime([])), home_travel_job, timezone.utc, ARRIVE - timedelta(hours=1))
     assert arrival == m.Arrival(ARRIVE, "Home", None)
-    assert sched.leave_at is not None
+    assert sched.leave_at == ARRIVE - timedelta(minutes=30)
 
 
 def test_evaluate_destination_failure_bubbles_reason(ctx):
