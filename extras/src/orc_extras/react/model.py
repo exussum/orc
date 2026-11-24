@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, NamedTuple
+from typing import Any, ClassVar, NamedTuple
 
 from orc_engine import model as em
 
@@ -111,6 +111,59 @@ class Range(em.Condition):
             return self.low <= float(value) < self.high
         except ValueError:
             return False
+
+
+def _number(value: Any) -> float | None:
+    if not isinstance(value, (int, float, str)):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+@dataclass(eq=False)
+class _HysteresisEdge(em.Condition):
+    """A Schmitt trigger edge: true on the reading that flips it, then not again until it has flipped back.
+
+    It flips up at `high` and down below `low`, and a reading in the dead band between leaves it as it was.
+    It starts undecided, so a restart inside the dead band fires nothing. The state is remembered, so each
+    instance is identified by object, not by value. A crossing a rule's cooldown holds back is not offered again.
+    """
+
+    subject: em.Subject
+    high: float
+    low: float
+    _above: bool | None = field(default=None, init=False, repr=False)
+    _fires_on: ClassVar[tuple[bool, bool]]
+
+    def __post_init__(self) -> None:
+        if self.high == self.low:
+            raise ValueError(f"{type(self).__name__}: high and low are both {self.high}; they need a dead band between them")
+        self.high, self.low = max(self.high, self.low), min(self.high, self.low)  # either order works
+
+    def holds(self, world: em.World) -> bool:
+        value = _number(world.read(self.subject))
+        if value is None:
+            return False
+        before = self._above
+        if value >= self.high:
+            self._above = True
+        elif value < self.low:
+            self._above = False
+        return (before, self._above) == self._fires_on
+
+
+class CrossedUp(_HysteresisEdge):
+    """True when the reading rises to `high`, once it has been below `low`."""
+
+    _fires_on = (False, True)
+
+
+class CrossedDown(_HysteresisEdge):
+    """True when the reading falls below `low`, once it has been at or above `high`."""
+
+    _fires_on = (True, False)
 
 
 @dataclass(frozen=True)

@@ -645,3 +645,70 @@ def test_rules_endpoint_reports_a_pending_delayed_run_until_it_runs(flask_client
     assert rules["Lights off"]["delayed_until"] == (NOW + timedelta(minutes=10)).isoformat()
     deferred_run()
     assert flask_client.get("/").get_json()["rules"][0]["delayed_until"] is None
+
+
+def _crossings(condition, values):
+    runtime = engine.Runtime(UTC)
+    rule = em.Rule((em.Step(condition, em.Command(m.OutsideTemperatureSubject(), 1)),), name="rule")
+    fired = []
+    for value in values:
+        (outcome,) = runtime.evaluate([rule], read=lambda subject, value=value: value, force=True)
+        fired.append(isinstance(outcome, em.Report))
+    return fired
+
+
+def test_crossed_up_fires_once_per_rise_and_ignores_a_wobble_in_the_dead_band():
+    up = model.CrossedUp(m.OutsideTemperatureSubject(), 55, 52)
+    assert _crossings(up, [50, 53, 56, 54, 56, 57]) == [False, False, True, False, False, False]
+    assert _crossings(up, [50, 56, 51, 56]) == [False, True, False, True]  # re-arms after dropping below low
+
+
+def test_crossed_down_fires_once_per_fall_and_ignores_a_wobble_in_the_dead_band():
+    down = model.CrossedDown(m.OutsideTemperatureSubject(), 55, 52)
+    assert _crossings(down, [57, 54, 51, 53, 51]) == [False, False, True, False, False]
+    assert _crossings(down, [57, 51, 56, 51]) == [False, True, False, True]
+
+
+def test_crossed_waits_to_be_armed():
+    up = model.CrossedUp(m.OutsideTemperatureSubject(), 55, 52)
+    assert _crossings(up, [53, 56]) == [False, False]  # first seen inside the dead band: not armed
+    assert _crossings(model.CrossedUp(m.OutsideTemperatureSubject(), 55, 52), [None, "x", 51, 56]) == [False, False, False, True]
+
+
+def test_crossed_takes_its_thresholds_in_either_order_but_not_equal():
+    up = model.CrossedUp(m.OutsideTemperatureSubject(), 52, 55)
+    assert (up.high, up.low) == (55, 52)
+    with pytest.raises(ValueError, match="both 55"):
+        model.CrossedUp(m.OutsideTemperatureSubject(), 55, 55)
+
+
+def test_crossed_conditions_parse_in_the_vocabulary(ctx):
+    built = react._eval("CrossedUp(Outside.temperature, 55, 52)", {**react.VOCABULARY})
+    assert isinstance(built, model.CrossedUp) and (built.high, built.low) == (55, 52)
+
+
+def test_crossed_up_held_back_by_the_cooldown_is_dropped_until_the_next_rise(ctx, ruleset, dispatches, device_report):
+    ac = m.AcState(m.ON, m.AcMode.COOL, "low", temperature=72)
+    subject = model.MqttDeviceSubject(Sensor.living, "temperature")
+    command = em.Command(m.Devices(Ac), ac)
+    rule = em.Rule((em.Step(em.And(model.CrossedUp(subject, 55, 52)), command),), name="rule")
+    ruleset([em.Watch(em.Changed(model.Device(Sensor.living)), rule, cooldown=timedelta(seconds=5))], {"5": Sensor.living})
+
+    ctx.frozen.move_to(NOW)
+    device_report(Sensor.living.value, {"temperature": 50}, 60)
+    device_report(Sensor.living.value, {"temperature": 56}, 50)
+    assert dispatches() == [(Ac.living, ac)]
+
+    ctx.api.dispatch.reset_mock()
+    ctx.frozen.move_to(NOW + timedelta(seconds=2))
+    device_report(Sensor.living.value, {"temperature": 51}, 56)
+    device_report(Sensor.living.value, {"temperature": 56}, 51)
+    ctx.api.dispatch.assert_not_called()  # crossed again, but still inside the cooldown
+
+    ctx.frozen.move_to(NOW + timedelta(seconds=6))
+    device_report(Sensor.living.value, {"temperature": 57}, 56)
+    ctx.api.dispatch.assert_not_called()  # the held crossing is not offered again once the cooldown ends
+
+    device_report(Sensor.living.value, {"temperature": 50}, 57)
+    device_report(Sensor.living.value, {"temperature": 56}, 50)
+    assert dispatches() == [(Ac.living, ac)]  # the next rise fires

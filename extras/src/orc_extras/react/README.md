@@ -34,6 +34,15 @@ A `phrase` line names a condition once; every `if` can then use it as
 | `--delay`    | Seconds to wait before setting. A `turns` rule drops a pending command if the attribute changes again first.                                                                                                             |
 | `--pause`    | Minutes the System page's sleep switch silences the rule (default 10).                                                                                                                                                   |
 
+`CrossedUp` and `CrossedDown` are edges like `Entered`, but a wobble inside the
+dead band between `low` and `high` cannot fire them twice: each re-arms only
+after the measurement has been past the other threshold, so `CrossedUp(m, 55, 52)`
+and `CrossedDown(m, 55, 52)` switch something on at 55 and off below 52 and never
+chatter in between. A reading never seen on the arming side fires nothing, so a
+restart inside the dead band acts on the next real crossing. A crossing a rule's
+cooldown holds back is dropped, not retried. The thresholds can
+come in either order, but they must differ.
+
 A rule without `turns` is evaluated on every report from its device and the
 `if` decides; write a measurement condition as `Entered(...)` so it fires once
 when the value crosses into the range rather than on every reading.
@@ -53,6 +62,8 @@ inside it are strings, so use the other quote: `if 'Eq(switch, "on")'`.
 | `Became(<attribute>, "<to>")`   | The attribute just changed to that state (what `turns` uses).                                  |
 | `Range(<measure>, low, high)`   | `low <= measurement < high` (level: holds on every reading in range).                          |
 | `Entered(<measure>, low, high)` | The measurement just crossed into `low <= x < high` (edge: holds on that reading only).        |
+| `CrossedUp(<measure>, high, low)`   | The measurement just reached `high` after being below `low` (edge with hysteresis).      |
+| `CrossedDown(<measure>, high, low)` | The measurement just fell below `low` after being at or above `high` (edge with hysteresis). |
 | `AcIs(AC.<member>, "<state>")`  | The AC is in that state: `on`, `off`, or `ac:mode[:fan[:temp]]`; an unsaid part matches anything. |
 | `Playing(Chromecast.<member>)`  | That Chromecast is playing.                                                                    |
 | `Present("alice", "bob")`       | Any of the named people is home.                                                               |
