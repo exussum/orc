@@ -1,4 +1,4 @@
-version 2
+version 3
 
 setting base_url         http://orc.test
 setting lan_domain       orc.test

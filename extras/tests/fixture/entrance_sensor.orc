@@ -1,5 +1,4 @@
 setting cleanup_delay_minutes  2
-setting presence_delay_minutes 1
 setting entrance               Sensor.entrance
 setting patio_door             Sensor.patio
 setting active_event           active

@@ -9,7 +9,6 @@ from orc import model as m
 
 SNAPSHOT_NAME = "entrance_sensor"
 CLEANUP_JOB_ID = "trigger-sensor"
-PRESENCE_JOB_ID = "trigger-sensor-presence"
 TRIGGER_MSG = "Entrance sensor triggered"
 
 
@@ -65,25 +64,13 @@ def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppC
         ctx.api.dispatch((*restore, *timed_commands), force=True, entry=log_entry)
     else:
         ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
-    now = ctx.api.local_now()
     ctx.scheduler.once(
         _run_trigger_sensor_off,
-        now + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
+        ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
         (sensor, log_entry),
         id=CLEANUP_JOB_ID,
         name="Entrance Cleanup",
     )
-    ctx.scheduler.once(
-        _run_resume_presence,
-        now + timedelta(minutes=sensor.setting.presence_delay_minutes),
-        log_entry,
-        id=PRESENCE_JOB_ID,
-        name="Resume Presence",
-    )
-
-
-def _run_resume_presence(payload: m.LogEntry, *, ctx: m.AppContext) -> None:
-    ctx.api.resume_presence(payload.trigger, probe=True)
 
 
 def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx: m.AppContext) -> None:

@@ -218,7 +218,6 @@ For example:
 
 ```
 setting cleanup_delay_minutes  2
-setting presence_delay_minutes 1
 setting entrance               Sensor.ENTRANCE_SENSOR
 setting patio_door             Sensor.PATIO_DOOR
 setting active_event           active

@@ -23,7 +23,7 @@ _BUTTON_EVENTS = frozenset({"pushed", "held", "doubleTapped", "released"})
 
 _POLAR_LATITUDE = 65.7
 
-CONFIG_VERSION = 2
+CONFIG_VERSION = 3
 
 _INCLUDE = re.compile(r"(\w+)(?:\s+-\s+(.+))?")
 

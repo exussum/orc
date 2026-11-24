@@ -32,7 +32,6 @@ timed <name> <start> <stop> <routine>
 | Setting                  | Meaning                                                                                            |
 | ------------------------ | -------------------------------------------------------------------------------------------------- |
 | `cleanup_delay_minutes`  | Minutes after the last motion event before the cleanup decides; at least 1 when `tag` lines exist. |
-| `presence_delay_minutes` | Minutes after the last motion event before presence is probed and resumed; at most the cleanup's.  |
 | `entrance`               | The motion sensor, as `Sensor.<name>`.                                                             |
 | `patio_door`             | A contact sensor; an open door counts as someone being around.                                     |
 | `active_event`           | The `motion` value that means motion (`active`).                                                   |
@@ -44,7 +43,6 @@ timed <name> <start> <stop> <routine>
 
 ```
 setting cleanup_delay_minutes  2
-setting presence_delay_minutes 1
 setting entrance               Sensor.ENTRANCE_SENSOR
 setting patio_door             Sensor.PATIO_DOOR
 setting active_event           active
@@ -75,13 +73,11 @@ timed Night 22:00 8:00  AD_HOC_SILENCE
   media, light the hall) belong in a [react](../react/README.md) rule on the
   same sensor.
 - **Motion inactive**: the `inside` routine runs.
-- Every motion event, active or inactive, restarts two countdowns: the
-  presence job `presence_delay_minutes` out and the cleanup
-  `cleanup_delay_minutes` out. Each is one scheduler job with a fixed id, so
-  a re-triggered sensor pushes both further out instead of stacking them.
-- **Presence**: presence tracking is resumed.
-- **Cleanup**: presence is re-checked with a tag probe and resumed if the
-  presence job hasn't already, then one branch runs:
+- Every motion event, active or inactive, restarts the cleanup countdown,
+  `cleanup_delay_minutes` out. It is one scheduler job with a fixed id, so a
+  re-triggered sensor pushes it further out instead of stacking it.
+- **Cleanup**: presence is re-checked with a tag probe and resumed, then one
+  branch runs:
   - someone other than the listener is home, or the door is open: `present`;
   - only the listener is home: the pre-visit scene is restored and `absent`
     runs;
