@@ -28,25 +28,36 @@ class TestButtons:
         with patch.object(config, "remotes", remotes):
             return _capture("add_status_listener", lambda: buttons.setup(ctx))
 
-    def test_mapped_event_runs_action(self, ctx, action_run):
+    @staticmethod
+    def _held(device_id, button=1):
+        return m.Status(_remote(device_id), "held", None, button, hubitat.HubitatSource.HUBITAT)
+
+    def test_mapped_event_is_queued_not_run_on_caller_thread(self, ctx, action_run):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
+        with patch.object(ctx.scheduler, "now") as now:
+            on_button(self._held(orc.Light.a.value))
+        action_run.assert_not_called()
+        func, payload = now.call_args[0]
+        assert payload == ("TV Lights", m.Button(str(orc.Light.a.value)))
+        assert now.call_args[1]["queue"] == m.Queue.ADHOC
         action_run.return_value = True
-        on_button(m.Status(_remote(orc.Light.a.value), "held", None, 1, hubitat.HubitatSource.HUBITAT))
+        func(payload, ctx=ctx)
         action_run.assert_called_once_with("TV Lights", m.Button(str(orc.Light.a.value)), source=m.LogSource.EXTERNAL)
 
     def test_unmapped_event_is_ignored(self, ctx, action_run):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
-        on_button(m.Status(_remote("99"), "held", None, 1, hubitat.HubitatSource.HUBITAT))
-        on_button(m.Status(_remote(orc.Light.a.value), "held", None, 2, hubitat.HubitatSource.HUBITAT))
-        on_button(m.Status(_remote(orc.Light.a.value), "pushed", None, 1, hubitat.HubitatSource.HUBITAT))
-        on_button(m.Status(_remote(orc.Light.a.value), "switch", "off", "on", hubitat.HubitatSource.HUBITAT))
+        with patch.object(ctx.scheduler, "now") as now:
+            on_button(self._held("99"))
+            on_button(self._held(orc.Light.a.value, 2))
+            on_button(m.Status(_remote(orc.Light.a.value), "pushed", None, 1, hubitat.HubitatSource.HUBITAT))
+            on_button(m.Status(_remote(orc.Light.a.value), "switch", "off", "on", hubitat.HubitatSource.HUBITAT))
+        now.assert_not_called()
         action_run.assert_not_called()
 
     def test_unknown_action_logs(self, ctx, action_run, log_call):
-        on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "No Such Routine"),))
         action_run.return_value = False
         with patch.object(api, "alert"):
-            on_button(m.Status(_remote(orc.Light.a.value), "held", None, 1, hubitat.HubitatSource.HUBITAT))
+            buttons._run_button(("No Such Routine", m.Button("1")), ctx=ctx)
         log_call.assert_called_once()
         assert "No Such Routine" in log_call.call_args[0][1]
 
