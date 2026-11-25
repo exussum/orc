@@ -753,4 +753,6 @@ class Registry:
 
 
 def _within_a_mired(a: int, b: int) -> bool:
+    if a == 0 or b == 0:
+        return a == b
     return abs(1_000_000 / a - 1_000_000 / b) <= 1  # the wire carries mireds, so 3000K reads back as 3003
