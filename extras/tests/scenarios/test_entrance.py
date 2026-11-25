@@ -170,3 +170,43 @@ def test_a_second_motion_keeps_the_before_set(house):
 
     assert house.log()[-1][2][-1] == "Trigger sensor off: applying OFF"
     assert house.pushed == []
+
+
+@pytest.mark.plugins(entrance_sensor)
+def test_a_rescan_during_the_visit_logs_who_it_finds(house):
+    house.scan()
+    house.tick(minutes=1)
+    house.entrance_sensor("active")
+    house.tick(seconds=30)
+
+    house.press("/api/presence/run")
+
+    assert house.log()[-1] == (
+        orc.m.Manual("presence"),
+        "Presence rescan",
+        ["Presence lost: `Alice`", "Presence detected: `Alice`"],
+    )
+
+
+@pytest.mark.plugins(entrance_sensor)
+def test_an_expire_during_the_visit_logs_the_loss(house):
+    house.scan()
+    house.tick(minutes=1)
+    house.entrance_sensor("active")
+    house.tick(seconds=30)
+    house.press("/api/presence/run")
+    house.tick(seconds=10)
+
+    house.press("/api/presence/Alice/expire")
+
+    assert house.log()[-1] == (orc.m.Manual("Alice"), "Presence expired: `Alice`", ["Presence lost: `Alice`"])
+
+
+@pytest.mark.plugins(entrance_sensor)
+def test_a_checkin_during_the_visit_logs_the_detection(house):
+    house.entrance_sensor("active")
+    house.tick(seconds=30)
+
+    house.press("/api/presence/Alice/checkin")
+
+    assert house.log()[-1] == (orc.m.Manual("Alice"), "Presence checked in: `Alice`", ["Presence detected: `Alice`"])

@@ -453,12 +453,12 @@ def present_names() -> set[str]:
     return net.presence.present(_presence_cutoff())
 
 
-def set_present(names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
-    return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger, source)
+def set_present(names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> set[str]:
+    return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger, source, forced)
 
 
 def expire_presence(names: list[str], trigger: m.Trigger, source: m.LogSourceEnum, force: bool = False) -> None:
-    net.presence.forget(names, trigger, source, before=None if force else local_now())
+    net.presence.forget(names, trigger, source, before=None if force else local_now(), forced=force)
 
 
 def delete_all_presence(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
@@ -550,8 +550,9 @@ def check_presence(trigger: m.Trigger, source: m.LogSourceEnum, *, probe: bool =
 
 
 def rescan_presence(trigger: m.Trigger) -> set[str]:
-    expire_presence([name for name in net.presence.seen() if name not in net.presence.tagged], trigger, m.LogSource.MANUAL)
-    return _scan_lan(trigger, m.LogSource.MANUAL)
+    stale = [name for name in net.presence.seen() if name not in net.presence.tagged]
+    net.presence.forget(stale, trigger, m.LogSource.MANUAL, before=local_now(), forced=True)
+    return _scan_lan(trigger, m.LogSource.MANUAL, forced=True)
 
 
 def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
@@ -896,13 +897,13 @@ def _check_presence_job(payload: m.Trigger, *, ctx: m.AppContext) -> set[str]:
     return check_presence(payload, m.LogSource.SYSTEM)
 
 
-def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
+def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> set[str]:
     found, errors = net.scan_presence(config.people)
     for name, exc in errors:
         msg = Message.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
         entry = context().log.write(source, msg, trigger, notification=m.Notification(("presence",), "/presence/"))
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-    return set_present(found, trigger, source)
+    return set_present(found, trigger, source, forced)
 
 
 def _presence_cutoff() -> datetime:

@@ -82,10 +82,10 @@ class Presence:
         self._clocks.pop(person)
         self._tags[person] = key
 
-    def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger, source: m.LogSourceEnum) -> None:
+    def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> None:
         for name in names:
             self._heard[name] = when
-        self._changed(trigger, source)
+        self._changed(trigger, source, forced)
 
     def seen(self) -> dict[str, datetime]:
         return self._heard.copy()
@@ -94,21 +94,25 @@ class Presence:
         paused = self._paused
         return {name for name, heard in self._heard.copy().items() if heard >= cutoff and (not paused or heard > paused)}
 
-    def forget(self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, before: datetime | None = None) -> None:
+    def forget(
+        self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, before: datetime | None = None, forced: bool = False
+    ) -> None:
         # `before` keeps entries at or past it — manual check-ins stamped in the future.
         for name in names:
             if (heard := self._heard.get(name)) and (before is None or heard < before):
                 self._heard.pop(name)
-        self._changed(trigger, source)
+        self._changed(trigger, source, forced)
 
-    def set_present(self, names: Iterable[str], when: datetime, cutoff: datetime, trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
+    def set_present(
+        self, names: Iterable[str], when: datetime, cutoff: datetime, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False
+    ) -> set[str]:
         found = set(names)
         for name, heard in self._heard.copy().items():
             if name not in found and heard < cutoff:
                 self._heard.pop(name)
         for name in found:
             self._heard[name] = when
-        self._changed(trigger, source)
+        self._changed(trigger, source, forced)
         return self.present(cutoff)
 
     def pause(self, until: datetime) -> None:
@@ -130,8 +134,8 @@ class Presence:
             heard = {name for name in wanted if self._frames.get(name, never) >= start}
         self.mark(heard, self._now(), trigger, source)
 
-    def _changed(self, trigger: m.Trigger, source: m.LogSourceEnum) -> None:
-        if not self._paused:
+    def _changed(self, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> None:
+        if forced or not self._paused:
             self._on_change(trigger, source)
 
     async def _run(self, stop: threading.Event) -> None:
