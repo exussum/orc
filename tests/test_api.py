@@ -547,6 +547,11 @@ class TestWorkDayTheme:
         api.set_theme_override("day off", date(2026, 1, 5), date(2026, 1, 5))
         assert api.calculate_theme(date(2026, 1, 5)) != m.THEME_WORK_DAY
 
+    def test_a_weekday_named_theme_wins_over_the_base_theme(self):
+        monday = m.Theme("monday", ())
+        with patch.object(config, "themes", {**config.themes, "monday": monday}):
+            assert api.calculate_theme(date(2026, 1, 5)) == "monday"
+
 
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
 @pytest.mark.time_machine(datetime(2026, 1, 3, 12, tzinfo=config.settings.tz), tick=False)

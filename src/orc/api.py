@@ -434,9 +434,7 @@ def active_theme_override(today: date) -> m.ThemeOverride | None:
 
 
 def calculate_theme(today: date) -> str:
-    if override := active_theme_override(today):
-        return override.name
-    return _base_theme(today)
+    return _scheduled_theme(today).name
 
 
 def set_theme_override(name: str, start: date, end: date) -> None:
