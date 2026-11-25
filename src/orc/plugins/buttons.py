@@ -18,7 +18,7 @@ def _on_event(ctx: m.AppContext, mapping: dict[tuple[Any, int, str], str], statu
     device, attribute, new = status.device, status.attribute, status.new
     action = mapping.get((device.id, new, attribute))
     trigger = m.Button(device.id)
-    if action is not None and not ctx.api.run_action(ctx, action, trigger, source=m.LogSource.EXTERNAL):
+    if action is not None and not ctx.api.run_action(action, trigger, source=m.LogSource.EXTERNAL):
         msg = Message.BUTTON_ACTION_UNKNOWN.format(id=action)
         entry = ctx.log.write(m.LogSource.SYSTEM, msg, trigger, notification=m.Notification(("button",)))
         ctx.api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)

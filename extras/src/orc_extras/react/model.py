@@ -105,16 +105,12 @@ class Range(em.Condition):
         return self._inside(new) and not self._inside(old)
 
     def _inside(self, value: Any) -> bool:
-        if not isinstance(value, (int, float, str)):
-            return False
-        try:
-            return self.low <= float(value) < self.high
-        except ValueError:
-            return False
+        number = _number(value)
+        return number is not None and self.low <= number < self.high
 
 
 def _number(value: Any) -> float | None:
-    if not isinstance(value, (int, float, str)):
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         return None
     try:
         return float(value)

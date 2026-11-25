@@ -28,7 +28,6 @@ from orc.collections import of_type
 from orc.dal import broker, net, push, sqlite
 from orc.dal.sqlite import durations as _durations
 from orc.dal.sqlite import init_db, load_durations, update_avg  # noqa: F401
-from orc.decorators import mappable
 from orc.kernel.declarations import Declarations
 from orc.log import Message
 
@@ -70,9 +69,8 @@ def duration_stats() -> dict[str, tuple[int, float]]:
     return _durations()
 
 
-@mappable
-def fetch_durations() -> list[tuple[str, int]]:
-    return [(name, math.ceil(avg)) for name, (_, avg) in duration_stats().items()]
+def fetch_durations() -> dict[str, int]:
+    return {name: math.ceil(avg) for name, (_, avg) in duration_stats().items()}
 
 
 def actions() -> dict[str, Any]:
@@ -110,7 +108,6 @@ def cancel_job(id: str, queue: m.QueueName) -> bool:
     return context().scheduler.cancel(id, queue)
 
 
-@mappable
 def fetch_jobs(queue: m.QueueName, where: Callable[[Any], bool] = lambda _: True) -> list[Job[Any]]:
     return [job for job in context().scheduler.jobs(queue) if where(job.payload)]
 
@@ -166,7 +163,6 @@ def device_state(target: str) -> m.DeviceState | None:
     return next((s for s in device_states() if str(s.device.id) == target or s.device.name == target), None)
 
 
-@mappable
 def capture_lights() -> m.Commands:
     found = {state.device.id: state.attributes for state in broker.snapshot()}
 
@@ -190,7 +186,6 @@ def _fetch_sound(w: m.DeviceEnum) -> m.SoundState:
             raise ValueError(f"{w.name}: no sound provider for {w.kind} devices")
 
 
-@mappable
 def sound_states() -> tuple[m.SoundState, ...]:
     def read(w: m.DeviceEnum) -> m.SoundState | None:
         try:
@@ -206,7 +201,6 @@ def sound_states() -> tuple[m.SoundState, ...]:
         return tuple(sound for sound in ex.map(read, devices) if sound is not None)
 
 
-@mappable
 def capture_sounds() -> m.Commands:
     def restore(sound: m.SoundState) -> tuple[Any, ...]:
         return (sound.volume, m.RESUME) if sound.playback == m.Playback.PLAYING else (sound.volume,)
@@ -246,8 +240,8 @@ def capture_sensors() -> list[m.DeviceStatus]:
     found = {s.device.id: s for s in device_states()}
     return [
         m.DeviceStatus(
-            name=found[sensor.value].device.name if sensor.value in found else sensor.label or sensor.name,
-            details={**found[sensor.value].attributes, "last_activity": found[sensor.value].last_activity} if sensor.value in found else {},
+            name=state.device.name if (state := found.get(sensor.value)) else sensor.label or sensor.name,
+            details={**state.attributes, "last_activity": state.last_activity} if state else {},
         )
         for sensor in config.devices.Sensor
     ]
@@ -276,7 +270,6 @@ def declare_core(declarations: Declarations) -> None:
 
 
 def run_action(
-    ctx: m.AppContext,
     id: str,
     trigger: m.Trigger,
     *,
@@ -284,6 +277,7 @@ def run_action(
     device: str | None = None,
     skip_delay: bool = False,
 ) -> bool:
+    ctx = context()
     if id == ORC_SYSTEM_SNAPSHOT:
         action = _RunAction(
             lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry), Message.SNAPSHOT_RESTORE
@@ -312,19 +306,19 @@ def run_action(
     with _record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
-            queued = context().log.write(source, Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
+            queued = ctx.log.write(source, Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
 
-            def run(*, ctx: m.AppContext) -> None:
+            def run() -> None:
                 started = queued.add(source, display)
                 if id != ORC_SYSTEM_SNAPSHOT:
-                    context().log.last = started
+                    ctx.log.last = started
                 action.fn(queued)
 
-            context().scheduler.once(run, when, id=id, name=action.name, queue=m.Queue.ADHOC)
+            ctx.scheduler.once(run, when, id=id, name=action.name, queue=m.Queue.ADHOC)
         else:
-            entry = context().log.write(source, display, trigger)
+            entry = ctx.log.write(source, display, trigger)
             if id != ORC_SYSTEM_SNAPSHOT:
-                context().log.last = entry
+                ctx.log.last = entry
             action.fn(entry)
     return True
 
@@ -528,7 +522,7 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
             context().log.write(m.LogSource.SYSTEM, Message.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
 
 
-def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
+def apply_theme_change(name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
     if not name:
         context().log.write(m.LogSource.MANUAL, Message.THEME_OVERRIDE_CLEARED, trigger)
         clear_theme_override()
@@ -536,7 +530,7 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
         assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
         context().log.write(m.LogSource.MANUAL, Message.THEME_OVERRIDE_SET.format(name=name, start=start, end=end), trigger)
-    rebuild_jobs(ctx)
+    rebuild_jobs()
 
 
 def check_presence(trigger: m.Trigger, source: m.LogSourceEnum, *, probe: bool = False) -> set[str]:
@@ -569,7 +563,7 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
     return result
 
 
-def run_iot_job(payload: m.IotJob, ctx: m.AppContext) -> None:
+def run_iot_job(payload: m.IotJob) -> None:
     entry = context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.rule.name))
     context().log.last = entry
     _run_schedule_routine(payload.rule, entry, present_names())
@@ -578,8 +572,8 @@ def run_iot_job(payload: m.IotJob, ctx: m.AppContext) -> None:
 def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None, *, state_override: Any = None) -> m.Commands:
     grouped: defaultdict[Any, list[m.DeviceCommand]] = defaultdict(list)
     for command in commands:
+        value = command.value if state_override is None else state_override
         for e in command.subject.all():
-            value = command.value if state_override is None else state_override
             grouped[e].append(em.Command(m.Devices(e), value, command.tag))
 
     flattened: list[m.DeviceCommand] = []
@@ -594,14 +588,15 @@ def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None,
     return tuple(flattened)
 
 
-def rebuild_jobs(ctx: m.AppContext) -> None:
-    ctx.scheduler.rebuild()
-    setup_scheduler(ctx)
+def rebuild_jobs() -> None:
+    context().scheduler.rebuild()
+    setup_scheduler()
 
 
-def setup_scheduler(ctx: m.AppContext) -> None:
+def setup_scheduler() -> None:
+    ctx = context()
     if not fetch_jobs(m.Queue.IOT):
-        rebuild_iot_schedule(ctx=ctx)
+        rebuild_iot_schedule()
     for job_id, func, crontab, name, queue in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron", m.Queue.ADHOC),
         ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron", m.Queue.PRESENCE),
@@ -610,17 +605,17 @@ def setup_scheduler(ctx: m.AppContext) -> None:
     ):
         ctx.scheduler.cron(func, crontab, id=job_id, name=name, queue=queue)
     ctx.scheduler.now(_retry_stats_job, name="Stats Boot Check", queue=m.Queue.FETCH)
-    ctx.scheduler.on_expired(partial(_log_expired, ctx))
-    ctx.scheduler.on_cancelled(partial(_log_cancelled, ctx))
+    ctx.scheduler.on_expired(_log_expired)
+    ctx.scheduler.on_cancelled(_log_cancelled)
 
 
-def _log_expired(ctx: m.AppContext, *, queue: Any, job: Any) -> None:
-    ctx.log.write(m.LogSource.SYSTEM, Message.TASK_EXPIRED.format(id=job.name or job.id), m.System("expired"))
+def _log_expired(*, queue: Any, job: Any) -> None:
+    context().log.write(m.LogSource.SYSTEM, Message.TASK_EXPIRED.format(id=job.name or job.id), m.System("expired"))
 
 
-def _log_cancelled(ctx: m.AppContext, *, queue: Any, job: Any) -> None:
+def _log_cancelled(*, queue: Any, job: Any) -> None:
     if job.id in config.ad_hoc_routines:
-        ctx.log.write(m.LogSource.MANUAL, Message.TASK_CANCELLED.format(id=job.name or job.id), m.Manual(job.id))
+        context().log.write(m.LogSource.MANUAL, Message.TASK_CANCELLED.format(id=job.name or job.id), m.Manual(job.id))
 
 
 def has_presence(rule: m.Routine) -> bool:
@@ -663,12 +658,12 @@ def runtime() -> engine.Runtime[m.Devices]:
     return engine.Runtime(config.settings.tz, override_key=ORC_SYSTEM_SNAPSHOT)
 
 
-def rebuild_iot_schedule(ctx: m.AppContext) -> None:
+def rebuild_iot_schedule() -> None:
     now = local_now()
     for run_at, entry in get_schedule():
         if now <= run_at:
             job = m.IotJob(entry.routine, entry.routine_id)
-            ctx.scheduler.once(
+            context().scheduler.once(
                 run_iot_job,
                 run_at,
                 job,
@@ -927,6 +922,6 @@ def _tag_keys_cron_job(ctx: m.AppContext) -> None:
     refresh_tag_keys(m.Cron("findhub"))
 
 
-def _retry_stats_job(ctx: m.AppContext) -> None:
+def _retry_stats_job() -> None:
     global _retry_stats
     _retry_stats = config.providers.hubitat.fetch_retry_stats()

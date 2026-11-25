@@ -23,8 +23,6 @@ class Log(m.LogSourceEnum):
 
 def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> None:
     device, attribute, old, new = status.device, status.attribute, status.old, status.new
-    if device.id not in (sensor.setting.entrance.value, sensor.setting.patio_door.value):
-        return
     if _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only
         # queued until the callback returns: dispatching here holds the light
@@ -63,7 +61,7 @@ def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppC
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
         ctx.api.dispatch((*restore, *timed_commands), force=True, entry=log_entry)
     else:
-        ctx.api.run_action(ctx, sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
+        ctx.api.run_action(sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
     ctx.scheduler.once(
         _run_trigger_sensor_off,
         ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
@@ -84,12 +82,12 @@ def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx:
     door_open = not people and _door_open(ctx, sensor)
 
     if people or door_open:
-        ctx.api.run_action(ctx, sensor.rules.present, log_entry.trigger, source=Log.ENTRANCE)
+        ctx.api.run_action(sensor.rules.present, log_entry.trigger, source=Log.ENTRANCE)
         log_entry.add(Log.ENTRANCE, sensor.message.log_door_open if door_open else sensor.message.log_present)
     elif sensor.setting.listener in present:
         # Visitor left, the listener stayed: restore the pre-visit state
         ctx.api.restore_scene(SNAPSHOT_NAME, (), log_entry)
-        ctx.api.run_action(ctx, sensor.rules.absent, log_entry.trigger, source=Log.ENTRANCE)
+        ctx.api.run_action(sensor.rules.absent, log_entry.trigger, source=Log.ENTRANCE)
         log_entry.add(Log.ENTRANCE, sensor.message.log_absent)
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)

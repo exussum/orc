@@ -143,20 +143,20 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
 
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with(ctx, "AD_HOC_LIGHTS_OFF", ctx.log.write.return_value.trigger, source=plugins.Log.ENTRANCE)
+    ctx.api.run_action.assert_called_once_with("AD_HOC_LIGHTS_OFF", ctx.log.write.return_value.trigger, source=plugins.Log.ENTRANCE)
 
 
 def test_someone_home_stops_media(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.run_action.assert_called_once_with(nobody_home_ctx, "AD_HOC_SILENCE", entry.trigger, source=plugins.Log.ENTRANCE)
+    nobody_home_ctx.api.run_action.assert_called_once_with("AD_HOC_SILENCE", entry.trigger, source=plugins.Log.ENTRANCE)
     assert [c.action for c in entry.children] == [config_sensor.message.log_present]
 
 
 def test_listener_home_alone_keeps_media_playing(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"Rex"}
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.run_action.assert_called_once_with(nobody_home_ctx, "AD_HOC_DOG", entry.trigger, source=plugins.Log.ENTRANCE)
+    nobody_home_ctx.api.run_action.assert_called_once_with("AD_HOC_DOG", entry.trigger, source=plugins.Log.ENTRANCE)
     assert [c.action for c in entry.children] == [config_sensor.message.log_absent]
 
 

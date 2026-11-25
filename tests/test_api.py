@@ -204,7 +204,7 @@ def test_button_ad_hoc_snapshot(ctx, config_ad_hoc, command_dispatch):
         patch.object(api, "capture_lights", return_value=captured),
         patch.object(api, "capture_sounds", return_value=()),
     ):
-        api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
+        api.run_action("r", m.Button("1"), source=m.LogSource.EXTERNAL)
     snap = ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine == captured
     assert snap.end > api.local_now()
@@ -221,7 +221,7 @@ def test_button_ad_hoc_snapshot_pauses_chromecasts_and_captures_them(ctx, config
         patch.object(api, "capture_lights", return_value=lights),
         patch.object(api, "capture_sounds", return_value=devices),
     ):
-        api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
+        api.run_action("r", m.Button("1"), source=m.LogSource.EXTERNAL)
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (*lights, *devices)
     command_dispatch.assert_called_once_with((action.commands[0], em.Command(cast, m.PAUSE)), force=True, entry=ANY)
 
@@ -273,7 +273,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispa
     snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
     ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap)
     with config_ad_hoc({"r": action}, reset_config=reset):
-        api.run_action(ctx, "r", m.Button("1"), source=m.LogSource.EXTERNAL)
+        api.run_action("r", m.Button("1"), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     light_capture.assert_not_called()
@@ -618,25 +618,25 @@ class TestPresence:
 
     def test_run_iot_job_skips_when_presence_absent(self, command_dispatch):
         rule = self._routine("partner-r", m.Present("Alice"))
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         rule = self._routine("partner-r", m.Present("Alice"))
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_called_once_with(
             api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Present("Alice")),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_runs_when_no_presence_required(self, command_dispatch):
         rule = _routine("r", time(8, 0), em.Command(m.Devices(orc.Light.a), m.OFF))
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
 
     def test_run_iot_job_system_trigger_bypasses_presence(self, command_dispatch):
         rule = self._routine("reset-r", em.Always())
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_called_once_with(
             api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=False, entry=ANY
         )
@@ -644,26 +644,26 @@ class TestPresence:
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):
         api.mark_present(["Bob"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         rule = self._routine("anyone-r", m.Anyone())
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_called_once_with(
             api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Anyone()),)), force=False, entry=ANY
         )
 
     def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, command_dispatch):
         rule = self._routine("anyone-r", m.Anyone())
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_not_called()
 
     def test_skip_log_blames_absence(self, command_dispatch):
         rule = self._routine("sunny-r", m.Weather(m.WeatherCondition.SUNNY))
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_not_called()
         assert "nobody home" in api.context().log.rows()[0].action
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         rule = self._routine("cloudy-r", m.Weather(m.WeatherCondition.CLOUDY))
-        api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
+        api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_not_called()
         assert "CLOUDY" in api.context().log.rows()[0].action
 

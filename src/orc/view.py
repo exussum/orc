@@ -194,7 +194,7 @@ def cfg() -> str:
         sounds=api.sound_states(),
         sensors=[replace(s, details=_with_dewpoint(s.details)) for s in api.capture_sensors()],
         retry_stats={s.id: s for s in api.fetch_retry_stats()},
-        durations=api.fetch_durations(mapper=dict),
+        durations=api.fetch_durations(),
         plugin_states=dict(states),
         device_buttons=device_buttons,
         device_plugins=device_plugins,
@@ -206,9 +206,9 @@ def cfg() -> str:
 
 @bp.route("/device/")
 def device() -> str:
-    light_states = api.capture_lights(mapper=_states_by_name)
+    light_states = {c.subject.one().name: c.value for c in api.capture_lights()}
     light_attributes = {s.device.id: s.attributes for s in api.device_states()}
-    sound_states = api.sound_states(mapper=_volumes_by_name)
+    sound_states = {s.what.name: s.volume for s in api.sound_states()}
     ac_temperatures = {s.what.name: round(s.state.temperature) for s in api.capture_acs() if s.state and s.state.temperature is not None}
     all_devices = list(chain.from_iterable(cls for name, cls in config.devices.items() if name in config.registry.controllable_devices))
 
@@ -255,7 +255,7 @@ def device() -> str:
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> dict[str, Any]:
     skip_delay = request.args.get("skip_delay") == "1"
-    if not api.run_action(app.orc, id, m.Manual(id), source=m.LogSource.MANUAL, device=request.args.get("device"), skip_delay=skip_delay):
+    if not api.run_action(id, m.Manual(id), source=m.LogSource.MANUAL, device=request.args.get("device"), skip_delay=skip_delay):
         abort(404, "Unknown routine")
     queued = _queued_runs().get(id)
     return {"queued": queued._asdict() if queued else None}
@@ -279,7 +279,8 @@ def expire_presence(name: str) -> dict[str, Any]:
 
 @bp.route("/")
 def index() -> str:
-    cells, page_boxes, page_concave_corners = _scene_layout(api.fetch_durations(mapper=dict))
+    durations = api.fetch_durations()
+    cells, page_boxes, page_concave_corners = _scene_layout(durations)
 
     return render_template(
         "scene.html",
@@ -296,11 +297,11 @@ def index() -> str:
         lights_on=api.lights_on(),
         sounds_playing=api.sounds_playing(),
         schedule_routines=config.schedule_routines,
-        durations=api.fetch_durations(mapper=dict),
+        durations=durations,
     )
 
 
-def _scene_layout(durations: dict[str, float]) -> tuple[list[SceneCell], list[Box], list[ConcaveCorner]]:
+def _scene_layout(durations: dict[str, int]) -> tuple[list[SceneCell], list[Box], list[ConcaveCorner]]:
     actions_by_routine_id = where(config.ad_hoc_routines, section="scene") | {p.name: p for p in config.plugins_in("scene")}
     cells_by_routine_id = {id: ButtonCell(action, id, durations.get(id, 0)) for id, action in actions_by_routine_id.items()}
 
@@ -422,14 +423,8 @@ def run_presence_check() -> dict[str, Any]:
 
 @bp.route("/schedule/")
 def schedule() -> str:
-    jobs = api.fetch_jobs(m.Queue.IOT, mapper=_by_run_date)
-    theme_override = api.current_theme_override()
-
-    theme = (
-        theme_override._replace(start=theme_override.start.isoformat(), end=theme_override.end.isoformat())  # type: ignore[arg-type]
-        if theme_override
-        else None
-    )
+    jobs = sorted(api.fetch_jobs(m.Queue.IOT), key=lambda job: job.run_at)
+    theme = api.current_theme_override()
 
     present_names = api.present_names()
 
@@ -452,7 +447,7 @@ def schedule() -> str:
         jobs_grouped=jobs_grouped,
         theme=theme,
         themes=sorted(config.themes),
-        durations=api.fetch_durations(mapper=dict),
+        durations=api.fetch_durations(),
         job_rows=job_rows,
     )
 
@@ -464,7 +459,7 @@ def set_theme() -> dict[str, Any]:
         abort(404, "Unknown theme")
     start = date.fromisoformat(request.form["start"]) if name else None
     end = date.fromisoformat(request.form["end"]) if name else None
-    api.apply_theme_change(app.orc, name, start, end, m.Manual(name or "theme"))
+    api.apply_theme_change(name, start, end, m.Manual(name or "theme"))
     return {}
 
 
@@ -552,20 +547,12 @@ def _config_text(config_dir: str) -> str:
     return (Path(config_dir) / "config.orc").read_text()
 
 
-def _states_by_name(commands: m.Commands) -> dict[str, Any]:
-    return {c.subject.one().name: c.value for c in commands}
-
-
 def _with_dewpoint(attributes: dict[str, Any]) -> dict[str, Any]:
     try:
         value = api.dewpoint(float(attributes["temperature"]), float(attributes["humidity"]))
     except KeyError, TypeError, ValueError:
         return attributes
     return {**attributes, "dewpoint": round(value, 1)}
-
-
-def _volumes_by_name(sounds: tuple[m.SoundState, ...]) -> dict[str, int]:
-    return {s.what.name: s.volume for s in sounds}
 
 
 def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datetime | None, list[tuple[datetime, str, str, str, bool]]]]:
@@ -586,10 +573,6 @@ def _scheduled_queues(ctx: m.AppContext, now: datetime) -> list[tuple[str, datet
             rows.append((when, job.id, job.name or job.id, state, not job.disable))
         cards.append((name, paused_since, rows))
     return cards
-
-
-def _by_run_date(jobs: list[Job[Any]]) -> list[Job[Any]]:
-    return sorted(jobs, key=lambda job: job.run_at)
 
 
 def _int_or_none(value: Any) -> int | None:

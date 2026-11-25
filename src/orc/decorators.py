@@ -1,37 +1,16 @@
-# Separate from api.py to avoid a circular import: api.py imports these decorators,
-# so anything that imports api must not live here.
+# Separate from api.py to avoid a circular import: api.py imports these decorators
+# through orc.dal.sqlite, so anything that imports api must not live here.
 
 import sqlite3
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from functools import update_wrapper, wraps
-from typing import Any, Concatenate, overload
+from functools import wraps
+from typing import Any, Concatenate
 
 import orc
 
 audio_lock = threading.Lock()
-
-
-class Mappable[**P, R]:
-    """Let a caller hand the result straight to a shape it wants: f(mapper=dict)."""
-
-    def __init__(self, f: Callable[P, R]) -> None:
-        self.f = f
-        update_wrapper(self, f)
-
-    @overload
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
-    @overload
-    def __call__(self, *args: Any, mapper: Callable[[R], Any], **kwargs: Any) -> Any: ...
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        mapper = kwargs.pop("mapper", None)
-        result = self.f(*args, **kwargs)
-        return result if mapper is None else mapper(result)
-
-
-def mappable[**P, R](f: Callable[P, R]) -> Mappable[P, R]:
-    return Mappable(f)
 
 
 @contextmanager

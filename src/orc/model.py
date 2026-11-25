@@ -5,6 +5,7 @@ from collections.abc import Callable, ItemsView, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, EnumType, StrEnum, auto
+from operator import eq
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, NewType, Protocol, Self
@@ -444,11 +445,11 @@ class LightState:
         elif self.switch == OFF and other.switch == OFF:
             return True
         pairs: tuple[tuple[Any, Any, Callable[[Any, Any], bool]], ...] = (
-            (self.switch, other.switch, _same),
-            (self.color_mode, other.color_mode, _same),
-            (self.level, other.level, _same),
-            (self.hue, other.hue, _same),
-            (self.saturation, other.saturation, _same),
+            (self.switch, other.switch, eq),
+            (self.color_mode, other.color_mode, eq),
+            (self.level, other.level, eq),
+            (self.hue, other.hue, eq),
+            (self.saturation, other.saturation, eq),
             (self.color_temperature, other.color_temperature, _within_a_mired),
         )
         return all(a is None or b is None or close(a, b) for a, b, close in pairs)
@@ -495,13 +496,9 @@ class Plugin:
 
 
 @dataclass
-class CallablePlugin:
-    name: str
-    module: ModuleType
+class CallablePlugin(Plugin):
     func: Callable[..., object] = field(kw_only=True)
     section: str = "scene"
-    icon: str = "rocket-launch"
-    backend: ModuleType | None = None
     delay: timedelta = field(default_factory=timedelta)
 
 
@@ -753,10 +750,6 @@ class Registry:
     setup_hooks: list[Callable[[AppContext], None]]
     blueprints: list[tuple[str, str, "Blueprint"]] = field(default_factory=list)
     secrets: dict[str, Callable[[str], Any]] = field(default_factory=dict)
-
-
-def _same(a: Any, b: Any) -> bool:
-    return a == b
 
 
 def _within_a_mired(a: int, b: int) -> bool:

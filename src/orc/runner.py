@@ -111,7 +111,7 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
 def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     step = partial(_step, boot)
     with step("scheduler setup"):
-        api.setup_scheduler(ctx)
+        api.setup_scheduler()
     for hook in config.config.registry.setup_hooks:
         with step(f"{hook.__module__} setup"):
             hook(ctx)

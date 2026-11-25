@@ -95,7 +95,7 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, 
     with config_ad_hoc({"r": action}), time_machine.travel(api.local_now(), tick=False) as frozen:
         flask_client.get("/api/run/r")
         frozen.shift(timedelta(minutes=7))
-        ctx.scheduler.once.call_args.args[0](ctx=ctx)
+        ctx.scheduler.once.call_args.args[0]()
     (queued,) = api.context().log.rows()
     assert [c.action for c in queued.children] == ["Running `r`"]
     command_dispatch.assert_called_once_with(action.commands, force=True, entry=queued)
@@ -161,13 +161,13 @@ def test_room_unknown_id_returns_404(flask_client, config_rooms, command_dispatc
 
 def test_set_theme_clear_passes_none_dates(flask_client, ctx, theme_change):
     flask_client.post("/api/schedule/theme", data={"theme": ""})
-    theme_change.assert_called_once_with(ctx, "", None, None, m.Manual("theme"))
+    theme_change.assert_called_once_with("", None, None, m.Manual("theme"))
 
 
 def test_set_theme_set_parses_dates(flask_client, ctx, theme_change):
     theme = next(iter(orc.config.themes))
     flask_client.post("/api/schedule/theme", data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"})
-    theme_change.assert_called_once_with(ctx, theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
+    theme_change.assert_called_once_with(theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
 
 
 def test_set_theme_rejects_unknown_theme(flask_client, ctx, theme_change):
@@ -372,7 +372,7 @@ def _get_schedule(flask_client, jobs, present_names=()):
         fetch_jobs=MagicMock(return_value=jobs),
         current_theme_override=MagicMock(return_value=None),
         present_names=MagicMock(return_value=set(present_names)),
-        fetch_durations=MagicMock(side_effect=lambda mapper=None: mapper([]) if mapper else []),
+        fetch_durations=MagicMock(return_value={}),
     ):
         return flask_client.get("/schedule/")
 

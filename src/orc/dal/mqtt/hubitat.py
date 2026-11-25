@@ -181,10 +181,8 @@ def _light_state(device: m.DeviceEnum, command: Any) -> m.LightState:
         if command.color_mode and m.Capability.color not in device.capabilities:
             raise ValueError(f"{device.name} does not support colour; cannot set {command}")
         return command
-    elif command == m.ON:
-        return m.LightState(switch=m.ON)
-    elif command == m.OFF:
-        return m.LightState(switch=m.OFF)
+    elif command in (m.ON, m.OFF):
+        return m.LightState(switch=command)
     elif isinstance(command, int) and m.Capability.change_level in device.capabilities:
         return m.LightState(switch=m.ON, level=command) if command else m.LightState(switch=m.OFF)
     elif command in (0, 100):

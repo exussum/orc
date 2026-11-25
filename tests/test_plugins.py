@@ -32,7 +32,7 @@ class TestButtons:
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         action_run.return_value = True
         on_button(m.Status(_remote(orc.Light.a.value), "held", None, 1, hubitat.HubitatSource.HUBITAT))
-        action_run.assert_called_once_with(ctx, "TV Lights", m.Button(str(orc.Light.a.value)), source=m.LogSource.EXTERNAL)
+        action_run.assert_called_once_with("TV Lights", m.Button(str(orc.Light.a.value)), source=m.LogSource.EXTERNAL)
 
     def test_unmapped_event_is_ignored(self, ctx, action_run):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))

@@ -89,10 +89,6 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
     elif kind == "leak" and new in (plugins.STATE_WET, plugins.STATE_DRY):
         msg = (Msg.WATER_DETECTED if new == plugins.STATE_WET else Msg.WATER_CLEARED).format(name=name)
         notification = m.Notification(("leak", name))
-        if new == plugins.STATE_WET:
-            entry = ctx.log.write(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification=notification)
-            api.alert(m.Alarm.EMERGENCY, text=msg, entry=entry)
-            return
     elif kind == "battery":
         old_critical = old is not None and old.is_critical
         if new.is_critical and not old_critical:
@@ -113,4 +109,5 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
 
     if msg:
         entry = ctx.log.write(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification=notification)
-        api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)
+        wet = kind == "leak" and new == plugins.STATE_WET
+        api.alert(m.Alarm.EMERGENCY if wet else m.Alarm.ATTENTION, text=msg, entry=entry)

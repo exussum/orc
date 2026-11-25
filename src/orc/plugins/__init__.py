@@ -45,7 +45,7 @@ def light_test(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> N
 
 
 def rebuild_jobs(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
-    ctx.api.rebuild_jobs(ctx)
+    ctx.api.rebuild_jobs()
 
 
 def reboot(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
