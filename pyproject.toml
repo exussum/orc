@@ -85,7 +85,8 @@ disable_error_code = ["type-abstract"]
 [tool.pytest.ini_options]
 minversion = "9.0"
 pythonpath = [ "src", "data/src", "extras/src" ]
-testpaths = [ "tests" ]
+testpaths = [ "tests", "extras" ]
+markers = [ "plugins(*modules): plugin packages a scenario boots" ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/orc"]

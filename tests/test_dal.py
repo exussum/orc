@@ -363,7 +363,8 @@ class TestLanTargets:
 
 class TestKeepass:
     @pytest.fixture(scope="session")
-    def keepass_db(self, tmp_path_factory):
+    @classmethod
+    def keepass_db(cls, tmp_path_factory):
         path = tmp_path_factory.mktemp("keepass")
         kp = create_database(path / "secrets.kdbx", password="open sesame")
         kp.add_entry(kp.root_group, "MARKET_HOLIDAYS_URL", "", "https://m")
