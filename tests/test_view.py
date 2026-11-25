@@ -176,6 +176,17 @@ def test_set_theme_rejects_unknown_theme(flask_client, ctx, theme_change):
     theme_change.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [("", "2100-01-10"), ("2100-01-01", ""), ("nope", "2100-01-10"), ("2100-01-11", "2100-01-10")],
+)
+def test_set_theme_rejects_bad_dates(flask_client, ctx, theme_change, start, end):
+    theme = next(iter(orc.config.themes))
+    response = flask_client.post("/api/schedule/theme", data={"theme": theme, "start": start, "end": end})
+    assert response.status_code == 400
+    theme_change.assert_not_called()
+
+
 def test_durations_returns_stats(flask_client, duration_lookup):
     duration_lookup.return_value = {"TV Lights": (4, 3.0), "Reset": (2, 0.5)}
     with patch("orc.api.action_delays", return_value={}):
