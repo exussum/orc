@@ -191,8 +191,8 @@ Two config surfaces:
    | `hubitat_url`       | Hubitat Maker API base URL                     | `http://hubitat.example` |
    | `http_timeout`      | Default outbound HTTP timeout (s)              | `5`                      |
    | `port`              | HTTP listen port                               | `8000`                   |
-   | `presence_hours`    | How long a presence detection persists         | `9`                      |
-   | `checkin_hours`     | How long a manual check-in persists            | `1`                      |
+   | `presence_hours`    | How long presence lasts after the last sighting | `9`                      |
+   | `checkin_hours`     | A check-in counts as seen this many hours ahead | `1`                      |
    | `sunset_lead_hours` | Hours before sunset that sunset routines fire  | `1`                      |
 
 2. **Environment variables**, only the bootstrap pair that can't live in
