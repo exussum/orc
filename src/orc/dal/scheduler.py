@@ -4,7 +4,7 @@ import logging
 import signal
 import threading
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import datetime, tzinfo
 from typing import Any
 
@@ -91,6 +91,18 @@ class Scheduler:
             self._queues[queue].add(job)
         return job
 
+    def sync(self, wanted: Iterable[Job[Any]], queue: m.QueueName) -> None:
+        jobs = {job.id: job for job in wanted}
+        now = utcnow()
+        with self._lock:
+            queue_ = self._queues[queue]
+            queued = {job.id: job for job in queue_.jobs()}
+            for id in queued.keys() - jobs.keys():
+                if queued[id].run_at > now:
+                    queue_.remove(id)
+            for id in jobs.keys() - queued.keys():
+                queue_.add(jobs[id])
+
     def cancel(self, id: str, queue: m.QueueName) -> bool:
         return self._coordinator.cancel_job(id, queue)
 
@@ -124,7 +136,3 @@ class Scheduler:
 
     def on_cancelled(self, fn: Callable[..., None]) -> None:
         oq.on(self.events, oq.Event.CANCELED, fn)
-
-    def rebuild(self) -> None:
-        with self._lock:
-            self._queues[m.Queue.IOT].reset()
