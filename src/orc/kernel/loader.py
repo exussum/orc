@@ -328,7 +328,10 @@ def _include(objects: dict[str, Any], spec: str) -> tuple[em.Command[em.Conditio
 def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
     rooms = objects["room"]
     base = rooms.get(args.name, em.Action())
-    rooms[args.name] = replace(base, commands=(*base.commands, _command(objects, args)))
+    command = _command(objects, args)
+    if others := sorted({d.kind for d in command.subject.all() if d.kind != "Light"}):
+        raise ValueError(f"Room {args.name!r} takes only Light devices, got {others} in {args.devices!r}")
+    rooms[args.name] = replace(base, commands=(*base.commands, command))
 
 
 def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:

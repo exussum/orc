@@ -39,6 +39,7 @@ _PARSE_ERRORS = [
     ("ac_command_non_ac", "AC command cool:low:75 applies only to AC devices, got 'Foo.A'"),
     ("mixed_ac_set", "AC devices take their own line, got '{Light.LAMP, AC.UNIT}'"),
     ("ac_device_bad_state", "AC devices take an ac:mode[:fan[:temp]] command, 'on', or 'off', got 'stop'"),
+    ("room_non_light", "Room 'R' takes only Light devices, got ['Chromecast'] in 'Chromecast.CC'"),
     ("invalid_delay", "invalid literal for int() with base 10: 'soon'"),
     ("invalid_snapshot", "invalid literal for int() with base 10: 'lots'"),
     ("invalid_section", "Invalid parameter section='weird'"),
