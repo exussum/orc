@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import time_machine
 from command_cfg import ConfigError
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -387,3 +388,24 @@ class TestKeepass:
         with patch("orc.dal.secrets.keepass.getpass", return_value="nope"):
             with pytest.raises(ConfigError):
                 keepass.fetch_secrets()
+
+
+def test_forecast_is_refetched_each_real_hour_but_once_within_it():
+    from orc.dal.weather import open_meteo
+
+    open_meteo._forecast.cache_clear()
+    asked = datetime(2026, 11, 26, 15, 30, tzinfo=timezone.utc)
+    payload = {"hourly": {"weather_code": [0] * 24, "temperature_2m": [50.0 + h for h in range(24)]}}
+    with patch.object(open_meteo.requests, "get") as get:
+        get.return_value.json.return_value = payload
+        with time_machine.travel(datetime(2026, 11, 25, 9, 5, tzinfo=timezone.utc), tick=False):
+            assert open_meteo.fetch_temperature(asked, 1.0, 2.0) == 65.0
+            assert open_meteo.fetch_weather(asked, 1.0, 2.0) == {m.WeatherCondition.SUNNY}
+            assert get.call_count == 1
+        with time_machine.travel(datetime(2026, 11, 25, 9, 55, tzinfo=timezone.utc), tick=False):
+            open_meteo.fetch_temperature(asked, 1.0, 2.0)
+            assert get.call_count == 1
+        with time_machine.travel(datetime(2026, 11, 25, 10, 5, tzinfo=timezone.utc), tick=False):
+            open_meteo.fetch_temperature(asked, 1.0, 2.0)
+            assert get.call_count == 2
+    open_meteo._forecast.cache_clear()

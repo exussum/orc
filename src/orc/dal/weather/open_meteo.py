@@ -19,16 +19,22 @@ class Hour(NamedTuple):
 
 
 def fetch_weather(now: datetime, lat: float, lon: float) -> frozenset[m.WeatherCondition]:
-    code = _forecast(now.replace(minute=0, second=0, microsecond=0), lat, lon).code
+    code = _hour_forecast(now, lat, lon).code
     return frozenset({m.WeatherCondition.SUNNY if code in _SUNNY_CODES else m.WeatherCondition.CLOUDY})
 
 
 def fetch_temperature(now: datetime, lat: float, lon: float) -> float:
-    return _forecast(now.replace(minute=0, second=0, microsecond=0), lat, lon).temperature
+    return _hour_forecast(now, lat, lon).temperature
 
 
+def _hour_forecast(when: datetime, lat: float, lon: float) -> Hour:
+    fetched = datetime.now(orc.config.settings.tz).replace(minute=0, second=0, microsecond=0)
+    return _forecast(when.replace(minute=0, second=0, microsecond=0), fetched, lat, lon)
+
+
+# `fetched` is only a cache key: a forecast for an hour is refetched once per real hour.
 @lru_cache(maxsize=10)
-def _forecast(now: datetime, lat: float, lon: float) -> Hour:
+def _forecast(now: datetime, fetched: datetime, lat: float, lon: float) -> Hour:
     date_str = now.strftime("%Y-%m-%d")
     response = requests.get(
         "https://api.open-meteo.com/v1/forecast",
