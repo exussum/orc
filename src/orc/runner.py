@@ -118,7 +118,7 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     with step("mqtt start"):
         api.start_mqtt()
     with step("ble setup"):
-        api.start_ble_listener()
+        api.start_presence()
     with step("scheduler start"):
         ctx.scheduler.start(ctx)
     with step("scheduler resume"):

@@ -52,18 +52,21 @@ class Presence:
         self._frames: dict[str, datetime] = {}
         self._frame_seen = threading.Condition()
         self._paused: datetime | None = None
-        self._on_change: Callable[[m.Trigger], object] = lambda trigger: None
+        self._on_change: Callable[[m.Trigger, m.LogSourceEnum], object] = lambda trigger, source: None
+        self._ble_source: m.LogSourceEnum = m.LogSource.SYSTEM
         self._on_clock: Callable[[str, m.TagClock], object]
 
     def start(
         self,
         tags: Iterable[m.BleTag],
         tz: tzinfo,
-        on_change: Callable[[m.Trigger], object],
+        on_change: Callable[[m.Trigger, m.LogSourceEnum], object],
+        ble_source: m.LogSourceEnum,
         clocks: Mapping[str, m.TagClock],
         on_clock: Callable[[str, m.TagClock], object],
     ) -> None:
         self._on_change = on_change
+        self._ble_source = ble_source
         self._on_clock = on_clock
         self.tagged = frozenset(tag.person for tag in tags)
         if not self.tagged:
@@ -79,10 +82,10 @@ class Presence:
         self._clocks.pop(person)
         self._tags[person] = key
 
-    def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger) -> None:
+    def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger, source: m.LogSourceEnum) -> None:
         for name in names:
             self._heard[name] = when
-        self._changed(trigger)
+        self._changed(trigger, source)
 
     def seen(self) -> dict[str, datetime]:
         return self._heard.copy()
@@ -91,31 +94,31 @@ class Presence:
         paused = self._paused
         return {name for name, heard in self._heard.copy().items() if heard >= cutoff and (not paused or heard > paused)}
 
-    def forget(self, names: Iterable[str], trigger: m.Trigger, before: datetime | None = None) -> None:
+    def forget(self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, before: datetime | None = None) -> None:
         # `before` keeps entries at or past it — manual check-ins stamped in the future.
         for name in names:
             if (heard := self._heard.get(name)) and (before is None or heard < before):
                 self._heard.pop(name)
-        self._changed(trigger)
+        self._changed(trigger, source)
 
-    def set_present(self, names: Iterable[str], when: datetime, cutoff: datetime, trigger: m.Trigger) -> set[str]:
+    def set_present(self, names: Iterable[str], when: datetime, cutoff: datetime, trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
         found = set(names)
         for name, heard in self._heard.copy().items():
             if name not in found and heard < cutoff:
                 self._heard.pop(name)
         for name in found:
             self._heard[name] = when
-        self._changed(trigger)
+        self._changed(trigger, source)
         return self.present(cutoff)
 
     def pause(self, until: datetime) -> None:
         self._paused = until
 
-    def resume(self, trigger: m.Trigger) -> None:
+    def resume(self, trigger: m.Trigger, source: m.LogSourceEnum) -> None:
         self._paused = None
-        self._changed(trigger)
+        self._changed(trigger, source)
 
-    def probe(self, names: Iterable[str], trigger: m.Trigger) -> None:
+    def probe(self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum) -> None:
         wanted = set(names)
         start = self._now()
         never = datetime.min.replace(tzinfo=start.tzinfo)
@@ -125,11 +128,11 @@ class Presence:
                 timeout=_PROBE_SECONDS,
             )
             heard = {name for name in wanted if self._frames.get(name, never) >= start}
-        self.mark(heard, self._now(), trigger)
+        self.mark(heard, self._now(), trigger, source)
 
-    def _changed(self, trigger: m.Trigger) -> None:
+    def _changed(self, trigger: m.Trigger, source: m.LogSourceEnum) -> None:
         if not self._paused:
-            self._on_change(trigger)
+            self._on_change(trigger, source)
 
     async def _run(self, stop: threading.Event) -> None:
         while not stop.is_set():
@@ -153,7 +156,7 @@ class Presence:
                 self._frames[person] = now
                 self._frame_seen.notify_all()
             if not self._paused:
-                self.mark([person], now, m.Query("ble"))
+                self.mark([person], now, m.Query("ble"), self._ble_source)
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)

@@ -219,19 +219,19 @@ def test_setup_compiles_windows_and_registers_hooks(ctx, config_sensor):
 
 def test_cleanup_checks_presence_then_resumes(config_sensor, nobody_home_ctx):
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    calls = [
-        c
-        for c in nobody_home_ctx.api.mock_calls
-        if c in (call.check_presence(entry.trigger, probe=True), call.resume_presence(entry.trigger))
+    expected = [
+        call.check_presence(entry.trigger, plugins.Log.ENTRANCE, probe=True),
+        call.resume_presence(entry.trigger, plugins.Log.ENTRANCE),
     ]
-    assert calls == [call.check_presence(entry.trigger, probe=True), call.resume_presence(entry.trigger)]
+    calls = [c for c in nobody_home_ctx.api.mock_calls if c in expected]
+    assert calls == expected
 
 
 def test_walk_in_pauses_and_purges_presence(ctx, config_sensor):
     ctx.plugin_state = {entrance_sensor: None}
     _trigger_sensor(ctx, config_sensor, "16", "active")
     ctx.api.pause_presence.assert_called_once_with()
-    ctx.api.delete_all_presence.assert_called_once_with(ctx.log.write.return_value.trigger)
+    ctx.api.delete_all_presence.assert_called_once_with(ctx.log.write.return_value.trigger, plugins.Log.ENTRANCE)
 
 
 def test_walk_out_leaves_presence_alone(ctx, config_sensor):

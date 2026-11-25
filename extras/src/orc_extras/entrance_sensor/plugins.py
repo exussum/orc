@@ -57,7 +57,7 @@ def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppC
     if new == sensor.setting.active_event:
         ctx.scheduler.pause_queue(m.Queue.IOT)
         ctx.api.pause_presence()
-        ctx.api.delete_all_presence(log_entry.trigger)
+        ctx.api.delete_all_presence(log_entry.trigger, Log.ENTRANCE)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME))
         timed_name, timed_commands = _timed_commands(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
@@ -77,8 +77,8 @@ def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx:
     sensor, log_entry = payload
     visit = ctx.plugin_state[orc_extras.entrance_sensor]
     ctx.plugin_state[orc_extras.entrance_sensor] = None
-    present = ctx.api.check_presence(log_entry.trigger, probe=True)
-    ctx.api.resume_presence(log_entry.trigger)
+    present = ctx.api.check_presence(log_entry.trigger, Log.ENTRANCE, probe=True)
+    ctx.api.resume_presence(log_entry.trigger, Log.ENTRANCE)
     ctx.scheduler.release_queue(m.Queue.IOT)
     people = present - {sensor.setting.listener}
     door_open = not people and _door_open(ctx, sensor)

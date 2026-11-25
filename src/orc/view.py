@@ -265,7 +265,7 @@ def run_routine(id: str) -> dict[str, Any]:
 def checkin_presence(name: str) -> dict[str, Any]:
     trigger = m.Manual(_person(name))
     with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_CHECKED_IN.format(name=name), trigger)):
-        api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger)
+        api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger, m.LogSource.MANUAL)
     return {}
 
 
@@ -273,7 +273,7 @@ def checkin_presence(name: str) -> dict[str, Any]:
 def expire_presence(name: str) -> dict[str, Any]:
     trigger = m.Manual(_person(name))
     with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_EXPIRED.format(name=name), trigger)):
-        api.expire_presence([name], trigger, force=True)
+        api.expire_presence([name], trigger, m.LogSource.MANUAL, force=True)
     return {}
 
 

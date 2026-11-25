@@ -62,7 +62,7 @@ def reset_presence():
     # installs a fresh reporter closure (no tag lines keeps the scanner thread off).
     net.presence.__init__()
     with patch.object(config, "tags", []):
-        api.start_ble_listener()
+        api.start_presence()
 
 
 @pytest.fixture(autouse=True)

@@ -192,7 +192,7 @@ def test_back_on_schedule_checks_presence_then_replays(log_entry):
     ctx = MagicMock()
     ctx.api = create_autospec(api)
     plugins.back_on_schedule(ctx, None, entry=log_entry)
-    ctx.api.check_presence.assert_called_once_with(log_entry.trigger)
+    ctx.api.check_presence.assert_called_once_with(log_entry.trigger, log_entry.source)
     ctx.api.replay_day.assert_called_once_with(ctx.api.local_now.return_value, log_entry)
 
 
@@ -604,16 +604,16 @@ class TestPresence:
 
     def test_mark_and_query(self):
         assert api.present_names() == set()
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         assert api.present_names() == {"Alice"}
 
     def test_expire(self):
-        api.mark_present(["Alice"], api.local_now() - timedelta(minutes=1), TRIGGER)
-        api.expire_presence(["Alice"], TRIGGER)
+        api.mark_present(["Alice"], api.local_now() - timedelta(minutes=1), TRIGGER, m.LogSource.SYSTEM)
+        api.expire_presence(["Alice"], TRIGGER, m.LogSource.SYSTEM)
         assert api.present_names() == set()
 
     def test_stale_mark_expires(self):
-        api.mark_present(["Alice"], datetime(2026, 1, 4, 23, 30, tzinfo=config.settings.tz), TRIGGER)
+        api.mark_present(["Alice"], datetime(2026, 1, 4, 23, 30, tzinfo=config.settings.tz), TRIGGER, m.LogSource.SYSTEM)
         assert api.present_names() == set()
 
     def test_run_iot_job_skips_when_presence_absent(self, command_dispatch):
@@ -622,7 +622,7 @@ class TestPresence:
         command_dispatch.assert_not_called()
 
     def test_run_iot_job_runs_when_presence_present(self, command_dispatch):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         rule = self._routine("partner-r", m.Present("Alice"))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
@@ -642,7 +642,7 @@ class TestPresence:
         )
 
     def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):
-        api.mark_present(["Bob"], api.local_now(), TRIGGER)
+        api.mark_present(["Bob"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         rule = self._routine("anyone-r", m.Anyone())
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_called_once_with(
@@ -661,7 +661,7 @@ class TestPresence:
         assert "nobody home" in api.context().log.rows()[0].action
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         rule = self._routine("cloudy-r", m.Weather(m.WeatherCondition.CLOUDY))
         api.run_iot_job(m.IotJob(rule, "r"), ctx=self.ctx)
         command_dispatch.assert_not_called()
@@ -674,7 +674,7 @@ class TestPresence:
         command_dispatch.assert_called_once_with((), force=True, entry=log_entry)
 
     def test_replay_day_runs_routines_for_present_people(self, log_entry, command_dispatch, elapsed_schedule):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         partner = self._routine("partner-r", m.Present("Alice"))
         with elapsed_schedule(partner, "partner-r"):
             api.replay_day(api.local_now(), log_entry)
@@ -682,7 +682,7 @@ class TestPresence:
         assert [(c.subject.one(), c.value) for c in squished] == [(orc.Light.a, m.OFF)]
 
     def test_replay_day_skips_skip_replay_routines(self, log_entry, command_dispatch, elapsed_schedule):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         meeting = replace(self._routine("meeting-r", m.Present("Alice")), tags=frozenset({m.SKIP_REPLAY_TAG}))
         with elapsed_schedule(meeting, "meeting-r"):
             api.replay_day(api.local_now(), log_entry)
@@ -705,7 +705,7 @@ class TestPresence:
             ),
             patch.object(net.socket, "gethostbyname", side_effect=resolve),
         ):
-            api.check_presence(TRIGGER)
+            api.check_presence(TRIGGER, m.LogSource.SYSTEM)
         assert api.present_names() == {"Bob"}
 
     def test_check_presence_with_only_tags_reads_memory(self):
@@ -713,30 +713,30 @@ class TestPresence:
             patch.object(config, "people", ()),
             patch.object(net.presence, "tagged", frozenset({"Alice"})),
         ):
-            api.mark_present(["Alice"], api.local_now(), TRIGGER)
-            assert api.check_presence(TRIGGER) == {"Alice"}
+            api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
+            assert api.check_presence(TRIGGER, m.LogSource.SYSTEM) == {"Alice"}
 
     def test_pause_hides_earlier_evidence_until_resume(self):
-        api.mark_present(["Alice"], api.local_now() - timedelta(minutes=1), TRIGGER)
+        api.mark_present(["Alice"], api.local_now() - timedelta(minutes=1), TRIGGER, m.LogSource.SYSTEM)
         api.pause_presence()
         assert api.present_names() == set()
-        api.resume_presence(TRIGGER)
+        api.resume_presence(TRIGGER, m.LogSource.SYSTEM)
         assert api.present_names() == {"Alice"}
 
     def test_marks_during_pause_count(self):
         api.pause_presence()
-        api.mark_present(["Alice"], api.local_now() + timedelta(seconds=1), TRIGGER)
+        api.mark_present(["Alice"], api.local_now() + timedelta(seconds=1), TRIGGER, m.LogSource.SYSTEM)
         assert api.present_names() == {"Alice"}
 
     def test_future_checkin_survives_pause_and_expiry(self):
-        api.mark_present(["Alice"], api.local_now() + timedelta(hours=1), TRIGGER)
+        api.mark_present(["Alice"], api.local_now() + timedelta(hours=1), TRIGGER, m.LogSource.SYSTEM)
         api.pause_presence()
-        api.expire_presence(["Alice"], TRIGGER)
+        api.expire_presence(["Alice"], TRIGGER, m.LogSource.SYSTEM)
         assert api.present_names() == {"Alice"}
 
     def test_force_expire_drops_future_checkin(self):
-        api.mark_present(["Alice"], api.local_now() + timedelta(hours=1), TRIGGER)
-        api.expire_presence(["Alice"], TRIGGER, force=True)
+        api.mark_present(["Alice"], api.local_now() + timedelta(hours=1), TRIGGER, m.LogSource.SYSTEM)
+        api.expire_presence(["Alice"], TRIGGER, m.LogSource.SYSTEM, force=True)
         assert api.present_names() == set()
 
     @staticmethod
@@ -744,39 +744,39 @@ class TestPresence:
         return [log_entry.action, *(c.action for c in log_entry.children)]
 
     def test_mark_reports_detected_once(self):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         first = api.context().log.rows()[0]
         assert any("Presence detected: `Alice`" in a for a in self._reported(first))
         before = self._reported(first)
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
         assert api.context().log.rows()[0] is first and self._reported(first) == before
 
     def test_report_waits_for_resume(self):
         api.pause_presence()
         entries = len(api.context().log.rows())
-        api.mark_present(["Alice"], api.local_now() + timedelta(seconds=1), TRIGGER)
+        api.mark_present(["Alice"], api.local_now() + timedelta(seconds=1), TRIGGER, m.LogSource.SYSTEM)
         assert len(api.context().log.rows()) == entries
-        api.resume_presence(TRIGGER)
+        api.resume_presence(TRIGGER, m.LogSource.SYSTEM)
         assert any("Presence detected: `Alice`" in a for a in self._reported(api.context().log.rows()[0]))
 
     def test_report_logs_lost_after_expiry(self):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER)
-        api.expire_presence(["Alice"], TRIGGER, force=True)
+        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
+        api.expire_presence(["Alice"], TRIGGER, m.LogSource.SYSTEM, force=True)
         assert "Presence lost: `Alice`" in api.context().log.rows()[0].children[-1].action
 
     def test_check_probes_stale_tags_by_default_and_every_absent_one_when_asked(self):
-        api.mark_present(["Bob"], api.local_now(), TRIGGER)
-        api.mark_present(["Alice"], api.local_now() - timedelta(hours=10), TRIGGER)
+        api.mark_present(["Bob"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
+        api.mark_present(["Alice"], api.local_now() - timedelta(hours=10), TRIGGER, m.LogSource.SYSTEM)
         with (
             patch.object(net.presence, "tagged", frozenset({"Alice", "Bob", "Carol"})),
             patch.object(net.presence, "probe") as probe,
             patch.object(net, "scan_presence", return_value=(set(), [])),
         ):
-            api.check_presence(TRIGGER)
-            probe.assert_called_once_with({"Alice"}, TRIGGER)
+            api.check_presence(TRIGGER, m.LogSource.SYSTEM)
+            probe.assert_called_once_with({"Alice"}, TRIGGER, m.LogSource.SYSTEM)
             probe.reset_mock()
-            api.check_presence(TRIGGER, probe=True)
-        probe.assert_called_once_with({"Alice", "Carol"}, TRIGGER)
+            api.check_presence(TRIGGER, m.LogSource.SYSTEM, probe=True)
+        probe.assert_called_once_with({"Alice", "Carol"}, TRIGGER, m.LogSource.SYSTEM)
 
 
 def test_squish_dim_then_off():

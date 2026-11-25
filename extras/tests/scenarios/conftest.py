@@ -83,7 +83,7 @@ class House:
         self.reachable.discard(name)
 
     def scan(self):
-        api.check_presence(m.Query("lan"))
+        api.check_presence(m.Query("lan"), m.LogSource.SYSTEM)
 
     def report(self, device, attribute, new):
         old = self.reported.get((device, attribute))
@@ -117,7 +117,7 @@ def house(request, monkeypatch, tmp_path):
         broker.status_listeners.clear()
         net.presence.__init__()
         net.presence._tz = config.settings.tz
-        api.start_ble_listener()
+        api.start_presence()
 
         scheduler = ManualScheduler(config.settings.jobs_db, config.settings.tz)
         ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())
@@ -135,11 +135,11 @@ def house(request, monkeypatch, tmp_path):
         probed, reachable = [], set()
         real_probe = net.Presence.probe
 
-        def probe(presence, names, trigger):
+        def probe(presence, names, trigger, source):
             probed.extend(sorted(names))
             for name in sorted(names & reachable):
                 house.advertise(name)
-            real_probe(presence, names, trigger)
+            real_probe(presence, names, trigger, source)
 
         def record(commands, *args, **kwargs):
             dispatched.append(commands)

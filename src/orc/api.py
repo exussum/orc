@@ -453,16 +453,16 @@ def present_names() -> set[str]:
     return net.presence.present(_presence_cutoff())
 
 
-def set_present(names: Iterable[str], trigger: m.Trigger) -> set[str]:
-    return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger)
+def set_present(names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
+    return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger, source)
 
 
-def expire_presence(names: list[str], trigger: m.Trigger, force: bool = False) -> None:
-    net.presence.forget(names, trigger, before=None if force else local_now())
+def expire_presence(names: list[str], trigger: m.Trigger, source: m.LogSourceEnum, force: bool = False) -> None:
+    net.presence.forget(names, trigger, source, before=None if force else local_now())
 
 
-def delete_all_presence(trigger: m.Trigger) -> None:
-    expire_presence(list(net.presence.seen()), trigger)
+def delete_all_presence(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
+    expire_presence(list(net.presence.seen()), trigger, source)
 
 
 def pause_presence() -> None:
@@ -470,21 +470,21 @@ def pause_presence() -> None:
     context().scheduler.pause_queue(m.Queue.PRESENCE)
 
 
-def resume_presence(trigger: m.Trigger) -> None:
-    net.presence.resume(trigger)
+def resume_presence(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
+    net.presence.resume(trigger, source)
     context().scheduler.release_queue(m.Queue.PRESENCE)
 
 
-def start_ble_listener() -> None:
+def start_presence() -> None:
     reported: set[str] = set()
 
-    def report(trigger: m.Trigger) -> None:
+    def report(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
         nonlocal reported
         present = present_names()
         if detected := sorted(present - reported):
-            context().log.write(m.LogSource.SYSTEM, Message.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger)
+            context().log.write(source, Message.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger)
         if lost := sorted(reported - present):
-            context().log.write(m.LogSource.SYSTEM, Message.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
+            context().log.write(source, Message.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
         reported = present
 
     rows = sqlite.fetch_tags()
@@ -494,6 +494,7 @@ def start_ble_listener() -> None:
         config.tags,
         config.settings.tz,
         report,
+        m.LogSource.SYSTEM,
         clocks={row.person: row.clock for row in rows if row.clock},
         on_clock=sqlite.update_tag_clock,
     )
@@ -538,18 +539,18 @@ def apply_theme_change(ctx: m.AppContext, name: str, start: date | None, end: da
     rebuild_jobs(ctx)
 
 
-def check_presence(trigger: m.Trigger, source: m.LogSourceEnum = m.LogSource.SYSTEM, *, probe: bool = False) -> set[str]:
+def check_presence(trigger: m.Trigger, source: m.LogSourceEnum, *, probe: bool = False) -> set[str]:
     present = present_names()
     tagged = net.presence.tagged
     if not config.people and not tagged:
         return present
     stale = set(net.presence.seen()) - present
-    net.presence.probe(tagged - present if probe else stale & tagged, trigger)
+    net.presence.probe(tagged - present if probe else stale & tagged, trigger, source)
     return _scan_lan(trigger, source)
 
 
 def rescan_presence(trigger: m.Trigger) -> set[str]:
-    expire_presence([name for name in net.presence.seen() if name not in net.presence.tagged], trigger)
+    expire_presence([name for name in net.presence.seen() if name not in net.presence.tagged], trigger, m.LogSource.MANUAL)
     return _scan_lan(trigger, m.LogSource.MANUAL)
 
 
@@ -892,7 +893,7 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
 
 
 def _check_presence_job(payload: m.Trigger, *, ctx: m.AppContext) -> set[str]:
-    return check_presence(payload)
+    return check_presence(payload, m.LogSource.SYSTEM)
 
 
 def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
@@ -901,7 +902,7 @@ def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum) -> set[str]:
         msg = Message.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
         entry = context().log.write(source, msg, trigger, notification=m.Notification(("presence",), "/presence/"))
         alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-    return set_present(found, trigger)
+    return set_present(found, trigger, source)
 
 
 def _presence_cutoff() -> datetime:
@@ -909,7 +910,7 @@ def _presence_cutoff() -> datetime:
 
 
 def _presence_cron_job(ctx: m.AppContext) -> set[str]:
-    return check_presence(m.Cron("presence"))
+    return check_presence(m.Cron("presence"), m.LogSource.SYSTEM)
 
 
 def _key_summary(key: m.BleKey) -> str:
