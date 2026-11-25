@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, create_autospec
 
 import pytest
-from freezegun import freeze_time
+import time_machine
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "examples" / "plugin"))
 
@@ -48,9 +48,9 @@ def ctx():
 
 
 @pytest.fixture
-def freezegun_clock(ctx, monkeypatch):
+def frozen_clock(ctx, monkeypatch):
     monkeypatch.setattr(orc.config, "settings", orc.config.settings._replace(tz=UTC))
-    with freeze_time(NOW) as frozen:
+    with time_machine.travel(NOW, tick=False) as frozen:
         ctx.frozen = frozen
         ctx.api.local_now = api.local_now
         ctx.config.settings.tz = UTC

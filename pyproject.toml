@@ -46,8 +46,9 @@ requires-python = ">=3.14,<3.15"
 
 [project.optional-dependencies]
 test = [
-    "freezegun==1.5.5",
     "pytest==9.2.0",
+    "pytest-xdist==3.8.0",
+    "time-machine==3.6.0",
 ]
 lint = [
     "mypy==2.4.1",

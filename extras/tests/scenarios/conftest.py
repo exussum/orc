@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+import time_machine
 from flask import Flask
-from freezegun import freeze_time
 from orc_queue import ManualCoordinator
 
 import orc
@@ -161,7 +161,7 @@ def house(request, monkeypatch, tmp_path):
             patch.object(net.Presence, "probe", probe),
             patch.object(net, "_PROBE_SECONDS", 0),
             patch.object(config, "providers", config.providers._replace(push=push)),
-            freeze_time(MONDAY_AFTERNOON) as frozen,
+            time_machine.travel(MONDAY_AFTERNOON, tick=False) as frozen,
         ):
             house = House(ctx, app.test_client(), frozen, listeners, dispatched, lan, probed, reachable, pushed)
             marker = request.node.get_closest_marker("plugins")

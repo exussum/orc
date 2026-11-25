@@ -37,7 +37,7 @@ DEVICE_ENUMS = {"Light": Light, "Chromecast": Chromecast, "Sensor": Sensor}
 
 
 @pytest.fixture
-def ctx(ctx, freezegun_clock):
+def ctx(ctx, frozen_clock):
     ctx.engine.evaluate.side_effect = engine.Runtime(UTC).evaluate
     ctx.api.reader.return_value = _no_world
     ctx.api.present_names.return_value = set()

@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from unittest.mock import ANY, MagicMock, call, create_autospec, patch
 
 import pytest
-from freezegun import freeze_time
+import time_machine
 from orc_engine import model as em
 
 import orc
@@ -408,20 +408,20 @@ class TestLog:
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [("first", ["second"])]
 
     def test_an_equal_trigger_after_the_window_starts_its_own_entry(self):
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
             api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
-            frozen.tick(Log.ROLLUP_WINDOW)
+            frozen.shift(Log.ROLLUP_WINDOW)
             api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x"))
         assert [(e.action, e.children) for e in api.context().log.rows()] == [("later", []), ("first", [])]
 
     def test_an_open_entry_takes_an_equal_trigger_until_it_closes(self):
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
             entry = api.context().log.write(m.LogSource.SYSTEM, "first", m.Integration("x"))
             with api.context().log.opened(entry):
-                frozen.tick(timedelta(hours=1))
+                frozen.shift(timedelta(hours=1))
                 api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x"))
                 api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y"))
-            frozen.tick(timedelta(hours=1))
+            frozen.shift(timedelta(hours=1))
             api.context().log.write(m.LogSource.PLUGIN, "closed", m.Integration("x"))
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
             ("closed", []),
@@ -430,11 +430,11 @@ class TestLog:
         ]
 
     def test_a_swarm_of_external_changes_rolls_up(self):
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)) as frozen:
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
             api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
             api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
             api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "on", "off", m.Source.ORC))
-            frozen.tick(Log.ROLLUP_WINDOW)
+            frozen.shift(Log.ROLLUP_WINDOW)
             api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off", m.Source.EXTERNAL))
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
             ("`lamp a` switch: on → off", []),
@@ -450,7 +450,7 @@ class TestLog:
 
     def test_a_nested_line_still_notifies(self):
         entry = api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)), api.context().log.opened(entry):
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False), api.context().log.opened(entry):
             api.context().log.write(
                 m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification=m.Notification(("calendar", "dentist"))
             )
@@ -464,14 +464,14 @@ class TestLog:
 
     def test_a_link_rides_the_push_as_given(self):
         notification = m.Notification(("calendar",), "https://meet.google.com/abc?x=1")
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False):
             api.context().log.write(m.LogSource.PLUGIN, "standup", m.Integration("x"), notification=notification)
         assert api._ctx.scheduler.now.call_args.args[1][2] == notification
 
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider, push_subscriptions):
         push_subscriptions = push_subscriptions("ab")
         api.subscribe_push(push_subscriptions[0])
-        with freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz)):
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False):
             api.subscribe_push(push_subscriptions[1], greet=True)
         now = api._ctx.scheduler.now
         assert now.call_args.args[0] is api._push_job
@@ -503,7 +503,7 @@ class TestLog:
         assert [c.action for c in entry.children] == ["Push failed for `…xample/c`: boom"]
 
 
-@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
+@pytest.mark.time_machine(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False)
 class TestActiveOverride:
     OVERRIDE = m.ThemeOverride("vacation", date(2026, 1, 1), date(2026, 1, 10))
 
@@ -531,7 +531,7 @@ class TestActiveOverride:
         assert api.active_theme_override(date(2026, 1, 11)) is None
 
 
-@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
+@pytest.mark.time_machine(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False)
 class TestWorkDayTheme:
     def test_a_weekday_that_the_market_trades_is_a_work_day(self):
         assert api.calculate_theme(date(2026, 1, 5)) == m.THEME_WORK_DAY
@@ -549,7 +549,7 @@ class TestWorkDayTheme:
 
 
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
-@freeze_time(datetime(2026, 1, 3, 12, tzinfo=config.settings.tz))
+@pytest.mark.time_machine(datetime(2026, 1, 3, 12, tzinfo=config.settings.tz), tick=False)
 class TestGetSchedule:
     @staticmethod
     def _theme(name, *routine_names):
@@ -594,7 +594,7 @@ class TestGetSchedule:
         assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
 
 
-@freeze_time(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz))
+@pytest.mark.time_machine(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False)
 class TestPresence:
     ctx = object()
 

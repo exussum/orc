@@ -44,7 +44,7 @@ DEVICE_ENUMS = {"Light": Light, "AC": Ac, "Chromecast": Chromecast, "Sensor": Se
 
 
 @pytest.fixture
-def ctx(ctx, freezegun_clock):
+def ctx(ctx, frozen_clock):
     ctx.engine = engine.Runtime(UTC)
     ctx.api.reader.return_value = _world_read(ctx)
     ctx.api.squish.side_effect = lambda commands, entry: api.squish(commands)
