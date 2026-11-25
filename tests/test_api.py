@@ -232,6 +232,18 @@ def test_pause_not_stop_only_changes_chromecast_stop():
     assert api._pause_not_stop(commands) == (em.Command(cast, m.PAUSE), *commands[1:])
 
 
+def test_snapshot_counts_lights_on_and_sounds_resuming():
+    cast = m.Devices(orc.Chromecast.x)
+    commands = (
+        em.Command(m.Devices(orc.Light.a), 40),
+        em.Command(m.Devices(orc.Light.b), m.OFF),
+        em.Command(m.Devices(orc.Light.c), m.ON),
+        em.Command(cast, 30),
+        em.Command(cast, m.RESUME),
+    )
+    assert api.snapshot_counts(commands) == (2, 1)
+
+
 @pytest.mark.parametrize(
     ("state", "expected"),
     [

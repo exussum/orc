@@ -347,12 +347,18 @@ def _pause_not_stop(commands: m.Commands) -> m.Commands:
     )
 
 
+def snapshot_counts(commands: m.Commands) -> tuple[int, int]:
+    lights = sum(1 for c in commands if c.subject.one().kind == "Light" and c.value != m.OFF)
+    sounds = sum(1 for c in commands if c.value == m.RESUME)
+    return lights, sounds
+
+
 def override_scene(key: str, commands: m.Commands, end: datetime, label: str, entry: m.LogEntry) -> None:
     if not context().engine.snapshot_active(key):
         captured = capture_lights() + capture_sounds()
         context().engine.save_snapshot(key, m.SnapShot(captured, end, label))
-        items = ", ".join(f"`{c.subject.one().name}`={c.value}" for c in captured if c.value != m.OFF)
-        entry.add(entry.source, Message.SNAPSHOT_TAKEN.format(name=label, end=end, items=items or Message.SNAPSHOT_ALL_OFF))
+        lights, sounds = snapshot_counts(captured)
+        entry.add(entry.source, Message.SNAPSHOT_TAKEN.format(name=label, end=end, lights=lights, sounds=sounds))
     dispatch(commands, force=True, entry=entry)
 
 

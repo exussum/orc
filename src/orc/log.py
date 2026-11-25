@@ -16,8 +16,7 @@ class Message:
     BOOT_STEP: str = "{name} — {seconds}s"
     BOOT_TOTAL: str = "started in {seconds}s"
 
-    SNAPSHOT_TAKEN: str = "Snapshot for `{name}` until {end:%I:%M}: {items}"
-    SNAPSHOT_ALL_OFF: str = "all off"
+    SNAPSHOT_TAKEN: str = "Snapshot for `{name}` until {end:%H:%M}: 💡 {lights} · 🔊 {sounds}"
     SNAPSHOT_RESTORE: str = "Restore Snapshot"
     SNAPSHOT_RESTORED: str = "Snapshot for `{name}` restored"
 

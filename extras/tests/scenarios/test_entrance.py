@@ -76,7 +76,7 @@ def test_a_listener_who_left_before_the_door_is_lost_at_cleanup(house):
         [
             *WALK_IN,
             "Presence lost: `Rex`",
-            "Snapshot for `entrance_sensor` until 04:47: all off",
+            "Snapshot for `entrance_sensor` until 16:47: 💡 0 · 🔊 0",
             "Trigger sensor off: applying OFF",
         ],
     )
@@ -117,7 +117,7 @@ def test_a_tag_passing_through_mid_visit_counts_for_neither(house):
             [
                 *WALK_IN,
                 *WALK_IN,
-                "Snapshot for `entrance_sensor` until 03:48: all off",
+                "Snapshot for `entrance_sensor` until 15:48: 💡 0 · 🔊 0",
                 "Trigger sensor off: applying OFF",
                 "Entrance motion with nobody tracked before or after",
             ],
