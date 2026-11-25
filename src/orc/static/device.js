@@ -47,13 +47,9 @@ const acGroups = {
         onSelect(id, el) {
             const mode = el.dataset.value;
             acSelections[id] = { ...acSelections[id], mode, fan: undefined };
-            if (mode === 'dry') {
-                resetGroup('fan', id, true);
-                acQuery('set', id).forEach(btn => btn.disabled = false);
-            } else {
-                resetGroup('fan', id, false);
-                acQuery('set', id).forEach(btn => btn.disabled = true);
-            }
+            const dry = mode === 'dry';
+            resetGroup('fan', id, dry);
+            acQuery('set', id).forEach(btn => btn.disabled = !dry);
         },
     },
     fan: {

@@ -1,4 +1,4 @@
-import { get, hardRefresh, startProgress, wire } from "./orc.js";
+import { hardRefresh, pauseJob, startProgress, wire } from "./orc.js";
 
 const startEl = document.querySelector("#orc-theme-select-start");
 const endEl = document.querySelector("#orc-theme-select-end");
@@ -40,17 +40,11 @@ async function set_theme() {
     }
 }
 
-async function pause(el) {
-    await get(`/api/schedule/${el.dataset.queue}/${el.dataset.id}/pause?paused=${el.checked ? 0 : 1}`, el, () => {
-        el.checked = !el.checked;
-    });
-}
-
 function formUpdated() {
     document.querySelector("#orc-theme-submit").disabled = selectEl.value && !(startEl.value && endEl.value);
 }
 
-wire(".orc-enable", "change", pause);
+wire(".orc-enable", "change", pauseJob);
 wire("#orc-theme-submit", "click", set_theme);
 
 selectEl.addEventListener("change", (e) => {

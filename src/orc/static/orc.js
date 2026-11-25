@@ -59,6 +59,14 @@ export async function get(url, el, onFailure = () => {}) {
 }
 
 
+export async function pauseJob(el) {
+    const done = await get(`/api/schedule/${el.dataset.queue}/${el.dataset.id}/pause?paused=${el.checked ? 0 : 1}`, el, () => {
+        el.checked = !el.checked;
+    });
+    const state = el.closest("tr").querySelector(".orc-job-state");
+    if (done && state) state.textContent = el.checked ? state.dataset.state : "disabled";
+}
+
 function clearQueued(el) {
     el.classList.remove("orc-button-queued");
     el.style.transition = "none";
