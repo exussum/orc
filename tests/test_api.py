@@ -509,7 +509,9 @@ class TestActiveOverride:
 
     @pytest.fixture(autouse=True)
     def theme_override(self):
-        api.set_theme_override(*self.OVERRIDE)
+        with patch.dict(config.themes, {"vacation": m.Theme("vacation", ())}):
+            api.set_theme_override(*self.OVERRIDE)
+            yield
 
     def test_no_override(self):
         api.clear_theme_override()
@@ -597,6 +599,12 @@ class TestGetSchedule:
         del self.themes["saturday"]
         del self.themes["sunday"]
         assert self._names(api.get_schedule()) == ["off-r", "off-r"]
+
+    def test_override_naming_a_removed_theme_is_ignored(self):
+        api.set_theme_override("gone", date(2026, 1, 3), date(2026, 1, 4))
+        assert api.current_theme_override() is None
+        assert api.calculate_theme(date(2026, 1, 3)) == m.THEME_DAY_OFF
+        assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
 
     def test_override_outside_window_does_not_apply(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
