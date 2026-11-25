@@ -415,6 +415,12 @@ class AcState:
         pairs = ((self.power, other.power), (self.mode, other.mode), (self.fan_mode, other.fan_mode), (self.temperature, other.temperature))
         return all(a is None or b is None or a == b for a, b in pairs)
 
+    # a fuzzy __eq__ can't agree with a field-based hash, so only the state __eq__ can never match is refused
+    def __hash__(self) -> int:
+        if self.power is None:
+            raise TypeError("an AcState without a power never equals anything, so it can't be hashed")
+        return hash((self.power, self.mode, self.fan_mode, self.temperature))
+
     def __str__(self) -> str:
         if self.power == OFF:
             return OFF
@@ -453,6 +459,12 @@ class LightState:
             (self.color_temperature, other.color_temperature, _within_a_mired),
         )
         return all(a is None or b is None or close(a, b) for a, b, close in pairs)
+
+    # a fuzzy __eq__ can't agree with a field-based hash, so only the state __eq__ can never match is refused
+    def __hash__(self) -> int:
+        if all(v is None for v in (self.switch, self.level, self.hue, self.saturation, self.color_temperature, self.color_mode)):
+            raise TypeError("a LightState with every field unsaid can't be hashed")
+        return hash((self.switch, self.level, self.hue, self.saturation, self.color_temperature, self.color_mode))
 
     def __str__(self) -> str:
         if self.switch == OFF:

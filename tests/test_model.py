@@ -24,3 +24,22 @@ def test_ac_state_eq(a, b, expected):
 )
 def test_color_temperature_compare_tolerates_zero(a, b, expected):
     assert m._within_a_mired(a, b) is expected
+
+
+def test_state_hash_refuses_the_invalid_state():
+    with pytest.raises(TypeError):
+        hash(m.AcState())
+    with pytest.raises(TypeError):
+        hash(m.AcState(mode="cool"))
+    with pytest.raises(TypeError):
+        hash(m.LightState())
+
+
+def test_state_hash_of_valid_states():
+    assert hash(m.AcState(power=m.ON, mode="cool", current_temperature=70)) == hash(
+        m.AcState(power=m.ON, mode="cool", current_temperature=75)
+    )
+    assert hash(m.AcState(power=m.ON, mode="cool")) == hash((m.ON, "cool", None, None))
+    assert hash(m.LightState(switch=m.ON, level=50)) == hash(m.LightState(switch=m.ON, level=50))
+    assert hash(m.LightState(level=50)) == hash((None, 50, None, None, None, None))
+    assert len({m.LightState(switch=m.ON), m.LightState(switch=m.ON)}) == 1
