@@ -733,7 +733,12 @@ def _squish(items: list[m.DeviceCommand]) -> tuple[m.DeviceCommand, ...]:
 def _base_theme(today: date) -> str:
     if today.weekday() in (5, 6):
         return m.THEME_DAY_OFF
-    return m.THEME_DAY_OFF if config.providers.holiday.market_holiday(today) else m.THEME_WORK_DAY
+    try:
+        holiday = config.providers.holiday.market_holiday(today)
+    except OSError, RuntimeError, ValueError, KeyError:  # request failures, the feed's error payload, malformed json or entries
+        _log.warning("could not check the market holiday for %s, treating it as a work day", today, exc_info=True)
+        return m.THEME_WORK_DAY
+    return m.THEME_DAY_OFF if holiday else m.THEME_WORK_DAY
 
 
 def _scheduled_theme(today: date) -> m.Theme:
