@@ -54,6 +54,8 @@ _PARSE_ERRORS = [
     ("invalid_button_event", "Invalid button event 'clicked'"),
     ("non_numeric_button", "invalid literal for int() with base 10: 'one'"),
     ("command_duplicate", "Command 'X' is already defined"),
+    ("ad_hoc_duplicate", "Ad-hoc routine 'AD_HOC_X' is already defined"),
+    ("routine_duplicate", "Routine 'R' is already defined"),
     ("command_append_unknown", "Unknown command 'X'"),
     ("include_unknown_command", "Unknown command 'NOPE'"),
     ("include_leaves_nothing", "Include 'X - Light' leaves no commands"),
