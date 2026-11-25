@@ -26,9 +26,11 @@ cp /tmp/data-pyproject.toml "$DEPS/data/pyproject.toml"
 sed -i '/github.com\/exussum/d' "$DEPS/pyproject.toml"
 UV_INDEX="$ORC_REGISTRY_URL/simple/" $UV sync --no-install-workspace --group dev --no-cache --project "$DEPS"
 rm -rf "$DEPS"
-$UV pip install orc==0.0.1 --reinstall-package orc $INSTALL_OPTS
-$UV pip install orc_extras==0.0.1 --reinstall-package orc_extras $INSTALL_OPTS
-$UV pip install orc_data==0.0.1 --reinstall-package orc_data $INSTALL_OPTS
+$UV pip install orc==0.0.1 orc_extras==0.0.1 orc_data==0.0.1 \
+    --reinstall-package orc \
+    --reinstall-package orc_extras \
+    --reinstall-package orc_data \
+    $INSTALL_OPTS
 
 if [ "$RESTART" ]; then
     supervisorctl start orc || true
