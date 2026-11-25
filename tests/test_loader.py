@@ -1,5 +1,6 @@
 import re
 from datetime import UTC, time, timedelta
+from functools import cache
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -80,8 +81,9 @@ def test_condition_holds_against_world():
     assert not _condition("bob").holds(seen)
 
 
-def parse(case, **kwargs):
-    return parse_config((FIXTURE / f"{case}.orc").read_text(), **kwargs)
+@cache
+def parse(case):
+    return parse_config((FIXTURE / f"{case}.orc").read_text())
 
 
 def test_devices_build_enums_with_rooms():
@@ -100,7 +102,7 @@ def test_devices_without_zigbee_config_get_generated_ids_and_are_virtual():
 
 
 def test_devices_resolve_zigbee_ids():
-    parsed = parse("core", zigbee_config={"h1": ("5", frozenset())})
+    parsed = parse_config((FIXTURE / "core.orc").read_text(), zigbee_config={"h1": ("5", frozenset())})
     assert parsed.enums["Light"]["LAMP"].value == "5"
     assert parsed.enums["Light"]["LAMP"] not in parsed.virtual_devices
 
@@ -166,7 +168,7 @@ def test_validate_unknown_emergency_routine():
 
 
 def test_validate_accepts_complete_config():
-    parsed = parse("core")
+    parsed = SimpleNamespace(**vars(parse("core")))
     parsed.provider = parse("provider").provider
     validate(parsed)
 
