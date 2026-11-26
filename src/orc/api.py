@@ -568,7 +568,7 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
 
 
 def run_iot_job(payload: m.IotJob) -> None:
-    entry = context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.rule.name))
+    entry = context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.routine_id))
     context().log.last = entry
     _run_schedule_routine(payload.rule, entry, present_names())
 
