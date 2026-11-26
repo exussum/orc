@@ -151,23 +151,26 @@ def test_settings_typed_and_defaulted():
     assert str(settings.tz) == "America/New_York"
 
 
-def test_validate_missing_settings():
-    with pytest.raises(
-        ConfigError,
-        match="Missing required settings: base_url, lan_domain, jobs_db, lat, long, broadlink_codes, mqtt_host, "
+_VALIDATE_ERRORS = [
+    (
+        "validate_missing_settings",
+        "Missing required settings: base_url, lan_domain, jobs_db, lat, long, broadlink_codes, mqtt_host, "
         "warning_device, attention_device, emergency_device, emergency_routine",
-    ):
-        validate(parse("validate_missing_settings"))
+    ),
+    ("validate_empty_setting", "Missing required settings: mqtt_host"),
+    ("validate_unknown_emergency_routine", r"Unknown routine 'ROUTINE_EMERGENCY': expected one of \('ROUTINE_RESET', 'ROUTINE_DEFAULT'\)"),
+    ("core", "Missing required providers: weather, holiday, blaster"),
+    ("validate_missing_routines", "Missing required routines: ROUTINE_DEFAULT, ROUTINE_RESET"),
+    ("validate_polar_sun_times", "Latitude 70.0 has days without a sunrise or sunset: Welcome"),
+    ("validate_missing_themes", "Missing required themes: day off, work day"),
+    ("validate_missing_reset_name", "Missing required routine names: Reset"),
+]
 
 
-def test_validate_empty_setting():
-    with pytest.raises(ConfigError, match="Missing required settings: mqtt_host"):
-        validate(parse("validate_empty_setting"))
-
-
-def test_validate_unknown_emergency_routine():
-    with pytest.raises(ConfigError, match=r"Unknown routine 'ROUTINE_EMERGENCY': expected one of \('ROUTINE_RESET', 'ROUTINE_DEFAULT'\)"):
-        validate(parse("validate_unknown_emergency_routine"))
+@pytest.mark.parametrize("case, error", _VALIDATE_ERRORS, ids=[case for case, _ in _VALIDATE_ERRORS])
+def test_validate_rejects(case, error):
+    with pytest.raises(ConfigError, match=error):
+        validate(parse(case))
 
 
 def test_validate_accepts_complete_config():
@@ -391,31 +394,6 @@ def test_unnamed_providers_default_to_the_real_backend_or_nothing():
         webpush,
     )
     assert (provider.weather, provider.holiday, provider.blaster) == (None, None, None)
-
-
-def test_validate_missing_providers():
-    with pytest.raises(ConfigError, match="Missing required providers: weather, holiday, blaster"):
-        validate(parse("core"))
-
-
-def test_validate_missing_routines():
-    with pytest.raises(ConfigError, match="Missing required routines: ROUTINE_DEFAULT, ROUTINE_RESET"):
-        validate(parse("validate_missing_routines"))
-
-
-def test_validate_polar_sun_times():
-    with pytest.raises(ConfigError, match="Latitude 70.0 has days without a sunrise or sunset: Welcome"):
-        validate(parse("validate_polar_sun_times"))
-
-
-def test_validate_missing_themes():
-    with pytest.raises(ConfigError, match="Missing required themes: day off, work day"):
-        validate(parse("validate_missing_themes"))
-
-
-def test_validate_requires_reset_routine_name():
-    with pytest.raises(ConfigError, match="Missing required routine names: Reset"):
-        validate(parse("validate_missing_reset_name"))
 
 
 def _condition(person=None, weather=None):

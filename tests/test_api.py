@@ -33,6 +33,10 @@ Light._sort = 0
 Chromecast._sort = 1
 
 
+def _cmd(what, value):
+    return em.Command(m.Devices(what), value)
+
+
 @pytest.fixture
 def snapshot_commands():
     return (em.Command(m.Devices(orc.Light.a), m.ON), em.Command(m.Devices(orc.Light.b), m.OFF))
@@ -805,39 +809,37 @@ class TestPresence:
         probe.assert_called_once_with({"Alice", "Carol"}, TRIGGER, m.LogSource.SYSTEM)
 
 
-def test_squish_dim_then_off():
-    cfg = (_cmd(Light.a, 10), _cmd(Light.a, m.ON), _cmd(Light.a, 20), _cmd(Light.a, m.ON), _cmd(Light.a, m.OFF))
-    assert api._squish(list(cfg)) == (_cmd(Light.a, 20), _cmd(Light.a, m.OFF))
+@pytest.mark.parametrize(
+    "cfg, expected",
+    [
+        (
+            [_cmd(Light.a, 10), _cmd(Light.a, m.ON), _cmd(Light.a, 20), _cmd(Light.a, m.ON), _cmd(Light.a, m.OFF)],
+            (_cmd(Light.a, 20), _cmd(Light.a, m.OFF)),
+        ),
+        ([_cmd(Light.a, m.ON), _cmd(Light.a, m.OFF)], (_cmd(Light.a, m.OFF),)),
+        ([_cmd(Light.a, 20), _cmd(Light.a, m.ON)], (_cmd(Light.a, 20), _cmd(Light.a, m.ON))),
+        ([_cmd(Light.a, m.OFF), _cmd(Light.a, m.ON)], (_cmd(Light.a, m.ON),)),
+    ],
+    ids=["dim_then_off", "just_off", "dim_on", "just_on"],
+)
+def test_squish_one_device(cfg, expected):
+    assert api._squish(cfg) == expected
 
 
-def test_squish_just_off():
-    cfg = [_cmd(Light.a, m.ON), _cmd(Light.a, m.OFF)]
-    assert api._squish(cfg) == (_cmd(Light.a, m.OFF),)
-
-
-def test_squish_dim_on():
-    cfg = [_cmd(Light.a, 20), _cmd(Light.a, m.ON)]
-    assert api._squish(cfg) == (_cmd(Light.a, 20), _cmd(Light.a, m.ON))
-
-
-def test_squish_just_on():
-    cfg = [_cmd(Light.a, m.OFF), _cmd(Light.a, m.ON)]
-    assert api._squish(cfg) == (_cmd(Light.a, m.ON),)
-
-
-def test_squish_expands_everything_off_start():
-    commands = (_cmd(Light, m.OFF), _cmd(Light.a, m.ON))
-    assert api.squish(commands) == (_cmd(Light.a, m.ON), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF))
-
-
-def test_squish_expands_double_on():
-    commands = (_cmd(Light, m.ON), _cmd(Light.a, m.ON))
-    assert api.squish(commands) == (_cmd(Light.a, m.ON), _cmd(Light.b, m.ON), _cmd(Light.c, m.ON))
-
-
-def test_squish_expands_dim_then_off():
-    commands = (_cmd(Light, m.OFF), _cmd(Light.a, 10), _cmd(Light, m.OFF))
-    assert api.squish(commands) == (_cmd(Light.a, 10), _cmd(Light.a, m.OFF), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF))
+@pytest.mark.parametrize(
+    "commands, expected",
+    [
+        ((_cmd(Light, m.OFF), _cmd(Light.a, m.ON)), (_cmd(Light.a, m.ON), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF))),
+        ((_cmd(Light, m.ON), _cmd(Light.a, m.ON)), (_cmd(Light.a, m.ON), _cmd(Light.b, m.ON), _cmd(Light.c, m.ON))),
+        (
+            (_cmd(Light, m.OFF), _cmd(Light.a, 10), _cmd(Light, m.OFF)),
+            (_cmd(Light.a, 10), _cmd(Light.a, m.OFF), _cmd(Light.b, m.OFF), _cmd(Light.c, m.OFF)),
+        ),
+    ],
+    ids=["everything_off_start", "double_on", "dim_then_off"],
+)
+def test_squish_expands(commands, expected):
+    assert api.squish(commands) == expected
 
 
 def test_squish_stop_then_volume():
@@ -875,10 +877,6 @@ def _routine(name, when, *commands, skip_replay=False):
 
 def _ac(**attributes):
     return patch.object(broker, "snapshot", return_value=[m.DeviceState(m.Device("clip-1", "unit", "lg_ac"), attributes, None)])
-
-
-def _cmd(what, value):
-    return em.Command(m.Devices(what), value)
 
 
 def test_runtime_does_not_report_a_change_that_only_differs_by_an_unsaid_field():

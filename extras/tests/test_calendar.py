@@ -136,22 +136,19 @@ def rebuild(ctx):
     return run
 
 
-def test_alarm_skipped_outside_its_theme(ctx):
-    ctx.api.calculate_theme.return_value = "day off"
-    plugins._run_event(CalendarJob(ALARM, A, "work day"), ctx=ctx)
-    ctx.log.write.assert_not_called()
-
-
-def test_alarm_runs_under_its_theme(ctx):
-    ctx.api.calculate_theme.return_value = "work day"
-    plugins._run_event(CalendarJob(ALARM, A, "work day"), ctx=ctx)
-    ctx.log.write.assert_called_once()
-
-
-def test_feed_without_theme_runs_under_any_theme(ctx):
-    ctx.api.calculate_theme.return_value = "day off"
-    plugins._run_event(CalendarJob(ALARM, A), ctx=ctx)
-    ctx.log.write.assert_called_once()
+@pytest.mark.parametrize(
+    "current_theme, job, runs",
+    [
+        ("day off", CalendarJob(ALARM, A, "work day"), False),
+        ("work day", CalendarJob(ALARM, A, "work day"), True),
+        ("day off", CalendarJob(ALARM, A), True),
+    ],
+    ids=["alarm_skipped_outside_its_theme", "alarm_runs_under_its_theme", "feed_without_theme_runs_under_any_theme"],
+)
+def test_alarm_theme(ctx, current_theme, job, runs):
+    ctx.api.calculate_theme.return_value = current_theme
+    plugins._run_event(job, ctx=ctx)
+    assert ctx.log.write.call_count == (1 if runs else 0)
 
 
 def test_alarm_links_the_choice_page(ctx):

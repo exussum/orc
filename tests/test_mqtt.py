@@ -119,25 +119,20 @@ class TestButtonEvents:
         mqtt._on_message(None, None, _button_msg("held"))
         assert mqtt_events == [("10", "remote", "held", None, 1)]
 
-    def test_press_from_a_device_the_hub_never_exported_is_dropped(self, mqtt_events):
+    @pytest.mark.parametrize(
+        "path, payloads",
+        [
+            ("button/1", [{"event_type": "held", "button": 1, "timestamp": "2026-07-29T22:42:37+0000"}]),
+            ("button/1", [b""]),
+            ("commands/release", [b"1"]),
+            ("button/1", [b"not json", {"unexpected": "shape"}]),
+        ],
+        ids=["press_from_a_device_the_hub_never_exported", "clearing_publish", "command_echo", "bad_payload"],
+    )
+    def test_ignored(self, mqtt_events, path, payloads):
         broker.add_status_listener(lambda *a: mqtt_events.append(a))
-        mqtt._on_message(None, None, _button_msg("held"))
-        assert mqtt_events == []
-
-    def test_clearing_publish_ignored(self, mqtt_events):
-        broker.add_status_listener(lambda *a: mqtt_events.append(a))
-        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"", retain=False))
-        assert mqtt_events == []
-
-    def test_command_echo_ignored(self, mqtt_events):
-        broker.add_status_listener(lambda *a: mqtt_events.append(a))
-        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/commands/release", b"1", retain=False))
-        assert mqtt_events == []
-
-    def test_bad_payload_ignored(self, mqtt_events):
-        broker.add_status_listener(lambda *a: mqtt_events.append(a))
-        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", b"not json", retain=False))
-        mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/button/1", {"unexpected": "shape"}, retain=False))
+        for payload in payloads:
+            mqtt._on_message(None, None, _msg(f"hubitat/{HUB}/devices/10/{path}", payload, retain=False))
         assert mqtt_events == []
 
     def test_failing_listener_does_not_break_others(self, mqtt_events):
@@ -222,21 +217,20 @@ class TestPublishLight:
     def published(self, mqtt_client):
         self.published = mqtt_client.published
 
-    def test_on_publishes_on_command(self):
-        mqtt.command(orc.Light.a, m.ON)
-        assert self.published == [(f"hubitat/{HUB}/devices/1/commands/on", None, False)]
-
-    def test_off_publishes_off_command(self):
-        mqtt.command(orc.Light.a, m.OFF)
-        assert self.published == [(f"hubitat/{HUB}/devices/1/commands/off", None, False)]
-
-    def test_brightness_publishes_set_level_with_raw_payload(self):
-        mqtt.command(orc.Light.a, 42)
-        assert self.published == [(f"hubitat/{HUB}/devices/1/commands/setLevel", "42", False)]
-
-    def test_brightness_zero_without_capability_publishes_off(self):
-        mqtt.command(orc.Light.b, 0)
-        assert self.published == [(f"hubitat/{HUB}/devices/2/commands/off", None, False)]
+    @pytest.mark.parametrize(
+        "device, value, command, payload",
+        [
+            ("a", m.ON, "on", None),
+            ("a", m.OFF, "off", None),
+            ("a", 42, "setLevel", "42"),
+            ("b", 0, "off", None),
+        ],
+        ids=["on", "off", "brightness", "brightness_zero_without_capability"],
+    )
+    def test_publishes_the_command(self, device, value, command, payload):
+        device = orc.Light[device]
+        mqtt.command(device, value)
+        assert self.published == [(f"hubitat/{HUB}/devices/{device.value}/commands/{command}", payload, False)]
 
     def test_brightness_without_capability_raises(self):
         with pytest.raises(ValueError):
