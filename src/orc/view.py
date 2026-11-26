@@ -457,8 +457,15 @@ def set_theme() -> dict[str, Any]:
     name = request.form["theme"]
     if name and name not in config.themes:
         abort(404, "Unknown theme")
-    start = date.fromisoformat(request.form["start"]) if name else None
-    end = date.fromisoformat(request.form["end"]) if name else None
+    start = end = None
+    if name:
+        try:
+            start = date.fromisoformat(request.form["start"])
+            end = date.fromisoformat(request.form["end"])
+        except ValueError:
+            abort(400, "Start and end must be dates")
+        if start > end:
+            abort(400, "Start must not be after end")
     api.apply_theme_change(name, start, end, m.Manual(name or "theme"))
     return {}
 
