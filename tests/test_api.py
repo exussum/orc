@@ -545,8 +545,12 @@ class TestWorkDayTheme:
 
     @pytest.mark.parametrize("exc", [ConnectionError("down"), RuntimeError("feed error"), ValueError("bad json"), KeyError("date")])
     def test_a_failing_holiday_provider_means_a_work_day(self, exc):
+        api.context().log.clear()
         with patch.object(config.providers.holiday, "market_holiday", side_effect=exc):
             assert api.calculate_theme(date(2026, 1, 5)) == m.THEME_WORK_DAY
+        assert [e.action for e in api.context().log.rows()] == [
+            f"Market holiday check failed for 2026-01-05, treating it as a work day: {exc}"
+        ]
 
     def test_an_override_decides_it(self):
         api.set_theme_override("day off", date(2026, 1, 5), date(2026, 1, 5))

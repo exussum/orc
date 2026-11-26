@@ -735,8 +735,8 @@ def _base_theme(today: date) -> str:
         return m.THEME_DAY_OFF
     try:
         holiday = config.providers.holiday.market_holiday(today)
-    except OSError, RuntimeError, ValueError, KeyError:  # request failures, the feed's error payload, malformed json or entries
-        _log.warning("could not check the market holiday for %s, treating it as a work day", today, exc_info=True)
+    except (OSError, RuntimeError, ValueError, KeyError) as exc:  # request failures, the feed's error payload, malformed json or entries
+        context().log.write(m.LogSource.SYSTEM, Message.HOLIDAY_CHECK_FAILED.format(day=today, exc=exc), m.System("holiday"))
         return m.THEME_WORK_DAY
     return m.THEME_DAY_OFF if holiday else m.THEME_WORK_DAY
 
