@@ -337,6 +337,8 @@ def _room(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _ad_hoc(objects: dict[str, Any], args: SimpleNamespace) -> None:
     ad_hoc_routines = objects["ad_hoc"]
     if args.define:
+        if args.id in ad_hoc_routines:
+            raise ValueError(f"Ad-hoc routine {args.id!r} is already defined")
         config = m.AdhocAction(
             name=args.name,
             snapshot=timedelta(minutes=args.snapshot) if args.snapshot is not None else None,
@@ -383,6 +385,8 @@ def _plugin(objects: dict[str, Any], args: SimpleNamespace) -> None:
 def _routine(objects: dict[str, Any], args: SimpleNamespace) -> None:
     routines = objects["routine"]
     if args.define:
+        if args.id in routines:
+            raise ValueError(f"Routine {args.id!r} is already defined")
         tags = frozenset({m.SKIP_REPLAY_TAG}) if args.skip_replay else frozenset()
         routines[args.id] = em.Rule((), name=args.name, tags=tags)
     elif (routine := routines.get(args.id)) is None:
