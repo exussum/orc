@@ -21,6 +21,7 @@ from orc.dal.findhub import nova
 from orc.dal.holiday import polygon
 from orc.dal.push import webpush
 from orc.dal.secrets import bws, keepass
+from orc.dal.weather import open_meteo
 from orc.model import BleKey, Query
 
 TRIGGER = Query("test")
@@ -391,8 +392,6 @@ class TestKeepass:
 
 
 def test_forecast_is_refetched_each_real_hour_but_once_within_it():
-    from orc.dal.weather import open_meteo
-
     open_meteo._forecast.cache_clear()
     asked = datetime(2026, 11, 26, 15, 30, tzinfo=timezone.utc)
     payload = {"hourly": {"weather_code": [0] * 24, "temperature_2m": [50.0 + h for h in range(24)]}}

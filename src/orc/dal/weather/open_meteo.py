@@ -32,7 +32,6 @@ def _hour_forecast(when: datetime, lat: float, lon: float) -> Hour:
     return _forecast(when.replace(minute=0, second=0, microsecond=0), fetched, lat, lon)
 
 
-# `fetched` is only a cache key: a forecast for an hour is refetched once per real hour.
 @lru_cache(maxsize=10)
 def _forecast(now: datetime, fetched: datetime, lat: float, lon: float) -> Hour:
     date_str = now.strftime("%Y-%m-%d")
