@@ -9,6 +9,7 @@ import time_machine
 from command_cfg import ConfigError
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from orc_queue import Job, utcnow
 from pykeepass import create_database
 from pywebpush import WebPushException
 
@@ -20,6 +21,7 @@ from orc.dal.chromecast.pychromecast import _strip_googlevideo_params
 from orc.dal.findhub import nova
 from orc.dal.holiday import polygon
 from orc.dal.push import webpush
+from orc.dal.scheduler import Scheduler
 from orc.dal.secrets import bws, keepass
 from orc.dal.weather import open_meteo
 from orc.model import BleKey, Query
@@ -204,6 +206,39 @@ def test_tag_clock_moves_only_by_more_than_half_a_window(offsets, expected):
     for offset in offsets:
         sqlite.update_tag_clock("Alice", m.TagClock(offset, 0))
     assert sqlite.fetch_tags() == [m.Tag("Alice", m.BleKey(bytes(32), 5), m.TagClock(expected, 0))]
+
+
+def _noop():
+    pass
+
+
+def _job(id, run_at, *, disable=False):
+    return Job(run_at, None, _noop, id=id, name=id, disable=disable)
+
+
+@pytest.fixture
+def scheduler(tmp_path):
+    return Scheduler(str(tmp_path / "jobs.sqlite"), timezone.utc)
+
+
+def _queue(scheduler, *jobs):
+    with scheduler._lock:
+        for job in jobs:
+            scheduler.queues()[m.Queue.IOT].add(job)
+
+
+def test_sync_adds_missing_jobs_and_leaves_a_queued_one_paused(scheduler):
+    later = utcnow() + timedelta(hours=1)
+    _queue(scheduler, _job("a", later, disable=True))
+    scheduler.sync([_job("a", later), _job("b", later)], m.Queue.IOT)
+    assert {job.id: job.disable for job in scheduler.jobs(m.Queue.IOT)} == {"a": True, "b": False}
+
+
+def test_sync_removes_unwanted_jobs_but_leaves_past_due_ones(scheduler):
+    now = utcnow()
+    _queue(scheduler, _job("past", now - timedelta(minutes=1)), _job("gone", now + timedelta(hours=1)))
+    scheduler.sync([], m.Queue.IOT)
+    assert [job.id for job in scheduler.jobs(m.Queue.IOT)] == ["past"]
 
 
 def test_tag_clock_needs_a_key_row():

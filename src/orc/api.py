@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from orc_engine import cast as engine_cast
 from orc_engine import engine
 from orc_engine import model as em
-from orc_queue import Job
+from orc_queue import Job, aware
 from skyfield import almanac
 from skyfield.api import load, load_file, wgs84
 from yarl import URL
@@ -593,14 +593,12 @@ def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None,
 
 
 def rebuild_jobs() -> None:
-    context().scheduler.rebuild()
-    setup_scheduler()
+    rebuild_iot_schedule()
 
 
 def setup_scheduler() -> None:
     ctx = context()
-    if not fetch_jobs(m.Queue.IOT):
-        rebuild_iot_schedule()
+    rebuild_iot_schedule()
     for job_id, func, crontab, name, queue in (
         ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron", m.Queue.ADHOC),
         ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron", m.Queue.PRESENCE),
@@ -664,17 +662,19 @@ def runtime() -> engine.Runtime[m.Devices]:
 
 def rebuild_iot_schedule() -> None:
     now = local_now()
-    for run_at, entry in get_schedule():
-        if now <= run_at:
-            job = m.IotJob(entry.routine, entry.routine_id)
-            context().scheduler.once(
-                run_iot_job,
-                run_at,
-                job,
-                id=f"iot-{entry.routine_id}-{run_at.date().isoformat()}",
-                name=entry.routine.name,
-                queue=m.Queue.IOT,
-            )
+    jobs = [
+        Job(
+            aware(run_at),
+            None,
+            run_iot_job,
+            m.IotJob(entry.routine, entry.routine_id),
+            id=f"iot-{entry.routine_id}-{run_at:%Y-%m-%dT%H:%M}",
+            name=entry.routine.name,
+        )
+        for run_at, entry in get_schedule()
+        if now <= run_at
+    ]
+    context().scheduler.sync(jobs, m.Queue.IOT)
 
 
 def replay_day(now: datetime, entry: m.LogEntry) -> None:

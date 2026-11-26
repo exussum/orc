@@ -11,6 +11,7 @@ from orc import api, config, plugins
 from orc import model as m
 from orc.dal import broker, net, push, sqlite
 from orc.dal.findhub import stub as findhub_stub
+from orc.dal.scheduler import Scheduler
 from orc.log import Log
 from orc.model import DeviceEnum
 
@@ -622,6 +623,65 @@ class TestGetSchedule:
         self.themes["vacation"] = self._theme("vacation", "vac-r")
         api.set_theme_override("vacation", date(2025, 12, 1), date(2025, 12, 31))
         assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
+
+
+@pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
+def test_a_routine_listed_twice_in_a_day_gets_two_jobs(ctx, tmp_path):
+    ctx.scheduler = Scheduler(str(tmp_path / "jobs.sqlite"), config.settings.tz)
+    rule = _routine("r", time(8, 0))
+    when = [datetime(2026, 1, 5, hour, tzinfo=config.settings.tz) for hour in (8, 18)]
+    with patch.object(api, "get_schedule", return_value=[(at, m.ThemeEntry(at.time(), rule, "r")) for at in when]):
+        api.rebuild_iot_schedule()
+    assert sorted(job.id for job in ctx.scheduler.jobs(m.Queue.IOT)) == ["iot-r-2026-01-05T08:00", "iot-r-2026-01-05T18:00"]
+
+
+def _pause(scheduler, queue, name):
+    with scheduler._lock:
+        jobs = scheduler.queues()[queue]
+        job = next(job for job in jobs.jobs() if job.name == name)
+        jobs.remove(job.id)
+        jobs.add(replace(job, disable=True))
+
+
+def _rebuild_ctx(ctx, tmp_path, rules):
+    ctx.scheduler = Scheduler(str(tmp_path / "jobs.sqlite"), config.settings.tz)
+    entries = [
+        (datetime(2026, 1, 5, 8 + i, tzinfo=config.settings.tz), m.ThemeEntry(time(8 + i, 0), _routine(n, time(8, 0)), n))
+        for i, n in enumerate(rules)
+    ]
+    return patch.object(api, "get_schedule", return_value=entries)
+
+
+@pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
+def test_two_rebuilds_keep_a_paused_job_paused(ctx, tmp_path):
+    with _rebuild_ctx(ctx, tmp_path, ["a", "b"]):
+        api.rebuild_iot_schedule()
+        _pause(ctx.scheduler, m.Queue.IOT, "a")
+        api.rebuild_iot_schedule()
+    assert {job.id: job.disable for job in ctx.scheduler.jobs(m.Queue.IOT)} == {
+        "iot-a-2026-01-05T08:00": True,
+        "iot-b-2026-01-05T09:00": False,
+    }
+
+
+@pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
+def test_boot_sync_before_start_drops_a_removed_routines_job(ctx, tmp_path):
+    with _rebuild_ctx(ctx, tmp_path, ["a", "b"]):
+        api.setup_scheduler()
+    with _rebuild_ctx(ctx, tmp_path, ["a"]):
+        api.rebuild_iot_schedule()
+    assert [job.id for job in ctx.scheduler.jobs(m.Queue.IOT)] == ["iot-a-2026-01-05T08:00"]
+
+
+@pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
+def test_repeated_rebuild_jobs_register_listeners_once_and_keep_a_paused_cron(ctx, tmp_path):
+    with _rebuild_ctx(ctx, tmp_path, ["a"]):
+        api.setup_scheduler()
+        _pause(ctx.scheduler, m.Queue.ADHOC, "Iot Cron")
+        for _ in range(3):
+            api.rebuild_jobs()
+    assert (len(ctx.scheduler.events["expired"]), len(ctx.scheduler.events["canceled"])) == (1, 1)
+    assert {job.name: job.disable for job in ctx.scheduler.jobs(m.Queue.ADHOC)}["Iot Cron"] is True
 
 
 @pytest.mark.time_machine(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False)
