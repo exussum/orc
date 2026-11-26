@@ -431,7 +431,7 @@ def current_theme_override() -> m.ThemeOverride | None:
     if not row:
         return None
     override = m.ThemeOverride(*row)
-    return override if override.end >= local_now().date() else None
+    return override if override.end >= local_now().date() and override.name in config.themes else None
 
 
 def active_theme_override(today: date) -> m.ThemeOverride | None:
