@@ -48,7 +48,7 @@ class Transition(em.Condition):
         if change is None:
             return False
         old, new = change
-        return new == self.to and old not in (None, self.to)
+        return m.fuzzy_eq(new, self.to) and old is not None and not m.fuzzy_eq(old, self.to)
 
 
 class Reaction(NamedTuple):
@@ -79,7 +79,7 @@ class AcIs(em.Condition):
     state: m.AcState
 
     def holds(self, world: em.World) -> bool:
-        return world.read(self.subject) == self.state
+        return m.fuzzy_eq(self.state, world.read(self.subject))
 
 
 @dataclass(frozen=True)

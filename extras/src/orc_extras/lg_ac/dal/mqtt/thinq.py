@@ -94,7 +94,7 @@ class Thinq:
         state = self.fetch_state(device_id)
         if not isinstance(value, om.AcState):
             raise ValueError(f"AC devices don't support state {value!r}")
-        if value == state:
+        if om.fuzzy_eq(value, state):
             return ()
         self._asked[device_id] = value
         return (self._packet(device_id, api.build_command(fm, _wire(value))),)
@@ -151,9 +151,9 @@ class Thinq:
             before, after = api.state_from_raw(fm, old), api.state_from_raw(fm, {**old, **values})
             # Until the unit has answered the values query, power is unknown and AcState's
             # equality treats unknown as never equal, so every temperature packet would log "? → ?".
-            if old and after.power and before != after:
+            if old and after.power and not om.fuzzy_eq(before, after):
                 source = om.Source.EXTERNAL
-                if (asked := self._asked.get(device_id)) and after == asked:
+                if (asked := self._asked.get(device_id)) and om.fuzzy_eq(after, asked):
                     source = om.Source.ORC
                     self._asked.pop(device_id)
                 return (om.Status(self._device(device_id), "state", before, after, source),)

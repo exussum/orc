@@ -405,22 +405,6 @@ class AcState:
     current_temperature: float | None = field(default=None, compare=False, kw_only=True)  # the room's; moves on its own
     temperature: float | None = None
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, AcState):
-            return NotImplemented
-        elif self.power is None or other.power is None:
-            return False
-        elif self.power == OFF and other.power == OFF:
-            return True
-        pairs = ((self.power, other.power), (self.mode, other.mode), (self.fan_mode, other.fan_mode), (self.temperature, other.temperature))
-        return all(a is None or b is None or a == b for a, b in pairs)
-
-    # a fuzzy __eq__ can't agree with a field-based hash, so only the state __eq__ can never match is refused
-    def __hash__(self) -> int:
-        if self.power is None:
-            raise TypeError("an AcState without a power never equals anything, so it can't be hashed")
-        return hash((self.power, self.mode, self.fan_mode, self.temperature))
-
     def __str__(self) -> str:
         if self.power == OFF:
             return OFF
@@ -445,27 +429,6 @@ class LightState:
     color_temperature: int | None = None
     color_mode: ColorMode | None = None
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, LightState):
-            return NotImplemented
-        elif self.switch == OFF and other.switch == OFF:
-            return True
-        pairs: tuple[tuple[Any, Any, Callable[[Any, Any], bool]], ...] = (
-            (self.switch, other.switch, eq),
-            (self.color_mode, other.color_mode, eq),
-            (self.level, other.level, eq),
-            (self.hue, other.hue, eq),
-            (self.saturation, other.saturation, eq),
-            (self.color_temperature, other.color_temperature, _within_a_mired),
-        )
-        return all(a is None or b is None or close(a, b) for a, b, close in pairs)
-
-    # a fuzzy __eq__ can't agree with a field-based hash, so only the state __eq__ can never match is refused
-    def __hash__(self) -> int:
-        if all(v is None for v in (self.switch, self.level, self.hue, self.saturation, self.color_temperature, self.color_mode)):
-            raise TypeError("a LightState with every field unsaid can't be hashed")
-        return hash((self.switch, self.level, self.hue, self.saturation, self.color_temperature, self.color_mode))
-
     def __str__(self) -> str:
         if self.switch == OFF:
             return OFF
@@ -476,6 +439,31 @@ class LightState:
         elif self.level is not None:
             return str(self.level)
         return self.switch or "?"
+
+
+def fuzzy_eq(a: object, b: object) -> bool:
+    match a, b:
+        case AcState(), AcState():
+            if a.power is None or b.power is None:
+                return False
+            elif a.power == OFF and b.power == OFF:
+                return True
+            pairs = ((a.power, b.power), (a.mode, b.mode), (a.fan_mode, b.fan_mode), (a.temperature, b.temperature))
+            return all(x is None or y is None or x == y for x, y in pairs)
+        case LightState(), LightState():
+            if a.switch == OFF and b.switch == OFF:
+                return True
+            checks: tuple[tuple[Any, Any, Callable[[Any, Any], bool]], ...] = (
+                (a.switch, b.switch, eq),
+                (a.color_mode, b.color_mode, eq),
+                (a.level, b.level, eq),
+                (a.hue, b.hue, eq),
+                (a.saturation, b.saturation, eq),
+                (a.color_temperature, b.color_temperature, _within_a_mired),
+            )
+            return all(x is None or y is None or close(x, y) for x, y, close in checks)
+        case _:
+            return a == b
 
 
 class Playback(StrEnum):

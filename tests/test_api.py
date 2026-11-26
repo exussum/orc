@@ -879,3 +879,25 @@ def _ac(**attributes):
 
 def _cmd(what, value):
     return em.Command(m.Devices(what), value)
+
+
+def test_runtime_does_not_report_a_change_that_only_differs_by_an_unsaid_field():
+    subject = em.Subject()
+    values = {subject: m.AcState(m.ON, "cool", "low", 72)}
+    runtime = api.runtime()
+    runtime.evaluate([em.Rule((em.Step(em.Has(subject), em.Command(subject, "x")),))], read=values.__getitem__, force=True)
+    values[subject] = m.AcState(m.ON, "cool")
+    assert runtime.world(values.__getitem__).changed(subject) is None
+    values[subject] = m.AcState(m.ON, "heat")
+    assert runtime.world(values.__getitem__).changed(subject) == (m.AcState(m.ON, "cool", "low", 72), m.AcState(m.ON, "heat"))
+
+
+def test_squish_logs_conflicting_arms_for_states_that_differ_by_an_unsaid_field():
+    entry = MagicMock()
+    commands = (
+        em.Command(m.Devices(orc.Light.a), m.LightState(switch=m.ON)),
+        em.Command(m.Devices(orc.Light.a), m.LightState(switch=m.ON, level=50)),
+    )
+    squished = api.squish(commands, entry)
+    assert [c.value for c in squished] == [m.LightState(switch=m.ON, level=50)]
+    assert any(c.args[1] == api.Message.CONFLICTING_ARMS.format(device=orc.Light.a.name, states="on, 50") for c in entry.add.call_args_list)

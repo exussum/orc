@@ -73,7 +73,7 @@ def encode(device: m.DeviceEnum, command: Any) -> tuple[m.Message, ...]:
         raise RuntimeError(f"hub not yet seen; cannot command {device.name}")
     asked = _light_state(device, command)
     current = _current(device.value)
-    if current is not None and asked == current:
+    if current is not None and m.fuzzy_eq(asked, current):
         return ()
     _commanded[device.value] = asked
     messages = _hub_commands(hub_id, device.value, asked)
@@ -147,9 +147,9 @@ def _document(topic: str, doc: dict[str, Any]) -> tuple[m.Status, ...]:
         before, after = old.attributes.get(attribute), state.attributes.get(attribute)
         if asked is not None and _explains(asked, attribute, after):
             sources[attribute] = m.Source.ORC
-        elif before is not None and after is not None and _record({attribute: before}) != _record({attribute: after}):
+        elif before is not None and after is not None and not m.fuzzy_eq(_record({attribute: before}), _record({attribute: after})):
             sources[attribute] = m.Source.EXTERNAL
-    if asked is not None and asked == _record(state.attributes):
+    if asked is not None and m.fuzzy_eq(asked, _record(state.attributes)):
         _commanded.pop(id)
     return tuple(
         m.Status(state.device, a, old.attributes.get(a), v, sources.get(a, HubitatSource.HUBITAT)) for a, v in state.attributes.items()
@@ -209,7 +209,7 @@ def _hub_commands(hub_id: str, device_id: str, state: m.LightState) -> tuple[m.M
 
 def _explains(asked: m.LightState, attribute: str, reported: Any) -> bool:
     wanted = _hub_attributes(asked).get(attribute)
-    return wanted is not None and reported is not None and _record({attribute: wanted}) == _record({attribute: reported})
+    return wanted is not None and reported is not None and m.fuzzy_eq(_record({attribute: wanted}), _record({attribute: reported}))
 
 
 def _record(attributes: Mapping[str, Any]) -> m.LightState:

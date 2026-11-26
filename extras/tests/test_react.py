@@ -721,3 +721,9 @@ def test_crossed_up_held_back_by_the_cooldown_is_dropped_until_the_next_rise(ctx
     device_report(Sensor.living.value, {"temperature": 50}, 57)
     device_report(Sensor.living.value, {"temperature": 56}, 50)
     assert dispatches() == [(Ac.living, ac)]
+
+
+def test_watches_whose_ac_states_differ_only_by_an_unsaid_field_are_separate_dict_keys():
+    subject = model.AcSubject(Ac.living)
+    loose, tight = model.AcIs(subject, m.AcState(power=m.ON)), model.AcIs(subject, m.AcState(m.ON, "cool"))
+    assert len({loose: "loose", tight: "tight"}) == 2

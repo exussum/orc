@@ -659,7 +659,7 @@ def reader(present: set[str] | None = None, now: datetime | None = None) -> em.R
 
 
 def runtime() -> engine.Runtime[m.Devices]:
-    return engine.Runtime(config.settings.tz, override_key=ORC_SYSTEM_SNAPSHOT)
+    return engine.Runtime(config.settings.tz, override_key=ORC_SYSTEM_SNAPSHOT, same=m.fuzzy_eq)
 
 
 def rebuild_iot_schedule() -> None:
