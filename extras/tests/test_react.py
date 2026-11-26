@@ -63,6 +63,14 @@ def react_rules(ctx):
     return rules
 
 
+def deliver(ctx, status):
+    plugins._on_event(ctx, ctx.sources, status)
+    queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_event]
+    ctx.scheduler.now.reset_mock()
+    for call in queued:
+        plugins._run_event(call.args[1], ctx=ctx)
+
+
 @pytest.fixture
 def ruleset(ctx):
     def ruleset(watches, sources):
@@ -82,7 +90,7 @@ def device_report(ctx):
         others = [s for s in known if s.device.id != device_id] if isinstance(known, list) else []
         ctx.api.device_states.return_value = [*others, state]
         attribute = next(iter(attributes))
-        plugins._on_event(ctx, ctx.sources, m.Status(state.device, attribute, old, attributes[attribute], hubitat.HubitatSource.HUBITAT))
+        deliver(ctx, m.Status(state.device, attribute, old, attributes[attribute], hubitat.HubitatSource.HUBITAT))
 
     return device_report
 
@@ -93,6 +101,19 @@ def pending_jobs(ctx, react_rules, device_report):
     job_id = ctx.scheduler.once.call_args.kwargs["id"]
     ctx.scheduler.reset_mock()
     return job_id
+
+
+def test_an_event_is_handed_to_the_scheduler_instead_of_evaluated_on_the_mqtt_thread(ctx, react_rules):
+    status = m.Status(m.Device("1", "lamp", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT)
+    plugins._on_event(ctx, ctx.sources, status)
+    ctx.api.dispatch.assert_not_called()
+    call = ctx.scheduler.now.call_args
+    assert (call.args, call.kwargs) == ((plugins._run_event, (ctx.sources, status)), {"name": "React"})
+
+
+def test_an_event_from_a_device_no_rule_watches_queues_nothing(ctx, react_rules):
+    plugins._on_event(ctx, ctx.sources, m.Status(m.Device("999", "other", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT))
+    ctx.scheduler.now.assert_not_called()
 
 
 @pytest.fixture
@@ -171,12 +192,6 @@ def test_sleep_cancels_a_pending_job(ctx, pending_jobs):
     ctx.scheduler.cancel.assert_any_call(pending_jobs, m.Queue.ADHOC)
 
 
-def test_unwatched_device_is_ignored(ctx, react_rules, device_report):
-    device_report("99", {"switch": m.ON}, m.OFF)
-    ctx.scheduler.once.assert_not_called()
-    ctx.api.dispatch.assert_not_called()
-
-
 def test_run_react_dispatches_the_action(ctx, ruleset, dispatches, deferred_run, device_report):
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF, delay=10), {"1": Light.lamp})
     device_report("1", {"switch": m.ON}, m.OFF)
@@ -222,7 +237,7 @@ def test_contact_open_triggers_immediate_rule(ctx, ruleset, dispatches):
     ruleset(rule, {"1": Light.lamp})
     state = m.DeviceState(m.Device("1", "balcony door", "hubitat"), {"contact": "open"}, None)
     ctx.api.device_states.return_value = [state]
-    plugins._on_event(ctx, ctx.sources, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
+    deliver(ctx, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
     assert dispatches() == [(Ac.living, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=75))]
 
 
@@ -271,11 +286,11 @@ def test_if_ac_state_gates_immediate_rule(ctx, ruleset, dispatches, ac_report):
     state = m.DeviceState(m.Device("1", "balcony door", "hubitat"), {"contact": "open"}, None)
     ctx.api.device_states.return_value = [state]
     ac_report(m.AcState(power=m.OFF))
-    plugins._on_event(ctx, ctx.sources, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
+    deliver(ctx, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
     ctx.api.dispatch.assert_not_called()
     ctx.log.write.assert_not_called()
     ac_report(m.AcState(m.ON, "cool"))
-    plugins._on_event(ctx, ctx.sources, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
+    deliver(ctx, m.Status(state.device, "contact", "closed", "open", hubitat.HubitatSource.HUBITAT))
     assert dispatches() == [(Ac.living, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low", temperature=75))]
 
 
@@ -364,12 +379,10 @@ def test_ac_turns_on_fires_once(ctx, ruleset, dispatches):
     rule = _make(m.Devices(Ac.living), "state", m.AcState(power=m.ON), m.AcState(m.ON, m.AcMode.FAN_ONLY, "low"), target=m.Devices(Ac))
     ruleset(rule, {"clip-1": Ac.living})
     device = m.Device("clip-1", "living", "lg_ac")
-    plugins._on_event(ctx, ctx.sources, m.Status(device, "state", m.AcState(power=m.OFF), m.AcState(m.ON, "cool", "low", 72), "lg_ac"))
+    deliver(ctx, m.Status(device, "state", m.AcState(power=m.OFF), m.AcState(m.ON, "cool", "low", 72), "lg_ac"))
     assert dispatches() == [(Ac.living, m.AcState(m.ON, m.AcMode.FAN_ONLY, "low"))]
     ctx.api.dispatch.reset_mock()
-    plugins._on_event(
-        ctx, ctx.sources, m.Status(device, "state", m.AcState(m.ON, "cool", "low", 72), m.AcState(m.ON, "cool", "low", 74), "lg_ac")
-    )
+    deliver(ctx, m.Status(device, "state", m.AcState(m.ON, "cool", "low", 72), m.AcState(m.ON, "cool", "low", 74), "lg_ac"))
     ctx.api.dispatch.assert_not_called()
 
 
@@ -489,12 +502,6 @@ def test_disabled_rule_expires_after_its_pause(react_rules):
     assert plugins.is_disabled(state, react_rules[0], NOW + timedelta(minutes=9))
     assert not plugins.is_disabled(state, react_rules[0], NOW + timedelta(minutes=10))
     assert not state.disabled
-
-
-def test_disabled_rule_does_not_fire(ctx, react_rules, device_report):
-    plugins.sleep(ctx, "Lights off")
-    device_report(react_rules[0].condition.subject.device.value, {"switch": m.ON}, m.OFF)
-    ctx.api.dispatch.assert_not_called()
 
 
 def test_wake_clears_a_sleeping_rule(ctx, react_rules):

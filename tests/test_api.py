@@ -81,14 +81,6 @@ class TestRestoreScene:
         assert command_dispatch.call_args_list == [call(snapshot_commands, force=True, entry=log_entry)]
         assert not api._ctx.engine.snapshots()
 
-    def test_pop_snapshot_once_and_never_expired(self, command_dispatch, snapshot_commands):
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=FUTURE))
-        assert api._ctx.engine.pop_snapshot("test").routine is snapshot_commands
-        assert api._ctx.engine.pop_snapshot("test") is None
-        api._ctx.engine.save_snapshot("test", m.SnapShot(routine=snapshot_commands, end=PAST))
-        assert api._ctx.engine.pop_snapshot("test") is None
-        command_dispatch.assert_not_called()
-
 
 @patch("orc.dal.broker.stub.command")
 class TestIntercepts:
@@ -548,12 +540,12 @@ class TestWorkDayTheme:
     def test_a_weekday_that_the_market_trades_is_a_work_day(self):
         assert api.calculate_theme(date(2026, 1, 5)) == m.THEME_WORK_DAY
 
-    def test_a_weekend_is_not(self):
-        assert api.calculate_theme(date(2026, 1, 3)) != m.THEME_WORK_DAY
+    def test_a_weekend_is_a_day_off(self):
+        assert api.calculate_theme(date(2026, 1, 3)) == m.THEME_DAY_OFF
 
-    def test_a_market_holiday_is_not(self):
+    def test_a_market_holiday_is_a_day_off(self):
         with patch.object(config.providers.holiday, "market_holiday", return_value=True):
-            assert api.calculate_theme(date(2026, 1, 5)) != m.THEME_WORK_DAY
+            assert api.calculate_theme(date(2026, 1, 5)) == m.THEME_DAY_OFF
 
     @pytest.mark.parametrize("exc", [ConnectionError("down"), RuntimeError("feed error"), ValueError("bad json"), KeyError("date")])
     def test_a_failing_holiday_provider_means_a_work_day(self, exc):

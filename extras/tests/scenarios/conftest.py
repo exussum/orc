@@ -1,3 +1,4 @@
+import itertools
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -28,6 +29,11 @@ HUB = {
 
 
 class ManualScheduler(Scheduler):
+    _ids = itertools.count()
+
+    def once(self, func, when, payload=None, *, id=None, name=None, queue=m.Queue.ADHOC):
+        return super().once(func, when, payload, id=id or f"{next(self._ids):09}", name=name, queue=queue)
+
     def start(self, ctx):
         self._coordinator = ManualCoordinator(*self._queues.values(), context=ctx)
 

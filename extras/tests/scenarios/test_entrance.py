@@ -136,12 +136,12 @@ def test_react_lines_stay_under_the_walk_in_row_until_the_cleanup(house):
             entrance,
             "Entrance sensor triggered",
             [
-                *ARRIVE,
                 "Applying `Day` rules",
-                "`ENTRANCE_SENSOR` inactive → set `Living room AC` off",
+                *ARRIVE,
                 "Running `All Lights Off`",
-                *ARRIVE,
+                "`ENTRANCE_SENSOR` inactive → set `Living room AC` off",
                 "Applying `Day` rules",
+                *ARRIVE,
             ],
         )
     ]

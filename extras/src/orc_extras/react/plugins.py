@@ -83,6 +83,12 @@ def _reader(ctx: m.AppContext) -> em.Read:
 
 
 def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status) -> None:
+    if status.device.id in sources:
+        ctx.scheduler.now(_run_event, (sources, status), name="React")
+
+
+def _run_event(payload: tuple[dict[str, m.DeviceEnum], m.Status], *, ctx: m.AppContext) -> None:
+    sources, status = payload
     _react(ctx, sources, status, ctx.plugin_state[orc_extras.react].watches)
 
 
