@@ -22,6 +22,7 @@ class Message:
 
     THEME_OVERRIDE_CLEARED: str = "Theme override cleared"
     THEME_OVERRIDE_SET: str = "Theme override set: `{name}` {start}..{end}"
+    HOLIDAY_CHECK_FAILED: str = "Market holiday check failed for {day}, treating it as a work day: {exc}"
 
     LIGHT_TEST_STILL_ON: str = "Light test: still on: `{names}`"
     LIGHT_TEST_STILL_OFF: str = "Light test: still off: `{names}`"
