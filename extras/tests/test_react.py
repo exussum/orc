@@ -205,7 +205,7 @@ def test_consecutive_fires_log_the_same_trigger_id(ctx, ruleset, device_report):
     device_report("1", {"switch": m.ON}, m.OFF)
     ctx.frozen.move_to(NOW + timedelta(seconds=model.COOLDOWN.total_seconds() + 1))
     device_report("1", {"switch": m.ON}, m.OFF)
-    assert [call.args[2] for call in ctx.log.write.call_args_list] == [_hub("1"), _hub("1")]
+    assert [call.args[1] for call in ctx.log.write.call_args_list] == [_hub("1"), _hub("1")]
 
 
 def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, device_report):
@@ -218,7 +218,7 @@ def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, device_rep
     )
     device_report("1", {"switch": m.ON}, m.OFF)
     device_report("2", {"switch": m.ON}, m.OFF)
-    assert [call.args[2] for call in ctx.log.write.call_args_list] == [_hub("1"), _hub("2")]
+    assert [call.args[1] for call in ctx.log.write.call_args_list] == [_hub("1"), _hub("2")]
 
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx, react_rules):
@@ -544,14 +544,14 @@ def test_sleep_endpoint_disables_every_rule_of_the_name_and_logs(flask_client, c
     assert plugins.is_disabled(state, react_rules[0], NOW) and plugins.is_disabled(state, react_rules[1], NOW)
     assert not plugins.is_disabled(state, react_rules[2], NOW)
     assert flask_client.get("/").get_json()["rules"][0]["sleeping_until"] == until.isoformat()
-    assert ctx.log.write.call_args.args[1] == "`Lights off` sleeping until 15:10"
+    assert ctx.log.write.call_args.args[0] == "`Lights off` sleeping until 15:10"
 
 
 def test_wake_endpoint_enables_the_rule_and_logs(flask_client, ctx, react_rules):
     ctx.plugin_state[react].disabled["Desk stops AC"] = NOW + timedelta(minutes=10)
     assert flask_client.get("/Desk%20stops%20AC/sleep?sleeping=0").get_json() == {"sleeping_until": None}
     assert not plugins.is_disabled(ctx.plugin_state[react], react_rules[3], NOW)
-    assert ctx.log.write.call_args.args[1] == "`Desk stops AC` awake"
+    assert ctx.log.write.call_args.args[0] == "`Desk stops AC` awake"
 
 
 def test_unknown_rule_is_a_404(flask_client):

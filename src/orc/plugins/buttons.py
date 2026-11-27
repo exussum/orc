@@ -1,3 +1,4 @@
+from dataclasses import replace
 from functools import partial
 from typing import Any
 
@@ -25,5 +26,5 @@ def _run_button(payload: tuple[str, m.Button], *, ctx: m.AppContext) -> None:
     action, trigger = payload
     if not ctx.api.run_action(action, trigger, source=m.LogSource.EXTERNAL):
         msg = Message.BUTTON_ACTION_UNKNOWN.format(id=action)
-        entry = ctx.log.write(m.LogSource.SYSTEM, msg, trigger, notification=m.Notification(("button",)))
+        entry = ctx.log.write(msg, replace(trigger, log_source=m.LogSource.SYSTEM), notification=m.Notification(("button",)))
         ctx.api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)

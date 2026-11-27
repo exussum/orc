@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta
 from unittest.mock import ANY, call
 
@@ -138,7 +139,8 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
     ctx.log.write.return_value = entry
     _trigger_sensor(ctx, config_sensor, "16", "active")
     ctx.log.write.assert_called_once_with(
-        plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(name="16", origin="hubitat", log_source=m.LogSource.EXTERNAL)
+        plugins.TRIGGER_MSG,
+        m.Broker(name="16", origin="hubitat", log_source=plugins.Log.ENTRANCE),
     )
     assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
@@ -187,7 +189,9 @@ def test_empty_house_shuts_down_snapshots_and_pushes(config_sensor, nobody_home_
     nobody_home_ctx.api.run_action.assert_not_called()
     assert [c.action for c in entry.children] == [config_sensor.message.log_shutdown]
     nobody_home_ctx.log.write.assert_called_once_with(
-        plugins.Log.ENTRANCE, config_sensor.message.log_nobody, entry.trigger, notification=m.Notification(("entrance",), "/presence/")
+        config_sensor.message.log_nobody,
+        replace(entry.trigger, log_source=plugins.Log.ENTRANCE),
+        notification=m.Notification(("entrance",), "/presence/"),
     )
 
 

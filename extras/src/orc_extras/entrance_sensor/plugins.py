@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, NamedTuple
@@ -33,7 +34,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         if previous:
             log_entry = previous.entry
         else:
-            log_entry = ctx.log.write(Log.ENTRANCE, TRIGGER_MSG, m.Broker(name=device.id, origin=device.source, log_source=Log.ENTRANCE))
+            log_entry = ctx.log.write(TRIGGER_MSG, m.Broker(name=device.id, origin=device.source, log_source=Log.ENTRANCE))
             ctx.log.open_row(log_entry)
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
             log_entry, previous.present_before if previous else set(ctx.api.present_names())
@@ -95,7 +96,9 @@ def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx:
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
         if not visit.present_before and not present:
             ctx.log.write(
-                Log.ENTRANCE, sensor.message.log_nobody, log_entry.trigger, notification=m.Notification(("entrance",), "/presence/")
+                sensor.message.log_nobody,
+                replace(log_entry.trigger, log_source=Log.ENTRANCE),
+                notification=m.Notification(("entrance",), "/presence/"),
             )
     ctx.log.close_row(log_entry)
 

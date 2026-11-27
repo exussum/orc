@@ -156,5 +156,5 @@ def _run_event(payload: CalendarJob, *, ctx: m.AppContext) -> None:
         destination = payload.destination
         record(RecentEvent(*destination, ctx.api.local_now().timestamp()))
         link = str(CHOOSER_URL.with_query(title=summary, url=destination.url, address=destination.address))
-        entry = ctx.log.write(Log.CALENDAR, summary, trigger, notification=m.Notification(("calendar",), link), link=link)
+        entry = ctx.log.write(summary, trigger, notification=m.Notification(("calendar",), link), link=link)
         ctx.api.alert(m.Alarm.ATTENTION, text=summary, entry=entry)

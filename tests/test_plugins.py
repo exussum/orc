@@ -61,7 +61,7 @@ class TestButtons:
         with patch.object(api, "alert"):
             buttons._run_button(("No Such Routine", m.Button("1", log_source=m.LogSource.EXTERNAL)), ctx=ctx)
         log_call.assert_called_once()
-        assert "No Such Routine" in log_call.call_args[0][1]
+        assert "No Such Routine" in log_call.call_args[0][0]
 
 
 class TestBattery:
@@ -75,9 +75,8 @@ class TestBattery:
         on_event(m.Status(device, "battery", old, new, hubitat.HubitatSource.HUBITAT))
         if expected:
             log_call.assert_called_once_with(
-                m.LogSource.SYSTEM,
                 "Low battery on `front door` (CRITICAL)",
-                m.Broker(name="16", origin="hubitat", log_source=m.LogSource.EXTERNAL),
+                m.Broker(name="16", origin="hubitat", log_source=m.LogSource.SYSTEM),
                 notification=m.Notification(("battery", "front door"), "/device/"),
             )
         else:

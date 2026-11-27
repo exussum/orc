@@ -412,26 +412,26 @@ class TestLog:
         api.context().log.clear()
 
     def test_an_equal_trigger_within_the_window_nests(self):
-        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
-        api.context().log.write(m.LogSource.PLUGIN, "second", m.Integration("x", log_source=m.LogSource.PLUGIN))
+        api.context().log.write("first", m.Integration("x", log_source=m.LogSource.PLUGIN))
+        api.context().log.write("second", m.Integration("x", log_source=m.LogSource.PLUGIN))
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [("first", ["second"])]
 
     def test_an_equal_trigger_after_the_window_starts_its_own_entry(self):
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
-            api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
+            api.context().log.write("first", m.Integration("x", log_source=m.LogSource.PLUGIN))
             frozen.shift(Log.ROLLUP_WINDOW)
-            api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x", log_source=m.LogSource.PLUGIN))
+            api.context().log.write("later", m.Integration("x", log_source=m.LogSource.PLUGIN))
         assert [(e.action, e.children) for e in api.context().log.rows()] == [("later", []), ("first", [])]
 
     def test_an_open_entry_takes_an_equal_trigger_until_it_closes(self):
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
-            entry = api.context().log.write(m.LogSource.SYSTEM, "first", m.Integration("x", log_source=m.LogSource.SYSTEM))
+            entry = api.context().log.write("first", m.Integration("x", log_source=m.LogSource.SYSTEM))
             with api.context().log.opened(entry):
                 frozen.shift(timedelta(hours=1))
-                api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x", log_source=m.LogSource.PLUGIN))
-                api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y", log_source=m.LogSource.PLUGIN))
+                api.context().log.write("later", m.Integration("x", log_source=m.LogSource.PLUGIN))
+                api.context().log.write("other", m.Integration("y", log_source=m.LogSource.PLUGIN))
             frozen.shift(timedelta(hours=1))
-            api.context().log.write(m.LogSource.PLUGIN, "closed", m.Integration("x", log_source=m.LogSource.PLUGIN))
+            api.context().log.write("closed", m.Integration("x", log_source=m.LogSource.PLUGIN))
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
             ("closed", []),
             ("other", []),
@@ -451,17 +451,16 @@ class TestLog:
         ]
 
     def test_a_different_trigger_starts_its_own_entry(self):
-        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
-        api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y", log_source=m.LogSource.PLUGIN))
+        api.context().log.write("first", m.Integration("x", log_source=m.LogSource.PLUGIN))
+        api.context().log.write("other", m.Integration("y", log_source=m.LogSource.PLUGIN))
         entries = api.context().log.rows()
         assert [e.action for e in entries] == ["other", "first"]
         assert entries[0].children == []
 
     def test_a_nested_line_still_notifies(self):
-        entry = api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
+        entry = api.context().log.write("first", m.Integration("x", log_source=m.LogSource.PLUGIN))
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False), api.context().log.opened(entry):
             api.context().log.write(
-                m.LogSource.PLUGIN,
                 "later `x`",
                 m.Integration("x", log_source=m.LogSource.PLUGIN),
                 notification=m.Notification(("calendar", "dentist")),
@@ -477,9 +476,7 @@ class TestLog:
     def test_a_link_rides_the_push_as_given(self):
         notification = m.Notification(("calendar",), "https://meet.google.com/abc?x=1")
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False):
-            api.context().log.write(
-                m.LogSource.PLUGIN, "standup", m.Integration("x", log_source=m.LogSource.PLUGIN), notification=notification
-            )
+            api.context().log.write("standup", m.Integration("x", log_source=m.LogSource.PLUGIN), notification=notification)
         assert api._ctx.scheduler.now.call_args.args[1][2] == notification
 
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider, push_subscriptions):
@@ -511,7 +508,6 @@ class TestLog:
             api.subscribe_push(subscription)
         push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
         entry = api.context().log.write(
-            m.LogSource.PLUGIN,
             "Leak at `kitchen`",
             m.Integration("x", log_source=m.LogSource.PLUGIN),
             notification=m.Notification(("leak",)),

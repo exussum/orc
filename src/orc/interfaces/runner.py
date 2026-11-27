@@ -104,7 +104,7 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     if boot.entry is None:
-        boot.entry, boot.started = boot.log.write(m.LogSource.SYSTEM, Message.BOOT, m.System("boot", log_source=m.LogSource.SYSTEM)), start
+        boot.entry, boot.started = boot.log.write(Message.BOOT, m.System("boot", log_source=m.LogSource.SYSTEM)), start
     boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
 
 

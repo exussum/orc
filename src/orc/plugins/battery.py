@@ -22,7 +22,6 @@ def _on_event(ctx: m.AppContext, status: m.Status) -> None:
     if level.is_critical and not was_critical:
         msg = Message.LOW_BATTERY.format(device=device.name, level=level.value)
         ctx.log.write(
-            m.LogSource.SYSTEM,
             msg,
             m.Broker(name=device.id, origin=device.source, log_source=m.LogSource.SYSTEM),
             notification=m.Notification(("battery", device.name), "/device/"),

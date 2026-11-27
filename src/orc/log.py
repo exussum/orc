@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from orc import model as m
 
-type Notify = Callable[[m.LogSourceEnum, str, m.Trigger, m.Notification], None]
+type Notify = Callable[[str, m.Trigger, m.Notification], None]
 
 
 class Message:
@@ -77,7 +77,6 @@ class Log:
 
     def write(
         self,
-        source: m.LogSourceEnum,
         action: str,
         trigger: m.Trigger,
         *,
@@ -85,6 +84,7 @@ class Log:
         link: str | None = None,
     ) -> m.LogEntry:
         now = self._now()
+        source = trigger.log_source
         with self._lock:
             row = self._row_for(trigger, now)
             if row:
@@ -94,7 +94,7 @@ class Log:
                 row = m.LogEntry(now, source, action, trigger, notified=bool(notification), link=link)
                 self._rows.appendleft(row)
         if notification:
-            self._notify(source, action, row.trigger, notification)
+            self._notify(action, trigger, notification)
         return row
 
     def rows(self) -> list[m.LogEntry]:

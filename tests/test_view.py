@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from unittest.mock import ANY, MagicMock, patch
 
@@ -295,16 +296,14 @@ def test_schedule_badges(flask_client, kwargs, present, present_badges, absent_b
 
 def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
     trigger = m.Manual("bell", log_source=m.LogSource.MANUAL)
-    with api.context().log.opened(api.context().log.write(m.LogSource.SYSTEM, "Walk in", trigger)):
-        api.context().log.write(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
+    with api.context().log.opened(api.context().log.write("Walk in", replace(trigger, log_source=m.LogSource.SYSTEM))):
+        api.context().log.write("Nobody home", replace(trigger, log_source=m.LogSource.SYSTEM), notification=m.Notification(("entrance",)))
     html = flask_client.get("/log/").get_data(as_text=True)
     assert html.count("🔔") == 2
 
 
 def test_log_page_links_a_line_before_its_action(flask_client):
-    api.context().log.write(
-        m.LogSource.SYSTEM, "Standup", m.Manual("link", log_source=m.LogSource.SYSTEM), link="/api/calendar/choose/?title=a"
-    )
+    api.context().log.write("Standup", m.Manual("link", log_source=m.LogSource.SYSTEM), link="/api/calendar/choose/?title=a")
     html = flask_client.get("/log/").get_data(as_text=True)
     assert (
         '<a href="/api/calendar/choose/?title=a">🔗</a>\n                            <div class="orc-log-action truncate min-w-0">Standup'
