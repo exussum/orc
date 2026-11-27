@@ -18,6 +18,7 @@ from orc import model as m
 from orc.dal import broker, net, sqlite
 from orc.dal.mqtt import hubitat
 from orc.dal.scheduler import Scheduler
+from orc.interfaces import inbound
 from orc.interfaces.web import bp
 from orc.plugins import battery, buttons
 
@@ -199,7 +200,7 @@ def house(request, monkeypatch, tmp_path):
                 plugin.setup(ctx)
             for listener in (buttons, battery):
                 listener.setup(ctx)
-            listeners.append(api._log_external)
+            listeners.append(api.log_external)
             yield house
     finally:
         _load(sample, {})

@@ -57,6 +57,7 @@ def reset_presence():
 
     from orc import api, config
     from orc.dal import net
+    from orc.interfaces import inbound
 
     # api's aliases bind the singleton's methods, so reset it in place; re-wiring
     # installs a fresh reporter closure (no tag lines keeps the scanner thread off).

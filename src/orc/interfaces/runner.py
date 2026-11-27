@@ -11,12 +11,14 @@ from functools import partial
 from pathlib import Path
 from urllib.parse import quote
 
+import orc_queue as oq
 from gunicorn.app.base import BaseApplication
 
-import orc as config
-from orc import _build, api
+from orc import _build, api, config
 from orc import model as m
+from orc.dal import broker, net
 from orc.dal.scheduler import Scheduler
+from orc.interfaces import inbound
 from orc.interfaces.web import OrcFlask, bp
 from orc.kernel.loader import check_secrets
 from orc.log import Log, Message
@@ -41,7 +43,7 @@ class GunicornApp(BaseApplication):
         self.cfg.set("threads", 1)
         self.cfg.set("timeout", 120)
         self.cfg.set("loglevel", "warning")
-        self.cfg.set("bind", f"0.0.0.0:{config.config.settings.port}")
+        self.cfg.set("bind", f"0.0.0.0:{config.settings.port}")
 
     def load(self) -> OrcFlask:
         _start_services(self._app.orc, self._boot)
@@ -54,7 +56,7 @@ def flask() -> None:
     boot = Boot()
     app = _build_app(boot)
     _start_services(app.orc, boot)
-    app.run(host="0.0.0.0", port=config.config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
+    app.run(host="0.0.0.0", port=config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
 def secrets() -> None:
@@ -69,9 +71,9 @@ def secrets() -> None:
     os.environ["ORC_CONFIG_DIR"] = str(path.parent if path.is_file() else path)
     if token := os.environ.get("BWS_ACCESS_TOKEN"):
         os.environ["BWS_ACCESS_TOKEN"] = "data:," + quote(token, safe="")
-    config.config.load(m.Secrets(), {})
-    fetched = config.config.providers.secrets.fetch_secrets()
-    needs = config.config.secret_needs
+    config.load(m.Secrets(), {})
+    fetched = config.providers.secrets.fetch_secrets()
+    needs = config.secret_needs
     problems = check_secrets(fetched, needs)
     for name in sorted(needs):
         print(f"{name:<40} {f'bad: {problems[name]}' if name in problems else 'ok'}")
@@ -112,12 +114,14 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
 def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     step = partial(_step, boot)
     with step("scheduler setup"):
-        api.setup_scheduler()
-    for hook in config.config.registry.setup_hooks:
+        setup_scheduler(ctx, boot.trigger)
+    for hook in config.registry.setup_hooks:
         with step(f"{hook.__module__} setup"):
             hook(ctx)
     with step("mqtt start"):
-        api.start_mqtt()
+        config.providers.broker.register(config.providers.adapter)
+        broker.add_status_listener(api.log_external)
+        config.providers.broker.start(inbound.on_message)
     with step("ble setup"):
         api.start_presence()
     with step("scheduler start"):
@@ -136,7 +140,7 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
 def _build_app(boot: Boot) -> OrcFlask:
     step = partial(_step, boot)
     with step("config load"):
-        config.config.load()
+        config.load()
     with step("database init"):
         api.init_db()
         api.load_durations()
@@ -153,6 +157,6 @@ def _build_flask(ctx: m.AppContext) -> OrcFlask:
     app.orc = ctx
     app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
-    for plugin, namespace, plugin_bp in config.config.registry.blueprints:
+    for plugin, namespace, plugin_bp in config.registry.blueprints:
         app.register_blueprint(plugin_bp, url_prefix=f"/api/{plugin}/{namespace}")
     return app

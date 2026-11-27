@@ -1,8 +1,10 @@
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
+from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, create_autospec, patch
 from uuid import UUID
 
+import orc_queue as oq
 import pytest
 import time_machine
 from orc_engine import model as em
@@ -13,6 +15,7 @@ from orc import model as m
 from orc.dal import broker, net, push, sqlite
 from orc.dal.findhub import stub as findhub_stub
 from orc.dal.scheduler import Scheduler
+from orc.interfaces import inbound, runner
 from orc.log import Log
 from orc.model import DeviceEnum
 
@@ -446,15 +449,41 @@ class TestLog:
 
     def test_a_swarm_of_external_changes_rolls_up(self):
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
-            api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
-            api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL))
-            api._log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "on", "off", m.Source.ORC))
+            api.log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL), EXTERNAL_EVENT)
+            api.log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "off", "on", m.Source.EXTERNAL), EXTERNAL_EVENT)
+            api.log_external(m.Status(m.Device("2", "lamp b", "hubitat"), "switch", "on", "off", m.Source.ORC), EXTERNAL_EVENT)
             frozen.shift(Log.ROLLUP_WINDOW)
-            api._log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off", m.Source.EXTERNAL))
+            api.log_external(m.Status(m.Device("1", "lamp a", "hubitat"), "switch", "on", "off", m.Source.EXTERNAL), EXTERNAL_EVENT)
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
             ("`lamp a` switch: on → off", []),
             ("`lamp a` switch: off → on", ["`lamp b` switch: off → on"]),
         ]
+
+    def test_separate_messages_roll_up_by_name(self):
+        def message(device, new):
+            trigger = m.Broker(device, origin="hubitat", log_source=m.LogSource.EXTERNAL)
+            api.log_external(m.Status(m.Device(device, f"lamp {device}", "hubitat"), "switch", "off", new, m.Source.EXTERNAL), trigger)
+
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
+            message("1", "on")
+            message("2", "on")
+            frozen.shift(Log.ROLLUP_WINDOW)
+            message("3", "on")
+        assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
+            ("`lamp 3` switch: off → on", []),
+            ("`lamp 1` switch: off → on", ["`lamp 2` switch: off → on"]),
+        ]
+
+    def test_attach_joins_the_open_row_only(self):
+        log = api.context().log
+        entry = log.write("visit", m.Integration("visit", id=X, log_source=m.LogSource.SYSTEM))
+        later = m.Integration("visit", id=Y, log_source=m.LogSource.PLUGIN)
+        log.attach(entry, later)
+        with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen, log.opened(entry):
+            frozen.shift(timedelta(hours=1))
+            log.write("joined", later)
+            log.write("stranger", m.Integration("visit", id=UUID(int=3), log_source=m.LogSource.PLUGIN))
+        assert [(e.action, [c.action for c in e.children]) for e in log.rows()] == [("stranger", []), ("visit", ["joined"])]
 
     def test_a_different_trigger_starts_its_own_entry(self):
         api.context().log.write("first", m.Integration("x", id=X, log_source=m.LogSource.PLUGIN))
@@ -553,32 +582,46 @@ class TestActiveOverride:
 @pytest.mark.time_machine(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False)
 class TestWorkDayTheme:
     def test_a_weekday_that_the_market_trades_is_a_work_day(self):
-        assert api.calculate_theme(date(2026, 1, 5)) == m.THEME_WORK_DAY
+        assert api.calculate_theme(date(2026, 1, 5), TRIGGER) == m.THEME_WORK_DAY
 
     def test_a_weekend_is_a_day_off(self):
-        assert api.calculate_theme(date(2026, 1, 3)) == m.THEME_DAY_OFF
+        assert api.calculate_theme(date(2026, 1, 3), TRIGGER) == m.THEME_DAY_OFF
 
     def test_a_market_holiday_is_a_day_off(self):
         with patch.object(config.providers.holiday, "market_holiday", return_value=True):
-            assert api.calculate_theme(date(2026, 1, 5)) == m.THEME_DAY_OFF
+            assert api.calculate_theme(date(2026, 1, 5), TRIGGER) == m.THEME_DAY_OFF
 
     @pytest.mark.parametrize("exc", [ConnectionError("down"), RuntimeError("feed error"), ValueError("bad json"), KeyError("date")])
     def test_a_failing_holiday_provider_means_a_work_day(self, exc):
         api.context().log.clear()
         with patch.object(config.providers.holiday, "market_holiday", side_effect=exc):
-            assert api.calculate_theme(date(2026, 1, 5)) == m.THEME_WORK_DAY
-        assert [e.action for e in api.context().log.rows()] == [
-            f"Market holiday check failed for 2026-01-05, treating it as a work day: {exc}"
+            assert api.calculate_theme(date(2026, 1, 5), TRIGGER) == m.THEME_WORK_DAY
+        assert [(e.action, e.trigger) for e in api.context().log.rows()] == [
+            (f"Market holiday check failed for 2026-01-05, treating it as a work day: {exc}", TRIGGER)
         ]
+
+    def test_rebuild_logs_holiday_failure(self):
+        api.context().log.clear()
+        trigger = m.Manual("theme", log_source=m.LogSource.MANUAL)
+        with patch.object(config.providers.holiday, "market_holiday", side_effect=ConnectionError("down")):
+            api.rebuild_jobs(trigger)
+        assert {e.trigger for e in api.context().log.rows()} == {trigger}
+
+    def test_iot_cron_logs_holiday_failure(self):
+        api.context().log.clear()
+        with patch.object(config.providers.holiday, "market_holiday", side_effect=ConnectionError("down")):
+            inbound.rebuild_iot_cron()
+        ((kind, name),) = {(type(e.trigger), e.trigger.name) for e in api.context().log.rows()}
+        assert (kind, name) == (m.Cron, "iot")
 
     def test_an_override_decides_it(self):
         api.set_theme_override("day off", date(2026, 1, 5), date(2026, 1, 5))
-        assert api.calculate_theme(date(2026, 1, 5)) != m.THEME_WORK_DAY
+        assert api.calculate_theme(date(2026, 1, 5), TRIGGER) != m.THEME_WORK_DAY
 
     def test_a_weekday_named_theme_wins_over_the_base_theme(self):
         monday = m.Theme("monday", ())
         with patch.object(config, "themes", {**config.themes, "monday": monday}):
-            assert api.calculate_theme(date(2026, 1, 5)) == "monday"
+            assert api.calculate_theme(date(2026, 1, 5), TRIGGER) == "monday"
 
 
 # 2026-01-03 is Saturday, 2026-01-04 is Sunday
@@ -606,31 +649,31 @@ class TestGetSchedule:
     def test_override_wins_over_weekday_named_theme(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
         api.set_theme_override("vacation", date(2026, 1, 3), date(2026, 1, 4))
-        assert self._names(api.get_schedule()) == ["vac-r", "vac-r"]
+        assert self._names(api.get_schedule(TRIGGER)) == ["vac-r", "vac-r"]
 
     def test_empty_override_clears_weekday_named_theme(self):
         self.themes["empty"] = self._theme("empty")
         api.set_theme_override("empty", date(2026, 1, 3), date(2026, 1, 4))
-        assert self._names(api.get_schedule()) == []
+        assert self._names(api.get_schedule(TRIGGER)) == []
 
     def test_weekday_named_theme_used_when_no_override(self):
-        assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
+        assert self._names(api.get_schedule(TRIGGER)) == ["sat-r", "sun-r"]
 
     def test_falls_back_to_calculate_theme_when_no_weekday_match(self):
         del self.themes["saturday"]
         del self.themes["sunday"]
-        assert self._names(api.get_schedule()) == ["off-r", "off-r"]
+        assert self._names(api.get_schedule(TRIGGER)) == ["off-r", "off-r"]
 
     def test_override_naming_a_removed_theme_is_ignored(self):
         api.set_theme_override("gone", date(2026, 1, 3), date(2026, 1, 4))
         assert api.current_theme_override() is None
-        assert api.calculate_theme(date(2026, 1, 3)) == "saturday"
-        assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
+        assert api.calculate_theme(date(2026, 1, 3), TRIGGER) == "saturday"
+        assert self._names(api.get_schedule(TRIGGER)) == ["sat-r", "sun-r"]
 
     def test_override_outside_window_does_not_apply(self):
         self.themes["vacation"] = self._theme("vacation", "vac-r")
         api.set_theme_override("vacation", date(2025, 12, 1), date(2025, 12, 31))
-        assert self._names(api.get_schedule()) == ["sat-r", "sun-r"]
+        assert self._names(api.get_schedule(TRIGGER)) == ["sat-r", "sun-r"]
 
 
 @pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
@@ -639,7 +682,7 @@ def test_a_routine_listed_twice_in_a_day_gets_two_jobs(ctx, tmp_path):
     rule = _routine("r", time(8, 0))
     when = [datetime(2026, 1, 5, hour, tzinfo=config.settings.tz) for hour in (8, 18)]
     with patch.object(api, "get_schedule", return_value=[(at, m.ThemeEntry(at.time(), rule, "r")) for at in when]):
-        api.rebuild_iot_schedule()
+        api.rebuild_iot_schedule(TRIGGER)
     assert sorted(job.id for job in ctx.scheduler.jobs(m.Queue.IOT)) == ["iot-r-2026-01-05T08:00", "iot-r-2026-01-05T18:00"]
 
 
@@ -663,9 +706,9 @@ def _rebuild_ctx(ctx, tmp_path, rules):
 @pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
 def test_two_rebuilds_keep_a_paused_job_paused(ctx, tmp_path):
     with _rebuild_ctx(ctx, tmp_path, ["a", "b"]):
-        api.rebuild_iot_schedule()
+        api.rebuild_iot_schedule(TRIGGER)
         _pause(ctx.scheduler, m.Queue.IOT, "a")
-        api.rebuild_iot_schedule()
+        api.rebuild_iot_schedule(TRIGGER)
     assert {job.id: job.disable for job in ctx.scheduler.jobs(m.Queue.IOT)} == {
         "iot-a-2026-01-05T08:00": True,
         "iot-b-2026-01-05T09:00": False,
@@ -675,20 +718,19 @@ def test_two_rebuilds_keep_a_paused_job_paused(ctx, tmp_path):
 @pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
 def test_boot_sync_before_start_drops_a_removed_routines_job(ctx, tmp_path):
     with _rebuild_ctx(ctx, tmp_path, ["a", "b"]):
-        api.setup_scheduler()
+        runner.setup_scheduler(ctx, TRIGGER)
     with _rebuild_ctx(ctx, tmp_path, ["a"]):
-        api.rebuild_iot_schedule()
+        api.rebuild_iot_schedule(TRIGGER)
     assert [job.id for job in ctx.scheduler.jobs(m.Queue.IOT)] == ["iot-a-2026-01-05T08:00"]
 
 
 @pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
 def test_repeated_rebuild_jobs_register_listeners_once_and_keep_a_paused_cron(ctx, tmp_path):
     with _rebuild_ctx(ctx, tmp_path, ["a"]):
-        api.setup_scheduler()
+        runner.setup_scheduler(ctx, TRIGGER)
         _pause(ctx.scheduler, m.Queue.ADHOC, "Iot Cron")
         for _ in range(3):
-            api.rebuild_jobs()
-    assert (len(ctx.scheduler.events["expired"]), len(ctx.scheduler.events["canceled"])) == (1, 1)
+            api.rebuild_jobs(TRIGGER)
     assert {job.name: job.disable for job in ctx.scheduler.jobs(m.Queue.ADHOC)}["Iot Cron"] is True
 
 

@@ -2,6 +2,7 @@ import pytest
 
 from orc import api
 from orc import model as m
+from orc.interfaces import inbound
 
 
 @pytest.mark.plugins()
@@ -51,7 +52,7 @@ def test_the_cron_check_does_not_probe_tags(house):
     house.advertise("Rex")
     house.tick(hours=1)
 
-    api._presence_cron_job(ctx=house.ctx)
+    inbound.check_presence_cron()
 
     assert house.probed == []
     assert house.log() == [(house.like(m.Query("ble", log_source=m.LogSource.SYSTEM)), "Presence detected: `Rex`", [])]
@@ -64,7 +65,7 @@ def test_a_tag_unheard_for_the_window_is_probed_before_it_is_lost(house):
     house.advertise("Rex")
     house.tick(hours=10)
 
-    api._presence_cron_job(ctx=house.ctx)
+    inbound.check_presence_cron()
 
     assert house.probed == ["Rex"]
     assert house.log() == [(house.like(m.Query("ble", log_source=m.LogSource.SYSTEM)), "Presence detected: `Rex`", [])]
@@ -78,8 +79,8 @@ def test_a_tag_unheard_and_unreachable_is_lost_at_the_next_check(house):
     house.tick(hours=10)
     house.leave("Rex")
 
-    api._presence_cron_job(ctx=house.ctx)
-    assert house.log()[-1] == (m.Cron("presence", log_source=m.LogSource.SYSTEM), "Presence lost: `Rex`", [])
+    inbound.check_presence_cron()
+    assert house.log()[-1] == (house.like(m.Cron("presence", log_source=m.LogSource.SYSTEM)), "Presence lost: `Rex`", [])
     assert api.present_names() == set()
 
     house.advertise("Rex")

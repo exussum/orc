@@ -11,7 +11,7 @@ from orc.dal import broker
 from orc.dal.broker import paho
 
 if TYPE_CHECKING:
-    from orc.dal.interfaces import Adapter
+    from orc.dal.interfaces import Adapter, OnMessage
 
 _log = logging.getLogger(__name__)
 
@@ -24,8 +24,8 @@ def register(adapter: "Adapter") -> None:
     broker.register(adapter, partial(_drop, adapter))
 
 
-def start() -> None:
-    paho.start()
+def start(on_message: "OnMessage") -> None:
+    paho.start(on_message)
 
 
 def command(device: m.DeviceEnum, value: Any) -> None:

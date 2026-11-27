@@ -153,10 +153,8 @@ def register_adapter(adapter: "Adapter") -> None:
     config.providers.broker.register(adapter)
 
 
-def start_mqtt() -> None:
-    config.providers.broker.register(config.providers.adapter)
-    broker.add_status_listener(_log_external)
-    config.providers.broker.start()
+def receive_mqtt(topic: str, payload: bytes, trigger: m.Broker) -> None:
+    broker.receive(topic, payload, trigger)
 
 
 def device_states() -> list[m.DeviceState]:
@@ -440,8 +438,8 @@ def active_theme_override(today: date) -> m.ThemeOverride | None:
     return cur if cur and cur.start <= today <= cur.end else None
 
 
-def calculate_theme(today: date) -> str:
-    return _scheduled_theme(today).name
+def calculate_theme(today: date, trigger: m.Trigger) -> str:
+    return _scheduled_theme(today, trigger).name
 
 
 def set_theme_override(name: str, start: date, end: date) -> None:
@@ -533,10 +531,8 @@ def apply_theme_change(name: str, start: date | None, end: date | None, trigger:
     else:
         assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
-        context().log.write(
-            Message.THEME_OVERRIDE_SET.format(name=name, start=start, end=end), replace(trigger, log_source=m.LogSource.MANUAL)
-        )
-    rebuild_jobs()
+        context().log.write(Message.THEME_OVERRIDE_SET.format(name=name, start=start, end=end), trigger)
+    rebuild_jobs(trigger)
 
 
 def check_presence(trigger: m.Trigger, *, probe: bool = False) -> set[str]:
@@ -555,7 +551,7 @@ def rescan_presence(trigger: m.Trigger) -> set[str]:
     return _scan_lan(trigger, m.LogSource.MANUAL, forced=True)
 
 
-def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
+def get_schedule(trigger: m.Trigger) -> list[tuple[datetime, m.ThemeEntry]]:
     result: list[tuple[datetime, m.ThemeEntry]] = []
     for x in range(2):
         now = local_now() + timedelta(days=x)
@@ -564,7 +560,7 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.settings.tz)
         sunrise, sunset = _sun_times(local_midnight, config.settings.lat, config.settings.long, config.settings.sunset_lead_hours)
 
-        for entry in _scheduled_theme(today).entries:
+        for entry in _scheduled_theme(today, trigger).entries:
             result.append((_entry_time(entry.when, sunrise, sunset, now), entry))
     return result
 
@@ -662,7 +658,8 @@ def runtime() -> engine.Runtime[m.Devices]:
     return engine.Runtime(config.settings.tz, override_key=ORC_SYSTEM_SNAPSHOT, same=m.fuzzy_eq)
 
 
-def rebuild_iot_schedule() -> None:
+def rebuild_iot_schedule(trigger: m.Trigger) -> None:
+    ctx = context()
     now = local_now()
     jobs = [
         Job(
@@ -673,14 +670,14 @@ def rebuild_iot_schedule() -> None:
             id=f"iot-{entry.routine_id}-{run_at:%Y-%m-%dT%H:%M}",
             name=entry.routine.name,
         )
-        for run_at, entry in get_schedule()
+        for run_at, entry in get_schedule(trigger)
         if now <= run_at
     ]
     context().scheduler.sync(jobs, m.Queue.IOT)
 
 
-def replay_day(now: datetime, entry: m.LogEntry) -> None:
-    jobs = sorted(get_schedule(), key=lambda x: x[0])
+def replay_day(now: datetime, trigger: m.Trigger) -> None:
+    jobs = sorted(get_schedule(trigger), key=lambda x: x[0])
     present = present_names()
     matched = [
         c for when, e in jobs if when <= now and m.SKIP_REPLAY_TAG not in e.routine.tags for c in _matching_items(e.routine, now, present)
@@ -736,7 +733,7 @@ def _squish(items: list[m.DeviceCommand]) -> tuple[m.DeviceCommand, ...]:
     return (match, last) if match else (last,)
 
 
-def _base_theme(today: date) -> str:
+def _base_theme(today: date, trigger: m.Trigger) -> str:
     if today.weekday() in (5, 6):
         return m.THEME_DAY_OFF
     try:
@@ -747,11 +744,11 @@ def _base_theme(today: date) -> str:
     return m.THEME_DAY_OFF if holiday else m.THEME_WORK_DAY
 
 
-def _scheduled_theme(today: date) -> m.Theme:
+def _scheduled_theme(today: date, trigger: m.Trigger) -> m.Theme:
     if override := active_theme_override(today):
         theme = config.themes.get(override.name)
     else:
-        theme = config.themes.get(today.strftime("%A").lower()) or config.themes.get(_base_theme(today))
+        theme = config.themes.get(today.strftime("%A").lower()) or config.themes.get(_base_theme(today, trigger))
     assert theme is not None
     return theme
 
@@ -883,7 +880,7 @@ def _push_job(payload: tuple[str, str, m.Notification, m.Trigger, tuple[m.PushSu
             )
 
 
-def _log_external(status: m.Status) -> None:
+def log_external(status: m.Status, trigger: m.Trigger) -> None:
     if status.source is m.Source.EXTERNAL:
         line = Message.EXTERNAL_CHANGE.format(device=status.device.name, attribute=status.attribute, old=status.old, new=status.new)
         external = replace(trigger, name="external")
@@ -922,8 +919,8 @@ def _presence_cutoff() -> datetime:
     return local_now() - timedelta(hours=config.settings.presence_hours)
 
 
-def _presence_cron_job(ctx: m.AppContext) -> set[str]:
-    return check_presence(m.Cron("presence", log_source=m.LogSource.SYSTEM), m.LogSource.SYSTEM)
+def _presence_cutoff() -> datetime:
+    return local_now() - timedelta(hours=config.settings.presence_hours)
 
 
 def _key_summary(key: m.BleKey) -> str:
@@ -935,10 +932,6 @@ def _refresh_tag_keys_job(payload: m.Trigger, *, ctx: m.AppContext) -> None:
     refresh_tag_keys(payload)
 
 
-def _tag_keys_cron_job(ctx: m.AppContext) -> None:
-    refresh_tag_keys(m.Cron("findhub", log_source=m.LogSource.SYSTEM))
-
-
-def _retry_stats_job() -> None:
+def refresh_retry_stats() -> None:
     global _retry_stats
     _retry_stats = config.providers.hubitat.fetch_retry_stats()

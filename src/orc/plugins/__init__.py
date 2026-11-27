@@ -44,8 +44,8 @@ def light_test(ctx: m.AppContext, device: str | None, *, trigger: m.Trigger) -> 
     ctx.api.restore_scene("light_test", ctx.config.default_config.commands, trigger)
 
 
-def rebuild_jobs(ctx: m.AppContext, device: str | None, *, entry: m.LogEntry) -> None:
-    ctx.api.rebuild_jobs()
+def rebuild_jobs(ctx: m.AppContext, device: str | None, *, trigger: m.Trigger) -> None:
+    ctx.api.rebuild_jobs(trigger)
 
 
 def reboot(ctx: m.AppContext, device: str | None, *, trigger: m.Trigger) -> None:

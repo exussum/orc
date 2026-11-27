@@ -5,7 +5,7 @@ from orc import model as m
 from orc.dal import broker, warn_stub
 
 if TYPE_CHECKING:
-    from orc.dal.interfaces import Adapter
+    from orc.dal.interfaces import Adapter, OnMessage
 
 REQUIRED_SECRETS: dict[str, Callable[[str], Any]] = {}
 
@@ -16,7 +16,7 @@ def register(adapter: "Adapter") -> None:
     broker.register(adapter, _drop)
 
 
-def start() -> None:
+def start(on_message: "OnMessage") -> None:
     for adapter in broker.adapters:
         adapter.start()
 
