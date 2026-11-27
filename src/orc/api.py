@@ -48,7 +48,6 @@ _ctx: m.AppContext | None = None
 _retry_stats: tuple[m.RetryStats, ...] = ()
 
 last_seen = net.presence.seen
-mark_present = net.presence.mark
 
 
 type _Job = tuple[Callable[..., None], m.DeviceEnum, em.Command[Any]]
@@ -450,11 +449,20 @@ def present_names() -> set[str]:
     return net.presence.present(_presence_cutoff())
 
 
-def set_present(names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> set[str]:
-    return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger, source, forced)
+def mark_present(names: Iterable[str], when: datetime, trigger: m.Trigger, forced: bool = False) -> None:
+    net.presence.mark(names, when)
+    _report_presence(trigger, forced)
 
 
+def set_present(names: Iterable[str], trigger: m.Trigger, forced: bool = False) -> set[str]:
+    present = net.presence.set_present(names, local_now(), _presence_cutoff())
+    _report_presence(trigger, forced)
+    return present
 
+
+def expire_presence(names: list[str], trigger: m.Trigger, force: bool = False) -> None:
+    net.presence.forget(names, before=None if force else local_now())
+    _report_presence(trigger, force)
 
 
 def delete_all_presence(trigger: m.Trigger) -> None:
@@ -466,36 +474,10 @@ def pause_presence() -> None:
     context().scheduler.pause_queue(m.Queue.PRESENCE)
 
 
-def resume_presence(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
-    net.presence.resume(trigger, source)
+def resume_presence(trigger: m.Trigger) -> None:
+    net.presence.resume()
+    _report_presence(trigger)
     context().scheduler.release_queue(m.Queue.PRESENCE)
-
-
-def start_presence() -> None:
-    reported: set[str] = set()
-
-    def report(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
-        nonlocal reported
-        present = present_names()
-        if detected := sorted(present - reported):
-            context().log.write(Message.PRESENCE_DETECTED.format(name=", ".join(detected)), replace(trigger, log_source=source))
-        if lost := sorted(reported - present):
-            context().log.write(Message.PRESENCE_LOST.format(name=", ".join(lost)), replace(trigger, log_source=source))
-        reported = present
-
-    rows = sqlite.fetch_tags()
-    for row in rows:
-        net.presence.set_key(row.person, row.key)
-    net.presence.start(
-        config.tags,
-        config.settings.tz,
-        report,
-        m.LogSource.SYSTEM,
-        clocks={row.person: row.clock for row in rows if row.clock},
-        on_clock=sqlite.update_tag_clock,
-    )
-    if net.presence.tagged:
-        context().scheduler.service(net.presence.listen, name="ble-listener")
 
 
 def schedule_presence_check(trigger: m.Trigger) -> None:
@@ -541,14 +523,16 @@ def check_presence(trigger: m.Trigger, *, probe: bool = False) -> set[str]:
     if not config.people and not tagged:
         return present
     stale = set(net.presence.seen()) - present
-    net.presence.probe(tagged - present if probe else stale & tagged, trigger, source)
-    return _scan_lan(trigger, source)
+    net.presence.probe(tagged - present if probe else stale & tagged)
+    _report_presence(trigger)
+    return _scan_lan(trigger)
 
 
 def rescan_presence(trigger: m.Trigger) -> set[str]:
     stale = [name for name in net.presence.seen() if name not in net.presence.tagged]
-    net.presence.forget(stale, trigger, m.LogSource.MANUAL, before=local_now(), forced=True)
-    return _scan_lan(trigger, m.LogSource.MANUAL, forced=True)
+    net.presence.forget(stale, before=local_now())
+    _report_presence(trigger, forced=True)
+    return _scan_lan(trigger, forced=True)
 
 
 def get_schedule(trigger: m.Trigger) -> list[tuple[datetime, m.ThemeEntry]]:
@@ -915,8 +899,12 @@ def _scan_lan(trigger: m.Trigger, forced: bool = False) -> set[str]:
     return set_present(found, trigger, forced)
 
 
-def _presence_cutoff() -> datetime:
-    return local_now() - timedelta(hours=config.settings.presence_hours)
+def _report_presence(trigger: m.Trigger, forced: bool = False) -> None:
+    detected, lost = net.presence.report(_presence_cutoff(), forced)
+    if detected:
+        context().log.write(Message.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger)
+    if lost:
+        context().log.write(Message.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
 
 
 def _presence_cutoff() -> datetime:

@@ -138,7 +138,7 @@ def _on_connection(
         _set_connected(ctx, on_transition, False, trigger)
 
 
-def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: str, data: dict[str, Any]) -> None:
+def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: str, data: dict[str, Any], trigger: m.Trigger) -> None:
     if "battery" in data:
         data["battery"] = m.BatteryLevel.from_fraction(data["battery"], 4)
 

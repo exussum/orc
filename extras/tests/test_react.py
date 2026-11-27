@@ -89,7 +89,7 @@ def ruleset(ctx):
 
 @pytest.fixture
 def device_report(ctx):
-    def device_report(device_id, attributes, old=None):
+    def device_report(device_id, attributes, old=None, trigger=None):
         name = next((e.name for cls in DEVICE_ENUMS.values() for e in cls if e.value == device_id), device_id)
         state = m.DeviceState(m.Device(device_id, name, "hubitat"), attributes, None)
         known = ctx.api.device_states.return_value
@@ -163,7 +163,7 @@ def test_cooldown_option_overrides_default(react_rules):
 
 
 def test_switch_on_schedules_reaction(ctx, react_rules, device_report):
-    device_report("1", {"switch": m.ON}, m.OFF)
+    device_report("1", {"switch": m.ON}, m.OFF, EVENT)
     call = ctx.scheduler.once.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"].startswith("react-")
@@ -210,10 +210,12 @@ def test_run_react_dispatches_the_action(ctx, ruleset, dispatches, deferred_run,
 
 def test_consecutive_fires_log_the_same_trigger_id(ctx, ruleset, device_report):
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {"1": Light.lamp})
-    device_report("1", {"switch": m.ON}, m.OFF)
+    device_report("1", {"switch": m.ON}, m.OFF, EVENT)
     ctx.frozen.move_to(NOW + timedelta(seconds=model.COOLDOWN.total_seconds() + 1))
-    device_report("1", {"switch": m.ON}, m.OFF)
-    assert [call.args[1] for call in ctx.log.write.call_args_list] == [_hub("1"), _hub("1")]
+    device_report("1", {"switch": m.ON}, m.OFF, EVENT)
+    logged = [call.args[1] for call in ctx.log.write.call_args_list]
+    assert logged == [EVENT, EVENT]
+    assert {t.log_source for t in logged} == {model.Log.REACT}
 
 
 def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, device_report):

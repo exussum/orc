@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 from orc_extras import yolink
@@ -25,6 +25,8 @@ def test_report_applies_with_or_without_a_battery(ctx, data, battery):
     device = MagicMock(value="leak-1", label="Kitchen")
     ctx.plugin_state = {yolink: yolink.plugins.states_for((device,))}
     on_transition = MagicMock()
-    yolink.plugins._on_report(ctx, on_transition, "leak-1", data)
-    on_transition.assert_any_call("Kitchen", "leak", None, "alert")
+    yolink.plugins._on_report(ctx, on_transition, "leak-1", data, EVENT)
+    on_transition.assert_any_call(ANY, "Kitchen", "leak", None, "alert")
+    assert on_transition.call_args.args[0] == EVENT
+    assert on_transition.call_args.args[0].name == "Kitchen"
     assert ctx.plugin_state[yolink].sensors.get("leak-1").battery is battery

@@ -76,7 +76,7 @@ def connect(access_token: str, on_connection: ConnectionCallback, on_report: Rep
             _log.exception("yolink: bad payload on %s", msg.topic)
             return
         try:
-            on_report(parts[2], payload.get("data") or {})
+            on_report(parts[2], payload.get("data") or {}, _trigger(parts[2]))
         except Exception:
             _log.exception("yolink: report handling failed on %s", msg.topic)
 

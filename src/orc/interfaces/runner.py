@@ -123,7 +123,9 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
         broker.add_status_listener(api.log_external)
         config.providers.broker.start(inbound.on_message)
     with step("ble setup"):
-        api.start_presence()
+        net.presence.start(config.tags, config.settings.tz, inbound.on_heard)
+        if net.presence.tagged:
+            ctx.scheduler.service(net.presence.listen, name="ble-listener")
     with step("scheduler start"):
         ctx.scheduler.start(ctx)
     with step("scheduler resume"):

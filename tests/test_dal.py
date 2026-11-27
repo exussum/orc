@@ -268,6 +268,7 @@ class TestPresence:
 
     def _hear(self, frames, tags):
         presence = net.Presence()
+        presence._on_heard = lambda person, when: presence.mark([person], when)
         presence._tags = tags
         presence._index = net._eid_index(tags, {}, self.NOW)
         for frame in frames:
@@ -309,9 +310,9 @@ class TestPresence:
     def test_a_rotation_reports_the_exact_clock(self):
         second = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[1]
         presence = self._heard()
-        presence._on_clock = MagicMock()
-        presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
-        presence._on_clock.assert_called_once_with("Alice", m.TagClock(5120 - 5000, int(self.NOW.timestamp()), second[1:]))
+        with patch.object(sqlite, "update_tag_clock") as update:
+            presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
+        update.assert_called_once_with("Alice", m.TagClock(5120 - 5000, int(self.NOW.timestamp()), second[1:]))
 
     def test_a_seeded_clock_starts_narrow(self):
         tags = {"Alice": self.KEY}

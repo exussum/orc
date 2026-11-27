@@ -265,10 +265,8 @@ def run_routine(id: str) -> dict[str, Any]:
 @bp.route("/api/presence/<name>/checkin")
 def checkin_presence(name: str) -> dict[str, Any]:
     trigger = m.Manual(_person(name), log_source=m.LogSource.MANUAL)
-    with app.orc.log.opened(
-        app.orc.log.write(Message.PRESENCE_CHECKED_IN.format(name=name), replace(trigger, log_source=m.LogSource.MANUAL))
-    ):
-        api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger, m.LogSource.MANUAL, forced=True)
+    with app.orc.log.opened(app.orc.log.write(Message.PRESENCE_CHECKED_IN.format(name=name), trigger)):
+        api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger, forced=True)
     return {}
 
 

@@ -144,7 +144,7 @@ def house(request, monkeypatch, tmp_path):
         broker.status_listeners.clear()
         net.presence.__init__()
         net.presence._tz = config.settings.tz
-        api.start_presence()
+        net.presence.start(config.tags, config.settings.tz, inbound.on_heard)
 
         scheduler = ManualScheduler(config.settings.jobs_db, config.settings.tz)
         ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())
@@ -164,11 +164,11 @@ def house(request, monkeypatch, tmp_path):
         probed, reachable = [], set()
         real_probe = net.Presence.probe
 
-        def probe(presence, names, trigger, source):
+        def probe(presence, names):
             probed.extend(sorted(names))
             for name in sorted(names & reachable):
                 house.advertise(name)
-            real_probe(presence, names, trigger, source)
+            real_probe(presence, names)
 
         def record(commands, *args, **kwargs):
             dispatched.append(commands)
