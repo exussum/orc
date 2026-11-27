@@ -20,13 +20,13 @@ def sleep(ctx: m.AppContext, name: str) -> datetime:
         if watch in state.groups[name].watches:
             ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
             state.delayed.pop(watch, None)
-    ctx.log.write(f"`{name}` sleeping until {until:%H:%M}", m.Manual("react", log_source=Log.REACT))
+    ctx.log.write(f"`{name}` sleeping until {until:%H:%M}", trigger)
     return until
 
 
 def wake(ctx: m.AppContext, name: str) -> None:
     ctx.plugin_state[orc_extras.react].disabled.pop(name, None)
-    ctx.log.write(f"`{name}` awake", m.Manual("react", log_source=Log.REACT))
+    ctx.log.write(f"`{name}` awake", trigger)
 
 
 def disabled_until(state: State, name: str, now: datetime) -> datetime | None:
@@ -145,8 +145,10 @@ def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -
     ctx.api.dispatch((_command(watch),), entry=_log(ctx, watch, device))
 
 
-def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> m.LogEntry:
-    return ctx.log.write(_line(ctx, watch, device), m.Broker(name=device.id, origin=device.source, log_source=Log.REACT))
+def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, trigger: m.Trigger) -> m.Trigger:
+    react = replace(trigger, log_source=Log.REACT)
+    ctx.log.write(_line(ctx, watch, device), react)
+    return react
 
 
 def _line(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> str:

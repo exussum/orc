@@ -19,12 +19,15 @@ def _on_event(ctx: m.AppContext, mapping: dict[tuple[Any, int, str], str], statu
     device, attribute, new = status.device, status.attribute, status.new
     action = mapping.get((device.id, new, attribute))
     if action is not None:
-        ctx.scheduler.now(_run_button, (action, m.Button(device.id, log_source=m.LogSource.EXTERNAL)), name="Button", queue=m.Queue.ADHOC)
+        ctx.scheduler.now(
+            _run_button, (action, m.Button(device.id, id=trigger.id, log_source=m.LogSource.EXTERNAL)), name="Button", queue=m.Queue.ADHOC
+        )
 
 
 def _run_button(payload: tuple[str, m.Button], *, ctx: m.AppContext) -> None:
     action, trigger = payload
-    if not ctx.api.run_action(action, trigger, source=m.LogSource.EXTERNAL):
+    if not ctx.api.run_action(action, trigger):
         msg = Message.BUTTON_ACTION_UNKNOWN.format(id=action)
-        entry = ctx.log.write(msg, replace(trigger, log_source=m.LogSource.SYSTEM), notification=m.Notification(("button",)))
-        ctx.api.alert(m.Alarm.ATTENTION, text=msg, entry=entry)
+        system = replace(trigger, log_source=m.LogSource.SYSTEM)
+        ctx.log.write(msg, system, notification=m.Notification(("button",)))
+        ctx.api.alert(m.Alarm.ATTENTION, text=msg, trigger=system)

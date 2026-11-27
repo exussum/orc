@@ -6,6 +6,8 @@ from orc_extras import yolink
 import orc
 from orc import model as m
 
+EVENT = m.Broker("leak-1", origin="yolink", log_source=m.LogSource.PLUGIN)
+
 
 def test_yolink_registers_with_core():
     assert "Leak" in orc.config.registry.devices

@@ -34,7 +34,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         if previous:
             log_entry = previous.entry
         else:
-            log_entry = ctx.log.write(TRIGGER_MSG, m.Broker(name=device.id, origin=device.source, log_source=Log.ENTRANCE))
+            log_entry = ctx.log.write(TRIGGER_MSG, replace(trigger, log_source=Log.ENTRANCE))
             ctx.log.open_row(log_entry)
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
             log_entry, previous.present_before if previous else set(ctx.api.present_names())
@@ -56,13 +56,13 @@ def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppC
     if new == sensor.setting.active_event:
         ctx.scheduler.pause_queue(m.Queue.IOT)
         ctx.api.pause_presence()
-        ctx.api.delete_all_presence(log_entry.trigger, Log.ENTRANCE)
+        ctx.api.delete_all_presence(trigger)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME))
         timed_name, timed_commands = _timed_commands(ctx, sensor)
         log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
         ctx.api.dispatch((*restore, *timed_commands), force=True, entry=log_entry)
     else:
-        ctx.api.run_action(sensor.rules.inside, log_entry.trigger, source=Log.ENTRANCE)
+        ctx.api.run_action(sensor.rules.inside, trigger)
     ctx.scheduler.once(
         _run_trigger_sensor_off,
         ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
@@ -76,31 +76,27 @@ def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx:
     sensor, log_entry = payload
     visit = ctx.plugin_state[orc_extras.entrance_sensor]
     ctx.plugin_state[orc_extras.entrance_sensor] = None
-    present = ctx.api.check_presence(log_entry.trigger, Log.ENTRANCE, probe=True)
-    ctx.api.resume_presence(log_entry.trigger, Log.ENTRANCE)
+    present = ctx.api.check_presence(trigger, probe=True)
+    ctx.api.resume_presence(trigger)
     ctx.scheduler.release_queue(m.Queue.IOT)
     people = present - {sensor.setting.listener}
     door_open = not people and _door_open(ctx, sensor)
 
     if people or door_open:
-        ctx.api.run_action(sensor.rules.present, log_entry.trigger, source=Log.ENTRANCE)
-        log_entry.add(Log.ENTRANCE, sensor.message.log_door_open if door_open else sensor.message.log_present)
+        ctx.api.run_action(sensor.rules.present, trigger)
+        ctx.log.write(sensor.message.log_door_open if door_open else sensor.message.log_present, trigger)
     elif sensor.setting.listener in present:
         # Visitor left, the listener stayed: restore the pre-visit state
-        ctx.api.restore_scene(SNAPSHOT_NAME, (), log_entry)
-        ctx.api.run_action(sensor.rules.absent, log_entry.trigger, source=Log.ENTRANCE)
-        log_entry.add(Log.ENTRANCE, sensor.message.log_absent)
+        ctx.api.restore_scene(SNAPSHOT_NAME, (), trigger)
+        ctx.api.run_action(sensor.rules.absent, trigger)
+        ctx.log.write(sensor.message.log_absent, trigger)
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
         ctx.api.override_scene(SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry)
         log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
         if not visit.present_before and not present:
-            ctx.log.write(
-                sensor.message.log_nobody,
-                replace(log_entry.trigger, log_source=Log.ENTRANCE),
-                notification=m.Notification(("entrance",), "/presence/"),
-            )
-    ctx.log.close_row(log_entry)
+            ctx.log.write(sensor.message.log_nobody, trigger, notification=m.Notification(("entrance",), "/presence/"))
+    ctx.log.close_row(visit.entry)
 
 
 def _door_open(ctx: m.AppContext, sensor: SimpleNamespace) -> bool:

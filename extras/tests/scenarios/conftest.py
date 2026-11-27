@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NamedTuple
 from unittest.mock import patch
 
 import pytest
@@ -39,6 +40,16 @@ class ManualScheduler(Scheduler):
 
     def run_until(self, when, tick):
         self._coordinator.run_until(when, tick=tick)
+
+
+class TriggerKey(NamedTuple):
+    kind: type
+    name: str
+    log_source: m.LogSourceEnum | None
+
+
+def trigger_key(trigger):
+    return TriggerKey(type(trigger), trigger.name, None if isinstance(trigger, m.Broker) else trigger.log_source)
 
 
 class House:
@@ -89,11 +100,12 @@ class House:
         self.reachable.discard(name)
 
     def scan(self):
-        api.check_presence(m.Query("lan", log_source=m.LogSource.SYSTEM), m.LogSource.SYSTEM)
+        api.check_presence(m.Query("lan", log_source=m.LogSource.SYSTEM))
 
     def report(self, device, attribute, new):
         old = self.reported.get((device, attribute))
         state = m.DeviceState(m.Device(device.value, device.label, "hubitat"), {attribute: new}, None)
+        trigger = m.Broker(str(device.value), origin="hubitat", id=uuid5(NAMESPACE_OID, str(device.value)), log_source=m.LogSource.EXTERNAL)
         for listener in self.listeners:
             listener(m.Status(state.device, attribute, old, new, hubitat.HubitatSource.HUBITAT))
         self.reported[(device, attribute)] = new
@@ -105,7 +117,7 @@ class House:
 
     @staticmethod
     def broker(device):
-        return m.Broker(name=str(device.value), origin="hubitat", log_source=m.LogSource.EXTERNAL)
+        return TriggerKey(m.Broker, str(device.value), None)
 
     @staticmethod
     def log():
@@ -135,7 +147,9 @@ def house(request, monkeypatch, tmp_path):
         app.orc = ctx
 
         listeners, dispatched, lan, pushed = [], [], {"Alice"}, []
-        api.subscribe_push(m.PushSubscription("https://push.example/house", "public-key", "auth-secret"))
+        api.subscribe_push(
+            m.PushSubscription("https://push.example/house", "public-key", "auth-secret"), m.Manual("notify", log_source=m.LogSource.SYSTEM)
+        )
         push = SimpleNamespace(public_key=lambda: "", send=lambda subscription, title, body, tag: pushed.append(body))
         dispatch = api.dispatch
         probed, reachable = [], set()

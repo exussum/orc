@@ -25,6 +25,7 @@ from orc.log import Log, Message
 @dataclass
 class Boot:
     log: Log = field(default_factory=lambda: Log(api.local_now, api.notify))
+    trigger: m.Trigger = field(default_factory=lambda: m.System("boot", log_source=m.LogSource.SYSTEM))
     entry: m.LogEntry | None = None
     started: float | None = None
 
@@ -128,7 +129,7 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     with step("tag key check"):
         api.schedule_tag_key_refresh(m.Cron("findhub", log_source=m.LogSource.SYSTEM))
     assert boot.entry is not None and boot.started is not None
-    boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
+    boot.log.add(boot.entry, m.LogSource.SYSTEM, Message.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 

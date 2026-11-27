@@ -23,6 +23,6 @@ def _on_event(ctx: m.AppContext, status: m.Status) -> None:
         msg = Message.LOW_BATTERY.format(device=device.name, level=level.value)
         ctx.log.write(
             msg,
-            m.Broker(name=device.id, origin=device.source, log_source=m.LogSource.SYSTEM),
+            replace(trigger, log_source=m.LogSource.SYSTEM),
             notification=m.Notification(("battery", device.name), "/device/"),
         )

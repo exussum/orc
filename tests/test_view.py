@@ -57,7 +57,7 @@ def test_manifest_titles_the_remote_host(flask_client, host, title):
 
 
 def test_console_plugin(flask_client, ctx):
-    plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device, entry: None)
+    plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device, trigger, source: None)
     with (
         patch.object(config, "plugins", (plugin,)),
         patch("orc.plugins.execute_plugin") as exec_plugin,
@@ -162,13 +162,15 @@ def test_room_unknown_id_returns_404(flask_client, config_rooms, command_dispatc
 
 def test_set_theme_clear_passes_none_dates(flask_client, ctx, theme_change):
     flask_client.post("/api/schedule/theme", data={"theme": ""})
-    theme_change.assert_called_once_with("", None, None, m.Manual("theme", log_source=m.LogSource.MANUAL))
+    theme_change.assert_called_once_with("", None, None, ANY)
+    assert theme_change.call_args.args[3].name == "theme"
 
 
 def test_set_theme_set_parses_dates(flask_client, ctx, theme_change):
     theme = next(iter(orc.config.themes))
     flask_client.post("/api/schedule/theme", data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"})
-    theme_change.assert_called_once_with(theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme, log_source=m.LogSource.MANUAL))
+    theme_change.assert_called_once_with(theme, date(2100, 1, 1), date(2100, 1, 10), ANY)
+    assert theme_change.call_args.args[3].name == theme
 
 
 def test_set_theme_rejects_unknown_theme(flask_client, ctx, theme_change):
@@ -295,9 +297,9 @@ def test_schedule_badges(flask_client, kwargs, present, present_badges, absent_b
 
 
 def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
-    trigger = m.Manual("bell", log_source=m.LogSource.MANUAL)
-    with api.context().log.opened(api.context().log.write("Walk in", replace(trigger, log_source=m.LogSource.SYSTEM))):
-        api.context().log.write("Nobody home", replace(trigger, log_source=m.LogSource.SYSTEM), notification=m.Notification(("entrance",)))
+    trigger = m.Manual("bell", log_source=m.LogSource.SYSTEM)
+    with api.context().log.opened(api.context().log.write("Walk in", trigger)):
+        api.context().log.write("Nobody home", trigger, notification=m.Notification(("entrance",)))
     html = flask_client.get("/log/").get_data(as_text=True)
     assert html.count("🔔") == 2
 

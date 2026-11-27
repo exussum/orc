@@ -91,11 +91,17 @@ class Log:
                 row.add(source, action, notified=bool(notification), link=link)
                 row.notified = row.notified or bool(notification)
             else:
-                row = m.LogEntry(now, source, action, trigger, notified=bool(notification), link=link)
+                row = m.LogEntry(trigger, line)
                 self._rows.appendleft(row)
         if notification:
             self._notify(action, trigger, notification)
         return row
+
+    def add(self, row: m.LogEntry, source: m.LogSourceEnum, action: str) -> m.LogSubEntry:
+        line = m.LogSubEntry(self._now(), source, action)
+        with self._lock:
+            row.children.append(line)
+        return line
 
     def rows(self) -> list[m.LogEntry]:
         with self._lock:

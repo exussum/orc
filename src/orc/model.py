@@ -336,11 +336,25 @@ class LogEntry(LogSubEntry):
     def __post_init__(self) -> None:
         self.touched = self.timestamp
 
-    def add(self, source: LogSourceEnum, action: str, *, notified: bool = False, link: str | None = None) -> LogSubEntry:
-        entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action, notified=notified, link=link)
-        self.children.append(entry)
-        self.touched = entry.timestamp
-        return entry
+    @property
+    def source(self) -> LogSourceEnum:
+        return self.head.source
+
+    @property
+    def action(self) -> str:
+        return self.head.action
+
+    @property
+    def link(self) -> str | None:
+        return self.head.link
+
+    @property
+    def notified(self) -> bool:
+        return self.head.notified or any(line.notified for line in self.children)
+
+    @property
+    def touched(self) -> datetime:
+        return self.children[-1].timestamp if self.children else self.head.timestamp
 
 
 QueueName = NewType("QueueName", str)

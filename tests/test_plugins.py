@@ -35,10 +35,10 @@ class TestButtons:
     def test_mapped_event_is_queued_not_run_on_caller_thread(self, ctx, action_run):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(ctx.scheduler, "now") as now:
-            on_button(self._held(orc.Light.a.value))
+            on_button(self._held(orc.Light.a.value), TRIGGER)
         action_run.assert_not_called()
         func, payload = now.call_args[0]
-        assert payload == ("TV Lights", m.Button(str(orc.Light.a.value), log_source=m.LogSource.EXTERNAL))
+        assert payload == ("TV Lights", m.Button(str(orc.Light.a.value), id=TRIGGER.id, log_source=m.LogSource.EXTERNAL))
         assert now.call_args[1]["queue"] == m.Queue.ADHOC
         action_run.return_value = True
         func(payload, ctx=ctx)
@@ -49,10 +49,10 @@ class TestButtons:
     def test_unmapped_event_is_ignored(self, ctx, action_run):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
         with patch.object(ctx.scheduler, "now") as now:
-            on_button(self._held("99"))
-            on_button(self._held(orc.Light.a.value, 2))
-            on_button(m.Status(_remote(orc.Light.a.value), "pushed", None, 1, hubitat.HubitatSource.HUBITAT))
-            on_button(m.Status(_remote(orc.Light.a.value), "switch", "off", "on", hubitat.HubitatSource.HUBITAT))
+            on_button(self._held("99"), TRIGGER)
+            on_button(self._held(orc.Light.a.value, 2), TRIGGER)
+            on_button(m.Status(_remote(orc.Light.a.value), "pushed", None, 1, hubitat.HubitatSource.HUBITAT), TRIGGER)
+            on_button(m.Status(_remote(orc.Light.a.value), "switch", "off", "on", hubitat.HubitatSource.HUBITAT), TRIGGER)
         now.assert_not_called()
         action_run.assert_not_called()
 
@@ -72,11 +72,11 @@ class TestBattery:
     def test_notifies_on_crossing_into_critical(self, ctx, log_call, old, new, expected):
         on_event = _capture("add_status_listener", lambda: battery.setup(ctx))
         device = m.Device("16", "front door", "hubitat")
-        on_event(m.Status(device, "battery", old, new, hubitat.HubitatSource.HUBITAT))
+        on_event(m.Status(device, "battery", old, new, hubitat.HubitatSource.HUBITAT), TRIGGER)
         if expected:
             log_call.assert_called_once_with(
                 "Low battery on `front door` (CRITICAL)",
-                m.Broker(name="16", origin="hubitat", log_source=m.LogSource.SYSTEM),
+                TRIGGER,
                 notification=m.Notification(("battery", "front door"), "/device/"),
             )
         else:
@@ -85,8 +85,11 @@ class TestBattery:
     def test_ignores_other_attributes(self, ctx, log_call):
         on_event = _capture("add_status_listener", lambda: battery.setup(ctx))
         device = m.Device("16", "front door", "hubitat")
-        on_event(m.Status(device, "motion", "inactive", "active", hubitat.HubitatSource.HUBITAT))
+        on_event(m.Status(device, "motion", "inactive", "active", hubitat.HubitatSource.HUBITAT), TRIGGER)
         log_call.assert_not_called()
+
+
+TRIGGER = m.Broker("16", origin="hubitat", log_source=m.LogSource.EXTERNAL)
 
 
 def _capture(name, fn):

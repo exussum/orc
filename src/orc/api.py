@@ -125,7 +125,7 @@ def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> 
     if greet:
         notify(
             Message.PUSH_GREETING,
-            m.Manual("notify", log_source=m.LogSource.SYSTEM),
+            trigger,
             m.Notification(("greeting",)),
             (subscription,),
         )
@@ -277,7 +277,6 @@ def run_action(
     id: str,
     trigger: m.Trigger,
     *,
-    source: m.LogSourceEnum,
     device: str | None = None,
     skip_delay: bool = False,
 ) -> bool:
@@ -310,7 +309,7 @@ def run_action(
     with _record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
-            queued = ctx.log.write(Message.TASK_QUEUED.format(id=action.name, when=when), replace(trigger, log_source=source))
+            queued = ctx.log.write(Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
 
             def run() -> None:
                 started = queued.add(source, display)
@@ -320,7 +319,7 @@ def run_action(
 
             ctx.scheduler.once(run, when, id=id, name=action.name, queue=m.Queue.ADHOC)
         else:
-            entry = ctx.log.write(display, replace(trigger, log_source=source))
+            entry = ctx.log.write(display, trigger)
             if id != ORC_SYSTEM_SNAPSHOT:
                 ctx.log.last = entry
             action.fn(entry)
@@ -338,10 +337,10 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
         commands = (*squish(others, state_override=m.OFF), *room.commands)
     else:
         raise ValueError(f"Unknown room state: {state}")
-    entry = context().log.write(Message.ROOM_SET.format(id=id, state=state), replace(trigger, log_source=m.LogSource.MANUAL))
-    context().log.last = entry
-    with _record_duration(id):
-        dispatch(commands, force=True, entry=entry)
+    entry = context().log.write(Message.ROOM_SET.format(id=id, state=state), trigger)
+    context().log.last_action = entry.action
+    with _record_duration(id), context().log.opened(entry):
+        dispatch(commands, force=True, trigger=trigger)
 
 
 def _pause_not_stop(commands: m.Commands) -> m.Commands:
@@ -459,12 +458,11 @@ def set_present(names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnu
     return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger, source, forced)
 
 
-def expire_presence(names: list[str], trigger: m.Trigger, source: m.LogSourceEnum, force: bool = False) -> None:
-    net.presence.forget(names, trigger, source, before=None if force else local_now(), forced=force)
 
 
-def delete_all_presence(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
-    expire_presence(list(net.presence.seen()), trigger, source)
+
+def delete_all_presence(trigger: m.Trigger) -> None:
+    expire_presence(list(net.presence.seen()), trigger)
 
 
 def pause_presence() -> None:
@@ -525,16 +523,14 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
             if not stored or stored.eik != key.eik:
                 sqlite.upsert_tag_key(tag.person, key)
                 net.presence.set_key(tag.person, key)
-                context().log.write(
-                    Message.TAG_KEY_UPDATED.format(name=tag.person, key=_key_summary(key)), replace(trigger, log_source=m.LogSource.SYSTEM)
-                )
+                context().log.write(Message.TAG_KEY_UPDATED.format(name=tag.person, key=_key_summary(key)), trigger)
         except Exception as exc:
-            context().log.write(Message.TAG_KEY_FAILED.format(name=tag.person, exc=exc), replace(trigger, log_source=m.LogSource.SYSTEM))
+            context().log.write(Message.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
 
 
 def apply_theme_change(name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
     if not name:
-        context().log.write(Message.THEME_OVERRIDE_CLEARED, replace(trigger, log_source=m.LogSource.MANUAL))
+        context().log.write(Message.THEME_OVERRIDE_CLEARED, trigger)
         clear_theme_override()
     else:
         assert start is not None and end is not None  # a named theme override always carries a start/end window
@@ -545,7 +541,7 @@ def apply_theme_change(name: str, start: date | None, end: date | None, trigger:
     rebuild_jobs()
 
 
-def check_presence(trigger: m.Trigger, source: m.LogSourceEnum, *, probe: bool = False) -> set[str]:
+def check_presence(trigger: m.Trigger, *, probe: bool = False) -> set[str]:
     present = present_names()
     tagged = net.presence.tagged
     if not config.people and not tagged:
@@ -748,7 +744,7 @@ def _base_theme(today: date) -> str:
     try:
         holiday = config.providers.holiday.market_holiday(today)
     except (OSError, RuntimeError, ValueError, KeyError) as exc:  # request failures, the feed's error payload, malformed json or entries
-        context().log.write(Message.HOLIDAY_CHECK_FAILED.format(day=today, exc=exc), m.System("holiday", log_source=m.LogSource.SYSTEM))
+        context().log.write(Message.HOLIDAY_CHECK_FAILED.format(day=today, exc=exc), replace(trigger, log_source=m.LogSource.SYSTEM))
         return m.THEME_WORK_DAY
     return m.THEME_DAY_OFF if holiday else m.THEME_WORK_DAY
 
@@ -892,7 +888,11 @@ def _push_job(payload: tuple[str, str, m.Notification, m.Trigger, tuple[m.PushSu
 def _log_external(status: m.Status) -> None:
     if status.source is m.Source.EXTERNAL:
         line = Message.EXTERNAL_CHANGE.format(device=status.device.name, attribute=status.attribute, old=status.old, new=status.new)
-        context().log.write(line, m.Broker(name="external", origin=status.device.source, log_source=m.LogSource.EXTERNAL))
+        external = replace(trigger, name="external")
+        log = context().log
+        if row := log.recent_row(external.name):
+            log.attach(row, external)
+        log.write(line, external)
 
 
 def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
@@ -908,16 +908,16 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
 
 
 def _check_presence_job(payload: m.Trigger, *, ctx: m.AppContext) -> set[str]:
-    return check_presence(payload, m.LogSource.SYSTEM)
+    return check_presence(payload)
 
 
-def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> set[str]:
+def _scan_lan(trigger: m.Trigger, forced: bool = False) -> set[str]:
     found, errors = net.scan_presence(config.people)
     for name, exc in errors:
         msg = Message.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
-        entry = context().log.write(msg, replace(trigger, log_source=source), notification=m.Notification(("presence",), "/presence/"))
-        alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-    return set_present(found, trigger, source, forced)
+        context().log.write(msg, trigger, notification=m.Notification(("presence",), "/presence/"))
+        alert(m.Alarm.ATTENTION, text=msg, trigger=trigger)
+    return set_present(found, trigger, forced)
 
 
 def _presence_cutoff() -> datetime:

@@ -334,7 +334,7 @@ class TestPresence:
 
     def test_forget_clears_the_hearing(self):
         presence = self._heard()
-        presence.forget(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+        presence.forget(["Alice"])
         assert self._present(presence) == set()
 
     def test_hearing_outside_the_window_expires(self):
@@ -345,13 +345,13 @@ class TestPresence:
         presence = self._heard()
         presence.pause(self.NOW)
         assert self._present(presence) == set()
-        presence.resume(TRIGGER, m.LogSource.SYSTEM)
+        presence.resume()
         assert self._present(presence) == {"Alice"}
 
     def _forgotten(self):
         with patch.object(net.Presence, "_now", return_value=self.NOW - timedelta(seconds=1)):
             presence = self._heard()
-        presence.forget(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+        presence.forget(["Alice"])
         return presence
 
     def _advertise(self, presence):
@@ -362,14 +362,14 @@ class TestPresence:
         presence = self._forgotten()
         threading.Timer(0.05, self._advertise, [presence]).start()
         with patch.object(net, "_PROBE_SECONDS", 5):
-            presence.probe(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+            presence.probe(["Alice"])
         assert self._present(presence) == {"Alice"}
 
     @pytest.mark.parametrize("heard_before", [True, False], ids=["forgotten", "never_heard"])
     def test_probe_marks_nothing_when_silent(self, heard_before):
         presence = self._forgotten() if heard_before else self._hear([], {"Alice": self.KEY})
         with patch.object(net, "_PROBE_SECONDS", 0):
-            presence.probe(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+            presence.probe(["Alice"])
         assert self._present(presence) == set()
 
 

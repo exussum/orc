@@ -150,8 +150,7 @@ def _run_event(payload: CalendarJob, *, ctx: m.AppContext) -> None:
     summary = payload.destination.summary
     trigger = m.Integration(summary, log_source=Log.CALENDAR)
     if payload.event_type == WARNING:
-        entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, summary, trigger)
-        ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
+        ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, trigger=trigger)
     else:
         destination = payload.destination
         record(RecentEvent(*destination, ctx.api.local_now().timestamp()))

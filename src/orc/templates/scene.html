@@ -61,7 +61,7 @@
                 </div>
             </div>
             <div class="text-xs text-right min-w-0 pl-4" style="flex: 1">
-                <div id="orc-last-run" class="whitespace-nowrap overflow-hidden">{% if last_run %}{{ last_run.action|codespan }}{% else %}none{% endif %}</div>
+                <div id="orc-last-run" class="whitespace-nowrap overflow-hidden">{% if last_run %}{{ last_run|codespan }}{% else %}none{% endif %}</div>
                 <div>👤 {{ present }} · 💡 {{ lights_on }} · 🔊 {{ sounds_playing }}</div>
             </div>
         </div>

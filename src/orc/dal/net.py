@@ -82,10 +82,9 @@ class Presence:
         self._clocks.pop(person)
         self._tags[person] = key
 
-    def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> None:
+    def mark(self, names: Iterable[str], when: datetime) -> None:
         for name in names:
             self._heard[name] = when
-        self._changed(trigger, source, forced)
 
     def seen(self) -> dict[str, datetime]:
         return self._heard.copy()
@@ -94,14 +93,11 @@ class Presence:
         paused = self._paused
         return {name for name, heard in self._heard.copy().items() if heard >= cutoff and (not paused or heard > paused)}
 
-    def forget(
-        self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, before: datetime | None = None, forced: bool = False
-    ) -> None:
+    def forget(self, names: Iterable[str], before: datetime | None = None) -> None:
         # `before` keeps entries at or past it — manual check-ins stamped in the future.
         for name in names:
             if (heard := self._heard.get(name)) and (before is None or heard < before):
                 self._heard.pop(name)
-        self._changed(trigger, source, forced)
 
     def set_present(
         self, names: Iterable[str], when: datetime, cutoff: datetime, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False
@@ -112,15 +108,13 @@ class Presence:
                 self._heard.pop(name)
         for name in found:
             self._heard[name] = when
-        self._changed(trigger, source, forced)
         return self.present(cutoff)
 
     def pause(self, until: datetime) -> None:
         self._paused = until
 
-    def resume(self, trigger: m.Trigger, source: m.LogSourceEnum) -> None:
+    def resume(self) -> None:
         self._paused = None
-        self._changed(trigger, source)
 
     def probe(self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum) -> None:
         wanted = set(names)

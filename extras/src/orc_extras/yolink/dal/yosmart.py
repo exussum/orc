@@ -18,6 +18,10 @@ _MQTT_PORT = 8003
 _log = logging.getLogger(__name__)
 
 
+def _trigger(name: str) -> m.Trigger:
+    return m.Broker(name, origin="yolink", log_source=m.LogSource.PLUGIN)
+
+
 def authenticate(secrets: m.Secrets, timeout: int) -> tuple[str, int]:
     response = requests.post(
         _AUTH_URL,

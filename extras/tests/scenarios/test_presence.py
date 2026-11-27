@@ -10,7 +10,7 @@ def test_a_tag_heard_for_the_first_time_is_logged_once(house):
     house.tick(seconds=30)
     house.advertise("Rex")
 
-    assert house.log() == [(m.Query("ble", log_source=m.LogSource.SYSTEM), "Presence detected: `Rex`", [])]
+    assert house.log() == [(house.like(m.Query("ble", log_source=m.LogSource.SYSTEM)), "Presence detected: `Rex`", [])]
     assert api.present_names() == {"Rex"}
 
 
@@ -23,7 +23,7 @@ def test_manual_rescan_clears_and_refinds_everyone(house):
     house.press("/api/presence/run")
 
     assert house.log()[-1] == (
-        m.Manual("presence", log_source=m.LogSource.MANUAL),
+        house.like(m.Manual("presence", log_source=m.LogSource.MANUAL)),
         "Presence rescan",
         ["Presence lost: `Alice`", "Presence detected: `Alice`"],
     )
@@ -40,8 +40,8 @@ def test_two_rescans_an_hour_apart_are_two_rows(house):
     house.press("/api/presence/run")
 
     assert house.log()[-2:] == [
-        (m.Manual("presence", log_source=m.LogSource.MANUAL), "Presence rescan", []),
-        (m.Manual("presence", log_source=m.LogSource.MANUAL), "Presence rescan", []),
+        (house.like(m.Manual("presence", log_source=m.LogSource.MANUAL)), "Presence rescan", []),
+        (house.like(m.Manual("presence", log_source=m.LogSource.MANUAL)), "Presence rescan", []),
     ]
 
 
@@ -54,7 +54,7 @@ def test_the_cron_check_does_not_probe_tags(house):
     api._presence_cron_job(ctx=house.ctx)
 
     assert house.probed == []
-    assert house.log() == [(m.Query("ble", log_source=m.LogSource.SYSTEM), "Presence detected: `Rex`", [])]
+    assert house.log() == [(house.like(m.Query("ble", log_source=m.LogSource.SYSTEM)), "Presence detected: `Rex`", [])]
     assert api.present_names() == {"Rex"}
 
 
@@ -67,7 +67,7 @@ def test_a_tag_unheard_for_the_window_is_probed_before_it_is_lost(house):
     api._presence_cron_job(ctx=house.ctx)
 
     assert house.probed == ["Rex"]
-    assert house.log() == [(m.Query("ble", log_source=m.LogSource.SYSTEM), "Presence detected: `Rex`", [])]
+    assert house.log() == [(house.like(m.Query("ble", log_source=m.LogSource.SYSTEM)), "Presence detected: `Rex`", [])]
     assert api.present_names() == {"Rex"}
 
 
@@ -83,4 +83,4 @@ def test_a_tag_unheard_and_unreachable_is_lost_at_the_next_check(house):
     assert api.present_names() == set()
 
     house.advertise("Rex")
-    assert house.log()[-1] == (m.Query("ble", log_source=m.LogSource.SYSTEM), "Presence detected: `Rex`", [])
+    assert house.log()[-1] == (house.like(m.Query("ble", log_source=m.LogSource.SYSTEM)), "Presence detected: `Rex`", [])

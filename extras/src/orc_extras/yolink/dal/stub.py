@@ -14,7 +14,7 @@ def fetch_leak_states(access_token: str, device_ids: Sequence[str], timeout: int
 
 
 def connect(access_token: str, on_connection: ConnectionCallback, on_report: ReportCallback, timeout: int) -> "_Session":
-    on_connection(True)
+    on_connection(True, m.Broker("connection", origin="yolink", log_source=m.LogSource.PLUGIN))
     return _Session()
 
 

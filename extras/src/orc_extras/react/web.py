@@ -38,6 +38,10 @@ def sleep(name: str) -> dict:
     return {"sleeping_until": None}
 
 
+def _trigger() -> m.Trigger:
+    return m.Manual("react", log_source=Log.REACT)
+
+
 def _known(name: str) -> str:
     if name not in app.orc.plugin_state[orc_extras.react].groups:
         abort(404)

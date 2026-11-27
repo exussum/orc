@@ -104,8 +104,9 @@ def run_job(payload: TravelJob, *, ctx: AppContext) -> None:
 
 def _alert(ctx: AppContext, job: TravelJob, arrival: Arrival, sched: Schedule, tz: Any) -> None:
     message = _leave_message(job, arrival, sched, tz)
-    entry = ctx.log.write(message, m.Integration(job.summary, log_source=Log.TRAVEL))
-    ctx.api.alert(Alarm.WARNING, text=message, entry=entry)
+    trigger = m.Integration(job.summary, log_source=Log.TRAVEL)
+    ctx.log.write(message, trigger)
+    ctx.api.alert(Alarm.WARNING, text=message, trigger=trigger)
 
 
 def _leave_message(job: TravelJob, arrival: Arrival, sched: Schedule, tz: Any) -> str:
