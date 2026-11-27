@@ -9,11 +9,12 @@ from operator import eq
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, NewType, Protocol, Self
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from orc_engine import cast, engine
 from orc_engine import model as em
-from orc_queue import AnyJob, Job, JobQueue
+from orc_queue import AnyJob, Event, Job, JobQueue
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from orc.log import Log
 
 
-type Listener = Callable[[Status], None]
+type Listener = Callable[[Status, Trigger], None]
 type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
 
@@ -280,20 +281,34 @@ class BatteryLevel(str, Enum):
             return cls.HIGH
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Trigger:
-    id: str
+    name: str
+    log_source: LogSourceEnum = field(kw_only=True)
+    id: UUID = field(default_factory=uuid4, kw_only=True)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.id, UUID):
+            raise TypeError(f"Trigger id must be a UUID, not {type(self.id).__name__}")
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Trigger):
+            return NotImplemented
+        return self.id == other.id
+
+    def __hash__(self) -> int:
+        return hash(self.id)
 
     def __str__(self) -> str:
-        return self.id
+        return self.name
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Broker(Trigger):
-    source: str = ""
+    origin: str = ""
 
     def __str__(self) -> str:
-        return f"{self.source}:{self.id}"
+        return f"{self.origin}:{self.name}"
 
 
 class Query(Trigger): ...
@@ -317,7 +332,7 @@ class Button(Trigger): ...
 class System(Trigger): ...
 
 
-@dataclass
+@dataclass(frozen=True)
 class LogSubEntry:
     timestamp: datetime
     source: LogSourceEnum
@@ -327,19 +342,40 @@ class LogSubEntry:
 
 
 @dataclass
-class LogEntry(LogSubEntry):
+class LogEntry:
+    """trigger_ids holds the ids of every trigger whose lines belong here: its own, plus any attached."""
+
     trigger: Trigger
+    head: LogSubEntry
     children: list[LogSubEntry] = field(default_factory=list)
-    touched: datetime = field(init=False)
+    trigger_ids: set[UUID] = field(init=False)
 
     def __post_init__(self) -> None:
-        self.touched = self.timestamp
+        self.trigger_ids = {self.trigger.id}
 
-    def add(self, source: LogSourceEnum, action: str, *, notified: bool = False, link: str | None = None) -> LogSubEntry:
-        entry = LogSubEntry(datetime.now(self.timestamp.tzinfo), source, action, notified=notified, link=link)
-        self.children.append(entry)
-        self.touched = entry.timestamp
-        return entry
+    @property
+    def timestamp(self) -> datetime:
+        return self.head.timestamp
+
+    @property
+    def source(self) -> LogSourceEnum:
+        return self.head.source
+
+    @property
+    def action(self) -> str:
+        return self.head.action
+
+    @property
+    def link(self) -> str | None:
+        return self.head.link
+
+    @property
+    def notified(self) -> bool:
+        return self.head.notified or any(line.notified for line in self.children)
+
+    @property
+    def touched(self) -> datetime:
+        return self.children[-1].timestamp if self.children else self.head.timestamp
 
 
 QueueName = NewType("QueueName", str)
@@ -531,6 +567,9 @@ class Secrets:
 
 
 class Scheduler(Protocol):
+    @property
+    def on_run(self) -> Callable[..., None]: ...
+
     def service(self, fn: Callable[[threading.Event], None], *, name: str) -> None: ...
     def queue(self, name: QueueName, *, lane: Lane, persist: bool = False) -> None: ...
     def start(self, ctx: "AppContext") -> None: ...
@@ -555,8 +594,7 @@ class Scheduler(Protocol):
     def pause_queue(self, queue: QueueName) -> None: ...
     def release_queue(self, queue: QueueName) -> None: ...
     def queues(self) -> dict[QueueName, JobQueue[Any]]: ...
-    def on_expired(self, fn: Callable[..., None]) -> None: ...
-    def on_cancelled(self, fn: Callable[..., None]) -> None: ...
+    def add_listener(self, event: Event, fn: Callable[..., None]) -> None: ...
 
 
 def _log() -> "Log":

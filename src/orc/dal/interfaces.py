@@ -11,10 +11,12 @@ from orc.dal.mqtt import hubitat as _adapter_default
 from orc.dal.push import webpush as _push_default
 from orc.dal.secrets import bws as _secrets_default
 from orc.model import (
+    AppContext,
     BleKey,
     Capability,
     DeviceEnum,
     DeviceState,
+    IotJob,
     MediaUrl,
     Message,
     Notification,
@@ -56,9 +58,25 @@ class Adapter(Backend, Protocol):
     def discover(self, messages: Sequence[Message]) -> dict[str, tuple[str, frozenset[Capability]]]: ...
 
 
+type OnMessage = Callable[[str, bytes], None]
+type OnHeard = Callable[[str, datetime], None]
+
+
+class OnRun(Protocol):
+    def __call__(self, payload: IotJob, *, ctx: AppContext) -> None: ...
+
+
+class OnExpired(Protocol):
+    def __call__(self, *, queue: Any, job: Any, ctx: AppContext) -> None: ...
+
+
+class OnQueueEvent(Protocol):
+    def __call__(self, *, queue: Any, job: Any, ctx: AppContext) -> None: ...
+
+
 class BrokerService(Backend, Protocol):
     def register(self, adapter: Adapter) -> None: ...
-    def start(self) -> None: ...
+    def start(self, on_message: OnMessage) -> None: ...
     def command(self, device: DeviceEnum, value: Any) -> None: ...
     def discover(self, adapter: Adapter, secrets: Secrets, timeout: float = 3.0) -> dict[str, tuple[str, frozenset[Capability]]]: ...
 

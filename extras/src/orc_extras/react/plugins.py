@@ -12,7 +12,7 @@ from orc_extras.react.model import AcSubject, CastSubject, Device, FormulaSubjec
 JOB_ID = "react"
 
 
-def sleep(ctx: m.AppContext, name: str) -> datetime:
+def sleep(ctx: m.AppContext, name: str, trigger: m.Trigger) -> datetime:
     state = ctx.plugin_state[orc_extras.react]
     until = ctx.api.local_now() + state.groups[name].pause
     state.disabled[name] = until
@@ -20,13 +20,13 @@ def sleep(ctx: m.AppContext, name: str) -> datetime:
         if watch in state.groups[name].watches:
             ctx.scheduler.cancel(_job(watch), m.Queue.ADHOC)
             state.delayed.pop(watch, None)
-    ctx.log.write(Log.REACT, f"`{name}` sleeping until {until:%H:%M}", m.Manual("react"))
+    ctx.log.write(f"`{name}` sleeping until {until:%H:%M}", trigger)
     return until
 
 
-def wake(ctx: m.AppContext, name: str) -> None:
+def wake(ctx: m.AppContext, name: str, trigger: m.Trigger) -> None:
     ctx.plugin_state[orc_extras.react].disabled.pop(name, None)
-    ctx.log.write(Log.REACT, f"`{name}` awake", m.Manual("react"))
+    ctx.log.write(f"`{name}` awake", trigger)
 
 
 def disabled_until(state: State, name: str, now: datetime) -> datetime | None:
@@ -82,17 +82,19 @@ def _reader(ctx: m.AppContext) -> em.Read:
     return read
 
 
-def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status) -> None:
+def _on_event(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, trigger: m.Trigger) -> None:
     if status.device.id in sources:
-        ctx.scheduler.now(_run_event, (sources, status), name="React")
+        ctx.scheduler.now(_run_event, (sources, status, trigger), name="React")
 
 
-def _run_event(payload: tuple[dict[str, m.DeviceEnum], m.Status], *, ctx: m.AppContext) -> None:
-    sources, status = payload
-    _react(ctx, sources, status, ctx.plugin_state[orc_extras.react].watches)
+def _run_event(payload: tuple[dict[str, m.DeviceEnum], m.Status, m.Trigger], *, ctx: m.AppContext) -> None:
+    sources, status, trigger = payload
+    _react(ctx, sources, status, trigger, ctx.plugin_state[orc_extras.react].watches)
 
 
-def _react(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, watches: list[em.Watch[m.Devices]]) -> None:
+def _react(
+    ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, trigger: m.Trigger, watches: list[em.Watch[m.Devices]]
+) -> None:
     device, attribute, old, new = status.device, status.attribute, status.old, status.new
     source = sources.get(device.id)
     if source is None:
@@ -112,25 +114,25 @@ def _react(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status
             case em.Defer(watch, when):
                 state.fired[watch] = now
                 state.delayed[watch] = when
-                ctx.scheduler.once(_run_react, when, (outcome, device), id=_job(watch), name=state.name_of[watch])
+                ctx.scheduler.once(_run_react, when, (outcome, device, trigger), id=_job(watch), name=state.name_of[watch])
             case em.Report(em.Watch() as watch, commands) if commands:
                 state.fired[watch] = now
                 fired.append(watch)
 
     for watch in paused:
         name = state.name_of[watch]
-        ctx.scheduler.once(_recheck, state.disabled[name], (ctx, sources, status, watch), id=f"{JOB_ID}-recheck-{name}", name=name)
+        ctx.scheduler.once(_recheck, state.disabled[name], (ctx, sources, status, trigger, watch), id=f"{JOB_ID}-recheck-{name}", name=name)
 
     if fired:
-        entry = _log(ctx, fired[0], device)
+        react = _log(ctx, fired[0], device, trigger)
         for watch in fired[1:]:
-            entry.add(Log.REACT, _line(ctx, watch, device))
-        ctx.api.dispatch(ctx.api.squish(map(_command, fired), entry), entry=entry)
+            ctx.log.write(_line(ctx, watch, device), react)
+        ctx.api.dispatch(ctx.api.squish(map(_command, fired), react), trigger=react)
 
 
-def _recheck(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, watch: em.Watch[m.Devices]) -> None:
+def _recheck(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, trigger: m.Trigger, watch: em.Watch[m.Devices]) -> None:
     current = _reader(ctx)(MqttDeviceSubject(sources[status.device.id], status.attribute))
-    _react(ctx, sources, replace(status, new=current), [watch])
+    _react(ctx, sources, replace(status, new=current), trigger, [watch])
 
 
 def _job(watch: em.Watch[Any]) -> str:
@@ -141,12 +143,14 @@ def _targets(what: m.Devices) -> str:
     return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
-def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> None:
-    ctx.api.dispatch((_command(watch),), entry=_log(ctx, watch, device))
+def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, trigger: m.Trigger) -> None:
+    ctx.api.dispatch((_command(watch),), trigger=_log(ctx, watch, device, trigger))
 
 
-def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> m.LogEntry:
-    return ctx.log.write(Log.REACT, _line(ctx, watch, device), m.Broker(id=device.id, source=device.source))
+def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, trigger: m.Trigger) -> m.Trigger:
+    react = replace(trigger, log_source=Log.REACT)
+    ctx.log.write(_line(ctx, watch, device), react)
+    return react
 
 
 def _line(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> str:
@@ -160,10 +164,10 @@ def _command(watch: em.Watch[m.Devices]) -> m.DeviceCommand:
     return em.Command(command.subject, command.value, tag=em.Always())
 
 
-def _run_react(payload: tuple[em.Defer[m.Devices], m.Device], *, ctx: m.AppContext) -> None:
-    deferred, device = payload
+def _run_react(payload: tuple[em.Defer[m.Devices], m.Device, m.Trigger], *, ctx: m.AppContext) -> None:
+    deferred, device, trigger = payload
     ctx.plugin_state[orc_extras.react].delayed.pop(deferred.watch, None)
     match ctx.engine.evaluate((deferred,), read=_reader(ctx), force=True):
         case (em.Report(em.Watch() as watch, commands),) if commands:
             ctx.plugin_state[orc_extras.react].fired[watch] = ctx.api.local_now()
-            _dispatch(ctx, watch, device)
+            _dispatch(ctx, watch, device, trigger)

@@ -7,7 +7,7 @@ from orc_extras.travel import plugins
 from orc_extras.travel.model import Submission, TravelJob
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 travel_bp = Blueprint("travel", __name__)
 app = cast("OrcFlask", current_app)

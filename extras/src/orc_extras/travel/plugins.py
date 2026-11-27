@@ -92,7 +92,7 @@ def run_job(payload: TravelJob, *, ctx: AppContext) -> None:
         if arrival:
             payload.arrive = arrival.when
     except ValueError as exc:
-        ctx.log.write(Log.TRAVEL, str(exc), m.Integration(payload.summary))
+        ctx.log.write(str(exc), m.Integration(payload.summary, log_source=Log.TRAVEL))
         _reschedule(ctx, payload, now + _REFRESH_INTERVAL)
         return
     payload.leave_at, payload.late, payload.eta = sched.leave_at, sched.late, sched.eta
@@ -104,8 +104,9 @@ def run_job(payload: TravelJob, *, ctx: AppContext) -> None:
 
 def _alert(ctx: AppContext, job: TravelJob, arrival: Arrival, sched: Schedule, tz: Any) -> None:
     message = _leave_message(job, arrival, sched, tz)
-    entry = ctx.log.write(Log.TRAVEL, message, m.Integration(job.summary))
-    ctx.api.alert(Alarm.WARNING, text=message, entry=entry)
+    trigger = m.Integration(job.summary, log_source=Log.TRAVEL)
+    ctx.log.write(message, trigger)
+    ctx.api.alert(Alarm.WARNING, text=message, trigger=trigger)
 
 
 def _leave_message(job: TravelJob, arrival: Arrival, sched: Schedule, tz: Any) -> str:

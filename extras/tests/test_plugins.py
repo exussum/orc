@@ -13,6 +13,8 @@ from orc.dal.mqtt import hubitat
 from orc.model import DeviceEnum
 from tests.conftest import NOW, plugin_config
 
+EVENT = m.Broker("16", origin="hubitat", log_source=m.LogSource.EXTERNAL)
+
 _NIGHTTIME = datetime(2024, 1, 1, 3, tzinfo=UTC)
 _FUTURE = datetime(2100, 1, 1, tzinfo=UTC)
 
@@ -45,7 +47,9 @@ def ctx(ctx, frozen_clock):
     ctx.config.people = (m.Person("Rex", ()),)
     ctx.config.tags = []
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
-    ctx.log.write.return_value = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
+    ctx.log.write.return_value = m.LogEntry(
+        m.Manual("test", log_source=plugins.Log.ENTRANCE), m.LogSubEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG)
+    )
     ctx.plugin_state = {entrance_sensor: None}
     ctx.config.ad_hoc_routines = {
         "AD_HOC_LIGHTS_OFF": m.AdhocAction((_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF)), name="Lights Off", reset=False),
@@ -72,7 +76,7 @@ def nobody_home_ctx(ctx):
 
 def test_day_walk_in_brightens_entrance(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with((em.Command(m.Devices(Light.day_bulb), 20),), force=True, entry=ANY)
+    ctx.api.dispatch.assert_called_once_with((em.Command(m.Devices(Light.day_bulb), 20),), force=True, trigger=ANY)
 
 
 def test_night_walk_in_dims_entrance_and_stops_media(ctx, config_sensor):
@@ -81,7 +85,7 @@ def test_night_walk_in_dims_entrance_and_stops_media(ctx, config_sensor):
     ctx.api.dispatch.assert_called_once_with(
         (em.Command(m.Devices(Light.night_bulb), 1), em.Command(m.Devices(Chromecast.cc), m.STOP)),
         force=True,
-        entry=ANY,
+        trigger=ANY,
     )
 
 
@@ -96,7 +100,7 @@ def test_walk_in_uses_first_window_that_contains_now(ctx, config_sensor):
 def test_walk_in_outside_any_window_dispatches_nothing(ctx, config_sensor):
     config_sensor.timed = (_window("Morning", time(8), time(9), _cmd(Light.day_bulb, 20)),)
     _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.api.dispatch.assert_called_once_with((), force=True, entry=ANY)
+    ctx.api.dispatch.assert_called_once_with((), force=True, trigger=ANY)
 
 
 def test_walk_in_shortly_after_shutdown_restores_house_lights(ctx, config_sensor):
@@ -134,43 +138,45 @@ def test_before_set_is_captured_once(ctx, config_sensor):
 
 def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
     ctx.plugin_state = {entrance_sensor: None}
-    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
+    entry = m.LogEntry(m.Manual("test", log_source=plugins.Log.ENTRANCE), m.LogSubEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG))
     ctx.log.write.return_value = entry
-    _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.log.write.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(id="16", source="hubitat"))
-    assert [c.action for c in entry.children] == ["Applying `Day` rules"]
+    _trigger_sensor(ctx, config_sensor, "16", "active", EVENT)
+    assert ctx.log.write.call_args_list == [
+        call(plugins.TRIGGER_MSG, EVENT),
+        call("Applying `Day` rules", entry.trigger),
+    ]
 
 
 def test_entrance_lights_turn_off_behind_you(ctx, config_sensor):
     _trigger_sensor(ctx, config_sensor, "16", "inactive")
-    ctx.api.run_action.assert_called_once_with("AD_HOC_LIGHTS_OFF", ctx.log.write.return_value.trigger, source=plugins.Log.ENTRANCE)
+    ctx.api.run_action.assert_called_once_with("AD_HOC_LIGHTS_OFF", ctx.log.write.return_value.trigger)
 
 
 def test_someone_home_stops_media(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"alice"}
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.run_action.assert_called_once_with("AD_HOC_SILENCE", entry.trigger, source=plugins.Log.ENTRANCE)
-    assert [c.action for c in entry.children] == [config_sensor.message.log_present]
+    nobody_home_ctx.api.run_action.assert_called_once_with("AD_HOC_SILENCE", entry.trigger)
+    assert _lines(nobody_home_ctx) == [config_sensor.message.log_present]
 
 
 def test_listener_home_alone_keeps_media_playing(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"Rex"}
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.run_action.assert_called_once_with("AD_HOC_DOG", entry.trigger, source=plugins.Log.ENTRANCE)
-    assert [c.action for c in entry.children] == [config_sensor.message.log_absent]
+    nobody_home_ctx.api.run_action.assert_called_once_with("AD_HOC_DOG", entry.trigger)
+    assert _lines(nobody_home_ctx) == [config_sensor.message.log_absent]
 
 
 def test_listener_home_alone_restores_pre_visit_state(config_sensor, nobody_home_ctx):
     # An undetected visitor left: put the lights back how the dog had them
     nobody_home_ctx.api.check_presence.return_value = {"Rex"}
     entry = _cleanup(config_sensor, nobody_home_ctx)
-    nobody_home_ctx.api.restore_scene.assert_called_once_with(plugins.SNAPSHOT_NAME, (), entry)
+    nobody_home_ctx.api.restore_scene.assert_called_once_with(plugins.SNAPSHOT_NAME, (), entry.trigger)
 
 
 def test_people_home_win_over_the_listener(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"alice", "Rex"}
-    entry = _cleanup(config_sensor, nobody_home_ctx)
-    assert [c.action for c in entry.children] == [config_sensor.message.log_present]
+    _cleanup(config_sensor, nobody_home_ctx)
+    assert _lines(nobody_home_ctx) == [config_sensor.message.log_present]
 
 
 def test_empty_house_shuts_down_snapshots_and_pushes(config_sensor, nobody_home_ctx):
@@ -180,19 +186,18 @@ def test_empty_house_shuts_down_snapshots_and_pushes(config_sensor, nobody_home_
         (em.Command(m.Devices(Light.lamp), m.OFF),),
         NOW + timedelta(minutes=45),
         plugins.SNAPSHOT_NAME,
-        entry,
+        entry.trigger,
     )
     nobody_home_ctx.api.run_action.assert_not_called()
-    assert [c.action for c in entry.children] == [config_sensor.message.log_shutdown]
-    nobody_home_ctx.log.write.assert_called_once_with(
-        plugins.Log.ENTRANCE, config_sensor.message.log_nobody, entry.trigger, notification=m.Notification(("entrance",), "/presence/")
-    )
+    assert nobody_home_ctx.log.write.call_args_list == [
+        call(config_sensor.message.log_shutdown, entry.trigger),
+        call(config_sensor.message.log_nobody, entry.trigger, notification=m.Notification(("entrance",), "/presence/")),
+    ]
 
 
 def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(config_sensor, nobody_home_ctx):
     entry = _cleanup(config_sensor, nobody_home_ctx, present_before={"Rex"})
-    assert [c.action for c in entry.children] == [config_sensor.message.log_shutdown]
-    nobody_home_ctx.log.write.assert_not_called()
+    assert nobody_home_ctx.log.write.call_args_list == [call(config_sensor.message.log_shutdown, entry.trigger)]
 
 
 @pytest.mark.parametrize(
@@ -205,8 +210,8 @@ def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(config_sensor, nob
 )
 def test_door_state_drives_cleanup(config_sensor, nobody_home_ctx, contact, expected):
     _seed_devices(nobody_home_ctx, *([_door(contact)] if contact else []))
-    entry = _cleanup(config_sensor, nobody_home_ctx)
-    assert [c.action for c in entry.children] == [getattr(config_sensor.message, expected)]
+    _cleanup(config_sensor, nobody_home_ctx)
+    assert _lines(nobody_home_ctx) == [getattr(config_sensor.message, expected)]
 
 
 def test_setup_compiles_windows_and_registers_hooks(ctx, config_sensor):
@@ -220,8 +225,8 @@ def test_setup_compiles_windows_and_registers_hooks(ctx, config_sensor):
 def test_cleanup_checks_presence_then_resumes(config_sensor, nobody_home_ctx):
     entry = _cleanup(config_sensor, nobody_home_ctx)
     expected = [
-        call.check_presence(entry.trigger, plugins.Log.ENTRANCE, probe=True),
-        call.resume_presence(entry.trigger, plugins.Log.ENTRANCE),
+        call.check_presence(entry.trigger, probe=True),
+        call.resume_presence(entry.trigger),
     ]
     calls = [c for c in nobody_home_ctx.api.mock_calls if c in expected]
     assert calls == expected
@@ -231,7 +236,7 @@ def test_walk_in_pauses_and_purges_presence(ctx, config_sensor):
     ctx.plugin_state = {entrance_sensor: None}
     _trigger_sensor(ctx, config_sensor, "16", "active")
     ctx.api.pause_presence.assert_called_once_with()
-    ctx.api.delete_all_presence.assert_called_once_with(ctx.log.write.return_value.trigger, plugins.Log.ENTRANCE)
+    ctx.api.delete_all_presence.assert_called_once_with(ctx.log.write.return_value.trigger)
 
 
 def test_walk_out_leaves_presence_alone(ctx, config_sensor):
@@ -269,18 +274,27 @@ def _no_world(subject):
     raise KeyError(subject)
 
 
+def _lines(ctx):
+    return [c.args[0] for c in ctx.log.write.call_args_list if "notification" not in c.kwargs]
+
+
 def _cleanup(config_sensor, nobody_home_ctx, present_before=()):
-    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test"))
+    entry = m.LogEntry(
+        m.Manual("test", log_source=plugins.Log.ENTRANCE), m.LogSubEntry(NOW, plugins.Log.ENTRANCE, "Entrance sensor triggered")
+    )
     nobody_home_ctx.plugin_state = {entrance_sensor: plugins.Visit(entry, set(present_before))}
-    plugins._run_trigger_sensor_off((config_sensor, entry), ctx=nobody_home_ctx)
+    plugins._run_trigger_sensor_off((config_sensor, entry.trigger), ctx=nobody_home_ctx)
     return entry
 
 
-def _trigger_sensor(ctx, config_sensor, device_id, event):
+def _trigger_sensor(ctx, config_sensor, device_id, event, trigger=None):
     old = "inactive" if event == "active" else "active"
     name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
     plugins._on_event(
-        ctx, config_sensor, m.Status(m.Device(device_id, name, "hubitat"), "motion", old, event, hubitat.HubitatSource.HUBITAT)
+        ctx,
+        config_sensor,
+        m.Status(m.Device(device_id, name, "hubitat"), "motion", old, event, hubitat.HubitatSource.HUBITAT),
+        trigger or m.Broker(device_id, origin="hubitat", log_source=m.LogSource.EXTERNAL),
     )
     queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_motion]
     ctx.scheduler.now.reset_mock()

@@ -1,14 +1,17 @@
+import dataclasses
 import json
 import threading
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+import orc_queue as oq
 import pytest
 import time_machine
 from command_cfg import ConfigError
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from orc_engine import model as em
 from orc_queue import Job, utcnow
 from pykeepass import create_database
 from pywebpush import WebPushException
@@ -26,7 +29,7 @@ from orc.dal.secrets import bws, keepass
 from orc.dal.weather import open_meteo
 from orc.model import BleKey, Query
 
-TRIGGER = Query("test")
+TRIGGER = Query("test", log_source=m.LogSource.SYSTEM)
 VAPID_PRIVATE_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE"
 VAPID_PUBLIC_KEY = "BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"
 SUBSCRIPTION = m.PushSubscription("https://push.example/a", "public-key", "auth-secret")
@@ -218,7 +221,9 @@ def _job(id, run_at, *, disable=False):
 
 @pytest.fixture
 def scheduler(tmp_path):
-    return Scheduler(str(tmp_path / "jobs.sqlite"), timezone.utc)
+    return Scheduler(
+        str(tmp_path / "jobs.sqlite"), timezone.utc, on_run=lambda payload, *, ctx: None, on_expired=lambda *, queue, job, ctx: None
+    )
 
 
 def _queue(scheduler, *jobs):
@@ -239,6 +244,37 @@ def test_sync_removes_unwanted_jobs_but_leaves_past_due_ones(scheduler):
     _queue(scheduler, _job("past", now - timedelta(minutes=1)), _job("gone", now + timedelta(hours=1)))
     scheduler.sync([], m.Queue.IOT)
     assert [job.id for job in scheduler.jobs(m.Queue.IOT)] == ["past"]
+
+
+def test_sync_updates_payload_keeps_pause(scheduler):
+    later = utcnow() + timedelta(hours=1)
+    _queue(scheduler, Job(later, None, _noop, "old", id="a", name="a", disable=True))
+    scheduler.sync([Job(later, None, _noop, "new", id="a", name="a")], m.Queue.IOT)
+    [job] = scheduler.jobs(m.Queue.IOT)
+    assert (job.payload, job.disable) == ("new", True)
+
+
+def test_sync_skips_identical_job(scheduler):
+    later = utcnow() + timedelta(hours=1)
+    rule = em.Rule((), name="r", tags=frozenset({"t"}))
+    _queue(scheduler, Job(later, None, _noop, m.IotJob(rule, "r"), id="a", name="a"))
+    events = []
+    oq.on(scheduler.events, oq.Event.MODIFIED, lambda **kw: events.append(kw))
+    scheduler.sync([Job(later, None, _noop, m.IotJob(rule, "r"), id="a", name="a")], m.Queue.IOT)
+    assert events == []
+
+
+@dataclasses.dataclass
+class _Counted(Job):
+    runs: int = 0
+
+
+def test_sync_keeps_unset_fields(scheduler):
+    later = utcnow() + timedelta(hours=1)
+    _queue(scheduler, _Counted(later, None, _noop, "old", id="a", name="a", runs=3))
+    scheduler.sync([Job(later, None, _noop, "new", id="a", name="a")], m.Queue.IOT)
+    [job] = scheduler.jobs(m.Queue.IOT)
+    assert (job.payload, job.runs) == ("new", 3)
 
 
 def test_tag_clock_needs_a_key_row():
@@ -268,6 +304,7 @@ class TestPresence:
 
     def _hear(self, frames, tags):
         presence = net.Presence()
+        presence._on_heard = lambda person, when: presence.mark([person], when)
         presence._tags = tags
         presence._index = net._eid_index(tags, {}, self.NOW)
         for frame in frames:
@@ -309,9 +346,9 @@ class TestPresence:
     def test_a_rotation_reports_the_exact_clock(self):
         second = bytes([0x40]) + security.fmdn_eids(self.EIK, 5000 + security.FMDN_ROTATION_SECONDS)[1]
         presence = self._heard()
-        presence._on_clock = MagicMock()
-        presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
-        presence._on_clock.assert_called_once_with("Alice", m.TagClock(5120 - 5000, int(self.NOW.timestamp()), second[1:]))
+        with patch.object(sqlite, "update_tag_clock") as update:
+            presence._seen(SimpleNamespace(address=self.ADDRESS), SimpleNamespace(service_data={net.FMDN_SERVICE_UUID: second}))
+        update.assert_called_once_with("Alice", m.TagClock(5120 - 5000, int(self.NOW.timestamp()), second[1:]))
 
     def test_a_seeded_clock_starts_narrow(self):
         tags = {"Alice": self.KEY}
@@ -334,7 +371,7 @@ class TestPresence:
 
     def test_forget_clears_the_hearing(self):
         presence = self._heard()
-        presence.forget(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+        presence.forget(["Alice"])
         assert self._present(presence) == set()
 
     def test_hearing_outside_the_window_expires(self):
@@ -345,13 +382,13 @@ class TestPresence:
         presence = self._heard()
         presence.pause(self.NOW)
         assert self._present(presence) == set()
-        presence.resume(TRIGGER, m.LogSource.SYSTEM)
+        presence.resume()
         assert self._present(presence) == {"Alice"}
 
     def _forgotten(self):
         with patch.object(net.Presence, "_now", return_value=self.NOW - timedelta(seconds=1)):
             presence = self._heard()
-        presence.forget(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+        presence.forget(["Alice"])
         return presence
 
     def _advertise(self, presence):
@@ -362,14 +399,14 @@ class TestPresence:
         presence = self._forgotten()
         threading.Timer(0.05, self._advertise, [presence]).start()
         with patch.object(net, "_PROBE_SECONDS", 5):
-            presence.probe(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+            presence.probe(["Alice"])
         assert self._present(presence) == {"Alice"}
 
     @pytest.mark.parametrize("heard_before", [True, False], ids=["forgotten", "never_heard"])
     def test_probe_marks_nothing_when_silent(self, heard_before):
         presence = self._forgotten() if heard_before else self._hear([], {"Alice": self.KEY})
         with patch.object(net, "_PROBE_SECONDS", 0):
-            presence.probe(["Alice"], TRIGGER, m.LogSource.SYSTEM)
+            presence.probe(["Alice"])
         assert self._present(presence) == set()
 
 

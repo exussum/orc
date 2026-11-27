@@ -5,6 +5,7 @@ Runtime state (api, config, device enums) comes only through the AppContext capt
 at setup(); module tops import orc leaf modules for types and helpers.
 """
 
+from dataclasses import replace
 from functools import partial
 from typing import Any
 
@@ -41,8 +42,8 @@ def setup(ctx: AppContext) -> None:
     plugins.start(ctx, backend, partial(_on_transition, ctx))
 
 
-def test_sensor(ctx: AppContext, device: str, *, entry: m.LogEntry) -> None:
-    plugins.simulate_transition(ctx, device, partial(_on_transition, ctx))
+def test_sensor(ctx: AppContext, device: str, *, trigger: m.Trigger) -> None:
+    plugins.simulate_transition(ctx, device, partial(_on_transition, ctx), trigger)
 
 
 def leak_state(ctx: AppContext) -> list[m.DeviceStatus]:
@@ -78,7 +79,7 @@ def declare(declarations: Any) -> None:
     )
 
 
-def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
+def _on_transition(ctx: AppContext, trigger: m.Trigger, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
     api = ctx.api
     msg = None
     notification: m.Notification | None = m.Notification(("yolink", name))
@@ -108,6 +109,7 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
         msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
 
     if msg:
-        entry = ctx.log.write(m.LogSource.PLUGIN, msg, m.Broker(id=name, source="yolink"), notification=notification)
+        trigger = replace(trigger, log_source=m.LogSource.PLUGIN)
+        ctx.log.write(msg, trigger, notification=notification)
         wet = kind == "leak" and new == plugins.STATE_WET
-        api.alert(m.Alarm.EMERGENCY if wet else m.Alarm.ATTENTION, text=msg, entry=entry)
+        api.alert(m.Alarm.EMERGENCY if wet else m.Alarm.ATTENTION, text=msg, trigger=trigger)

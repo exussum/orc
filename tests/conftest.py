@@ -53,16 +53,13 @@ def core_registry(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def reset_presence():
-    from unittest.mock import patch
-
-    from orc import api, config
+    from orc import config
     from orc.dal import net
+    from orc.interfaces import inbound
 
-    # api's aliases bind the singleton's methods, so reset it in place; re-wiring
-    # installs a fresh reporter closure (no tag lines keeps the scanner thread off).
+    # api's aliases bind the singleton's methods, so reset it in place; no tags keeps the scanner thread off.
     net.presence.__init__()
-    with patch.object(config, "tags", []):
-        api.start_presence()
+    net.presence.start([], config.settings.tz, inbound.on_heard)
 
 
 @pytest.fixture(autouse=True)

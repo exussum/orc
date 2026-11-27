@@ -12,7 +12,7 @@ from datetime import time as dt_time
 from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, assert_never
 
 from orc_engine import cast as engine_cast
 from orc_engine import engine
@@ -48,7 +48,6 @@ _ctx: m.AppContext | None = None
 _retry_stats: tuple[m.RetryStats, ...] = ()
 
 last_seen = net.presence.seen
-mark_present = net.presence.mark
 
 
 type _Job = tuple[Callable[..., None], m.DeviceEnum, em.Command[Any]]
@@ -120,10 +119,15 @@ def push_public_key() -> str:
     return config.providers.push.public_key()
 
 
-def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> None:
+def subscribe_push(subscription: m.PushSubscription, trigger: m.Trigger, *, greet: bool = False) -> None:
     sqlite.insert_push_subscription(subscription)
     if greet:
-        notify(m.LogSource.SYSTEM, Message.PUSH_GREETING, m.Manual("notify"), m.Notification(("greeting",)), (subscription,))
+        notify(
+            Message.PUSH_GREETING,
+            trigger,
+            m.Notification(("greeting",)),
+            (subscription,),
+        )
 
 
 def unsubscribe_push(endpoint: str) -> None:
@@ -131,13 +135,12 @@ def unsubscribe_push(endpoint: str) -> None:
 
 
 def notify(
-    source: m.LogSourceEnum,
     action: str,
     trigger: m.Trigger,
     notification: m.Notification,
     subscriptions: tuple[m.PushSubscription, ...] | None = None,
 ) -> None:
-    title = Message.PUSH_TITLE.format(source=source.capitalize(), date=f"{local_now():%m/%d}")
+    title = Message.PUSH_TITLE.format(source=trigger.log_source.capitalize(), date=f"{local_now():%m/%d}")
     _schedule_push(title, action.replace("`", ""), notification, trigger, subscriptions)
 
 
@@ -149,10 +152,8 @@ def register_adapter(adapter: "Adapter") -> None:
     config.providers.broker.register(adapter)
 
 
-def start_mqtt() -> None:
-    config.providers.broker.register(config.providers.adapter)
-    broker.add_status_listener(_log_external)
-    config.providers.broker.start()
+def receive_mqtt(topic: str, payload: bytes, trigger: m.Broker) -> None:
+    broker.receive(topic, payload, trigger)
 
 
 def device_states() -> list[m.DeviceState]:
@@ -273,32 +274,27 @@ def run_action(
     id: str,
     trigger: m.Trigger,
     *,
-    source: m.LogSourceEnum,
     device: str | None = None,
     skip_delay: bool = False,
 ) -> bool:
     ctx = context()
     if id == ORC_SYSTEM_SNAPSHOT:
-        action = _RunAction(
-            lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry), Message.SNAPSHOT_RESTORE
-        )
+        action = _RunAction(lambda: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, trigger), Message.SNAPSHOT_RESTORE)
     elif (plugin := config.plugin(id)) is not None:
-        action = _RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.name, plugin.delay)
+        action = _RunAction(lambda: plugins.execute_plugin(ctx, plugin, device, trigger=trigger), plugin.name, plugin.delay)
     elif id in config.schedule_routines:
         rule = config.schedule_routines[id]
-        action = _RunAction(
-            lambda entry: _run_schedule_routine(rule, entry, {person.name for person in config.people}, force=True), rule.name
-        )
+        action = _RunAction(lambda: run_schedule_routine(rule, trigger, {person.name for person in config.people}, force=True), rule.name)
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
             commands = _pause_not_stop(routine.commands)
-            action = _RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, commands, end, routine.name, entry), routine.name)
+            action = _RunAction(lambda: override_scene(ORC_SYSTEM_SNAPSHOT, commands, end, routine.name, trigger), routine.name)
         else:
             base = config.reset_config.commands if routine.reset else ()
             commands = (*base, *routine.commands)
-            action = _RunAction(lambda entry: dispatch(commands, force=True, entry=entry), routine.name, routine.delay)
+            action = _RunAction(lambda: dispatch(commands, force=True, trigger=trigger), routine.name, routine.delay)
     else:
         return False
 
@@ -306,20 +302,22 @@ def run_action(
     with _record_duration(id):
         if action.delay and not skip_delay:
             when = local_now() + action.delay
-            queued = ctx.log.write(source, Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
+            queued = ctx.log.write(Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
 
             def run() -> None:
-                started = queued.add(source, display)
+                started = ctx.log.add(queued, trigger.log_source, display)
                 if id != ORC_SYSTEM_SNAPSHOT:
-                    ctx.log.last = started
-                action.fn(queued)
+                    ctx.log.last_action = started.action
+                with ctx.log.opened(queued):
+                    action.fn()
 
             ctx.scheduler.once(run, when, id=id, name=action.name, queue=m.Queue.ADHOC)
         else:
-            entry = ctx.log.write(source, display, trigger)
+            entry = ctx.log.write(display, trigger)
             if id != ORC_SYSTEM_SNAPSHOT:
-                ctx.log.last = entry
-            action.fn(entry)
+                ctx.log.last_action = entry.action
+            with ctx.log.opened(entry):
+                action.fn()
     return True
 
 
@@ -334,10 +332,10 @@ def run_room(id: str, state: str | None, trigger: m.Trigger) -> None:
         commands = (*squish(others, state_override=m.OFF), *room.commands)
     else:
         raise ValueError(f"Unknown room state: {state}")
-    entry = context().log.write(m.LogSource.MANUAL, Message.ROOM_SET.format(id=id, state=state), trigger)
-    context().log.last = entry
-    with _record_duration(id):
-        dispatch(commands, force=True, entry=entry)
+    entry = context().log.write(Message.ROOM_SET.format(id=id, state=state), trigger)
+    context().log.last_action = entry.action
+    with _record_duration(id), context().log.opened(entry):
+        dispatch(commands, force=True, trigger=trigger)
 
 
 def _pause_not_stop(commands: m.Commands) -> m.Commands:
@@ -353,24 +351,24 @@ def snapshot_counts(commands: m.Commands) -> tuple[int, int]:
     return lights, sounds
 
 
-def override_scene(key: str, commands: m.Commands, end: datetime, label: str, entry: m.LogEntry) -> None:
+def override_scene(key: str, commands: m.Commands, end: datetime, label: str, trigger: m.Trigger) -> None:
     if not context().engine.snapshot_active(key):
         captured = capture_lights() + capture_sounds()
         context().engine.save_snapshot(key, m.SnapShot(captured, end, label))
         lights, sounds = snapshot_counts(captured)
-        entry.add(entry.source, Message.SNAPSHOT_TAKEN.format(name=label, end=end, lights=lights, sounds=sounds))
-    dispatch(commands, force=True, entry=entry)
+        context().log.write(Message.SNAPSHOT_TAKEN.format(name=label, end=end, lights=lights, sounds=sounds), trigger)
+    dispatch(commands, force=True, trigger=trigger)
 
 
-def restore_scene(key: str, commands: m.Commands, entry: m.LogEntry) -> None:
+def restore_scene(key: str, commands: m.Commands, trigger: m.Trigger) -> None:
     snapshot = context().engine.pop_snapshot(key)
     if snapshot:
         commands = snapshot.routine
-        entry.add(entry.source, Message.SNAPSHOT_RESTORED.format(name=snapshot.label))
-    dispatch(commands, force=True, entry=entry)
+        context().log.write(Message.SNAPSHOT_RESTORED.format(name=snapshot.label), trigger)
+    dispatch(commands, force=True, trigger=trigger)
 
 
-def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
+def dispatch(commands: m.Commands, force: bool = False, *, trigger: m.Trigger) -> None:
     commands = squish(commands)
     survived = set(commands) if force else set(context().engine.apply_override(commands))
 
@@ -379,9 +377,9 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
     for command in commands:
         w = command.subject.one()
         if command not in survived:
-            entry.add(entry.source, Message.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"))
+            context().log.write(Message.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"), trigger)
         elif w in config.virtual_devices:
-            entry.add(entry.source, Message.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
+            context().log.write(Message.VIRTUAL_DEVICE_SKIPPED.format(device=w.name), trigger)
         elif (dispatch_handler := config.registry.dispatch_handlers.get(w.kind)) is None:
             raise LookupError(f"no dispatch handler for `{w.kind}`")
         else:
@@ -390,10 +388,10 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
             todo.append((dispatch_handler, w, command))
 
     with Pool(max_workers=max(1, len(todo))) as ex:
-        list(ex.map(partial(_dispatch_one, stream=stream, entry=entry), todo))
+        list(ex.map(partial(_dispatch_one, stream=stream, trigger=trigger), todo))
 
 
-def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, entry: m.LogEntry) -> None:
+def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, trigger: m.Trigger) -> None:
     if (text is None) == (path is None):
         raise ValueError("alert() requires exactly one of text or path")
     device = _alarm_device(severity)
@@ -401,17 +399,17 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
 
     if severity is m.Alarm.EMERGENCY:
-        dispatch(config.routines[config.settings.emergency_routine].commands, force=True, entry=entry)
+        dispatch(config.routines[config.settings.emergency_routine].commands, force=True, trigger=trigger)
         if text is not None:
             video_url = m.AlertVideo(str((URL(config.settings.base_url) / "api/alert.mp4").with_query(text=text)))
-            dispatch((em.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, entry=entry)
+            dispatch((em.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, trigger=trigger)
             if not isinstance(device, config.devices.Chromecast):
-                dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
+                dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, trigger=trigger)
     elif text is not None:
-        dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
+        dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, trigger=trigger)
     else:
         assert path is not None
-        dispatch((em.Command(m.Devices(device), path),), force=True, entry=entry)
+        dispatch((em.Command(m.Devices(device), path),), force=True, trigger=trigger)
 
 
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
@@ -439,8 +437,8 @@ def active_theme_override(today: date) -> m.ThemeOverride | None:
     return cur if cur and cur.start <= today <= cur.end else None
 
 
-def calculate_theme(today: date) -> str:
-    return _scheduled_theme(today).name
+def calculate_theme(today: date, trigger: m.Trigger) -> str:
+    return _scheduled_theme(today, trigger).name
 
 
 def set_theme_override(name: str, start: date, end: date) -> None:
@@ -451,16 +449,24 @@ def present_names() -> set[str]:
     return net.presence.present(_presence_cutoff())
 
 
-def set_present(names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> set[str]:
-    return net.presence.set_present(names, local_now(), _presence_cutoff(), trigger, source, forced)
+def mark_present(names: Iterable[str], when: datetime, trigger: m.Trigger, forced: bool = False) -> None:
+    net.presence.mark(names, when)
+    _report_presence(trigger, forced)
 
 
-def expire_presence(names: list[str], trigger: m.Trigger, source: m.LogSourceEnum, force: bool = False) -> None:
-    net.presence.forget(names, trigger, source, before=None if force else local_now(), forced=force)
+def set_present(names: Iterable[str], trigger: m.Trigger, forced: bool = False) -> set[str]:
+    present = net.presence.set_present(names, local_now(), _presence_cutoff())
+    _report_presence(trigger, forced)
+    return present
 
 
-def delete_all_presence(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
-    expire_presence(list(net.presence.seen()), trigger, source)
+def expire_presence(names: list[str], trigger: m.Trigger, force: bool = False) -> None:
+    net.presence.forget(names, before=None if force else local_now())
+    _report_presence(trigger, force)
+
+
+def delete_all_presence(trigger: m.Trigger) -> None:
+    expire_presence(list(net.presence.seen()), trigger)
 
 
 def pause_presence() -> None:
@@ -468,36 +474,10 @@ def pause_presence() -> None:
     context().scheduler.pause_queue(m.Queue.PRESENCE)
 
 
-def resume_presence(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
-    net.presence.resume(trigger, source)
+def resume_presence(trigger: m.Trigger) -> None:
+    net.presence.resume()
+    _report_presence(trigger)
     context().scheduler.release_queue(m.Queue.PRESENCE)
-
-
-def start_presence() -> None:
-    reported: set[str] = set()
-
-    def report(trigger: m.Trigger, source: m.LogSourceEnum) -> None:
-        nonlocal reported
-        present = present_names()
-        if detected := sorted(present - reported):
-            context().log.write(source, Message.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger)
-        if lost := sorted(reported - present):
-            context().log.write(source, Message.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
-        reported = present
-
-    rows = sqlite.fetch_tags()
-    for row in rows:
-        net.presence.set_key(row.person, row.key)
-    net.presence.start(
-        config.tags,
-        config.settings.tz,
-        report,
-        m.LogSource.SYSTEM,
-        clocks={row.person: row.clock for row in rows if row.clock},
-        on_clock=sqlite.update_tag_clock,
-    )
-    if net.presence.tagged:
-        context().scheduler.service(net.presence.listen, name="ble-listener")
 
 
 def schedule_presence_check(trigger: m.Trigger) -> None:
@@ -521,39 +501,41 @@ def refresh_tag_keys(trigger: m.Trigger) -> None:
             if not stored or stored.eik != key.eik:
                 sqlite.upsert_tag_key(tag.person, key)
                 net.presence.set_key(tag.person, key)
-                context().log.write(m.LogSource.SYSTEM, Message.TAG_KEY_UPDATED.format(name=tag.person, key=_key_summary(key)), trigger)
+                context().log.write(Message.TAG_KEY_UPDATED.format(name=tag.person, key=_key_summary(key)), trigger)
         except Exception as exc:
-            context().log.write(m.LogSource.SYSTEM, Message.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
+            context().log.write(Message.TAG_KEY_FAILED.format(name=tag.person, exc=exc), trigger)
 
 
 def apply_theme_change(name: str, start: date | None, end: date | None, trigger: m.Trigger) -> None:
     if not name:
-        context().log.write(m.LogSource.MANUAL, Message.THEME_OVERRIDE_CLEARED, trigger)
+        context().log.write(Message.THEME_OVERRIDE_CLEARED, trigger)
         clear_theme_override()
     else:
         assert start is not None and end is not None  # a named theme override always carries a start/end window
         set_theme_override(name, start, end)
-        context().log.write(m.LogSource.MANUAL, Message.THEME_OVERRIDE_SET.format(name=name, start=start, end=end), trigger)
-    rebuild_jobs()
+        context().log.write(Message.THEME_OVERRIDE_SET.format(name=name, start=start, end=end), trigger)
+    rebuild_jobs(trigger)
 
 
-def check_presence(trigger: m.Trigger, source: m.LogSourceEnum, *, probe: bool = False) -> set[str]:
+def check_presence(trigger: m.Trigger, *, probe: bool = False) -> set[str]:
     present = present_names()
     tagged = net.presence.tagged
     if not config.people and not tagged:
         return present
     stale = set(net.presence.seen()) - present
-    net.presence.probe(tagged - present if probe else stale & tagged, trigger, source)
-    return _scan_lan(trigger, source)
+    net.presence.probe(tagged - present if probe else stale & tagged)
+    _report_presence(trigger)
+    return _scan_lan(trigger)
 
 
 def rescan_presence(trigger: m.Trigger) -> set[str]:
     stale = [name for name in net.presence.seen() if name not in net.presence.tagged]
-    net.presence.forget(stale, trigger, m.LogSource.MANUAL, before=local_now(), forced=True)
-    return _scan_lan(trigger, m.LogSource.MANUAL, forced=True)
+    net.presence.forget(stale, before=local_now())
+    _report_presence(trigger, forced=True)
+    return _scan_lan(trigger, forced=True)
 
 
-def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
+def get_schedule(trigger: m.Trigger) -> list[tuple[datetime, m.ThemeEntry]]:
     result: list[tuple[datetime, m.ThemeEntry]] = []
     for x in range(2):
         now = local_now() + timedelta(days=x)
@@ -562,18 +544,17 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
         local_midnight = datetime(today.year, today.month, today.day, tzinfo=config.settings.tz)
         sunrise, sunset = _sun_times(local_midnight, config.settings.lat, config.settings.long, config.settings.sunset_lead_hours)
 
-        for entry in _scheduled_theme(today).entries:
+        for entry in _scheduled_theme(today, trigger).entries:
             result.append((_entry_time(entry.when, sunrise, sunset, now), entry))
     return result
 
 
-def run_iot_job(payload: m.IotJob) -> None:
-    entry = context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.routine_id))
-    context().log.last = entry
-    _run_schedule_routine(payload.rule, entry, present_names())
-
-
-def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None, *, state_override: Any = None) -> m.Commands:
+def squish(
+    commands: Iterable[m.DeviceCommand],
+    trigger: m.Trigger | None = None,
+    *,
+    state_override: Any = None,
+) -> m.Commands:
     grouped: defaultdict[Any, list[m.DeviceCommand]] = defaultdict(list)
     for command in commands:
         value = command.value if state_override is None else state_override
@@ -583,41 +564,17 @@ def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None,
     flattened: list[m.DeviceCommand] = []
     for what, items in grouped.items():
         squished = _squish(items)
-        if entry and {c.value for c in items} - {c.value for c in squished}:
+        if trigger is not None and {c.value for c in items} - {c.value for c in squished}:
             states = ", ".join(str(c.value) for c in items)
-            entry.add(entry.source, Message.CONFLICTING_ARMS.format(device=what.name, states=states))
+            context().log.write(Message.CONFLICTING_ARMS.format(device=what.name, states=states), trigger)
         flattened.extend(squished)
 
     flattened.sort(key=_op_cmp)
     return tuple(flattened)
 
 
-def rebuild_jobs() -> None:
-    rebuild_iot_schedule()
-
-
-def setup_scheduler() -> None:
-    ctx = context()
-    rebuild_iot_schedule()
-    for job_id, func, crontab, name, queue in (
-        ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron", m.Queue.ADHOC),
-        ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron", m.Queue.PRESENCE),
-        ("findhub-cron", _tag_keys_cron_job, "0 */4 * * *", "Find Hub Cron", m.Queue.PRESENCE),
-        ("stats-cron", _retry_stats_job, "*/5 * * * *", "Stats Cron", m.Queue.FETCH),
-    ):
-        ctx.scheduler.cron(func, crontab, id=job_id, name=name, queue=queue)
-    ctx.scheduler.now(_retry_stats_job, name="Stats Boot Check", queue=m.Queue.FETCH)
-    ctx.scheduler.on_expired(_log_expired)
-    ctx.scheduler.on_cancelled(_log_cancelled)
-
-
-def _log_expired(*, queue: Any, job: Any) -> None:
-    context().log.write(m.LogSource.SYSTEM, Message.TASK_EXPIRED.format(id=job.name or job.id), m.System("expired"))
-
-
-def _log_cancelled(*, queue: Any, job: Any) -> None:
-    if job.id in config.ad_hoc_routines:
-        context().log.write(m.LogSource.MANUAL, Message.TASK_CANCELLED.format(id=job.name or job.id), m.Manual(job.id))
+def rebuild_jobs(trigger: m.Trigger) -> None:
+    rebuild_iot_schedule(trigger)
 
 
 def has_presence(rule: m.Routine) -> bool:
@@ -660,34 +617,35 @@ def runtime() -> engine.Runtime[m.Devices]:
     return engine.Runtime(config.settings.tz, override_key=ORC_SYSTEM_SNAPSHOT, same=m.fuzzy_eq)
 
 
-def rebuild_iot_schedule() -> None:
+def rebuild_iot_schedule(trigger: m.Trigger) -> None:
+    ctx = context()
     now = local_now()
     jobs = [
         Job(
             aware(run_at),
             None,
-            run_iot_job,
+            ctx.scheduler.on_run,
             m.IotJob(entry.routine, entry.routine_id),
             id=f"iot-{entry.routine_id}-{run_at:%Y-%m-%dT%H:%M}",
             name=entry.routine.name,
         )
-        for run_at, entry in get_schedule()
+        for run_at, entry in get_schedule(trigger)
         if now <= run_at
     ]
-    context().scheduler.sync(jobs, m.Queue.IOT)
+    ctx.scheduler.sync(jobs, m.Queue.IOT)
 
 
-def replay_day(now: datetime, entry: m.LogEntry) -> None:
-    jobs = sorted(get_schedule(), key=lambda x: x[0])
+def replay_day(now: datetime, trigger: m.Trigger) -> None:
+    jobs = sorted(get_schedule(trigger), key=lambda x: x[0])
     present = present_names()
     matched = [
         c for when, e in jobs if when <= now and m.SKIP_REPLAY_TAG not in e.routine.tags for c in _matching_items(e.routine, now, present)
     ]
-    dispatch(tuple(matched), force=True, entry=entry)
+    dispatch(tuple(matched), force=True, trigger=trigger)
 
 
 class _RunAction(NamedTuple):
-    fn: Callable[[m.LogEntry], object]
+    fn: Callable[[], object]
     name: str
     delay: timedelta = timedelta()
 
@@ -699,14 +657,14 @@ def _record_duration(name: str) -> Iterator[None]:
     update_avg(name, time.perf_counter() - start)
 
 
-def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.LogEntry) -> None:
+def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], trigger: m.Trigger) -> None:
     handler, w, command = job
     try:
         handler(context(), w, command, stream)
     except Exception as exc:
         msg = Message.DISPATCH_FAILED.format(device=w.name, exc=exc)
-        entry.add(entry.source, msg)
-        notify(entry.source, msg, entry.trigger, m.Notification(("dispatch",)))
+        context().log.write(msg, trigger)
+        notify(msg, trigger, m.Notification(("dispatch",)))
         try:
             config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
         except Exception:
@@ -734,22 +692,22 @@ def _squish(items: list[m.DeviceCommand]) -> tuple[m.DeviceCommand, ...]:
     return (match, last) if match else (last,)
 
 
-def _base_theme(today: date) -> str:
+def _base_theme(today: date, trigger: m.Trigger) -> str:
     if today.weekday() in (5, 6):
         return m.THEME_DAY_OFF
     try:
         holiday = config.providers.holiday.market_holiday(today)
     except (OSError, RuntimeError, ValueError, KeyError) as exc:  # request failures, the feed's error payload, malformed json or entries
-        context().log.write(m.LogSource.SYSTEM, Message.HOLIDAY_CHECK_FAILED.format(day=today, exc=exc), m.System("holiday"))
+        context().log.write(Message.HOLIDAY_CHECK_FAILED.format(day=today, exc=exc), replace(trigger, log_source=m.LogSource.SYSTEM))
         return m.THEME_WORK_DAY
     return m.THEME_DAY_OFF if holiday else m.THEME_WORK_DAY
 
 
-def _scheduled_theme(today: date) -> m.Theme:
+def _scheduled_theme(today: date, trigger: m.Trigger) -> m.Theme:
     if override := active_theme_override(today):
         theme = config.themes.get(override.name)
     else:
-        theme = config.themes.get(today.strftime("%A").lower()) or config.themes.get(_base_theme(today))
+        theme = config.themes.get(today.strftime("%A").lower()) or config.themes.get(_base_theme(today, trigger))
     assert theme is not None
     return theme
 
@@ -784,7 +742,7 @@ def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: i
     return sunrise, sunset
 
 
-def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
+def run_schedule_routine(rule: m.Routine, trigger: m.Trigger, pnames: set[str], force: bool = False) -> None:
     now = local_now()
     if not (matched := _matching_items(rule, now, pnames)):
         if not pnames:
@@ -792,11 +750,11 @@ def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], 
         else:
             unmet = sorted({str(step.command.tag) for step in rule.steps if isinstance(step.command.tag, m.Present | m.Weather)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
-        entry.action += f" — {Message.RULE_SKIPPED.format(detail=detail)}"
+        context().log.write(Message.RULE_SKIPPED.format(detail=detail), trigger)
         return
     elif weather_triggers := {str(c.tag) for c in matched if isinstance(c.tag, m.Weather)}:
-        entry.action += f" (weather: {', '.join(sorted(weather_triggers))})"
-    dispatch(squish(matched, entry), force=force, entry=entry)
+        context().log.write(Message.RULE_WEATHER.format(triggers=", ".join(sorted(weather_triggers))), trigger)
+    dispatch(squish(matched, trigger), force=force, trigger=trigger)
 
 
 def _presence(rule: m.Routine) -> m.Routine:
@@ -876,13 +834,19 @@ def _push_job(payload: tuple[str, str, m.Notification, m.Trigger, tuple[m.PushSu
         except push.Gone:
             sqlite.delete_push_subscription(subscription.endpoint)
         except Exception as exc:
-            context().log.write(m.LogSource.SYSTEM, Message.PUSH_FAILED.format(endpoint=subscription.endpoint[-8:], exc=exc), trigger)
+            context().log.write(
+                Message.PUSH_FAILED.format(endpoint=subscription.endpoint[-8:], exc=exc), replace(trigger, log_source=m.LogSource.SYSTEM)
+            )
 
 
-def _log_external(status: m.Status) -> None:
+def log_external(status: m.Status, trigger: m.Trigger) -> None:
     if status.source is m.Source.EXTERNAL:
         line = Message.EXTERNAL_CHANGE.format(device=status.device.name, attribute=status.attribute, old=status.old, new=status.new)
-        context().log.write(m.LogSource.EXTERNAL, line, m.Broker(id="external", source=status.device.source))
+        external = replace(trigger, name="external")
+        log = context().log
+        if row := log.recent_row(external.name):
+            log.attach(row, external)
+        log.write(line, external)
 
 
 def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
@@ -891,31 +855,37 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
             device = config.settings.warning_device
         case m.Alarm.ATTENTION:
             device = config.settings.attention_device
-        case _:
+        case m.Alarm.EMERGENCY:
             device = config.settings.emergency_device
+        case _:
+            assert_never(severity)
     assert device is not None
     return device
 
 
 def _check_presence_job(payload: m.Trigger, *, ctx: m.AppContext) -> set[str]:
-    return check_presence(payload, m.LogSource.SYSTEM)
+    return check_presence(payload)
 
 
-def _scan_lan(trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> set[str]:
+def _scan_lan(trigger: m.Trigger, forced: bool = False) -> set[str]:
     found, errors = net.scan_presence(config.people)
     for name, exc in errors:
         msg = Message.PRESENCE_SCAN_FAILED.format(name=name, exc=exc)
-        entry = context().log.write(source, msg, trigger, notification=m.Notification(("presence",), "/presence/"))
-        alert(m.Alarm.ATTENTION, text=msg, entry=entry)
-    return set_present(found, trigger, source, forced)
+        context().log.write(msg, trigger, notification=m.Notification(("presence",), "/presence/"))
+        alert(m.Alarm.ATTENTION, text=msg, trigger=trigger)
+    return set_present(found, trigger, forced)
+
+
+def _report_presence(trigger: m.Trigger, forced: bool = False) -> None:
+    detected, lost = net.presence.report(_presence_cutoff(), forced)
+    if detected:
+        context().log.write(Message.PRESENCE_DETECTED.format(name=", ".join(detected)), trigger)
+    if lost:
+        context().log.write(Message.PRESENCE_LOST.format(name=", ".join(lost)), trigger)
 
 
 def _presence_cutoff() -> datetime:
     return local_now() - timedelta(hours=config.settings.presence_hours)
-
-
-def _presence_cron_job(ctx: m.AppContext) -> set[str]:
-    return check_presence(m.Cron("presence"), m.LogSource.SYSTEM)
 
 
 def _key_summary(key: m.BleKey) -> str:
@@ -927,10 +897,6 @@ def _refresh_tag_keys_job(payload: m.Trigger, *, ctx: m.AppContext) -> None:
     refresh_tag_keys(payload)
 
 
-def _tag_keys_cron_job(ctx: m.AppContext) -> None:
-    refresh_tag_keys(m.Cron("findhub"))
-
-
-def _retry_stats_job() -> None:
+def refresh_retry_stats() -> None:
     global _retry_stats
     _retry_stats = config.providers.hubitat.fetch_retry_stats()

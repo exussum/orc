@@ -3,7 +3,9 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NamedTuple
 from unittest.mock import patch
+from uuid import NAMESPACE_OID, uuid5
 
 import pytest
 import time_machine
@@ -16,8 +18,9 @@ from orc import model as m
 from orc.dal import broker, net, sqlite
 from orc.dal.mqtt import hubitat
 from orc.dal.scheduler import Scheduler
+from orc.interfaces import inbound
+from orc.interfaces.web import bp
 from orc.plugins import battery, buttons
-from orc.view import bp
 
 MONDAY_AFTERNOON = datetime(2026, 1, 5, 15, tzinfo=config.settings.tz)
 HUB = {
@@ -39,6 +42,16 @@ class ManualScheduler(Scheduler):
 
     def run_until(self, when, tick):
         self._coordinator.run_until(when, tick=tick)
+
+
+class TriggerKey(NamedTuple):
+    kind: type
+    name: str
+    log_source: m.LogSourceEnum | None
+
+
+def trigger_key(trigger):
+    return TriggerKey(type(trigger), trigger.name, None if isinstance(trigger, m.Broker) else trigger.log_source)
 
 
 class House:
@@ -89,13 +102,14 @@ class House:
         self.reachable.discard(name)
 
     def scan(self):
-        api.check_presence(m.Query("lan"), m.LogSource.SYSTEM)
+        api.check_presence(m.Query("lan", log_source=m.LogSource.SYSTEM))
 
     def report(self, device, attribute, new):
         old = self.reported.get((device, attribute))
         state = m.DeviceState(m.Device(device.value, device.label, "hubitat"), {attribute: new}, None)
+        trigger = m.Broker(str(device.value), origin="hubitat", id=uuid5(NAMESPACE_OID, str(device.value)), log_source=m.LogSource.EXTERNAL)
         for listener in self.listeners:
-            listener(m.Status(state.device, attribute, old, new, hubitat.HubitatSource.HUBITAT))
+            listener(m.Status(state.device, attribute, old, new, hubitat.HubitatSource.HUBITAT), trigger)
         self.reported[(device, attribute)] = new
         self.ctx.scheduler.run_until(api.local_now(), self.frozen.move_to)
 
@@ -104,12 +118,19 @@ class House:
         self.ctx.scheduler.run_until(api.local_now(), self.frozen.move_to)
 
     @staticmethod
+    def like(trigger):
+        return trigger_key(trigger)
+
+    @staticmethod
     def broker(device):
-        return m.Broker(id=str(device.value), source="hubitat")
+        return TriggerKey(m.Broker, str(device.value), None)
 
     @staticmethod
     def log():
-        return [(entry.trigger, entry.action, [child.action for child in entry.children]) for entry in reversed(api.context().log.rows())]
+        return [
+            (trigger_key(entry.trigger), entry.action, [child.action for child in entry.children])
+            for entry in reversed(api.context().log.rows())
+        ]
 
 
 @pytest.fixture
@@ -123,9 +144,9 @@ def house(request, monkeypatch, tmp_path):
         broker.status_listeners.clear()
         net.presence.__init__()
         net.presence._tz = config.settings.tz
-        api.start_presence()
+        net.presence.start(config.tags, config.settings.tz, inbound.on_heard)
 
-        scheduler = ManualScheduler(config.settings.jobs_db, config.settings.tz)
+        scheduler = ManualScheduler(config.settings.jobs_db, config.settings.tz, on_run=inbound.on_run, on_expired=inbound.on_expired)
         ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())
         scheduler.start(ctx)
         api.set_ctx(ctx)
@@ -135,17 +156,19 @@ def house(request, monkeypatch, tmp_path):
         app.orc = ctx
 
         listeners, dispatched, lan, pushed = [], [], {"Alice"}, []
-        api.subscribe_push(m.PushSubscription("https://push.example/house", "public-key", "auth-secret"))
+        api.subscribe_push(
+            m.PushSubscription("https://push.example/house", "public-key", "auth-secret"), m.Manual("notify", log_source=m.LogSource.SYSTEM)
+        )
         push = SimpleNamespace(public_key=lambda: "", send=lambda subscription, title, body, tag: pushed.append(body))
         dispatch = api.dispatch
         probed, reachable = [], set()
         real_probe = net.Presence.probe
 
-        def probe(presence, names, trigger, source):
+        def probe(presence, names):
             probed.extend(sorted(names))
             for name in sorted(names & reachable):
                 house.advertise(name)
-            real_probe(presence, names, trigger, source)
+            real_probe(presence, names)
 
         def record(commands, *args, **kwargs):
             dispatched.append(commands)
@@ -177,7 +200,7 @@ def house(request, monkeypatch, tmp_path):
                 plugin.setup(ctx)
             for listener in (buttons, battery):
                 listener.setup(ctx)
-            listeners.append(api._log_external)
+            listeners.append(api.log_external)
             yield house
     finally:
         _load(sample, {})

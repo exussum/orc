@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, cast
 from flask import Blueprint, current_app
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 example_bp = Blueprint("example", __name__)
 app = cast("OrcFlask", current_app)

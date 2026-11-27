@@ -3,10 +3,12 @@ from typing import TYPE_CHECKING, cast
 from flask import Blueprint, abort, current_app, request
 
 import orc_extras.react
+from orc import model as m
 from orc_extras.react import plugins
+from orc_extras.react.model import Log
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 react_bp = Blueprint("react", __name__)
 app = cast("OrcFlask", current_app)
@@ -33,9 +35,13 @@ def rules() -> dict:
 @react_bp.route("/<path:name>/sleep")
 def sleep(name: str) -> dict:
     if request.args.get("sleeping") == "1":
-        return {"sleeping_until": plugins.sleep(app.orc, _known(name)).isoformat()}
-    plugins.wake(app.orc, _known(name))
+        return {"sleeping_until": plugins.sleep(app.orc, _known(name), _trigger()).isoformat()}
+    plugins.wake(app.orc, _known(name), _trigger())
     return {"sleeping_until": None}
+
+
+def _trigger() -> m.Trigger:
+    return m.Manual("react", log_source=Log.REACT)
 
 
 def _known(name: str) -> str:

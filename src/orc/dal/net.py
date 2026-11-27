@@ -3,10 +3,10 @@ import logging
 import socket
 import threading
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, tzinfo
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
@@ -18,7 +18,11 @@ from scapy.sendrecv import AsyncSniffer, sendp
 
 from orc import model as m
 from orc.collections import LockedDict
+from orc.dal import sqlite
 from orc.security import FMDN_ROTATION_SECONDS, FMDN_SERVICE_UUID, fmdn_eids, fmdn_parse
+
+if TYPE_CHECKING:
+    from orc.dal.interfaces import OnHeard
 
 _WINDOW_SECONDS = 3
 _PROBE_SECONDS = 30
@@ -52,27 +56,20 @@ class Presence:
         self._frames: dict[str, datetime] = {}
         self._frame_seen = threading.Condition()
         self._paused: datetime | None = None
-        self._on_change: Callable[[m.Trigger, m.LogSourceEnum], object] = lambda trigger, source: None
-        self._ble_source: m.LogSourceEnum = m.LogSource.SYSTEM
-        self._on_clock: Callable[[str, m.TagClock], object]
+        self._reported: set[str] = set()
+        self._report_lock = threading.Lock()
+        self._on_heard: OnHeard = lambda person, when: None
 
-    def start(
-        self,
-        tags: Iterable[m.BleTag],
-        tz: tzinfo,
-        on_change: Callable[[m.Trigger, m.LogSourceEnum], object],
-        ble_source: m.LogSourceEnum,
-        clocks: Mapping[str, m.TagClock],
-        on_clock: Callable[[str, m.TagClock], object],
-    ) -> None:
-        self._on_change = on_change
-        self._ble_source = ble_source
-        self._on_clock = on_clock
+    def start(self, tags: Iterable[m.BleTag], tz: tzinfo, on_heard: "OnHeard") -> None:
+        self._on_heard = on_heard
+        rows = sqlite.fetch_tags()
+        for row in rows:
+            self.set_key(row.person, row.key)
         self.tagged = frozenset(tag.person for tag in tags)
         if not self.tagged:
             return
         self._tz = tz
-        self._clocks = LockedDict(clocks)
+        self._clocks = LockedDict({row.person: row.clock for row in rows if row.clock})
 
     def listen(self, stop: threading.Event) -> None:
         while not stop.is_set():
@@ -82,10 +79,9 @@ class Presence:
         self._clocks.pop(person)
         self._tags[person] = key
 
-    def mark(self, names: Iterable[str], when: datetime, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> None:
+    def mark(self, names: Iterable[str], when: datetime) -> None:
         for name in names:
             self._heard[name] = when
-        self._changed(trigger, source, forced)
 
     def seen(self) -> dict[str, datetime]:
         return self._heard.copy()
@@ -94,35 +90,37 @@ class Presence:
         paused = self._paused
         return {name for name, heard in self._heard.copy().items() if heard >= cutoff and (not paused or heard > paused)}
 
-    def forget(
-        self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum, before: datetime | None = None, forced: bool = False
-    ) -> None:
+    def forget(self, names: Iterable[str], before: datetime | None = None) -> None:
         # `before` keeps entries at or past it — manual check-ins stamped in the future.
         for name in names:
             if (heard := self._heard.get(name)) and (before is None or heard < before):
                 self._heard.pop(name)
-        self._changed(trigger, source, forced)
 
-    def set_present(
-        self, names: Iterable[str], when: datetime, cutoff: datetime, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False
-    ) -> set[str]:
+    def report(self, cutoff: datetime, forced: bool = False) -> tuple[list[str], list[str]]:
+        if self._paused and not forced:
+            return [], []
+        with self._report_lock:
+            present = self.present(cutoff)
+            detected, lost = sorted(present - self._reported), sorted(self._reported - present)
+            self._reported = present
+        return detected, lost
+
+    def set_present(self, names: Iterable[str], when: datetime, cutoff: datetime) -> set[str]:
         found = set(names)
         for name, heard in self._heard.copy().items():
             if name not in found and heard < cutoff:
                 self._heard.pop(name)
         for name in found:
             self._heard[name] = when
-        self._changed(trigger, source, forced)
         return self.present(cutoff)
 
     def pause(self, until: datetime) -> None:
         self._paused = until
 
-    def resume(self, trigger: m.Trigger, source: m.LogSourceEnum) -> None:
+    def resume(self) -> None:
         self._paused = None
-        self._changed(trigger, source)
 
-    def probe(self, names: Iterable[str], trigger: m.Trigger, source: m.LogSourceEnum) -> None:
+    def probe(self, names: Iterable[str]) -> None:
         wanted = set(names)
         start = self._now()
         never = datetime.min.replace(tzinfo=start.tzinfo)
@@ -132,11 +130,7 @@ class Presence:
                 timeout=_PROBE_SECONDS,
             )
             heard = {name for name in wanted if self._frames.get(name, never) >= start}
-        self.mark(heard, self._now(), trigger, source)
-
-    def _changed(self, trigger: m.Trigger, source: m.LogSourceEnum, forced: bool = False) -> None:
-        if forced or not self._paused:
-            self._on_change(trigger, source)
+        self.mark(heard, self._now())
 
     async def _run(self, stop: threading.Event) -> None:
         while not stop.is_set():
@@ -155,12 +149,12 @@ class Presence:
                 clock = m.TagClock(window - (int(now.timestamp()) - self._tags[person].anchor), int(now.timestamp()), eid)
                 self._clocks[person] = clock
                 if known and known.eid:
-                    self._on_clock(person, clock)
+                    sqlite.update_tag_clock(person, clock)
             with self._frame_seen:
                 self._frames[person] = now
                 self._frame_seen.notify_all()
             if not self._paused:
-                self.mark([person], now, m.Query("ble"), self._ble_source)
+                self._on_heard(person, now)
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)

@@ -1,12 +1,14 @@
 import asyncio
 import atexit
+import dataclasses
+import functools
 import logging
 import signal
 import threading
 import uuid
 from collections.abc import Callable, Iterable
 from datetime import datetime, tzinfo
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import orc_queue as oq
 from orc_queue import (
@@ -26,9 +28,12 @@ from orc_queue import (
 
 from orc import model as m
 
+if TYPE_CHECKING:
+    from orc.dal.interfaces import OnExpired, OnQueueEvent, OnRun
+
 
 class Scheduler:
-    def __init__(self, jobs_db: str, tz: tzinfo) -> None:
+    def __init__(self, jobs_db: str, tz: tzinfo, *, on_run: "OnRun", on_expired: "OnExpired") -> None:
         self._tz = tz
         self._jobs_db = jobs_db
         self._lock = threading.RLock()
@@ -37,6 +42,9 @@ class Scheduler:
         self._queues: dict[m.QueueName, JobQueue[Any]] = {}
         self._lane_queues: dict[m.Lane, list[JobQueue[Any]]] = {lane: [] for lane in m.Lane}
         self._services: list[Service] = []
+        self.on_run = on_run
+        self._on_expired = on_expired
+        self._listeners: list[tuple[oq.Event, "OnQueueEvent"]] = []
         self._thread = threading.Thread(target=self._run, name="orc-queue", daemon=True)
         self.queue(m.Queue.ADHOC, lane=m.Lane.DEVICES)
         self.queue(m.Queue.IOT, lane=m.Lane.DEVICES, persist=True)
@@ -54,6 +62,9 @@ class Scheduler:
         self._lane_queues[lane].append(self._queues[name])
 
     def start(self, ctx: m.AppContext) -> None:
+        oq.on(self.events, oq.Event.EXPIRED, functools.partial(self._on_expired, ctx=ctx))
+        for event, fn in self._listeners:
+            oq.on(self.events, event, functools.partial(fn, ctx=ctx))
         lanes = [ThreadLane(*queues) for queues in self._lane_queues.values()]
         self._coordinator: Coordinator[Any] = Coordinator(*lanes, services=self._services, context=ctx)
         self._thread.start()
@@ -97,11 +108,16 @@ class Scheduler:
         with self._lock:
             queue_ = self._queues[queue]
             queued = {job.id: job for job in queue_.jobs()}
-            for id in queued.keys() - jobs.keys():
-                if queued[id].run_at > now:
+            for id, old in queued.items():
+                if id not in jobs and old.run_at > now:
                     queue_.remove(id)
-            for id in jobs.keys() - queued.keys():
-                queue_.add(jobs[id])
+            for id, job in jobs.items():
+                if (old := queued.get(id)) is None:
+                    queue_.add(job)
+                    continue
+                new = dataclasses.replace(old, run_at=job.run_at, expires_at=job.expires_at, fn=job.fn, payload=job.payload, name=job.name)
+                if new != old:
+                    queue_.add(new)
 
     def cancel(self, id: str, queue: m.QueueName) -> bool:
         return self._coordinator.cancel_job(id, queue)
@@ -131,8 +147,5 @@ class Scheduler:
     def queues(self) -> dict[m.QueueName, JobQueue[Any]]:
         return dict(self._queues)
 
-    def on_expired(self, fn: Callable[..., None]) -> None:
-        oq.on(self.events, oq.Event.EXPIRED, fn)
-
-    def on_cancelled(self, fn: Callable[..., None]) -> None:
-        oq.on(self.events, oq.Event.CANCELED, fn)
+    def add_listener(self, event: oq.Event, fn: "OnQueueEvent") -> None:
+        self._listeners.append((event, fn))

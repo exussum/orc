@@ -15,7 +15,7 @@ from orc.collections import LockedDict
 from orc_extras.yolink.dal.interfaces import CloudBackend
 
 TransitionKind = Literal["connection", "leak", "battery", "signal", "interval", "online"]
-type TransitionCallback = Callable[[str, TransitionKind, Any, Any], None]
+type TransitionCallback = Callable[[m.Trigger, str, TransitionKind, Any, Any], None]
 
 
 STATE_DRY = "normal"
@@ -65,7 +65,7 @@ def snapshot(ctx: m.AppContext) -> list[SensorState]:
     return [sensors.get(device.value) or SensorState(name=device.label, device_id=device.value) for device in _leak_devices(ctx)]
 
 
-def simulate_transition(ctx: m.AppContext, name: str, on_transition: TransitionCallback) -> bool:
+def simulate_transition(ctx: m.AppContext, name: str, on_transition: TransitionCallback, trigger: m.Trigger) -> bool:
     states = _states(ctx)
     sensor = next((s for s in states.copy().values() if s.name == name), None)
     if sensor is None:
@@ -75,11 +75,11 @@ def simulate_transition(ctx: m.AppContext, name: str, on_transition: TransitionC
 
     if states.update(device_id, _transition_to(ctx, STATE_WET)) is None:
         return False
-    _fire(on_transition, "leak", name, prev, STATE_WET)
+    _fire(on_transition, trigger, "leak", name, prev, STATE_WET)
 
     def _revert() -> None:
         if states.update(device_id, _transition_to(ctx, STATE_DRY, require=STATE_WET)) is not None:
-            _fire(on_transition, "leak", name, STATE_WET, STATE_DRY)
+            _fire(on_transition, trigger, "leak", name, STATE_WET, STATE_DRY)
 
     ctx.scheduler.once(_revert, ctx.api.local_now() + timedelta(seconds=5), name=f"YoLink test revert {name}")
     return True
@@ -124,19 +124,21 @@ def _run(ctx: m.AppContext, backend: CloudBackend, on_transition: TransitionCall
         session.close()
 
 
-def _on_connection(ctx: m.AppContext, on_transition: TransitionCallback, disconnect_times: list[float], connected: bool) -> None:
+def _on_connection(
+    ctx: m.AppContext, on_transition: TransitionCallback, disconnect_times: list[float], connected: bool, trigger: m.Trigger
+) -> None:
     if connected:
-        _set_connected(ctx, on_transition, True)
+        _set_connected(ctx, on_transition, True, trigger)
         return
     now = time.time()
     cutoff = now - _FLAP_WINDOW_SEC
     disconnect_times[:] = [t for t in disconnect_times if t >= cutoff]
     disconnect_times.append(now)
     if len(disconnect_times) >= _FLAP_THRESHOLD:
-        _set_connected(ctx, on_transition, False)
+        _set_connected(ctx, on_transition, False, trigger)
 
 
-def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: str, data: dict[str, Any]) -> None:
+def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: str, data: dict[str, Any], trigger: m.Trigger) -> None:
     if "battery" in data:
         data["battery"] = m.BatteryLevel.from_fraction(data["battery"], 4)
 
@@ -161,8 +163,10 @@ def _on_report(ctx: m.AppContext, on_transition: TransitionCallback, device_id: 
         return dataclasses.replace(current, last_change=ctx.api.local_now(), **changes)
 
     _states(ctx).update(device_id, apply)
-    for kind, old, new in captured["transitions"]:
-        _fire(on_transition, kind, captured["name"], old, new)
+    if captured["transitions"]:
+        named = dataclasses.replace(trigger, name=captured["name"])
+        for kind, old, new in captured["transitions"]:
+            _fire(on_transition, named, kind, captured["name"], old, new)
 
 
 def _hydrate_states(ctx: m.AppContext, backend: CloudBackend, access_token: str) -> None:
@@ -193,7 +197,7 @@ def _transition_to(ctx: m.AppContext, new_state: str, require: str | None = None
     return fn
 
 
-def _set_connected(ctx: m.AppContext, on_transition: TransitionCallback, connected: bool) -> None:
+def _set_connected(ctx: m.AppContext, on_transition: TransitionCallback, connected: bool, trigger: m.Trigger) -> None:
     # collect (name, prior state) inside the atomic update, fire after releasing the lock
     fired: list[tuple[str, str]] = []
 
@@ -207,14 +211,14 @@ def _set_connected(ctx: m.AppContext, on_transition: TransitionCallback, connect
     for device_id in states.copy().keys():
         states.update(device_id, apply)
     for name, old in fired:
-        _fire(on_transition, "connection", name, old, "connected" if connected else "disconnected")
+        _fire(on_transition, dataclasses.replace(trigger, name=name), "connection", name, old, "connected" if connected else "disconnected")
     _state(ctx).first = False
 
 
-def _fire(on_transition: TransitionCallback, kind: TransitionKind, name: str, old: Any, new: Any) -> None:
+def _fire(on_transition: TransitionCallback, trigger: m.Trigger, kind: TransitionKind, name: str, old: Any, new: Any) -> None:
     if old != new:
         try:
-            on_transition(name, kind, old, new)
+            on_transition(trigger, name, kind, old, new)
         except Exception:
             _log.exception("yolink transition callback failed")
 

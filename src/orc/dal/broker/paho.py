@@ -15,7 +15,7 @@ from orc import model as m
 from orc.dal import broker
 
 if TYPE_CHECKING:
-    from orc.dal.interfaces import Adapter
+    from orc.dal.interfaces import Adapter, OnMessage
 
 _log = logging.getLogger(__name__)
 
@@ -30,10 +30,10 @@ def register(adapter: "Adapter") -> None:
     broker.register(adapter, partial(_publish, adapter))
 
 
-def start() -> None:
+def start(on_message: "OnMessage") -> None:
     global _client
     if any(adapter.namespaces for adapter in broker.adapters):
-        _client = _new_client(orc.config.secrets, partial(_on_connect, broker.adapters), _on_message, 3.0)
+        _client = _new_client(orc.config.secrets, partial(_on_connect, broker.adapters), partial(_on_message, on_message), 3.0)
     for adapter in broker.adapters:
         adapter.start()
 
@@ -122,5 +122,5 @@ def _wait_settled(count: Callable[[], int], timeout: float) -> bool:
     return False
 
 
-def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    broker.receive(msg.topic, msg.payload)
+def _on_message(on_message: "OnMessage", client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+    on_message(msg.topic, msg.payload)

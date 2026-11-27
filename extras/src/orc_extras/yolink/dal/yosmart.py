@@ -18,6 +18,10 @@ _MQTT_PORT = 8003
 _log = logging.getLogger(__name__)
 
 
+def _trigger(name: str) -> m.Trigger:
+    return m.Broker(name, origin="yolink", log_source=m.LogSource.PLUGIN)
+
+
 def authenticate(secrets: m.Secrets, timeout: int) -> tuple[str, int]:
     response = requests.post(
         _AUTH_URL,
@@ -57,10 +61,10 @@ def connect(access_token: str, on_connection: ConnectionCallback, on_report: Rep
             _log.warning("yolink: mqtt connect rc=%s", rc)
             return
         client.subscribe(f"yl-home/{home_id}/+/report", qos=0)
-        on_connection(True)
+        on_connection(True, _trigger("connection"))
 
     def _on_disconnect(client: mqtt.Client, userdata: Any, *args: Any) -> None:
-        on_connection(False)
+        on_connection(False, _trigger("connection"))
 
     def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
         parts = msg.topic.split("/")
@@ -72,7 +76,7 @@ def connect(access_token: str, on_connection: ConnectionCallback, on_report: Rep
             _log.exception("yolink: bad payload on %s", msg.topic)
             return
         try:
-            on_report(parts[2], payload.get("data") or {})
+            on_report(parts[2], payload.get("data") or {}, _trigger(parts[2]))
         except Exception:
             _log.exception("yolink: report handling failed on %s", msg.topic)
 

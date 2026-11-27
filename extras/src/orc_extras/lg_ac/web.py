@@ -13,7 +13,7 @@ from orc_extras.lg_ac.dal.mqtt.thinq import SOURCE
 from orc_extras.lg_ac.model import LogSource
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 enroll = Blueprint("lg_ac", __name__)
 app = cast("OrcFlask", current_app)
@@ -37,7 +37,7 @@ def route_certificate() -> Response:
 def device_certificate(device_id: str) -> Response:
     body = request.get_json(force=True)
     signed = api.sign_device_csr(body["csr"].encode(), device_id)
-    app.orc.log.write(LogSource.LG_AC, f"AC {device_id[:8]}: paired", m.Broker(id=device_id, source=SOURCE))
+    app.orc.log.write(f"AC {device_id[:8]}: paired", m.Broker(name=device_id, origin=SOURCE, log_source=LogSource.LG_AC))
     return jsonify(api.cert_response(signed))
 
 
@@ -80,6 +80,7 @@ def command() -> Response:
         )
         if asked.fan_mode is None or asked.temperature is None:
             return jsonify({"error": "a setpoint needs fan_mode and temperature"})
-    entry = app.orc.log.write(LogSource.LG_AC, f"AC {device_id[:8]}: {asked}", m.Manual("lg_ac"))
-    app.orc.api.dispatch((em.Command(m.Devices(unit), asked),), force=True, entry=entry)
+    trigger = m.Manual("lg_ac", log_source=LogSource.LG_AC)
+    app.orc.log.write(f"AC {device_id[:8]}: {asked}", trigger)
+    app.orc.api.dispatch((em.Command(m.Devices(unit), asked),), force=True, trigger=trigger)
     return jsonify({"status": "sent", "device": device_id, "command": str(asked)})

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC
 from unittest.mock import patch
 
 import pytest
@@ -56,7 +56,7 @@ class TestDispatchLGTV:
         self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room
         self.bl = BroadLink.living_room
-        self.entry = m.LogEntry(datetime.now(UTC), m.LogSource.MANUAL, "test", m.Manual("test"))
+        self.trigger = m.Manual("test", log_source=m.LogSource.MANUAL)
 
     @pytest.fixture
     def webos_off(self):
@@ -64,15 +64,15 @@ class TestDispatchLGTV:
             yield off
 
     def test_off_powers_webos_off(self, webos_off):
-        api.dispatch((em.Command(m.Devices(self.lg_tv), m.OFF),), entry=self.entry)
+        api.dispatch((em.Command(m.Devices(self.lg_tv), m.OFF),), trigger=self.trigger)
         webos_off.assert_called_once_with(self.ctx, self.webos)
 
     def test_on_toggles_broadlink_when_tv_is_off(self):
         with patch.object(plugins, "is_off", return_value=True):
-            api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
+            api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), trigger=self.trigger)
         self.ctx.api.tv_toggle.assert_called_once_with(self.bl)
 
     def test_on_skips_toggle_when_tv_already_on(self):
         with patch.object(plugins, "is_off", return_value=False):
-            api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), entry=self.entry)
+            api.dispatch((em.Command(m.Devices(self.lg_tv), m.ON),), trigger=self.trigger)
         self.ctx.api.tv_toggle.assert_not_called()

@@ -11,7 +11,7 @@ from orc_extras.calendar.api import EventDestination
 from orc_extras.calendar.plugins import ALARM
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 choose = Blueprint("calendar", __name__, template_folder="templates")
 app = cast("OrcFlask", current_app)
@@ -38,7 +38,7 @@ def refresh() -> Response:
     app.orc.scheduler.once(
         plugins.schedule_events, app.orc.api.local_now(), id=plugins.REFRESH_ID, name="Calendar Refresh", queue=m.Queue.FETCH
     )
-    app.orc.log.write(plugins.Log.CALENDAR, "Calendar refreshed", m.Manual("calendar"))
+    app.orc.log.write("Calendar refreshed", m.Manual("calendar", log_source=plugins.Log.CALENDAR))
     return redirect(url_for("calendar.index"))
 
 

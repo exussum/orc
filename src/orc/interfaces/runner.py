@@ -11,20 +11,23 @@ from functools import partial
 from pathlib import Path
 from urllib.parse import quote
 
+import orc_queue as oq
 from gunicorn.app.base import BaseApplication
 
-import orc as config
-from orc import _build, api
+from orc import _build, api, config
 from orc import model as m
+from orc.dal import broker, net
 from orc.dal.scheduler import Scheduler
+from orc.interfaces import inbound
+from orc.interfaces.web import OrcFlask, bp
 from orc.kernel.loader import check_secrets
 from orc.log import Log, Message
-from orc.view import OrcFlask, bp
 
 
 @dataclass
 class Boot:
     log: Log = field(default_factory=lambda: Log(api.local_now, api.notify))
+    trigger: m.Trigger = field(default_factory=lambda: m.System("boot", log_source=m.LogSource.SYSTEM))
     entry: m.LogEntry | None = None
     started: float | None = None
 
@@ -40,7 +43,7 @@ class GunicornApp(BaseApplication):
         self.cfg.set("threads", 1)
         self.cfg.set("timeout", 120)
         self.cfg.set("loglevel", "warning")
-        self.cfg.set("bind", f"0.0.0.0:{config.config.settings.port}")
+        self.cfg.set("bind", f"0.0.0.0:{config.settings.port}")
 
     def load(self) -> OrcFlask:
         _start_services(self._app.orc, self._boot)
@@ -53,7 +56,7 @@ def flask() -> None:
     boot = Boot()
     app = _build_app(boot)
     _start_services(app.orc, boot)
-    app.run(host="0.0.0.0", port=config.config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
+    app.run(host="0.0.0.0", port=config.settings.port, use_reloader=False)  # nosemgrep: avoid_app_run_with_bad_host
 
 
 def secrets() -> None:
@@ -68,9 +71,9 @@ def secrets() -> None:
     os.environ["ORC_CONFIG_DIR"] = str(path.parent if path.is_file() else path)
     if token := os.environ.get("BWS_ACCESS_TOKEN"):
         os.environ["BWS_ACCESS_TOKEN"] = "data:," + quote(token, safe="")
-    config.config.load(m.Secrets(), {})
-    fetched = config.config.providers.secrets.fetch_secrets()
-    needs = config.config.secret_needs
+    config.load(m.Secrets(), {})
+    fetched = config.providers.secrets.fetch_secrets()
+    needs = config.secret_needs
     problems = check_secrets(fetched, needs)
     for name in sorted(needs):
         print(f"{name:<40} {f'bad: {problems[name]}' if name in problems else 'ok'}")
@@ -104,54 +107,73 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     if boot.entry is None:
-        boot.entry, boot.started = boot.log.write(m.LogSource.SYSTEM, Message.BOOT, m.System("boot")), start
-    boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
+        boot.entry, boot.started = boot.log.write(Message.BOOT, boot.trigger), start
+    boot.log.add(boot.entry, m.LogSource.SYSTEM, Message.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
+
+
+def setup_scheduler(ctx: m.AppContext, trigger: m.Trigger) -> None:
+    api.rebuild_iot_schedule(trigger)
+    for job_id, func, crontab, name, queue in (
+        ("iot-cron", inbound.rebuild_iot_cron, "10 0 * * *", "Iot Cron", m.Queue.ADHOC),
+        ("presence-cron", inbound.check_presence_cron, "5 * * * *", "Presence Cron", m.Queue.PRESENCE),
+        ("findhub-cron", inbound.refresh_tag_keys_cron, "0 */4 * * *", "Find Hub Cron", m.Queue.PRESENCE),
+        ("stats-cron", inbound.refresh_stats_cron, "*/5 * * * *", "Stats Cron", m.Queue.FETCH),
+    ):
+        ctx.scheduler.cron(func, crontab, id=job_id, name=name, queue=queue)
+    ctx.scheduler.now(inbound.refresh_stats_cron, name="Stats Boot Check", queue=m.Queue.FETCH)
+    ctx.scheduler.add_listener(oq.Event.CANCELED, inbound.on_cancelled)
 
 
 def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     step = partial(_step, boot)
     with step("scheduler setup"):
-        api.setup_scheduler()
-    for hook in config.config.registry.setup_hooks:
+        setup_scheduler(ctx, boot.trigger)
+    for hook in config.registry.setup_hooks:
         with step(f"{hook.__module__} setup"):
             hook(ctx)
     with step("mqtt start"):
-        api.start_mqtt()
+        config.providers.broker.register(config.providers.adapter)
+        broker.add_status_listener(api.log_external)
+        config.providers.broker.start(inbound.on_message)
     with step("ble setup"):
-        api.start_presence()
+        net.presence.start(config.tags, config.settings.tz, inbound.on_heard)
+        if net.presence.tagged:
+            ctx.scheduler.service(net.presence.listen, name="ble-listener")
     with step("scheduler start"):
         ctx.scheduler.start(ctx)
     with step("scheduler resume"):
         ctx.scheduler.resume()
     with step("presence check"):
-        api.schedule_presence_check(m.Cron("presence"))
+        api.schedule_presence_check(m.Cron("presence", log_source=m.LogSource.SYSTEM))
     with step("tag key check"):
-        api.schedule_tag_key_refresh(m.Cron("findhub"))
+        api.schedule_tag_key_refresh(m.Cron("findhub", log_source=m.LogSource.SYSTEM))
     assert boot.entry is not None and boot.started is not None
-    boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
+    boot.log.add(boot.entry, m.LogSource.SYSTEM, Message.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)
 
 
 def _build_app(boot: Boot) -> OrcFlask:
     step = partial(_step, boot)
     with step("config load"):
-        config.config.load()
+        config.load()
     with step("database init"):
         api.init_db()
         api.load_durations()
 
-    ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz), api.runtime(), log=boot.log)
+    settings = config.settings
+    scheduler = Scheduler(settings.jobs_db, settings.tz, on_run=inbound.on_run, on_expired=inbound.on_expired)
+    ctx = m.AppContext(scheduler, api.runtime(), log=boot.log)
     api.set_ctx(ctx)
     return _build_flask(ctx)
 
 
 def _build_flask(ctx: m.AppContext) -> OrcFlask:
-    app = OrcFlask(__name__)
+    app = OrcFlask("orc")
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
     app.orc = ctx
     app.jinja_env.globals.update(build_sha=_build.SHA, build_time=_build.BUILD_TIME)
     app.register_blueprint(bp)
-    for plugin, namespace, plugin_bp in config.config.registry.blueprints:
+    for plugin, namespace, plugin_bp in config.registry.blueprints:
         app.register_blueprint(plugin_bp, url_prefix=f"/api/{plugin}/{namespace}")
     return app

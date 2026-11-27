@@ -145,16 +145,15 @@ def _schedule(backend: FeedService, settings: Settings, feeds: list[Feed], *, ct
 
 
 def _run_event(payload: CalendarJob, *, ctx: m.AppContext) -> None:
-    if payload.theme and payload.theme != ctx.api.calculate_theme(ctx.api.local_now().date()):
-        return
     summary = payload.destination.summary
-    trigger = m.Integration(summary)
+    trigger = m.Integration(summary, log_source=Log.CALENDAR)
+    if payload.theme and payload.theme != ctx.api.calculate_theme(ctx.api.local_now().date(), trigger):
+        return
     if payload.event_type == WARNING:
-        entry = m.LogEntry(ctx.api.local_now(), Log.CALENDAR, summary, trigger)
-        ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, entry=entry)
+        ctx.api.alert(m.Alarm.ATTENTION, path=ctx.api.DEFAULT_ALERT_PATH, trigger=trigger)
     else:
         destination = payload.destination
         record(RecentEvent(*destination, ctx.api.local_now().timestamp()))
         link = str(CHOOSER_URL.with_query(title=summary, url=destination.url, address=destination.address))
-        entry = ctx.log.write(Log.CALENDAR, summary, trigger, notification=m.Notification(("calendar",), link), link=link)
-        ctx.api.alert(m.Alarm.ATTENTION, text=summary, entry=entry)
+        ctx.log.write(summary, trigger, notification=m.Notification(("calendar",), link), link=link)
+        ctx.api.alert(m.Alarm.ATTENTION, text=summary, trigger=trigger)

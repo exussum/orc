@@ -17,6 +17,8 @@ from orc.dal.mqtt import hubitat
 from orc.model import DeviceEnum
 from tests.conftest import NOW, plugin_config
 
+TRIGGER = m.Manual("react", log_source=model.Log.REACT)
+EVENT = m.Broker("1", origin="hubitat", log_source=m.LogSource.EXTERNAL)
 _PAUSE_ERRORS = [
     ("react_pause_zero", ConfigError, "Invalid --pause 0"),
     ("react_pause_mismatch", ValueError, "same --pause"),
@@ -47,7 +49,7 @@ DEVICE_ENUMS = {"Light": Light, "AC": Ac, "Chromecast": Chromecast, "Sensor": Se
 def ctx(ctx, frozen_clock):
     ctx.engine = engine.Runtime(UTC)
     ctx.api.reader.return_value = _world_read(ctx)
-    ctx.api.squish.side_effect = lambda commands, entry: api.squish(commands)
+    ctx.api.squish.side_effect = lambda commands, trigger: api.squish(commands)
     ctx.api.capture_acs.return_value = (m.AcStatus(Ac.living, m.AcState(power=m.OFF)),)
     ctx.config.registry = orc.config.registry
     ctx.api.dewpoint.side_effect = api.dewpoint
@@ -63,8 +65,12 @@ def react_rules(ctx):
     return rules
 
 
-def deliver(ctx, status):
-    plugins._on_event(ctx, ctx.sources, status)
+def _edge(status):
+    return m.Broker(status.device.id, origin=status.device.source, log_source=m.LogSource.EXTERNAL)
+
+
+def deliver(ctx, status, trigger=None):
+    plugins._on_event(ctx, ctx.sources, status, trigger or _edge(status))
     queued = [c for c in ctx.scheduler.now.call_args_list if c.args[0] is plugins._run_event]
     ctx.scheduler.now.reset_mock()
     for call in queued:
@@ -83,14 +89,14 @@ def ruleset(ctx):
 
 @pytest.fixture
 def device_report(ctx):
-    def device_report(device_id, attributes, old=None):
+    def device_report(device_id, attributes, old=None, trigger=None):
         name = next((e.name for cls in DEVICE_ENUMS.values() for e in cls if e.value == device_id), device_id)
         state = m.DeviceState(m.Device(device_id, name, "hubitat"), attributes, None)
         known = ctx.api.device_states.return_value
         others = [s for s in known if s.device.id != device_id] if isinstance(known, list) else []
         ctx.api.device_states.return_value = [*others, state]
         attribute = next(iter(attributes))
-        deliver(ctx, m.Status(state.device, attribute, old, attributes[attribute], hubitat.HubitatSource.HUBITAT))
+        deliver(ctx, m.Status(state.device, attribute, old, attributes[attribute], hubitat.HubitatSource.HUBITAT), trigger)
 
     return device_report
 
@@ -105,14 +111,16 @@ def pending_jobs(ctx, react_rules, device_report):
 
 def test_an_event_is_handed_to_the_scheduler_instead_of_evaluated_on_the_mqtt_thread(ctx, react_rules):
     status = m.Status(m.Device("1", "lamp", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT)
-    plugins._on_event(ctx, ctx.sources, status)
+    plugins._on_event(ctx, ctx.sources, status, EVENT)
     ctx.api.dispatch.assert_not_called()
     call = ctx.scheduler.now.call_args
-    assert (call.args, call.kwargs) == ((plugins._run_event, (ctx.sources, status)), {"name": "React"})
+    assert (call.args, call.kwargs) == ((plugins._run_event, (ctx.sources, status, EVENT)), {"name": "React"})
 
 
 def test_an_event_from_a_device_no_rule_watches_queues_nothing(ctx, react_rules):
-    plugins._on_event(ctx, ctx.sources, m.Status(m.Device("999", "other", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT))
+    plugins._on_event(
+        ctx, ctx.sources, m.Status(m.Device("999", "other", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT), EVENT
+    )
     ctx.scheduler.now.assert_not_called()
 
 
@@ -155,11 +163,11 @@ def test_cooldown_option_overrides_default(react_rules):
 
 
 def test_switch_on_schedules_reaction(ctx, react_rules, device_report):
-    device_report("1", {"switch": m.ON}, m.OFF)
+    device_report("1", {"switch": m.ON}, m.OFF, EVENT)
     call = ctx.scheduler.once.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"].startswith("react-")
-    assert call.args[2] == (ANY, m.Device("1", "lamp", "hubitat"))
+    assert call.args[2] == (ANY, m.Device("1", "lamp", "hubitat"), EVENT)
 
 
 def test_first_report_after_boot_is_not_a_transition(ctx, ruleset, device_report):
@@ -182,13 +190,13 @@ def test_switch_off_cancels_pending_jobs(ctx, pending_jobs, device_report):
 
 
 def test_sleeping_rule_schedules_only_a_recheck(ctx, react_rules, device_report):
-    plugins.sleep(ctx, "Lights off")
+    plugins.sleep(ctx, "Lights off", TRIGGER)
     device_report("1", {"switch": m.ON}, m.OFF)
     assert {call.args[0] for call in ctx.scheduler.once.call_args_list} == {plugins._recheck}
 
 
 def test_sleep_cancels_a_pending_job(ctx, pending_jobs):
-    plugins.sleep(ctx, "Lights off")
+    plugins.sleep(ctx, "Lights off", TRIGGER)
     ctx.scheduler.cancel.assert_any_call(pending_jobs, m.Queue.ADHOC)
 
 
@@ -202,10 +210,12 @@ def test_run_react_dispatches_the_action(ctx, ruleset, dispatches, deferred_run,
 
 def test_consecutive_fires_log_the_same_trigger_id(ctx, ruleset, device_report):
     ruleset(_make(m.Devices(Light.lamp), "switch", m.ON, m.OFF), {"1": Light.lamp})
-    device_report("1", {"switch": m.ON}, m.OFF)
+    device_report("1", {"switch": m.ON}, m.OFF, EVENT)
     ctx.frozen.move_to(NOW + timedelta(seconds=model.COOLDOWN.total_seconds() + 1))
-    device_report("1", {"switch": m.ON}, m.OFF)
-    assert [call.args[2] for call in ctx.log.write.call_args_list] == [_hub("1"), _hub("1")]
+    device_report("1", {"switch": m.ON}, m.OFF, EVENT)
+    logged = [call.args[1] for call in ctx.log.write.call_args_list]
+    assert logged == [EVENT, EVENT]
+    assert {t.log_source for t in logged} == {model.Log.REACT}
 
 
 def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, device_report):
@@ -218,7 +228,9 @@ def test_a_different_device_logs_a_different_trigger_id(ctx, ruleset, device_rep
     )
     device_report("1", {"switch": m.ON}, m.OFF)
     device_report("2", {"switch": m.ON}, m.OFF)
-    assert [call.args[2] for call in ctx.log.write.call_args_list] == [_hub("1"), _hub("2")]
+    logged = [call.args[1] for call in ctx.log.write.call_args_list]
+    assert [t.name for t in logged] == ["1", "2"]
+    assert logged[0] != logged[1]
 
 
 def test_untargeted_ac_command_targets_the_ac_set(ctx, react_rules):
@@ -506,10 +518,10 @@ def test_disabled_rule_expires_after_its_pause(react_rules):
 
 def test_wake_clears_a_sleeping_rule(ctx, react_rules):
     state = ctx.plugin_state[react]
-    until = plugins.sleep(ctx, "Lights off")
+    until = plugins.sleep(ctx, "Lights off", TRIGGER)
     assert until == NOW + timedelta(minutes=10)
     assert plugins.disabled_until(state, "Lights off", NOW) == until
-    plugins.wake(ctx, "Lights off")
+    plugins.wake(ctx, "Lights off", TRIGGER)
     assert not plugins.is_disabled(state, react_rules[0], NOW)
     assert plugins.disabled_until(state, "Lights off", NOW) is None
 
@@ -544,14 +556,14 @@ def test_sleep_endpoint_disables_every_rule_of_the_name_and_logs(flask_client, c
     assert plugins.is_disabled(state, react_rules[0], NOW) and plugins.is_disabled(state, react_rules[1], NOW)
     assert not plugins.is_disabled(state, react_rules[2], NOW)
     assert flask_client.get("/").get_json()["rules"][0]["sleeping_until"] == until.isoformat()
-    assert ctx.log.write.call_args.args[1] == "`Lights off` sleeping until 15:10"
+    assert ctx.log.write.call_args.args[0] == "`Lights off` sleeping until 15:10"
 
 
 def test_wake_endpoint_enables_the_rule_and_logs(flask_client, ctx, react_rules):
     ctx.plugin_state[react].disabled["Desk stops AC"] = NOW + timedelta(minutes=10)
     assert flask_client.get("/Desk%20stops%20AC/sleep?sleeping=0").get_json() == {"sleeping_until": None}
     assert not plugins.is_disabled(ctx.plugin_state[react], react_rules[3], NOW)
-    assert ctx.log.write.call_args.args[1] == "`Desk stops AC` awake"
+    assert ctx.log.write.call_args.args[0] == "`Desk stops AC` awake"
 
 
 def test_unknown_rule_is_a_404(flask_client):
@@ -609,10 +621,6 @@ def _make(devices, attribute, state, action, target=None, delay=None, cond=None)
         trigger = model.Transition(model.MqttDeviceSubject(source, attribute), state)
         watches.append(em.Watch(trigger, em.Rule((em.Step(cond, command),), name="rule"), span, model.COOLDOWN))
     return watches
-
-
-def _hub(id):
-    return m.Broker(id=id, source="hubitat")
 
 
 def _dewpoint_of(sensor):

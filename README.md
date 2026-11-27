@@ -348,7 +348,7 @@ restart.
 `uv sync --extra test --extra lint` installs `orc` and `orc_extras`
 editable, so the dev server runs your working tree and the sample config's
 plugin lines resolve against `extras/src` directly. Two entry points in
-`src/orc/runner.py` serve on `0.0.0.0:<port>`:
+`src/orc/interfaces/runner.py` serve on `0.0.0.0:<port>`:
 
 - `orc-dev` runs Flask's dev server, for development.
 - `orc` runs gunicorn, for production.

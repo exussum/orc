@@ -10,7 +10,7 @@ from orc_queue import Job
 import orc
 from orc import api, config
 from orc import model as m
-from orc.view import bp
+from orc.interfaces.web import bp
 
 MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
 ANDROID = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/128.0 Mobile Safari/537.36"}
@@ -56,14 +56,14 @@ def test_manifest_titles_the_remote_host(flask_client, host, title):
 
 
 def test_console_plugin(flask_client, ctx):
-    plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device, entry: None)
+    plugin = m.CallablePlugin(name="do-thing", module=m, func=lambda ctx, device, trigger, source: None)
     with (
         patch.object(config, "plugins", (plugin,)),
         patch("orc.plugins.execute_plugin") as exec_plugin,
     ):
         response = flask_client.get("/api/run/do-thing")
     assert response.status_code == 200
-    exec_plugin.assert_called_once_with(ctx, plugin, None, entry=ANY)
+    exec_plugin.assert_called_once_with(ctx, plugin, None, trigger=ANY)
 
 
 def test_console_schedule_routine(flask_client, command_dispatch):
@@ -71,7 +71,7 @@ def test_console_schedule_routine(flask_client, command_dispatch):
     with patch.object(config, "schedule_routines", {"r": rule}):
         flask_client.get("/api/run/r")
     command_dispatch.assert_called_once_with(
-        api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=True, entry=ANY
+        api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=True, trigger=ANY
     )
 
 
@@ -80,14 +80,14 @@ def test_console_ad_hoc(flask_client, config_ad_hoc, command_dispatch):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),))
     with config_ad_hoc({"r": action}, reset_config=reset):
         flask_client.get("/api/run/r")
-    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, trigger=ANY)
 
 
 def test_console_ad_hoc_no_reset(flask_client, config_ad_hoc, command_dispatch):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
     with config_ad_hoc({"r": action}):
         flask_client.get("/api/run/r")
-    command_dispatch.assert_called_once_with(api.squish(action.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(api.squish(action.commands), force=True, trigger=ANY)
 
 
 def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, config_ad_hoc, command_dispatch):
@@ -98,7 +98,7 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, 
         ctx.scheduler.once.call_args.args[0]()
     (queued,) = api.context().log.rows()
     assert [c.action for c in queued.children] == ["Running `r`"]
-    command_dispatch.assert_called_once_with(action.commands, force=True, entry=queued)
+    command_dispatch.assert_called_once_with(action.commands, force=True, trigger=queued.trigger)
 
 
 def test_console_ad_hoc_snapshot_skipped_for_web_callers(flask_client, ctx, config_ad_hoc, command_dispatch, light_capture):
@@ -108,7 +108,7 @@ def test_console_ad_hoc_snapshot_skipped_for_web_callers(flask_client, ctx, conf
         flask_client.get("/api/run/r")
     assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots()
     light_capture.assert_not_called()
-    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, trigger=ANY)
 
 
 def test_console_unknown_returns_404(flask_client, config_ad_hoc):
@@ -120,7 +120,7 @@ def test_console_unknown_returns_404(flask_client, config_ad_hoc):
 def test_room_on(flask_client, config_rooms, command_dispatch):
     config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
     flask_client.get("/api/room/Living Room?state=on")
-    command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, trigger=ANY)
 
 
 def test_room_off_turns_all_off(flask_client, config_rooms, command_dispatch):
@@ -143,7 +143,7 @@ def test_room_follow(flask_client, config_rooms, command_dispatch):
         em.Command(m.Devices(orc.Light.b), m.OFF),
         em.Command(m.Devices(orc.Light.a), m.ON),
     )
-    command_dispatch.assert_called_once_with(expected, force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(expected, force=True, trigger=ANY)
 
 
 def test_room_unknown_state_returns_400(flask_client, config_rooms):
@@ -161,13 +161,15 @@ def test_room_unknown_id_returns_404(flask_client, config_rooms, command_dispatc
 
 def test_set_theme_clear_passes_none_dates(flask_client, ctx, theme_change):
     flask_client.post("/api/schedule/theme", data={"theme": ""})
-    theme_change.assert_called_once_with("", None, None, m.Manual("theme"))
+    theme_change.assert_called_once_with("", None, None, ANY)
+    assert theme_change.call_args.args[3].name == "theme"
 
 
 def test_set_theme_set_parses_dates(flask_client, ctx, theme_change):
     theme = next(iter(orc.config.themes))
     flask_client.post("/api/schedule/theme", data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"})
-    theme_change.assert_called_once_with(theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
+    theme_change.assert_called_once_with(theme, date(2100, 1, 1), date(2100, 1, 10), ANY)
+    assert theme_change.call_args.args[3].name == theme
 
 
 def test_set_theme_rejects_unknown_theme(flask_client, ctx, theme_change):
@@ -294,15 +296,15 @@ def test_schedule_badges(flask_client, kwargs, present, present_badges, absent_b
 
 
 def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
-    trigger = m.Manual("bell")
-    with api.context().log.opened(api.context().log.write(m.LogSource.SYSTEM, "Walk in", trigger)):
-        api.context().log.write(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
+    trigger = m.Manual("bell", log_source=m.LogSource.SYSTEM)
+    with api.context().log.opened(api.context().log.write("Walk in", trigger)):
+        api.context().log.write("Nobody home", trigger, notification=m.Notification(("entrance",)))
     html = flask_client.get("/log/").get_data(as_text=True)
     assert html.count("🔔") == 2
 
 
 def test_log_page_links_a_line_before_its_action(flask_client):
-    api.context().log.write(m.LogSource.SYSTEM, "Standup", m.Manual("link"), link="/api/calendar/choose/?title=a")
+    api.context().log.write("Standup", m.Manual("link", log_source=m.LogSource.SYSTEM), link="/api/calendar/choose/?title=a")
     html = flask_client.get("/log/").get_data(as_text=True)
     assert (
         '<a href="/api/calendar/choose/?title=a">🔗</a>\n                            <div class="orc-log-action truncate min-w-0">Standup'
@@ -315,6 +317,15 @@ def test_system_page_adds_dewpoint_to_sensors(flask_client):
     with patch.object(api, "capture_sensors", return_value=[status]):
         html = flask_client.get("/system/").get_data(as_text=True)
     assert "dewpoint" in html and "62.0" in html
+
+
+@pytest.mark.time_machine(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False)
+def test_system_page_logs_holiday_failure(flask_client):
+    api.context().log.clear()
+    with patch.object(config.providers.holiday, "market_holiday", side_effect=ConnectionError("down")):
+        assert flask_client.get("/system/").status_code == 200
+    ((kind, name),) = {(type(e.trigger), e.trigger.name) for e in api.context().log.rows()}
+    assert (kind, name) == (m.Query, "theme")
 
 
 def test_system_page_lists_each_light(flask_client):
@@ -404,7 +415,7 @@ def test_system_jobs_show_each_date_once_with_a_run_button(flask_client):
         (day.replace(hour=2), "b", "Second", "", True),
         (day.replace(day=3), "c", "Third", "", False),
     ]
-    with patch("orc.view._scheduled_queues", return_value=[("adhoc", None, rows)]):
+    with patch("orc.interfaces.web._scheduled_queues", return_value=[("adhoc", None, rows)]):
         html = flask_client.get("/system/").get_data(as_text=True)
     assert html.count("Wednesday, January 2") == 1 and html.count("Thursday, January 3") == 1
     assert 'class="orc-btn orc-job-run w-8 h-8 p-0" data-queue="adhoc" data-id="b"' in html
