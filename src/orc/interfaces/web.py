@@ -295,7 +295,7 @@ def index() -> str:
         boxes=page_boxes,
         concave_corners=page_concave_corners,
         rooms=config.rooms,
-        last_run=app.orc.log.last,
+        last_run=app.orc.log.last_action,
         present=len(api.present_names()),
         lights_on=api.lights_on(),
         sounds_playing=api.sounds_playing(),

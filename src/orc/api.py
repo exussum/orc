@@ -310,15 +310,17 @@ def run_action(
             def run() -> None:
                 started = ctx.log.add(queued, trigger.log_source, display)
                 if id != ORC_SYSTEM_SNAPSHOT:
-                    ctx.log.last = started
-                action.fn(queued)
+                    ctx.log.last_action = started.action
+                with ctx.log.opened(queued):
+                    action.fn()
 
             ctx.scheduler.once(run, when, id=id, name=action.name, queue=m.Queue.ADHOC)
         else:
             entry = ctx.log.write(display, trigger)
             if id != ORC_SYSTEM_SNAPSHOT:
-                ctx.log.last = entry
-            action.fn(entry)
+                ctx.log.last_action = entry.action
+            with ctx.log.opened(entry):
+                action.fn()
     return True
 
 

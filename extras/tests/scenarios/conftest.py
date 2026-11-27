@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
 from unittest.mock import patch
+from uuid import NAMESPACE_OID, uuid5
 
 import pytest
 import time_machine
@@ -116,12 +117,19 @@ class House:
         self.ctx.scheduler.run_until(api.local_now(), self.frozen.move_to)
 
     @staticmethod
+    def like(trigger):
+        return trigger_key(trigger)
+
+    @staticmethod
     def broker(device):
         return TriggerKey(m.Broker, str(device.value), None)
 
     @staticmethod
     def log():
-        return [(entry.trigger, entry.action, [child.action for child in entry.children]) for entry in reversed(api.context().log.rows())]
+        return [
+            (trigger_key(entry.trigger), entry.action, [child.action for child in entry.children])
+            for entry in reversed(api.context().log.rows())
+        ]
 
 
 @pytest.fixture

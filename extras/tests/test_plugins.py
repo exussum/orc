@@ -175,8 +175,8 @@ def test_listener_home_alone_restores_pre_visit_state(config_sensor, nobody_home
 
 def test_people_home_win_over_the_listener(config_sensor, nobody_home_ctx):
     nobody_home_ctx.api.check_presence.return_value = {"alice", "Rex"}
-    entry = _cleanup(config_sensor, nobody_home_ctx)
-    assert [c.action for c in entry.children] == [config_sensor.message.log_present]
+    _cleanup(config_sensor, nobody_home_ctx)
+    assert _lines(nobody_home_ctx) == [config_sensor.message.log_present]
 
 
 def test_empty_house_shuts_down_snapshots_and_pushes(config_sensor, nobody_home_ctx):
@@ -197,8 +197,7 @@ def test_empty_house_shuts_down_snapshots_and_pushes(config_sensor, nobody_home_
 
 def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(config_sensor, nobody_home_ctx):
     entry = _cleanup(config_sensor, nobody_home_ctx, present_before={"Rex"})
-    assert [c.action for c in entry.children] == [config_sensor.message.log_shutdown]
-    nobody_home_ctx.log.write.assert_not_called()
+    assert nobody_home_ctx.log.write.call_args_list == [call(config_sensor.message.log_shutdown, entry.trigger)]
 
 
 @pytest.mark.parametrize(
@@ -211,8 +210,8 @@ def test_a_shutdown_after_a_tracked_person_left_is_not_pushed(config_sensor, nob
 )
 def test_door_state_drives_cleanup(config_sensor, nobody_home_ctx, contact, expected):
     _seed_devices(nobody_home_ctx, *([_door(contact)] if contact else []))
-    entry = _cleanup(config_sensor, nobody_home_ctx)
-    assert [c.action for c in entry.children] == [getattr(config_sensor.message, expected)]
+    _cleanup(config_sensor, nobody_home_ctx)
+    assert _lines(nobody_home_ctx) == [getattr(config_sensor.message, expected)]
 
 
 def test_setup_compiles_windows_and_registers_hooks(ctx, config_sensor):

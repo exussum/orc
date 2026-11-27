@@ -29,6 +29,7 @@ class Message:
     SOUND_TEST_TEXT: str = "Test"
 
     RULE_SKIPPED: str = "skipped: {detail}"
+    RULE_WEATHER: str = "weather: {triggers}"
     RULE_SUPPRESSED: str = "Suppressed by snapshot: {kinds}"
     DISPATCH_FAILED: str = "Dispatch failed for `{device}`: {exc}"
     VIRTUAL_DEVICE_SKIPPED: str = "Skipped `{device}`: virtual device, nothing to dispatch"
@@ -73,7 +74,7 @@ class Log:
         self._lock = threading.Lock()
         self._rows: deque[m.LogEntry] = deque(maxlen=self.SIZE)
         self._open_rows: list[m.LogEntry] = []
-        self.last: m.LogSubEntry | None = None
+        self.last_action: str | None = None
 
     def write(
         self,
@@ -86,10 +87,10 @@ class Log:
         now = self._now()
         source = trigger.log_source
         with self._lock:
+            line = m.LogSubEntry(now, trigger.log_source, action, notified=bool(notification), link=link)
             row = self._row_for(trigger, now)
             if row:
-                row.add(source, action, notified=bool(notification), link=link)
-                row.notified = row.notified or bool(notification)
+                row.children.append(line)
             else:
                 row = m.LogEntry(trigger, line)
                 self._rows.appendleft(row)
@@ -115,6 +116,15 @@ class Log:
         with self._lock:
             self._open_rows.remove(row)
 
+    def attach(self, row: m.LogEntry, trigger: m.Trigger) -> None:
+        with self._lock:
+            row.trigger_ids.add(trigger.id)
+
+    def recent_row(self, name: str) -> m.LogEntry | None:
+        now = self._now()
+        with self._lock:
+            return next((row for row in self._rows if row.trigger.name == name and now - row.touched < self.ROLLUP_WINDOW), None)
+
     @contextlib.contextmanager
     def opened(self, row: m.LogEntry) -> Iterator[None]:
         self.open_row(row)
@@ -130,4 +140,4 @@ class Log:
 
     def _row_for(self, trigger: m.Trigger, now: datetime) -> m.LogEntry | None:
         fresh = (row for row in self._rows if now - row.touched < self.ROLLUP_WINDOW)
-        return next((row for row in (*self._open_rows, *fresh) if row.trigger == trigger), None)
+        return next((row for row in (*self._open_rows, *fresh) if trigger.id in row.trigger_ids), None)

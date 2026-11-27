@@ -33,6 +33,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         previous = ctx.plugin_state[orc_extras.entrance_sensor]
         if previous:
             log_entry = previous.entry
+            ctx.log.attach(log_entry, trigger)
         else:
             log_entry = ctx.log.write(TRIGGER_MSG, replace(trigger, log_source=Log.ENTRANCE))
             ctx.log.open_row(log_entry)

@@ -9,11 +9,12 @@ from operator import eq
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, NewType, Protocol, Self
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from orc_engine import cast, engine
 from orc_engine import model as em
-from orc_queue import AnyJob, Job, JobQueue
+from orc_queue import AnyJob, Event, Job, JobQueue
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -280,16 +281,29 @@ class BatteryLevel(str, Enum):
             return cls.HIGH
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Trigger:
     name: str
-    log_source: LogSourceEnum = field(kw_only=True, compare=False)
+    log_source: LogSourceEnum = field(kw_only=True)
+    id: UUID = field(default_factory=uuid4, kw_only=True)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.id, UUID):
+            raise TypeError(f"Trigger id must be a UUID, not {type(self.id).__name__}")
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Trigger):
+            return NotImplemented
+        return self.id == other.id
+
+    def __hash__(self) -> int:
+        return hash(self.id)
 
     def __str__(self) -> str:
         return self.name
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Broker(Trigger):
     origin: str = ""
 
@@ -318,7 +332,7 @@ class Button(Trigger): ...
 class System(Trigger): ...
 
 
-@dataclass
+@dataclass(frozen=True)
 class LogSubEntry:
     timestamp: datetime
     source: LogSourceEnum
@@ -328,13 +342,20 @@ class LogSubEntry:
 
 
 @dataclass
-class LogEntry(LogSubEntry):
+class LogEntry:
+    """trigger_ids holds the ids of every trigger whose lines belong here: its own, plus any attached."""
+
     trigger: Trigger
+    head: LogSubEntry
     children: list[LogSubEntry] = field(default_factory=list)
-    touched: datetime = field(init=False)
+    trigger_ids: set[UUID] = field(init=False)
 
     def __post_init__(self) -> None:
-        self.touched = self.timestamp
+        self.trigger_ids = {self.trigger.id}
+
+    @property
+    def timestamp(self) -> datetime:
+        return self.head.timestamp
 
     @property
     def source(self) -> LogSourceEnum:

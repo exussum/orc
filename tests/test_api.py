@@ -1,6 +1,7 @@
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from unittest.mock import ANY, MagicMock, call, create_autospec, patch
+from uuid import UUID
 
 import pytest
 import time_machine
@@ -20,6 +21,7 @@ EXTERNAL_EVENT = m.Broker("external", origin="hubitat", log_source=m.LogSource.E
 NOTIFY = m.Manual("notify", log_source=m.LogSource.SYSTEM)
 TRIGGER = m.Query("test", log_source=m.LogSource.SYSTEM)
 PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
+X, Y = UUID(int=1), UUID(int=2)
 
 
 class Light(DeviceEnum):
@@ -754,7 +756,7 @@ class TestPresence:
         rule = self._routine("sunny-r", m.Weather(m.WeatherCondition.SUNNY))
         api.run_iot_job(m.IotJob(rule, "r"))
         command_dispatch.assert_not_called()
-        assert "nobody home" in api.context().log.rows()[0].action
+        assert any("nobody home" in c.action for c in api.context().log.rows()[0].children)
 
     def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
         api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)

@@ -182,7 +182,7 @@ def test_a_rescan_during_the_visit_logs_who_it_finds(house):
     house.press("/api/presence/run")
 
     assert house.log()[-1] == (
-        orc.m.Manual("presence", log_source=orc.m.LogSource.MANUAL),
+        house.like(orc.m.Manual("presence", log_source=orc.m.LogSource.MANUAL)),
         "Presence rescan",
         ["Presence lost: `Alice`", "Presence detected: `Alice`"],
     )
@@ -200,7 +200,7 @@ def test_an_expire_during_the_visit_logs_the_loss(house):
     house.press("/api/presence/Alice/expire")
 
     assert house.log()[-1] == (
-        orc.m.Manual("Alice", log_source=orc.m.LogSource.MANUAL),
+        house.like(orc.m.Manual("Alice", log_source=orc.m.LogSource.MANUAL)),
         "Presence expired: `Alice`",
         ["Presence lost: `Alice`"],
     )
@@ -214,7 +214,7 @@ def test_a_checkin_during_the_visit_logs_the_detection(house):
     house.press("/api/presence/Alice/checkin")
 
     assert house.log()[-1] == (
-        orc.m.Manual("Alice", log_source=orc.m.LogSource.MANUAL),
+        house.like(orc.m.Manual("Alice", log_source=orc.m.LogSource.MANUAL)),
         "Presence checked in: `Alice`",
         ["Presence detected: `Alice`"],
     )
