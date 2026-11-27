@@ -10,7 +10,7 @@ from orc_extras.calendar import api, plugins, web
 from orc_extras.calendar.api import EventDestination, RecentEvent
 from orc_extras.calendar.plugins import ALARM, WARNING, CalendarJob, address, link
 
-import orc.view
+import orc.interfaces.web
 from orc import model as m
 
 TZ = ZoneInfo("America/New_York")
@@ -191,8 +191,8 @@ def test_alarm_skipped_by_theme_is_not_recorded(ctx):
 
 @pytest.fixture
 def flask_client(ctx):
-    app = Flask(__name__, template_folder=str(Path(orc.view.__file__).parent / "templates"))
-    app.register_blueprint(orc.view.bp)
+    app = Flask(__name__, template_folder=str(Path(orc.interfaces.web.__file__).parent.parent / "templates"))
+    app.register_blueprint(orc.interfaces.web.bp)
     app.register_blueprint(web.choose, url_prefix="/api/calendar/choose")
     app.orc = ctx  # type: ignore[attr-defined]
     return app.test_client()

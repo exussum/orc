@@ -16,7 +16,7 @@ from orc.kernel.loader import load_plugin_config
 from orc.model import AppContext
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 CONFIG = "orc_extras/memleak"
 CRON_ID = "memleak-cron"

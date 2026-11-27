@@ -6,7 +6,7 @@ import orc_extras.react
 from orc_extras.react import plugins
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 react_bp = Blueprint("react", __name__)
 app = cast("OrcFlask", current_app)

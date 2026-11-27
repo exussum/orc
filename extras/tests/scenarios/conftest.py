@@ -16,8 +16,8 @@ from orc import model as m
 from orc.dal import broker, net, sqlite
 from orc.dal.mqtt import hubitat
 from orc.dal.scheduler import Scheduler
+from orc.interfaces.web import bp
 from orc.plugins import battery, buttons
-from orc.view import bp
 
 MONDAY_AFTERNOON = datetime(2026, 1, 5, 15, tzinfo=config.settings.tz)
 HUB = {

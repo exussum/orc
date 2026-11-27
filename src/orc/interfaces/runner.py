@@ -17,9 +17,9 @@ import orc as config
 from orc import _build, api
 from orc import model as m
 from orc.dal.scheduler import Scheduler
+from orc.interfaces.web import OrcFlask, bp
 from orc.kernel.loader import check_secrets
 from orc.log import Log, Message
-from orc.view import OrcFlask, bp
 
 
 @dataclass
@@ -146,7 +146,7 @@ def _build_app(boot: Boot) -> OrcFlask:
 
 
 def _build_flask(ctx: m.AppContext) -> OrcFlask:
-    app = OrcFlask(__name__)
+    app = OrcFlask("orc")
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
     app.orc = ctx

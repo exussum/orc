@@ -13,7 +13,7 @@ from orc_extras.lg_ac.dal.mqtt.thinq import SOURCE
 from orc_extras.lg_ac.model import LogSource
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 enroll = Blueprint("lg_ac", __name__)
 app = cast("OrcFlask", current_app)

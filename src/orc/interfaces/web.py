@@ -32,7 +32,7 @@ _GRID_WIDTH = 5
 _CODESPAN_RE = re.compile(r"`([^`]+)`")
 
 
-_MANIFEST = json.loads((Path(__file__).parent / "static" / "manifest.json").read_text())
+_MANIFEST = json.loads((Path(__file__).parent.parent / "static" / "manifest.json").read_text())
 
 
 _LINK_HOSTS = ("meet.google.com", "zoom.us", "teams.microsoft.com")
@@ -534,7 +534,7 @@ def _app_name() -> str:
 
 @cache
 def _hooks_bundle(scripts: tuple[tuple[str, Path], ...]) -> str:
-    static = Path(__file__).parent / "static"
+    static = Path(__file__).parent.parent / "static"
     gate = static / "hooks" / "are-you-sure.js"
     core = [gate, *(p for p in (static / "hooks").glob("*.js") if p != gate)]
     files = [(p.name, p) for p in core] + list(scripts)

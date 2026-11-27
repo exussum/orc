@@ -10,7 +10,7 @@ from orc_queue import Job
 import orc
 from orc import api, config
 from orc import model as m
-from orc.view import bp
+from orc.interfaces.web import bp
 
 MAC = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:130.0) Gecko/20100101 Firefox/130.0"}
 ANDROID = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/128.0 Mobile Safari/537.36"}
@@ -404,7 +404,7 @@ def test_system_jobs_show_each_date_once_with_a_run_button(flask_client):
         (day.replace(hour=2), "b", "Second", "", True),
         (day.replace(day=3), "c", "Third", "", False),
     ]
-    with patch("orc.view._scheduled_queues", return_value=[("adhoc", None, rows)]):
+    with patch("orc.interfaces.web._scheduled_queues", return_value=[("adhoc", None, rows)]):
         html = flask_client.get("/system/").get_data(as_text=True)
     assert html.count("Wednesday, January 2") == 1 and html.count("Thursday, January 3") == 1
     assert 'class="orc-btn orc-job-run w-8 h-8 p-0" data-queue="adhoc" data-id="b"' in html

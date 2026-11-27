@@ -11,7 +11,7 @@ from orc_extras.calendar.api import EventDestination
 from orc_extras.calendar.plugins import ALARM
 
 if TYPE_CHECKING:
-    from orc.view import OrcFlask
+    from orc.interfaces.web import OrcFlask
 
 choose = Blueprint("calendar", __name__, template_folder="templates")
 app = cast("OrcFlask", current_app)
