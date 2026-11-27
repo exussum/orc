@@ -56,7 +56,7 @@ class TestDispatchLGTV:
         self.lg_tv = LGTV.living_room
         self.webos = WebOS.living_room
         self.bl = BroadLink.living_room
-        self.entry = m.LogEntry(datetime.now(UTC), m.LogSource.MANUAL, "test", m.Manual("test"))
+        self.entry = m.LogEntry(datetime.now(UTC), m.LogSource.MANUAL, "test", m.Manual("test", log_source=m.LogSource.MANUAL))
 
     @pytest.fixture
     def webos_off(self):

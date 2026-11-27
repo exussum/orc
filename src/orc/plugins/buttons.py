@@ -18,7 +18,7 @@ def _on_event(ctx: m.AppContext, mapping: dict[tuple[Any, int, str], str], statu
     device, attribute, new = status.device, status.attribute, status.new
     action = mapping.get((device.id, new, attribute))
     if action is not None:
-        ctx.scheduler.now(_run_button, (action, m.Button(device.id)), name="Button", queue=m.Queue.ADHOC)
+        ctx.scheduler.now(_run_button, (action, m.Button(device.id, log_source=m.LogSource.EXTERNAL)), name="Button", queue=m.Queue.ADHOC)
 
 
 def _run_button(payload: tuple[str, m.Button], *, ctx: m.AppContext) -> None:

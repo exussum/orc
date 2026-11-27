@@ -26,7 +26,7 @@ from orc.dal.secrets import bws, keepass
 from orc.dal.weather import open_meteo
 from orc.model import BleKey, Query
 
-TRIGGER = Query("test")
+TRIGGER = Query("test", log_source=m.LogSource.SYSTEM)
 VAPID_PRIVATE_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE"
 VAPID_PUBLIC_KEY = "BGsX0fLhLEJH-Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"
 SUBSCRIPTION = m.PushSubscription("https://push.example/a", "public-key", "auth-secret")

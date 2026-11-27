@@ -108,6 +108,8 @@ def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old
         msg = (Msg.ONLINE if new else Msg.OFFLINE).format(name=name)
 
     if msg:
-        entry = ctx.log.write(m.LogSource.PLUGIN, msg, m.Broker(name=name, origin="yolink"), notification=notification)
+        entry = ctx.log.write(
+            m.LogSource.PLUGIN, msg, m.Broker(name=name, origin="yolink", log_source=m.LogSource.PLUGIN), notification=notification
+        )
         wet = kind == "leak" and new == plugins.STATE_WET
         api.alert(m.Alarm.EMERGENCY if wet else m.Alarm.ATTENTION, text=msg, entry=entry)

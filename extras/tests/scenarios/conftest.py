@@ -89,7 +89,7 @@ class House:
         self.reachable.discard(name)
 
     def scan(self):
-        api.check_presence(m.Query("lan"), m.LogSource.SYSTEM)
+        api.check_presence(m.Query("lan", log_source=m.LogSource.SYSTEM), m.LogSource.SYSTEM)
 
     def report(self, device, attribute, new):
         old = self.reported.get((device, attribute))
@@ -105,7 +105,7 @@ class House:
 
     @staticmethod
     def broker(device):
-        return m.Broker(name=str(device.value), origin="hubitat")
+        return m.Broker(name=str(device.value), origin="hubitat", log_source=m.LogSource.EXTERNAL)
 
     @staticmethod
     def log():

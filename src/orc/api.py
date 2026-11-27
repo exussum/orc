@@ -123,7 +123,13 @@ def push_public_key() -> str:
 def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> None:
     sqlite.insert_push_subscription(subscription)
     if greet:
-        notify(m.LogSource.SYSTEM, Message.PUSH_GREETING, m.Manual("notify"), m.Notification(("greeting",)), (subscription,))
+        notify(
+            m.LogSource.SYSTEM,
+            Message.PUSH_GREETING,
+            m.Manual("notify", log_source=m.LogSource.SYSTEM),
+            m.Notification(("greeting",)),
+            (subscription,),
+        )
 
 
 def unsubscribe_push(endpoint: str) -> None:
@@ -568,7 +574,9 @@ def get_schedule() -> list[tuple[datetime, m.ThemeEntry]]:
 
 
 def run_iot_job(payload: m.IotJob) -> None:
-    entry = context().log.write(m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.routine_id))
+    entry = context().log.write(
+        m.LogSource.ROUTINE, f"`{payload.rule.name}`", m.Scheduled(payload.routine_id, log_source=m.LogSource.ROUTINE)
+    )
     context().log.last = entry
     _run_schedule_routine(payload.rule, entry, present_names())
 
@@ -612,12 +620,16 @@ def setup_scheduler() -> None:
 
 
 def _log_expired(*, queue: Any, job: Any) -> None:
-    context().log.write(m.LogSource.SYSTEM, Message.TASK_EXPIRED.format(id=job.name or job.id), m.System("expired"))
+    context().log.write(
+        m.LogSource.SYSTEM, Message.TASK_EXPIRED.format(id=job.name or job.id), m.System("expired", log_source=m.LogSource.SYSTEM)
+    )
 
 
 def _log_cancelled(*, queue: Any, job: Any) -> None:
     if job.id in config.ad_hoc_routines:
-        context().log.write(m.LogSource.MANUAL, Message.TASK_CANCELLED.format(id=job.name or job.id), m.Manual(job.id))
+        context().log.write(
+            m.LogSource.MANUAL, Message.TASK_CANCELLED.format(id=job.name or job.id), m.Manual(job.id, log_source=m.LogSource.MANUAL)
+        )
 
 
 def has_presence(rule: m.Routine) -> bool:
@@ -740,7 +752,9 @@ def _base_theme(today: date) -> str:
     try:
         holiday = config.providers.holiday.market_holiday(today)
     except (OSError, RuntimeError, ValueError, KeyError) as exc:  # request failures, the feed's error payload, malformed json or entries
-        context().log.write(m.LogSource.SYSTEM, Message.HOLIDAY_CHECK_FAILED.format(day=today, exc=exc), m.System("holiday"))
+        context().log.write(
+            m.LogSource.SYSTEM, Message.HOLIDAY_CHECK_FAILED.format(day=today, exc=exc), m.System("holiday", log_source=m.LogSource.SYSTEM)
+        )
         return m.THEME_WORK_DAY
     return m.THEME_DAY_OFF if holiday else m.THEME_WORK_DAY
 
@@ -882,7 +896,9 @@ def _push_job(payload: tuple[str, str, m.Notification, m.Trigger, tuple[m.PushSu
 def _log_external(status: m.Status) -> None:
     if status.source is m.Source.EXTERNAL:
         line = Message.EXTERNAL_CHANGE.format(device=status.device.name, attribute=status.attribute, old=status.old, new=status.new)
-        context().log.write(m.LogSource.EXTERNAL, line, m.Broker(name="external", origin=status.device.source))
+        context().log.write(
+            m.LogSource.EXTERNAL, line, m.Broker(name="external", origin=status.device.source, log_source=m.LogSource.EXTERNAL)
+        )
 
 
 def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
@@ -915,7 +931,7 @@ def _presence_cutoff() -> datetime:
 
 
 def _presence_cron_job(ctx: m.AppContext) -> set[str]:
-    return check_presence(m.Cron("presence"), m.LogSource.SYSTEM)
+    return check_presence(m.Cron("presence", log_source=m.LogSource.SYSTEM), m.LogSource.SYSTEM)
 
 
 def _key_summary(key: m.BleKey) -> str:
@@ -928,7 +944,7 @@ def _refresh_tag_keys_job(payload: m.Trigger, *, ctx: m.AppContext) -> None:
 
 
 def _tag_keys_cron_job(ctx: m.AppContext) -> None:
-    refresh_tag_keys(m.Cron("findhub"))
+    refresh_tag_keys(m.Cron("findhub", log_source=m.LogSource.SYSTEM))
 
 
 def _retry_stats_job() -> None:

@@ -45,7 +45,7 @@ def ctx(ctx, frozen_clock):
     ctx.config.people = (m.Person("Rex", ()),)
     ctx.config.tags = []
     ctx.config.plugin_configs = plugin_config(entrance_sensor, "entrance_sensor")
-    ctx.log.write.return_value = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
+    ctx.log.write.return_value = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test", log_source=m.LogSource.MANUAL))
     ctx.plugin_state = {entrance_sensor: None}
     ctx.config.ad_hoc_routines = {
         "AD_HOC_LIGHTS_OFF": m.AdhocAction((_cmd(Light.day_bulb, m.OFF), _cmd(Light.night_bulb, m.OFF)), name="Lights Off", reset=False),
@@ -134,10 +134,12 @@ def test_before_set_is_captured_once(ctx, config_sensor):
 
 def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
     ctx.plugin_state = {entrance_sensor: None}
-    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
+    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test", log_source=m.LogSource.MANUAL))
     ctx.log.write.return_value = entry
     _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.log.write.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(name="16", origin="hubitat"))
+    ctx.log.write.assert_called_once_with(
+        plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(name="16", origin="hubitat", log_source=m.LogSource.EXTERNAL)
+    )
     assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
 
@@ -270,7 +272,7 @@ def _no_world(subject):
 
 
 def _cleanup(config_sensor, nobody_home_ctx, present_before=()):
-    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test"))
+    entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, "Entrance sensor triggered", m.Manual("test", log_source=m.LogSource.MANUAL))
     nobody_home_ctx.plugin_state = {entrance_sensor: plugins.Visit(entry, set(present_before))}
     plugins._run_trigger_sensor_off((config_sensor, entry), ctx=nobody_home_ctx)
     return entry

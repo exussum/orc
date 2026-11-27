@@ -16,7 +16,7 @@ from orc.log import Log
 from orc.model import DeviceEnum
 
 FUTURE = datetime(2100, 1, 1, tzinfo=config.settings.tz)
-TRIGGER = m.Query("test")
+TRIGGER = m.Query("test", log_source=m.LogSource.SYSTEM)
 PAST = datetime(2000, 1, 1, tzinfo=config.settings.tz)
 
 
@@ -201,7 +201,7 @@ def test_button_ad_hoc_snapshot(ctx, config_ad_hoc, command_dispatch):
         patch.object(api, "capture_lights", return_value=captured),
         patch.object(api, "capture_sounds", return_value=()),
     ):
-        api.run_action("r", m.Button("1"), source=m.LogSource.EXTERNAL)
+        api.run_action("r", m.Button("1", log_source=m.LogSource.EXTERNAL), source=m.LogSource.EXTERNAL)
     snap = ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT]
     assert snap.routine == captured
     assert snap.end > api.local_now()
@@ -218,7 +218,7 @@ def test_button_ad_hoc_snapshot_pauses_chromecasts_and_captures_them(ctx, config
         patch.object(api, "capture_lights", return_value=lights),
         patch.object(api, "capture_sounds", return_value=devices),
     ):
-        api.run_action("r", m.Button("1"), source=m.LogSource.EXTERNAL)
+        api.run_action("r", m.Button("1", log_source=m.LogSource.EXTERNAL), source=m.LogSource.EXTERNAL)
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine == (*lights, *devices)
     command_dispatch.assert_called_once_with((action.commands[0], em.Command(cast, m.PAUSE)), force=True, entry=ANY)
 
@@ -282,7 +282,7 @@ def test_button_ad_hoc_snapshot_does_not_stack(ctx, config_ad_hoc, command_dispa
     snap = m.SnapShot(routine=existing, end=api.local_now() + timedelta(hours=1))
     ctx.engine.save_snapshot(api.ORC_SYSTEM_SNAPSHOT, snap)
     with config_ad_hoc({"r": action}, reset_config=reset):
-        api.run_action("r", m.Button("1"), source=m.LogSource.EXTERNAL)
+        api.run_action("r", m.Button("1", log_source=m.LogSource.EXTERNAL), source=m.LogSource.EXTERNAL)
     # Existing snapshot is preserved (not popped, not overwritten) and no new one is taken.
     assert ctx.engine.snapshots()[api.ORC_SYSTEM_SNAPSHOT].routine is existing
     light_capture.assert_not_called()
@@ -376,7 +376,7 @@ class TestRefreshTagKeys:
 
     def test_a_new_key_reaches_the_row_and_the_listener(self):
         with patch.object(net.presence, "set_key") as set_key:
-            api.refresh_tag_keys(m.Manual("secrets"))
+            api.refresh_tag_keys(m.Manual("secrets", log_source=m.LogSource.MANUAL))
         key = m.BleKey(b"Alice Tag".ljust(32, b"\0"), 0)
         assert sqlite.fetch_tags() == [m.Tag("Alice", key, None)]
         set_key.assert_called_once_with("Alice", key)
@@ -385,23 +385,23 @@ class TestRefreshTagKeys:
         ]
 
     def test_an_unchanged_key_is_silent(self):
-        api.refresh_tag_keys(m.Manual("secrets"))
+        api.refresh_tag_keys(m.Manual("secrets", log_source=m.LogSource.MANUAL))
         api.context().log.clear()
-        api.refresh_tag_keys(m.Manual("secrets"))
+        api.refresh_tag_keys(m.Manual("secrets", log_source=m.LogSource.MANUAL))
         assert api.context().log.rows() == []
 
     def test_a_moved_pairing_date_keeps_the_stored_key(self, monkeypatch):
-        api.refresh_tag_keys(m.Manual("secrets"))
+        api.refresh_tag_keys(m.Manual("secrets", log_source=m.LogSource.MANUAL))
         api.context().log.clear()
         key = m.BleKey(b"Alice Tag".ljust(32, b"\0"), 0)
         monkeypatch.setattr(findhub_stub, "identity_key", lambda device: m.BleKey(key.eik, 8293))
-        api.refresh_tag_keys(m.Manual("secrets"))
+        api.refresh_tag_keys(m.Manual("secrets", log_source=m.LogSource.MANUAL))
         assert sqlite.fetch_tags() == [m.Tag("Alice", key, None)]
         assert api.context().log.rows() == []
 
     def test_a_failed_lookup_logs_and_keeps_going(self, monkeypatch):
         monkeypatch.setattr(findhub_stub, "identity_key", MagicMock(side_effect=RuntimeError("boom")))
-        api.refresh_tag_keys(m.Manual("secrets"))
+        api.refresh_tag_keys(m.Manual("secrets", log_source=m.LogSource.MANUAL))
         assert sqlite.fetch_tags() == []
         assert [e.action for e in api.context().log.rows()] == ["Find Hub lookup failed for `Alice`: boom"]
 
@@ -412,26 +412,26 @@ class TestLog:
         api.context().log.clear()
 
     def test_an_equal_trigger_within_the_window_nests(self):
-        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        api.context().log.write(m.LogSource.PLUGIN, "second", m.Integration("x"))
+        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
+        api.context().log.write(m.LogSource.PLUGIN, "second", m.Integration("x", log_source=m.LogSource.PLUGIN))
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [("first", ["second"])]
 
     def test_an_equal_trigger_after_the_window_starts_its_own_entry(self):
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
-            api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
+            api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
             frozen.shift(Log.ROLLUP_WINDOW)
-            api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x"))
+            api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x", log_source=m.LogSource.PLUGIN))
         assert [(e.action, e.children) for e in api.context().log.rows()] == [("later", []), ("first", [])]
 
     def test_an_open_entry_takes_an_equal_trigger_until_it_closes(self):
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False) as frozen:
-            entry = api.context().log.write(m.LogSource.SYSTEM, "first", m.Integration("x"))
+            entry = api.context().log.write(m.LogSource.SYSTEM, "first", m.Integration("x", log_source=m.LogSource.SYSTEM))
             with api.context().log.opened(entry):
                 frozen.shift(timedelta(hours=1))
-                api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x"))
-                api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y"))
+                api.context().log.write(m.LogSource.PLUGIN, "later", m.Integration("x", log_source=m.LogSource.PLUGIN))
+                api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y", log_source=m.LogSource.PLUGIN))
             frozen.shift(timedelta(hours=1))
-            api.context().log.write(m.LogSource.PLUGIN, "closed", m.Integration("x"))
+            api.context().log.write(m.LogSource.PLUGIN, "closed", m.Integration("x", log_source=m.LogSource.PLUGIN))
         assert [(e.action, [c.action for c in e.children]) for e in api.context().log.rows()] == [
             ("closed", []),
             ("other", []),
@@ -451,30 +451,35 @@ class TestLog:
         ]
 
     def test_a_different_trigger_starts_its_own_entry(self):
-        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
-        api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y"))
+        api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
+        api.context().log.write(m.LogSource.PLUGIN, "other", m.Integration("y", log_source=m.LogSource.PLUGIN))
         entries = api.context().log.rows()
         assert [e.action for e in entries] == ["other", "first"]
         assert entries[0].children == []
 
     def test_a_nested_line_still_notifies(self):
-        entry = api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x"))
+        entry = api.context().log.write(m.LogSource.PLUGIN, "first", m.Integration("x", log_source=m.LogSource.PLUGIN))
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False), api.context().log.opened(entry):
             api.context().log.write(
-                m.LogSource.PLUGIN, "later `x`", m.Integration("x"), notification=m.Notification(("calendar", "dentist"))
+                m.LogSource.PLUGIN,
+                "later `x`",
+                m.Integration("x", log_source=m.LogSource.PLUGIN),
+                notification=m.Notification(("calendar", "dentist")),
             )
         assert api._ctx.scheduler.now.call_args.args[1] == (
             "[Plugin 01/05]",
             "later x",
             m.Notification(("calendar", "dentist")),
-            m.Integration("x"),
+            m.Integration("x", log_source=m.LogSource.PLUGIN),
             None,
         )
 
     def test_a_link_rides_the_push_as_given(self):
         notification = m.Notification(("calendar",), "https://meet.google.com/abc?x=1")
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False):
-            api.context().log.write(m.LogSource.PLUGIN, "standup", m.Integration("x"), notification=notification)
+            api.context().log.write(
+                m.LogSource.PLUGIN, "standup", m.Integration("x", log_source=m.LogSource.PLUGIN), notification=notification
+            )
         assert api._ctx.scheduler.now.call_args.args[1][2] == notification
 
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider, push_subscriptions):
@@ -488,7 +493,7 @@ class TestLog:
             "[System 01/05]",
             "Notifications enabled on this device",
             m.Notification(("greeting",)),
-            m.Manual("notify"),
+            m.Manual("notify", log_source=m.LogSource.MANUAL),
             (push_subscriptions[1],),
         )
         assert set(sqlite.fetch_push_subscriptions()) == set(push_subscriptions)
@@ -505,7 +510,12 @@ class TestLog:
         for subscription in push_subscriptions:
             api.subscribe_push(subscription)
         push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
-        entry = api.context().log.write(m.LogSource.PLUGIN, "Leak at `kitchen`", m.Integration("x"), notification=m.Notification(("leak",)))
+        entry = api.context().log.write(
+            m.LogSource.PLUGIN,
+            "Leak at `kitchen`",
+            m.Integration("x", log_source=m.LogSource.PLUGIN),
+            notification=m.Notification(("leak",)),
+        )
         api._push_job(("[Plugin 01/05]", "Leak at kitchen", "leak", entry.trigger, None), ctx=api._ctx)
         assert push_provider.send.call_args_list == [call(s, "[Plugin 01/05]", "Leak at kitchen", "leak") for s in push_subscriptions]
         assert set(sqlite.fetch_push_subscriptions()) == {push_subscriptions[0], push_subscriptions[2]}

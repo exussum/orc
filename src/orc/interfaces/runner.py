@@ -104,7 +104,7 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     if boot.entry is None:
-        boot.entry, boot.started = boot.log.write(m.LogSource.SYSTEM, Message.BOOT, m.System("boot")), start
+        boot.entry, boot.started = boot.log.write(m.LogSource.SYSTEM, Message.BOOT, m.System("boot", log_source=m.LogSource.SYSTEM)), start
     boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
 
 
@@ -124,9 +124,9 @@ def _start_services(ctx: m.AppContext, boot: Boot) -> None:
     with step("scheduler resume"):
         ctx.scheduler.resume()
     with step("presence check"):
-        api.schedule_presence_check(m.Cron("presence"))
+        api.schedule_presence_check(m.Cron("presence", log_source=m.LogSource.SYSTEM))
     with step("tag key check"):
-        api.schedule_tag_key_refresh(m.Cron("findhub"))
+        api.schedule_tag_key_refresh(m.Cron("findhub", log_source=m.LogSource.SYSTEM))
     assert boot.entry is not None and boot.started is not None
     boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_TOTAL.format(seconds=f"{time.perf_counter() - boot.started:.1f}"))
     print(f"{api.local_now().isoformat()}: ORC Started", file=sys.stderr, flush=True)

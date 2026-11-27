@@ -283,6 +283,7 @@ class BatteryLevel(str, Enum):
 @dataclass(frozen=True)
 class Trigger:
     name: str
+    log_source: LogSourceEnum = field(kw_only=True, compare=False)
 
     def __str__(self) -> str:
         return self.name

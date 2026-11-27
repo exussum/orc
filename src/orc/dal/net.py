@@ -160,7 +160,7 @@ class Presence:
                 self._frames[person] = now
                 self._frame_seen.notify_all()
             if not self._paused:
-                self.mark([person], now, m.Query("ble"), self._ble_source)
+                self.mark([person], now, m.Query("ble", log_source=self._ble_source), self._ble_source)
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._tz)

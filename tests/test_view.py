@@ -161,13 +161,13 @@ def test_room_unknown_id_returns_404(flask_client, config_rooms, command_dispatc
 
 def test_set_theme_clear_passes_none_dates(flask_client, ctx, theme_change):
     flask_client.post("/api/schedule/theme", data={"theme": ""})
-    theme_change.assert_called_once_with("", None, None, m.Manual("theme"))
+    theme_change.assert_called_once_with("", None, None, m.Manual("theme", log_source=m.LogSource.MANUAL))
 
 
 def test_set_theme_set_parses_dates(flask_client, ctx, theme_change):
     theme = next(iter(orc.config.themes))
     flask_client.post("/api/schedule/theme", data={"theme": theme, "start": "2100-01-01", "end": "2100-01-10"})
-    theme_change.assert_called_once_with(theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme))
+    theme_change.assert_called_once_with(theme, date(2100, 1, 1), date(2100, 1, 10), m.Manual(theme, log_source=m.LogSource.MANUAL))
 
 
 def test_set_theme_rejects_unknown_theme(flask_client, ctx, theme_change):
@@ -294,7 +294,7 @@ def test_schedule_badges(flask_client, kwargs, present, present_badges, absent_b
 
 
 def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
-    trigger = m.Manual("bell")
+    trigger = m.Manual("bell", log_source=m.LogSource.MANUAL)
     with api.context().log.opened(api.context().log.write(m.LogSource.SYSTEM, "Walk in", trigger)):
         api.context().log.write(m.LogSource.SYSTEM, "Nobody home", trigger, notification=m.Notification(("entrance",)))
     html = flask_client.get("/log/").get_data(as_text=True)
@@ -302,7 +302,9 @@ def test_log_page_bells_a_notifying_line_and_its_parent(flask_client):
 
 
 def test_log_page_links_a_line_before_its_action(flask_client):
-    api.context().log.write(m.LogSource.SYSTEM, "Standup", m.Manual("link"), link="/api/calendar/choose/?title=a")
+    api.context().log.write(
+        m.LogSource.SYSTEM, "Standup", m.Manual("link", log_source=m.LogSource.SYSTEM), link="/api/calendar/choose/?title=a"
+    )
     html = flask_client.get("/log/").get_data(as_text=True)
     assert (
         '<a href="/api/calendar/choose/?title=a">🔗</a>\n                            <div class="orc-log-action truncate min-w-0">Standup'

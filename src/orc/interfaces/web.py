@@ -255,7 +255,9 @@ def device() -> str:
 @bp.route("/api/run/<id>")
 def run_routine(id: str) -> dict[str, Any]:
     skip_delay = request.args.get("skip_delay") == "1"
-    if not api.run_action(id, m.Manual(id), source=m.LogSource.MANUAL, device=request.args.get("device"), skip_delay=skip_delay):
+    if not api.run_action(
+        id, m.Manual(id, log_source=m.LogSource.MANUAL), source=m.LogSource.MANUAL, device=request.args.get("device"), skip_delay=skip_delay
+    ):
         abort(404, "Unknown routine")
     queued = _queued_runs().get(id)
     return {"queued": queued._asdict() if queued else None}
@@ -263,7 +265,7 @@ def run_routine(id: str) -> dict[str, Any]:
 
 @bp.route("/api/presence/<name>/checkin")
 def checkin_presence(name: str) -> dict[str, Any]:
-    trigger = m.Manual(_person(name))
+    trigger = m.Manual(_person(name), log_source=m.LogSource.MANUAL)
     with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_CHECKED_IN.format(name=name), trigger)):
         api.mark_present([name], api.local_now() + timedelta(hours=config.settings.checkin_hours), trigger, m.LogSource.MANUAL, forced=True)
     return {}
@@ -271,7 +273,7 @@ def checkin_presence(name: str) -> dict[str, Any]:
 
 @bp.route("/api/presence/<name>/expire")
 def expire_presence(name: str) -> dict[str, Any]:
-    trigger = m.Manual(_person(name))
+    trigger = m.Manual(_person(name), log_source=m.LogSource.MANUAL)
     with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_EXPIRED.format(name=name), trigger)):
         api.expire_presence([name], trigger, m.LogSource.MANUAL, force=True)
     return {}
@@ -393,7 +395,9 @@ def device_api(kind: str, name: str) -> dict[str, Any]:
     else:
         what = Message.DEVICE_SET_LEVEL.format(level=value)
     id = str(device)
-    entry = app.orc.log.write(m.LogSource.MANUAL, Message.DEVICE_SET.format(name=device.label, what=what), m.Manual(id))
+    entry = app.orc.log.write(
+        m.LogSource.MANUAL, Message.DEVICE_SET.format(name=device.label, what=what), m.Manual(id, log_source=m.LogSource.MANUAL)
+    )
     api.dispatch((em.Command(m.Devices(device), value),), force=True, entry=entry)
     return {}
 
@@ -404,7 +408,7 @@ def room(id: str) -> dict[str, Any]:
         abort(404, "Unknown room")
     elif (state := request.args.get("state")) not in (m.ON, m.OFF, m.FOLLOW):
         abort(400, f"Unknown room state: {state}")
-    api.run_room(id, state, m.Manual(id))
+    api.run_room(id, state, m.Manual(id, log_source=m.LogSource.MANUAL))
     return {}
 
 
@@ -415,7 +419,7 @@ def presence_state() -> dict[str, Any]:
 
 @bp.route("/api/presence/run")
 def run_presence_check() -> dict[str, Any]:
-    trigger = m.Manual("presence")
+    trigger = m.Manual("presence", log_source=m.LogSource.MANUAL)
     with app.orc.log.opened(app.orc.log.write(m.LogSource.MANUAL, Message.PRESENCE_RESCAN, trigger)):
         api.rescan_presence(trigger)
     return {}
@@ -466,14 +470,14 @@ def set_theme() -> dict[str, Any]:
             abort(400, "Start and end must be dates")
         if start > end:
             abort(400, "Start must not be after end")
-    api.apply_theme_change(name, start, end, m.Manual(name or "theme"))
+    api.apply_theme_change(name, start, end, m.Manual(name or "theme", log_source=m.LogSource.MANUAL))
     return {}
 
 
 @bp.route("/api/announce", methods=["POST"])
 def announce() -> dict[str, Any]:
     text = request.form["text"]
-    entry = app.orc.log.write(m.LogSource.MANUAL, Message.ANNOUNCE.format(text=text), m.Manual("announce"))
+    entry = app.orc.log.write(m.LogSource.MANUAL, Message.ANNOUNCE.format(text=text), m.Manual("announce", log_source=m.LogSource.MANUAL))
     api.alert(m.Alarm.WARNING, text=text, entry=entry)
     return {}
 

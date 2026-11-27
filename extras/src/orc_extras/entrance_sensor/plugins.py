@@ -33,7 +33,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         if previous:
             log_entry = previous.entry
         else:
-            log_entry = ctx.log.write(Log.ENTRANCE, TRIGGER_MSG, m.Broker(name=device.id, origin=device.source))
+            log_entry = ctx.log.write(Log.ENTRANCE, TRIGGER_MSG, m.Broker(name=device.id, origin=device.source, log_source=Log.ENTRANCE))
             ctx.log.open_row(log_entry)
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
             log_entry, previous.present_before if previous else set(ctx.api.present_names())

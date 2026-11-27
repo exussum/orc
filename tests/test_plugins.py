@@ -38,11 +38,13 @@ class TestButtons:
             on_button(self._held(orc.Light.a.value))
         action_run.assert_not_called()
         func, payload = now.call_args[0]
-        assert payload == ("TV Lights", m.Button(str(orc.Light.a.value)))
+        assert payload == ("TV Lights", m.Button(str(orc.Light.a.value), log_source=m.LogSource.EXTERNAL))
         assert now.call_args[1]["queue"] == m.Queue.ADHOC
         action_run.return_value = True
         func(payload, ctx=ctx)
-        action_run.assert_called_once_with("TV Lights", m.Button(str(orc.Light.a.value)), source=m.LogSource.EXTERNAL)
+        action_run.assert_called_once_with(
+            "TV Lights", m.Button(str(orc.Light.a.value), log_source=m.LogSource.EXTERNAL), source=m.LogSource.EXTERNAL
+        )
 
     def test_unmapped_event_is_ignored(self, ctx, action_run):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))
@@ -57,7 +59,7 @@ class TestButtons:
     def test_unknown_action_logs(self, ctx, action_run, log_call):
         action_run.return_value = False
         with patch.object(api, "alert"):
-            buttons._run_button(("No Such Routine", m.Button("1")), ctx=ctx)
+            buttons._run_button(("No Such Routine", m.Button("1", log_source=m.LogSource.EXTERNAL)), ctx=ctx)
         log_call.assert_called_once()
         assert "No Such Routine" in log_call.call_args[0][1]
 
@@ -75,7 +77,7 @@ class TestBattery:
             log_call.assert_called_once_with(
                 m.LogSource.SYSTEM,
                 "Low battery on `front door` (CRITICAL)",
-                m.Broker(name="16", origin="hubitat"),
+                m.Broker(name="16", origin="hubitat", log_source=m.LogSource.EXTERNAL),
                 notification=m.Notification(("battery", "front door"), "/device/"),
             )
         else:
