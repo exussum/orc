@@ -17,7 +17,7 @@ def test_yolink_registers_with_core():
 
 def test_simulate_transition_unknown_sensor_returns_false(ctx):
     ctx.plugin_state = {yolink: yolink.plugins.states_for(())}
-    assert yolink.plugins.simulate_transition(ctx, "no-such-sensor", MagicMock()) is False
+    assert yolink.plugins.simulate_transition(ctx, "no-such-sensor", MagicMock(), EVENT) is False
 
 
 @pytest.mark.parametrize(("data", "battery"), [({"state": "alert"}, None), ({"state": "alert", "battery": 4}, m.BatteryLevel.HIGH)])

@@ -15,7 +15,7 @@ def setup(ctx: m.AppContext) -> None:
     ctx.api.add_listener(partial(_on_event, ctx, mapping))
 
 
-def _on_event(ctx: m.AppContext, mapping: dict[tuple[Any, int, str], str], status: m.Status) -> None:
+def _on_event(ctx: m.AppContext, mapping: dict[tuple[Any, int, str], str], status: m.Status, trigger: m.Trigger) -> None:
     device, attribute, new = status.device, status.attribute, status.new
     action = mapping.get((device.id, new, attribute))
     if action is not None:

@@ -287,7 +287,7 @@ def _cleanup(config_sensor, nobody_home_ctx, present_before=()):
     return entry
 
 
-def _trigger_sensor(ctx, config_sensor, device_id, event):
+def _trigger_sensor(ctx, config_sensor, device_id, event, trigger=None):
     old = "inactive" if event == "active" else "active"
     name = "front door motion sensor" if device_id == "16" else f"device {device_id}"
     plugins._on_event(

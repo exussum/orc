@@ -4,8 +4,8 @@ from typing import Any, Protocol, runtime_checkable
 from orc import model as m
 
 # on_connection receives raw connect/disconnect events; flap suppression is the caller's job
-type ConnectionCallback = Callable[[bool], None]
-type ReportCallback = Callable[[str, dict[str, Any]], None]
+type ConnectionCallback = Callable[[bool, m.Trigger], None]
+type ReportCallback = Callable[[str, dict[str, Any], m.Trigger], None]
 
 
 class Session(Protocol):

@@ -485,9 +485,9 @@ class TestLog:
 
     def test_a_greeted_subscription_is_pushed_alone(self, push_provider, push_subscriptions):
         push_subscriptions = push_subscriptions("ab")
-        api.subscribe_push(push_subscriptions[0])
+        api.subscribe_push(push_subscriptions[0], NOTIFY)
         with time_machine.travel(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False):
-            api.subscribe_push(push_subscriptions[1], greet=True)
+            api.subscribe_push(push_subscriptions[1], NOTIFY, greet=True)
         now = api._ctx.scheduler.now
         assert now.call_args.args[0] is api._push_job
         assert now.call_args.args[1] == (
@@ -502,14 +502,14 @@ class TestLog:
     def test_unsubscribing_drops_only_that_endpoint(self, push_subscriptions):
         push_subscriptions = push_subscriptions("ab")
         for subscription in push_subscriptions:
-            api.subscribe_push(subscription)
+            api.subscribe_push(subscription, NOTIFY)
         api.unsubscribe_push(push_subscriptions[0].endpoint)
         assert sqlite.fetch_push_subscriptions() == [push_subscriptions[1]]
 
     def test_a_push_reaches_every_subscription_and_drops_gone_ones(self, push_provider, push_subscriptions):
         push_subscriptions = push_subscriptions("abc")
         for subscription in push_subscriptions:
-            api.subscribe_push(subscription)
+            api.subscribe_push(subscription, NOTIFY)
         push_provider.send.side_effect = [None, push.Gone("b"), RuntimeError("boom")]
         entry = api.context().log.write(
             "Leak at `kitchen`", m.Integration("x", id=X, log_source=m.LogSource.PLUGIN), notification=m.Notification(("leak",))

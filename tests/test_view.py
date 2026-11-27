@@ -319,6 +319,15 @@ def test_system_page_adds_dewpoint_to_sensors(flask_client):
     assert "dewpoint" in html and "62.0" in html
 
 
+@pytest.mark.time_machine(datetime(2026, 1, 5, 12, tzinfo=config.settings.tz), tick=False)
+def test_system_page_logs_holiday_failure(flask_client):
+    api.context().log.clear()
+    with patch.object(config.providers.holiday, "market_holiday", side_effect=ConnectionError("down")):
+        assert flask_client.get("/system/").status_code == 200
+    ((kind, name),) = {(type(e.trigger), e.trigger.name) for e in api.context().log.rows()}
+    assert (kind, name) == (m.Query, "theme")
+
+
 def test_system_page_lists_each_light(flask_client):
     response = flask_client.get("/system/")
     assert response.status_code == 200

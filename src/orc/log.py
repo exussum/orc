@@ -85,7 +85,6 @@ class Log:
         link: str | None = None,
     ) -> m.LogEntry:
         now = self._now()
-        source = trigger.log_source
         with self._lock:
             line = m.LogSubEntry(now, trigger.log_source, action, notified=bool(notification), link=link)
             row = self._row_for(trigger, now)

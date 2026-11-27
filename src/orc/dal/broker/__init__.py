@@ -7,6 +7,7 @@ The ``adapter`` provider is registered at boot; plugins register theirs during s
 import json
 import logging
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from orc import model as m
@@ -43,7 +44,7 @@ def adapter_for(device: m.DeviceEnum) -> "Adapter":
     return adapter
 
 
-def receive(topic: str, payload: bytes) -> None:
+def receive(topic: str, payload: bytes, trigger: m.Broker) -> None:
     namespace = topic.split("/", 1)[0]
     adapter = next((c for c in adapters if namespace in c.namespaces), None)
     if adapter is None:

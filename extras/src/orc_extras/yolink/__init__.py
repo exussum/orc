@@ -79,7 +79,7 @@ def declare(declarations: Any) -> None:
     )
 
 
-def _on_transition(ctx: AppContext, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
+def _on_transition(ctx: AppContext, trigger: m.Trigger, name: str, kind: plugins.TransitionKind, old: Any, new: Any) -> None:
     api = ctx.api
     msg = None
     notification: m.Notification | None = m.Notification(("yolink", name))

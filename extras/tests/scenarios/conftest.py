@@ -108,7 +108,7 @@ class House:
         state = m.DeviceState(m.Device(device.value, device.label, "hubitat"), {attribute: new}, None)
         trigger = m.Broker(str(device.value), origin="hubitat", id=uuid5(NAMESPACE_OID, str(device.value)), log_source=m.LogSource.EXTERNAL)
         for listener in self.listeners:
-            listener(m.Status(state.device, attribute, old, new, hubitat.HubitatSource.HUBITAT))
+            listener(m.Status(state.device, attribute, old, new, hubitat.HubitatSource.HUBITAT), trigger)
         self.reported[(device, attribute)] = new
         self.ctx.scheduler.run_until(api.local_now(), self.frozen.move_to)
 

@@ -22,7 +22,7 @@ class Log(m.LogSourceEnum):
     ENTRANCE = "entrance"
 
 
-def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> None:
+def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status, trigger: m.Trigger) -> None:
     device, attribute, old, new = status.device, status.attribute, status.old, status.new
     if _entrance_motion_changed(sensor, device, attribute, old, new):
         # The listener runs on the mqtt network thread, where a publish is only

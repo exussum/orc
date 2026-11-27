@@ -120,7 +120,7 @@ def push_public_key() -> str:
     return config.providers.push.public_key()
 
 
-def subscribe_push(subscription: m.PushSubscription, *, greet: bool = False) -> None:
+def subscribe_push(subscription: m.PushSubscription, trigger: m.Trigger, *, greet: bool = False) -> None:
     sqlite.insert_push_subscription(subscription)
     if greet:
         notify(

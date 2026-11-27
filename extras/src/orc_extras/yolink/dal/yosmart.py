@@ -61,10 +61,10 @@ def connect(access_token: str, on_connection: ConnectionCallback, on_report: Rep
             _log.warning("yolink: mqtt connect rc=%s", rc)
             return
         client.subscribe(f"yl-home/{home_id}/+/report", qos=0)
-        on_connection(True)
+        on_connection(True, _trigger("connection"))
 
     def _on_disconnect(client: mqtt.Client, userdata: Any, *args: Any) -> None:
-        on_connection(False)
+        on_connection(False, _trigger("connection"))
 
     def _on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
         parts = msg.topic.split("/")

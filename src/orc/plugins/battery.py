@@ -1,3 +1,4 @@
+from dataclasses import replace
 from functools import partial
 from typing import Any
 
@@ -13,7 +14,7 @@ def setup(ctx: m.AppContext) -> None:
     ctx.api.add_listener(partial(_on_event, ctx))
 
 
-def _on_event(ctx: m.AppContext, status: m.Status) -> None:
+def _on_event(ctx: m.AppContext, status: m.Status, trigger: m.Trigger) -> None:
     device, attribute, old, new = status.device, status.attribute, status.old, status.new
     if attribute != "battery":
         return

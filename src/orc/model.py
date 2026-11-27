@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from orc.log import Log
 
 
-type Listener = Callable[[Status], None]
+type Listener = Callable[[Status, Trigger], None]
 type DeviceCommand = em.Command[Any, Devices]
 type Commands = tuple[DeviceCommand, ...]
 

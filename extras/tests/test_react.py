@@ -96,7 +96,7 @@ def device_report(ctx):
         others = [s for s in known if s.device.id != device_id] if isinstance(known, list) else []
         ctx.api.device_states.return_value = [*others, state]
         attribute = next(iter(attributes))
-        deliver(ctx, m.Status(state.device, attribute, old, attributes[attribute], hubitat.HubitatSource.HUBITAT))
+        deliver(ctx, m.Status(state.device, attribute, old, attributes[attribute], hubitat.HubitatSource.HUBITAT), trigger)
 
     return device_report
 
@@ -111,14 +111,16 @@ def pending_jobs(ctx, react_rules, device_report):
 
 def test_an_event_is_handed_to_the_scheduler_instead_of_evaluated_on_the_mqtt_thread(ctx, react_rules):
     status = m.Status(m.Device("1", "lamp", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT)
-    plugins._on_event(ctx, ctx.sources, status)
+    plugins._on_event(ctx, ctx.sources, status, EVENT)
     ctx.api.dispatch.assert_not_called()
     call = ctx.scheduler.now.call_args
-    assert (call.args, call.kwargs) == ((plugins._run_event, (ctx.sources, status)), {"name": "React"})
+    assert (call.args, call.kwargs) == ((plugins._run_event, (ctx.sources, status, EVENT)), {"name": "React"})
 
 
 def test_an_event_from_a_device_no_rule_watches_queues_nothing(ctx, react_rules):
-    plugins._on_event(ctx, ctx.sources, m.Status(m.Device("999", "other", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT))
+    plugins._on_event(
+        ctx, ctx.sources, m.Status(m.Device("999", "other", "hubitat"), "switch", m.OFF, m.ON, hubitat.HubitatSource.HUBITAT), EVENT
+    )
     ctx.scheduler.now.assert_not_called()
 
 
@@ -165,7 +167,7 @@ def test_switch_on_schedules_reaction(ctx, react_rules, device_report):
     call = ctx.scheduler.once.call_args
     assert call.args[0] is plugins._run_react
     assert call.kwargs["id"].startswith("react-")
-    assert call.args[2] == (ANY, m.Device("1", "lamp", "hubitat"))
+    assert call.args[2] == (ANY, m.Device("1", "lamp", "hubitat"), EVENT)
 
 
 def test_first_report_after_boot_is_not_a_transition(ctx, ruleset, device_report):
