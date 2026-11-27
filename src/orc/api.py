@@ -282,26 +282,22 @@ def run_action(
 ) -> bool:
     ctx = context()
     if id == ORC_SYSTEM_SNAPSHOT:
-        action = _RunAction(
-            lambda entry: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, entry), Message.SNAPSHOT_RESTORE
-        )
+        action = _RunAction(lambda: restore_scene(ORC_SYSTEM_SNAPSHOT, config.default_config.commands, trigger), Message.SNAPSHOT_RESTORE)
     elif (plugin := config.plugin(id)) is not None:
-        action = _RunAction(lambda entry: plugins.execute_plugin(ctx, plugin, device, entry=entry), plugin.name, plugin.delay)
+        action = _RunAction(lambda: plugins.execute_plugin(ctx, plugin, device, trigger=trigger), plugin.name, plugin.delay)
     elif id in config.schedule_routines:
         rule = config.schedule_routines[id]
-        action = _RunAction(
-            lambda entry: _run_schedule_routine(rule, entry, {person.name for person in config.people}, force=True), rule.name
-        )
+        action = _RunAction(lambda: run_schedule_routine(rule, trigger, {person.name for person in config.people}, force=True), rule.name)
     elif id in config.ad_hoc_routines:
         routine = config.ad_hoc_routines[id]
         if isinstance(trigger, m.Button) and routine.snapshot and not ctx.engine.snapshot_active(ORC_SYSTEM_SNAPSHOT):
             end = local_now() + routine.snapshot
             commands = _pause_not_stop(routine.commands)
-            action = _RunAction(lambda entry: override_scene(ORC_SYSTEM_SNAPSHOT, commands, end, routine.name, entry), routine.name)
+            action = _RunAction(lambda: override_scene(ORC_SYSTEM_SNAPSHOT, commands, end, routine.name, trigger), routine.name)
         else:
             base = config.reset_config.commands if routine.reset else ()
             commands = (*base, *routine.commands)
-            action = _RunAction(lambda entry: dispatch(commands, force=True, entry=entry), routine.name, routine.delay)
+            action = _RunAction(lambda: dispatch(commands, force=True, trigger=trigger), routine.name, routine.delay)
     else:
         return False
 
@@ -312,7 +308,7 @@ def run_action(
             queued = ctx.log.write(Message.TASK_QUEUED.format(id=action.name, when=when), trigger)
 
             def run() -> None:
-                started = queued.add(source, display)
+                started = ctx.log.add(queued, trigger.log_source, display)
                 if id != ORC_SYSTEM_SNAPSHOT:
                     ctx.log.last = started
                 action.fn(queued)
@@ -356,24 +352,24 @@ def snapshot_counts(commands: m.Commands) -> tuple[int, int]:
     return lights, sounds
 
 
-def override_scene(key: str, commands: m.Commands, end: datetime, label: str, entry: m.LogEntry) -> None:
+def override_scene(key: str, commands: m.Commands, end: datetime, label: str, trigger: m.Trigger) -> None:
     if not context().engine.snapshot_active(key):
         captured = capture_lights() + capture_sounds()
         context().engine.save_snapshot(key, m.SnapShot(captured, end, label))
         lights, sounds = snapshot_counts(captured)
-        entry.add(entry.source, Message.SNAPSHOT_TAKEN.format(name=label, end=end, lights=lights, sounds=sounds))
-    dispatch(commands, force=True, entry=entry)
+        context().log.write(Message.SNAPSHOT_TAKEN.format(name=label, end=end, lights=lights, sounds=sounds), trigger)
+    dispatch(commands, force=True, trigger=trigger)
 
 
-def restore_scene(key: str, commands: m.Commands, entry: m.LogEntry) -> None:
+def restore_scene(key: str, commands: m.Commands, trigger: m.Trigger) -> None:
     snapshot = context().engine.pop_snapshot(key)
     if snapshot:
         commands = snapshot.routine
-        entry.add(entry.source, Message.SNAPSHOT_RESTORED.format(name=snapshot.label))
-    dispatch(commands, force=True, entry=entry)
+        context().log.write(Message.SNAPSHOT_RESTORED.format(name=snapshot.label), trigger)
+    dispatch(commands, force=True, trigger=trigger)
 
 
-def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) -> None:
+def dispatch(commands: m.Commands, force: bool = False, *, trigger: m.Trigger) -> None:
     commands = squish(commands)
     survived = set(commands) if force else set(context().engine.apply_override(commands))
 
@@ -382,9 +378,9 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
     for command in commands:
         w = command.subject.one()
         if command not in survived:
-            entry.add(entry.source, Message.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"))
+            context().log.write(Message.RULE_SUPPRESSED.format(kinds=f"`{w.kind}`"), trigger)
         elif w in config.virtual_devices:
-            entry.add(entry.source, Message.VIRTUAL_DEVICE_SKIPPED.format(device=w.name))
+            context().log.write(Message.VIRTUAL_DEVICE_SKIPPED.format(device=w.name), trigger)
         elif (dispatch_handler := config.registry.dispatch_handlers.get(w.kind)) is None:
             raise LookupError(f"no dispatch handler for `{w.kind}`")
         else:
@@ -393,10 +389,10 @@ def dispatch(commands: m.Commands, force: bool = False, *, entry: m.LogEntry) ->
             todo.append((dispatch_handler, w, command))
 
     with Pool(max_workers=max(1, len(todo))) as ex:
-        list(ex.map(partial(_dispatch_one, stream=stream, entry=entry), todo))
+        list(ex.map(partial(_dispatch_one, stream=stream, trigger=trigger), todo))
 
 
-def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, entry: m.LogEntry) -> None:
+def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None, trigger: m.Trigger) -> None:
     if (text is None) == (path is None):
         raise ValueError("alert() requires exactly one of text or path")
     device = _alarm_device(severity)
@@ -404,17 +400,17 @@ def alert(severity: m.Alarm, *, text: str | None = None, path: str | None = None
         raise ValueError(f"{device!r}: alert() takes a local file path, which only USB devices can play")
 
     if severity is m.Alarm.EMERGENCY:
-        dispatch(config.routines[config.settings.emergency_routine].commands, force=True, entry=entry)
+        dispatch(config.routines[config.settings.emergency_routine].commands, force=True, trigger=trigger)
         if text is not None:
             video_url = m.AlertVideo(str((URL(config.settings.base_url) / "api/alert.mp4").with_query(text=text)))
-            dispatch((em.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, entry=entry)
+            dispatch((em.Command(m.Devices(config.devices.Chromecast), video_url),), force=True, trigger=trigger)
             if not isinstance(device, config.devices.Chromecast):
-                dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
+                dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, trigger=trigger)
     elif text is not None:
-        dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, entry=entry)
+        dispatch((em.Command(m.Devices(device), m.Speak(text)),), force=True, trigger=trigger)
     else:
         assert path is not None
-        dispatch((em.Command(m.Devices(device), path),), force=True, entry=entry)
+        dispatch((em.Command(m.Devices(device), path),), force=True, trigger=trigger)
 
 
 def fetch_retry_stats() -> tuple[m.RetryStats, ...]:
@@ -587,9 +583,9 @@ def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None,
     flattened: list[m.DeviceCommand] = []
     for what, items in grouped.items():
         squished = _squish(items)
-        if entry and {c.value for c in items} - {c.value for c in squished}:
+        if trigger is not None and {c.value for c in items} - {c.value for c in squished}:
             states = ", ".join(str(c.value) for c in items)
-            entry.add(entry.source, Message.CONFLICTING_ARMS.format(device=what.name, states=states))
+            context().log.write(Message.CONFLICTING_ARMS.format(device=what.name, states=states), trigger)
         flattened.extend(squished)
 
     flattened.sort(key=_op_cmp)
@@ -687,11 +683,11 @@ def replay_day(now: datetime, entry: m.LogEntry) -> None:
     matched = [
         c for when, e in jobs if when <= now and m.SKIP_REPLAY_TAG not in e.routine.tags for c in _matching_items(e.routine, now, present)
     ]
-    dispatch(tuple(matched), force=True, entry=entry)
+    dispatch(tuple(matched), force=True, trigger=trigger)
 
 
 class _RunAction(NamedTuple):
-    fn: Callable[[m.LogEntry], object]
+    fn: Callable[[], object]
     name: str
     delay: timedelta = timedelta()
 
@@ -703,14 +699,14 @@ def _record_duration(name: str) -> Iterator[None]:
     update_avg(name, time.perf_counter() - start)
 
 
-def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], entry: m.LogEntry) -> None:
+def _dispatch_one(job: _Job, *, stream: dict[Any, tuple[str, str]], trigger: m.Trigger) -> None:
     handler, w, command = job
     try:
         handler(context(), w, command, stream)
     except Exception as exc:
         msg = Message.DISPATCH_FAILED.format(device=w.name, exc=exc)
-        entry.add(entry.source, msg)
-        notify(msg, replace(entry.trigger, log_source=entry.source), m.Notification(("dispatch",)))
+        context().log.write(msg, trigger)
+        notify(msg, trigger, m.Notification(("dispatch",)))
         try:
             config.providers.audio.speak(config.settings.attention_device, m.Speak(msg))
         except Exception:
@@ -788,7 +784,7 @@ def _sun_times(midnight: datetime, lat: float, long: float, sunset_lead_hours: i
     return sunrise, sunset
 
 
-def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], force: bool = False) -> None:
+def run_schedule_routine(rule: m.Routine, trigger: m.Trigger, pnames: set[str], force: bool = False) -> None:
     now = local_now()
     if not (matched := _matching_items(rule, now, pnames)):
         if not pnames:
@@ -796,11 +792,11 @@ def _run_schedule_routine(rule: m.Routine, entry: m.LogEntry, pnames: set[str], 
         else:
             unmet = sorted({str(step.command.tag) for step in rule.steps if isinstance(step.command.tag, m.Present | m.Weather)})
             detail = ", ".join(unmet) if unmet else "no conditions met"
-        entry.action += f" — {Message.RULE_SKIPPED.format(detail=detail)}"
+        context().log.write(Message.RULE_SKIPPED.format(detail=detail), trigger)
         return
     elif weather_triggers := {str(c.tag) for c in matched if isinstance(c.tag, m.Weather)}:
-        entry.action += f" (weather: {', '.join(sorted(weather_triggers))})"
-    dispatch(squish(matched, entry), force=force, entry=entry)
+        context().log.write(Message.RULE_WEATHER.format(triggers=", ".join(sorted(weather_triggers))), trigger)
+    dispatch(squish(matched, trigger), force=force, trigger=trigger)
 
 
 def _presence(rule: m.Routine) -> m.Routine:
@@ -901,7 +897,7 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
             device = config.settings.warning_device
         case m.Alarm.ATTENTION:
             device = config.settings.attention_device
-        case _:
+        case m.Alarm.EMERGENCY:
             device = config.settings.emergency_device
     assert device is not None
     return device

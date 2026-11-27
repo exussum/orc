@@ -100,8 +100,13 @@ class Scheduler:
             for id in queued.keys() - jobs.keys():
                 if queued[id].run_at > now:
                     queue_.remove(id)
-            for id in jobs.keys() - queued.keys():
-                queue_.add(jobs[id])
+            for id, job in jobs.items():
+                if (old := queued.get(id)) is None:
+                    queue_.add(job)
+                    continue
+                new = dataclasses.replace(old, run_at=job.run_at, expires_at=job.expires_at, fn=job.fn, payload=job.payload, name=job.name)
+                if new != old:
+                    queue_.add(new)
 
     def cancel(self, id: str, queue: m.QueueName) -> bool:
         return self._coordinator.cancel_job(id, queue)

@@ -122,10 +122,10 @@ def _react(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status
         ctx.scheduler.once(_recheck, state.disabled[name], (ctx, sources, status, watch), id=f"{JOB_ID}-recheck-{name}", name=name)
 
     if fired:
-        entry = _log(ctx, fired[0], device)
+        react = _log(ctx, fired[0], device, trigger)
         for watch in fired[1:]:
-            entry.add(Log.REACT, _line(ctx, watch, device))
-        ctx.api.dispatch(ctx.api.squish(map(_command, fired), entry), entry=entry)
+            ctx.log.write(_line(ctx, watch, device), react)
+        ctx.api.dispatch(ctx.api.squish(map(_command, fired), react), trigger=react)
 
 
 def _recheck(ctx: m.AppContext, sources: dict[str, m.DeviceEnum], status: m.Status, watch: em.Watch[m.Devices]) -> None:
@@ -141,8 +141,8 @@ def _targets(what: m.Devices) -> str:
     return ", ".join(f"`{d.label or d.name}`" for d in what.all())
 
 
-def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> None:
-    ctx.api.dispatch((_command(watch),), entry=_log(ctx, watch, device))
+def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, trigger: m.Trigger) -> None:
+    ctx.api.dispatch((_command(watch),), trigger=_log(ctx, watch, device, trigger))
 
 
 def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device, trigger: m.Trigger) -> m.Trigger:

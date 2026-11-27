@@ -1,4 +1,3 @@
-from dataclasses import replace
 from datetime import date, datetime, timedelta
 from unittest.mock import ANY, MagicMock, patch
 
@@ -64,7 +63,7 @@ def test_console_plugin(flask_client, ctx):
     ):
         response = flask_client.get("/api/run/do-thing")
     assert response.status_code == 200
-    exec_plugin.assert_called_once_with(ctx, plugin, None, entry=ANY)
+    exec_plugin.assert_called_once_with(ctx, plugin, None, trigger=ANY)
 
 
 def test_console_schedule_routine(flask_client, command_dispatch):
@@ -72,7 +71,7 @@ def test_console_schedule_routine(flask_client, command_dispatch):
     with patch.object(config, "schedule_routines", {"r": rule}):
         flask_client.get("/api/run/r")
     command_dispatch.assert_called_once_with(
-        api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=True, entry=ANY
+        api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=True, trigger=ANY
     )
 
 
@@ -81,14 +80,14 @@ def test_console_ad_hoc(flask_client, config_ad_hoc, command_dispatch):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),))
     with config_ad_hoc({"r": action}, reset_config=reset):
         flask_client.get("/api/run/r")
-    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, trigger=ANY)
 
 
 def test_console_ad_hoc_no_reset(flask_client, config_ad_hoc, command_dispatch):
     action = m.AdhocAction((em.Command(m.Devices(orc.Light.b), m.ON),), reset=False)
     with config_ad_hoc({"r": action}):
         flask_client.get("/api/run/r")
-    command_dispatch.assert_called_once_with(api.squish(action.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(api.squish(action.commands), force=True, trigger=ANY)
 
 
 def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, config_ad_hoc, command_dispatch):
@@ -99,7 +98,7 @@ def test_delayed_ad_hoc_nests_its_run_under_the_queued_entry(flask_client, ctx, 
         ctx.scheduler.once.call_args.args[0]()
     (queued,) = api.context().log.rows()
     assert [c.action for c in queued.children] == ["Running `r`"]
-    command_dispatch.assert_called_once_with(action.commands, force=True, entry=queued)
+    command_dispatch.assert_called_once_with(action.commands, force=True, trigger=queued.trigger)
 
 
 def test_console_ad_hoc_snapshot_skipped_for_web_callers(flask_client, ctx, config_ad_hoc, command_dispatch, light_capture):
@@ -109,7 +108,7 @@ def test_console_ad_hoc_snapshot_skipped_for_web_callers(flask_client, ctx, conf
         flask_client.get("/api/run/r")
     assert api.ORC_SYSTEM_SNAPSHOT not in ctx.engine.snapshots()
     light_capture.assert_not_called()
-    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with((*reset.commands, *action.commands), force=True, trigger=ANY)
 
 
 def test_console_unknown_returns_404(flask_client, config_ad_hoc):
@@ -121,7 +120,7 @@ def test_console_unknown_returns_404(flask_client, config_ad_hoc):
 def test_room_on(flask_client, config_rooms, command_dispatch):
     config_rooms({"Living Room": _room(em.Command(m.Devices(orc.Light.a), m.ON))})
     flask_client.get("/api/room/Living Room?state=on")
-    command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.ON),)), force=True, trigger=ANY)
 
 
 def test_room_off_turns_all_off(flask_client, config_rooms, command_dispatch):
@@ -144,7 +143,7 @@ def test_room_follow(flask_client, config_rooms, command_dispatch):
         em.Command(m.Devices(orc.Light.b), m.OFF),
         em.Command(m.Devices(orc.Light.a), m.ON),
     )
-    command_dispatch.assert_called_once_with(expected, force=True, entry=ANY)
+    command_dispatch.assert_called_once_with(expected, force=True, trigger=ANY)
 
 
 def test_room_unknown_state_returns_400(flask_client, config_rooms):

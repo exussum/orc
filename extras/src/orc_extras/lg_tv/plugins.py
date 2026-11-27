@@ -5,7 +5,7 @@ from orc_engine import model as em
 
 import orc_extras.lg_tv
 from orc.kernel.loader import resolve_backend
-from orc.model import OFF, ON, AppContext, DeviceEnum, DeviceStatus, LogEntry
+from orc.model import OFF, ON, AppContext, DeviceEnum, DeviceStatus, Trigger
 from orc_extras.lg_tv.dal.interfaces import WebOsBackend
 
 
@@ -38,7 +38,7 @@ def tv_state(ctx: AppContext, backend: WebOsBackend) -> list[DeviceStatus]:
     ]
 
 
-def pair_tv(ctx: AppContext, device: str, *, entry: LogEntry) -> None:
+def pair_tv(ctx: AppContext, device: str, *, trigger: Trigger) -> None:
     pair(ctx, ctx.config.devices.WebOS[device].value)
 
 

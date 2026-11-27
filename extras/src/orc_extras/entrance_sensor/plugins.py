@@ -39,7 +39,7 @@ def _on_event(ctx: m.AppContext, sensor: SimpleNamespace, status: m.Status) -> N
         ctx.plugin_state[orc_extras.entrance_sensor] = Visit(
             log_entry, previous.present_before if previous else set(ctx.api.present_names())
         )
-        ctx.scheduler.now(_run_motion, (sensor, new, log_entry), name="Entrance Motion")
+        ctx.scheduler.now(_run_motion, (sensor, new, log_entry.trigger), name="Entrance Motion")
 
 
 def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribute: str, old: Any, new: Any) -> bool:
@@ -51,29 +51,29 @@ def _entrance_motion_changed(sensor: SimpleNamespace, device: m.Device, attribut
     )
 
 
-def _run_motion(payload: tuple[SimpleNamespace, Any, m.LogEntry], *, ctx: m.AppContext) -> None:
-    sensor, new, log_entry = payload
+def _run_motion(payload: tuple[SimpleNamespace, Any, m.Trigger], *, ctx: m.AppContext) -> None:
+    sensor, new, trigger = payload
     if new == sensor.setting.active_event:
         ctx.scheduler.pause_queue(m.Queue.IOT)
         ctx.api.pause_presence()
         ctx.api.delete_all_presence(trigger)
         restore = _restorable(ctx, sensor, ctx.engine.pop_snapshot(SNAPSHOT_NAME))
         timed_name, timed_commands = _timed_commands(ctx, sensor)
-        log_entry.add(Log.ENTRANCE, f"Applying `{timed_name}` rules")
-        ctx.api.dispatch((*restore, *timed_commands), force=True, entry=log_entry)
+        ctx.log.write(f"Applying `{timed_name}` rules", trigger)
+        ctx.api.dispatch((*restore, *timed_commands), force=True, trigger=trigger)
     else:
         ctx.api.run_action(sensor.rules.inside, trigger)
     ctx.scheduler.once(
         _run_trigger_sensor_off,
         ctx.api.local_now() + timedelta(minutes=sensor.setting.cleanup_delay_minutes),
-        (sensor, log_entry),
+        (sensor, trigger),
         id=CLEANUP_JOB_ID,
         name="Entrance Cleanup",
     )
 
 
-def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx: m.AppContext) -> None:
-    sensor, log_entry = payload
+def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.Trigger], *, ctx: m.AppContext) -> None:
+    sensor, trigger = payload
     visit = ctx.plugin_state[orc_extras.entrance_sensor]
     ctx.plugin_state[orc_extras.entrance_sensor] = None
     present = ctx.api.check_presence(trigger, probe=True)
@@ -92,8 +92,8 @@ def _run_trigger_sensor_off(payload: tuple[SimpleNamespace, m.LogEntry], *, ctx:
         ctx.log.write(sensor.message.log_absent, trigger)
     else:
         end = ctx.api.local_now() + timedelta(minutes=sensor.setting.snapshot)
-        ctx.api.override_scene(SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, log_entry)
-        log_entry.add(Log.ENTRANCE, sensor.message.log_shutdown)
+        ctx.api.override_scene(SNAPSHOT_NAME, ctx.config.ad_hoc_routines[sensor.rules.shutdown].commands, end, SNAPSHOT_NAME, trigger)
+        ctx.log.write(sensor.message.log_shutdown, trigger)
         if not visit.present_before and not present:
             ctx.log.write(sensor.message.log_nobody, trigger, notification=m.Notification(("entrance",), "/presence/"))
     ctx.log.close_row(visit.entry)
