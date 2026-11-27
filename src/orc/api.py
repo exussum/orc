@@ -882,7 +882,7 @@ def _push_job(payload: tuple[str, str, m.Notification, m.Trigger, tuple[m.PushSu
 def _log_external(status: m.Status) -> None:
     if status.source is m.Source.EXTERNAL:
         line = Message.EXTERNAL_CHANGE.format(device=status.device.name, attribute=status.attribute, old=status.old, new=status.new)
-        context().log.write(m.LogSource.EXTERNAL, line, m.Broker(id="external", source=status.device.source))
+        context().log.write(m.LogSource.EXTERNAL, line, m.Broker(name="external", origin=status.device.source))
 
 
 def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:

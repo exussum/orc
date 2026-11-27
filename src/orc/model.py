@@ -282,18 +282,18 @@ class BatteryLevel(str, Enum):
 
 @dataclass(frozen=True)
 class Trigger:
-    id: str
+    name: str
 
     def __str__(self) -> str:
-        return self.id
+        return self.name
 
 
 @dataclass(frozen=True)
 class Broker(Trigger):
-    source: str = ""
+    origin: str = ""
 
     def __str__(self) -> str:
-        return f"{self.source}:{self.id}"
+        return f"{self.origin}:{self.name}"
 
 
 class Query(Trigger): ...

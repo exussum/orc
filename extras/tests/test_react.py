@@ -612,7 +612,7 @@ def _make(devices, attribute, state, action, target=None, delay=None, cond=None)
 
 
 def _hub(id):
-    return m.Broker(id=id, source="hubitat")
+    return m.Broker(name=id, origin="hubitat")
 
 
 def _dewpoint_of(sensor):

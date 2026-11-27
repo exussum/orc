@@ -146,7 +146,7 @@ def _dispatch(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -
 
 
 def _log(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> m.LogEntry:
-    return ctx.log.write(Log.REACT, _line(ctx, watch, device), m.Broker(id=device.id, source=device.source))
+    return ctx.log.write(Log.REACT, _line(ctx, watch, device), m.Broker(name=device.id, origin=device.source))
 
 
 def _line(ctx: m.AppContext, watch: em.Watch[m.Devices], device: m.Device) -> str:

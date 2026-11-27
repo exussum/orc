@@ -37,7 +37,7 @@ def route_certificate() -> Response:
 def device_certificate(device_id: str) -> Response:
     body = request.get_json(force=True)
     signed = api.sign_device_csr(body["csr"].encode(), device_id)
-    app.orc.log.write(LogSource.LG_AC, f"AC {device_id[:8]}: paired", m.Broker(id=device_id, source=SOURCE))
+    app.orc.log.write(LogSource.LG_AC, f"AC {device_id[:8]}: paired", m.Broker(name=device_id, origin=SOURCE))
     return jsonify(api.cert_response(signed))
 
 

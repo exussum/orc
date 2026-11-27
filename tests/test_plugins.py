@@ -75,7 +75,7 @@ class TestBattery:
             log_call.assert_called_once_with(
                 m.LogSource.SYSTEM,
                 "Low battery on `front door` (CRITICAL)",
-                m.Broker(id="16", source="hubitat"),
+                m.Broker(name="16", origin="hubitat"),
                 notification=m.Notification(("battery", "front door"), "/device/"),
             )
         else:

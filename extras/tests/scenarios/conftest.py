@@ -105,7 +105,7 @@ class House:
 
     @staticmethod
     def broker(device):
-        return m.Broker(id=str(device.value), source="hubitat")
+        return m.Broker(name=str(device.value), origin="hubitat")
 
     @staticmethod
     def log():

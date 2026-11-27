@@ -137,7 +137,7 @@ def test_motion_groups_under_the_trigger_entry(ctx, config_sensor):
     entry = m.LogEntry(NOW, plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Manual("test"))
     ctx.log.write.return_value = entry
     _trigger_sensor(ctx, config_sensor, "16", "active")
-    ctx.log.write.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(id="16", source="hubitat"))
+    ctx.log.write.assert_called_once_with(plugins.Log.ENTRANCE, plugins.TRIGGER_MSG, m.Broker(name="16", origin="hubitat"))
     assert [c.action for c in entry.children] == ["Applying `Day` rules"]
 
 
