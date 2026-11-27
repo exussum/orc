@@ -12,7 +12,7 @@ from datetime import time as dt_time
 from functools import cache, lru_cache, partial
 from importlib import resources  # nosemgrep: python37-compatibility-importlib2
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, assert_never
 
 from orc_engine import cast as engine_cast
 from orc_engine import engine
@@ -549,13 +549,12 @@ def get_schedule(trigger: m.Trigger) -> list[tuple[datetime, m.ThemeEntry]]:
     return result
 
 
-def run_iot_job(payload: m.IotJob) -> None:
-    entry = context().log.write(f"`{payload.rule.name}`", m.Scheduled(payload.routine_id, log_source=m.LogSource.ROUTINE))
-    context().log.last = entry
-    _run_schedule_routine(payload.rule, entry, present_names())
-
-
-def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None, *, state_override: Any = None) -> m.Commands:
+def squish(
+    commands: Iterable[m.DeviceCommand],
+    trigger: m.Trigger | None = None,
+    *,
+    state_override: Any = None,
+) -> m.Commands:
     grouped: defaultdict[Any, list[m.DeviceCommand]] = defaultdict(list)
     for command in commands:
         value = command.value if state_override is None else state_override
@@ -574,32 +573,8 @@ def squish(commands: Iterable[m.DeviceCommand], entry: m.LogEntry | None = None,
     return tuple(flattened)
 
 
-def rebuild_jobs() -> None:
-    rebuild_iot_schedule()
-
-
-def setup_scheduler() -> None:
-    ctx = context()
-    rebuild_iot_schedule()
-    for job_id, func, crontab, name, queue in (
-        ("iot-cron", rebuild_iot_schedule, "10 0 * * *", "Iot Cron", m.Queue.ADHOC),
-        ("presence-cron", _presence_cron_job, "5 * * * *", "Presence Cron", m.Queue.PRESENCE),
-        ("findhub-cron", _tag_keys_cron_job, "0 */4 * * *", "Find Hub Cron", m.Queue.PRESENCE),
-        ("stats-cron", _retry_stats_job, "*/5 * * * *", "Stats Cron", m.Queue.FETCH),
-    ):
-        ctx.scheduler.cron(func, crontab, id=job_id, name=name, queue=queue)
-    ctx.scheduler.now(_retry_stats_job, name="Stats Boot Check", queue=m.Queue.FETCH)
-    ctx.scheduler.on_expired(_log_expired)
-    ctx.scheduler.on_cancelled(_log_cancelled)
-
-
-def _log_expired(*, queue: Any, job: Any) -> None:
-    context().log.write(Message.TASK_EXPIRED.format(id=job.name or job.id), m.System("expired", log_source=m.LogSource.SYSTEM))
-
-
-def _log_cancelled(*, queue: Any, job: Any) -> None:
-    if job.id in config.ad_hoc_routines:
-        context().log.write(Message.TASK_CANCELLED.format(id=job.name or job.id), m.Manual(job.id, log_source=m.LogSource.MANUAL))
+def rebuild_jobs(trigger: m.Trigger) -> None:
+    rebuild_iot_schedule(trigger)
 
 
 def has_presence(rule: m.Routine) -> bool:
@@ -649,7 +624,7 @@ def rebuild_iot_schedule(trigger: m.Trigger) -> None:
         Job(
             aware(run_at),
             None,
-            run_iot_job,
+            ctx.scheduler.on_run,
             m.IotJob(entry.routine, entry.routine_id),
             id=f"iot-{entry.routine_id}-{run_at:%Y-%m-%dT%H:%M}",
             name=entry.routine.name,
@@ -657,7 +632,7 @@ def rebuild_iot_schedule(trigger: m.Trigger) -> None:
         for run_at, entry in get_schedule(trigger)
         if now <= run_at
     ]
-    context().scheduler.sync(jobs, m.Queue.IOT)
+    ctx.scheduler.sync(jobs, m.Queue.IOT)
 
 
 def replay_day(now: datetime, trigger: m.Trigger) -> None:
@@ -882,6 +857,8 @@ def _alarm_device(severity: m.Alarm) -> m.DeviceEnum:
             device = config.settings.attention_device
         case m.Alarm.EMERGENCY:
             device = config.settings.emergency_device
+        case _:
+            assert_never(severity)
     assert device is not None
     return device
 

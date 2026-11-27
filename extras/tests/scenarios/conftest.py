@@ -146,7 +146,7 @@ def house(request, monkeypatch, tmp_path):
         net.presence._tz = config.settings.tz
         net.presence.start(config.tags, config.settings.tz, inbound.on_heard)
 
-        scheduler = ManualScheduler(config.settings.jobs_db, config.settings.tz)
+        scheduler = ManualScheduler(config.settings.jobs_db, config.settings.tz, on_run=inbound.on_run, on_expired=inbound.on_expired)
         ctx = m.AppContext(scheduler=scheduler, engine=api.runtime())
         scheduler.start(ctx)
         api.set_ctx(ctx)

@@ -107,8 +107,21 @@ def _step(boot: Boot, name: str) -> Iterator[None]:
     start = time.perf_counter()
     yield
     if boot.entry is None:
-        boot.entry, boot.started = boot.log.write(Message.BOOT, m.System("boot", log_source=m.LogSource.SYSTEM)), start
-    boot.entry.add(m.LogSource.SYSTEM, Message.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
+        boot.entry, boot.started = boot.log.write(Message.BOOT, boot.trigger), start
+    boot.log.add(boot.entry, m.LogSource.SYSTEM, Message.BOOT_STEP.format(name=name, seconds=f"{time.perf_counter() - start:.1f}"))
+
+
+def setup_scheduler(ctx: m.AppContext, trigger: m.Trigger) -> None:
+    api.rebuild_iot_schedule(trigger)
+    for job_id, func, crontab, name, queue in (
+        ("iot-cron", inbound.rebuild_iot_cron, "10 0 * * *", "Iot Cron", m.Queue.ADHOC),
+        ("presence-cron", inbound.check_presence_cron, "5 * * * *", "Presence Cron", m.Queue.PRESENCE),
+        ("findhub-cron", inbound.refresh_tag_keys_cron, "0 */4 * * *", "Find Hub Cron", m.Queue.PRESENCE),
+        ("stats-cron", inbound.refresh_stats_cron, "*/5 * * * *", "Stats Cron", m.Queue.FETCH),
+    ):
+        ctx.scheduler.cron(func, crontab, id=job_id, name=name, queue=queue)
+    ctx.scheduler.now(inbound.refresh_stats_cron, name="Stats Boot Check", queue=m.Queue.FETCH)
+    ctx.scheduler.add_listener(oq.Event.CANCELED, inbound.on_cancelled)
 
 
 def _start_services(ctx: m.AppContext, boot: Boot) -> None:
@@ -147,7 +160,9 @@ def _build_app(boot: Boot) -> OrcFlask:
         api.init_db()
         api.load_durations()
 
-    ctx = m.AppContext(Scheduler(config.config.settings.jobs_db, config.config.settings.tz), api.runtime(), log=boot.log)
+    settings = config.settings
+    scheduler = Scheduler(settings.jobs_db, settings.tz, on_run=inbound.on_run, on_expired=inbound.on_expired)
+    ctx = m.AppContext(scheduler, api.runtime(), log=boot.log)
     api.set_ctx(ctx)
     return _build_flask(ctx)
 

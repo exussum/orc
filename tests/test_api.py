@@ -678,7 +678,7 @@ class TestGetSchedule:
 
 @pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
 def test_a_routine_listed_twice_in_a_day_gets_two_jobs(ctx, tmp_path):
-    ctx.scheduler = Scheduler(str(tmp_path / "jobs.sqlite"), config.settings.tz)
+    ctx.scheduler = Scheduler(str(tmp_path / "jobs.sqlite"), config.settings.tz, on_run=inbound.on_run, on_expired=inbound.on_expired)
     rule = _routine("r", time(8, 0))
     when = [datetime(2026, 1, 5, hour, tzinfo=config.settings.tz) for hour in (8, 18)]
     with patch.object(api, "get_schedule", return_value=[(at, m.ThemeEntry(at.time(), rule, "r")) for at in when]):
@@ -695,7 +695,7 @@ def _pause(scheduler, queue, name):
 
 
 def _rebuild_ctx(ctx, tmp_path, rules):
-    ctx.scheduler = Scheduler(str(tmp_path / "jobs.sqlite"), config.settings.tz)
+    ctx.scheduler = Scheduler(str(tmp_path / "jobs.sqlite"), config.settings.tz, on_run=inbound.on_run, on_expired=inbound.on_expired)
     entries = [
         (datetime(2026, 1, 5, 8 + i, tzinfo=config.settings.tz), m.ThemeEntry(time(8 + i, 0), _routine(n, time(8, 0)), n))
         for i, n in enumerate(rules)
@@ -725,7 +725,7 @@ def test_boot_sync_before_start_drops_a_removed_routines_job(ctx, tmp_path):
 
 
 @pytest.mark.time_machine(datetime(2026, 1, 5, 7, tzinfo=config.settings.tz), tick=False)
-def test_repeated_rebuild_jobs_register_listeners_once_and_keep_a_paused_cron(ctx, tmp_path):
+def test_repeated_rebuild_jobs_keep_a_paused_cron(ctx, tmp_path):
     with _rebuild_ctx(ctx, tmp_path, ["a"]):
         runner.setup_scheduler(ctx, TRIGGER)
         _pause(ctx.scheduler, m.Queue.ADHOC, "Iot Cron")
@@ -756,56 +756,64 @@ class TestPresence:
         api.mark_present(["Alice"], datetime(2026, 1, 4, 23, 30, tzinfo=config.settings.tz), TRIGGER)
         assert api.present_names() == set()
 
-    def test_run_iot_job_skips_when_presence_absent(self, command_dispatch):
+    def test_on_run_skips_when_presence_absent(self, command_dispatch):
         rule = self._routine("partner-r", m.Present("Alice"))
-        api.run_iot_job(m.IotJob(rule, "r"))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
         command_dispatch.assert_not_called()
 
-    def test_run_iot_job_runs_when_presence_present(self, command_dispatch):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
+    def test_on_run_runs_when_presence_present(self, command_dispatch):
+        api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("partner-r", m.Present("Alice"))
-        api.run_iot_job(m.IotJob(rule, "r"))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
         command_dispatch.assert_called_once_with(
             api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Present("Alice")),)), force=False, trigger=ANY
         )
 
-    def test_run_iot_job_runs_when_no_presence_required(self, command_dispatch):
+    def test_on_run_runs_when_no_presence_required(self, command_dispatch):
         rule = _routine("r", time(8, 0), em.Command(m.Devices(orc.Light.a), m.OFF))
-        api.run_iot_job(m.IotJob(rule, "r"))
-        command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, entry=ANY)
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
+        command_dispatch.assert_called_once_with(api.squish((em.Command(m.Devices(orc.Light.a), m.OFF),)), force=False, trigger=ANY)
 
-    def test_run_iot_job_system_trigger_bypasses_presence(self, command_dispatch):
+    def test_on_run_system_trigger_bypasses_presence(self, command_dispatch):
         rule = self._routine("reset-r", em.Always())
-        api.run_iot_job(m.IotJob(rule, "r"))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
         command_dispatch.assert_called_once_with(
             api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=em.Always()),)), force=False, trigger=ANY
         )
 
-    def test_run_iot_job_anyone_trigger_runs_when_someone_present(self, command_dispatch):
-        api.mark_present(["Bob"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
+    def test_on_run_anyone_trigger_runs_when_someone_present(self, command_dispatch):
+        api.mark_present(["Bob"], api.local_now(), TRIGGER)
         rule = self._routine("anyone-r", m.Anyone())
-        api.run_iot_job(m.IotJob(rule, "r"))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
         command_dispatch.assert_called_once_with(
             api.squish((em.Command(m.Devices(orc.Light.a), m.OFF, tag=m.Anyone()),)), force=False, trigger=ANY
         )
 
-    def test_run_iot_job_anyone_trigger_skips_when_no_one_present(self, command_dispatch):
+    def test_on_run_anyone_trigger_skips_when_no_one_present(self, command_dispatch):
         rule = self._routine("anyone-r", m.Anyone())
-        api.run_iot_job(m.IotJob(rule, "r"))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
         command_dispatch.assert_not_called()
 
     def test_skip_log_blames_absence(self, command_dispatch):
         rule = self._routine("sunny-r", m.Weather(m.WeatherCondition.SUNNY))
-        api.run_iot_job(m.IotJob(rule, "r"))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
         command_dispatch.assert_not_called()
         assert any("nobody home" in c.action for c in api.context().log.rows()[0].children)
 
-    def test_run_iot_job_skip_log_lists_weather_when_someone_home(self, command_dispatch):
-        api.mark_present(["Alice"], api.local_now(), TRIGGER, m.LogSource.SYSTEM)
+    def test_on_run_skip_log_lists_weather_when_someone_home(self, command_dispatch):
+        api.mark_present(["Alice"], api.local_now(), TRIGGER)
         rule = self._routine("cloudy-r", m.Weather(m.WeatherCondition.CLOUDY))
-        api.run_iot_job(m.IotJob(rule, "r"))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
         command_dispatch.assert_not_called()
-        assert "CLOUDY" in api.context().log.rows()[0].action
+        assert any("CLOUDY" in c.action for c in api.context().log.rows()[0].children)
+
+    def test_on_run_logs_weather_as_child(self, command_dispatch):
+        api.mark_present(["Alice"], api.local_now(), TRIGGER)
+        rule = self._routine("sunny-r", m.Weather(m.WeatherCondition.SUNNY))
+        inbound.on_run(m.IotJob(rule, "r"), ctx=api.context())
+        command_dispatch.assert_called_once()
+        row = next(e for e in api.context().log.rows() if e.action == "`sunny-r`")
+        assert [c.action for c in row.children] == ["weather: SUNNY"]
 
     def test_replay_day_skips_routines_for_absent_people(self, log_entry, command_dispatch, elapsed_schedule):
         partner = self._routine("partner-r", m.Present("Alice"))
@@ -1007,4 +1015,31 @@ def test_squish_logs_conflicting_arms_for_states_that_differ_by_an_unsaid_field(
     )
     squished = api.squish(commands, replace(TRIGGER, log_source=m.LogSource.MANUAL))
     assert [c.value for c in squished] == [m.LightState(switch=m.ON, level=50)]
-    assert any(c.args[1] == api.Message.CONFLICTING_ARMS.format(device=orc.Light.a.name, states="on, 50") for c in entry.add.call_args_list)
+    assert [e.action for e in api.context().log.rows()] == [api.Message.CONFLICTING_ARMS.format(device=orc.Light.a.name, states="on, 50")]
+
+
+class TestCancelledListener:
+    @pytest.fixture(autouse=True)
+    def reset_log(self):
+        api.context().log.clear()
+
+    def test_cancelling_ad_hoc_job_logs_it(self, ctx, config_ad_hoc):
+        job = SimpleNamespace(id="movie", name="Nice Name")
+        with config_ad_hoc({"movie": object()}):
+            inbound.on_cancelled(queue=None, job=job, ctx=ctx)
+        [entry] = ctx.log.rows()
+        assert (entry.action, entry.trigger.name, entry.trigger.log_source) == ("Cancelled: `Nice Name`", "movie", m.LogSource.MANUAL)
+
+    def test_cancelling_another_job_logs_nothing(self, ctx, config_ad_hoc):
+        with config_ad_hoc({}):
+            inbound.on_cancelled(queue=None, job=SimpleNamespace(id="other", name="Other"), ctx=ctx)
+        assert ctx.log.rows() == []
+
+    def test_scheduler_fires_cancel_listener(self, ctx, tmp_path):
+        ctx.scheduler = Scheduler(str(tmp_path / "jobs.sqlite"), config.settings.tz, on_run=inbound.on_run, on_expired=inbound.on_expired)
+        seen = []
+        ctx.scheduler.add_listener(oq.Event.CANCELED, lambda *, queue, job, ctx: seen.append(job.id))
+        ctx.scheduler.once(inbound.refresh_stats_cron, datetime(2030, 1, 1, tzinfo=config.settings.tz), id="movie", name="Nice Name")
+        ctx.scheduler.start(ctx)
+        assert ctx.scheduler.cancel("movie", m.Queue.ADHOC)
+        assert seen == ["movie"]

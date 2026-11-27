@@ -42,9 +42,7 @@ class TestButtons:
         assert now.call_args[1]["queue"] == m.Queue.ADHOC
         action_run.return_value = True
         func(payload, ctx=ctx)
-        action_run.assert_called_once_with(
-            "TV Lights", m.Button(str(orc.Light.a.value), log_source=m.LogSource.EXTERNAL), source=m.LogSource.EXTERNAL
-        )
+        action_run.assert_called_once_with("TV Lights", m.Button(str(orc.Light.a.value), id=TRIGGER.id, log_source=m.LogSource.EXTERNAL))
 
     def test_unmapped_event_is_ignored(self, ctx, action_run):
         on_button = self._wire(ctx, (m.Remote(orc.Light.a, 1, "held", "TV Lights"),))

@@ -1,14 +1,17 @@
+import dataclasses
 import json
 import threading
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+import orc_queue as oq
 import pytest
 import time_machine
 from command_cfg import ConfigError
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from orc_engine import model as em
 from orc_queue import Job, utcnow
 from pykeepass import create_database
 from pywebpush import WebPushException
@@ -218,7 +221,9 @@ def _job(id, run_at, *, disable=False):
 
 @pytest.fixture
 def scheduler(tmp_path):
-    return Scheduler(str(tmp_path / "jobs.sqlite"), timezone.utc)
+    return Scheduler(
+        str(tmp_path / "jobs.sqlite"), timezone.utc, on_run=lambda payload, *, ctx: None, on_expired=lambda *, queue, job, ctx: None
+    )
 
 
 def _queue(scheduler, *jobs):
@@ -239,6 +244,37 @@ def test_sync_removes_unwanted_jobs_but_leaves_past_due_ones(scheduler):
     _queue(scheduler, _job("past", now - timedelta(minutes=1)), _job("gone", now + timedelta(hours=1)))
     scheduler.sync([], m.Queue.IOT)
     assert [job.id for job in scheduler.jobs(m.Queue.IOT)] == ["past"]
+
+
+def test_sync_updates_payload_keeps_pause(scheduler):
+    later = utcnow() + timedelta(hours=1)
+    _queue(scheduler, Job(later, None, _noop, "old", id="a", name="a", disable=True))
+    scheduler.sync([Job(later, None, _noop, "new", id="a", name="a")], m.Queue.IOT)
+    [job] = scheduler.jobs(m.Queue.IOT)
+    assert (job.payload, job.disable) == ("new", True)
+
+
+def test_sync_skips_identical_job(scheduler):
+    later = utcnow() + timedelta(hours=1)
+    rule = em.Rule((), name="r", tags=frozenset({"t"}))
+    _queue(scheduler, Job(later, None, _noop, m.IotJob(rule, "r"), id="a", name="a"))
+    events = []
+    oq.on(scheduler.events, oq.Event.MODIFIED, lambda **kw: events.append(kw))
+    scheduler.sync([Job(later, None, _noop, m.IotJob(rule, "r"), id="a", name="a")], m.Queue.IOT)
+    assert events == []
+
+
+@dataclasses.dataclass
+class _Counted(Job):
+    runs: int = 0
+
+
+def test_sync_keeps_unset_fields(scheduler):
+    later = utcnow() + timedelta(hours=1)
+    _queue(scheduler, _Counted(later, None, _noop, "old", id="a", name="a", runs=3))
+    scheduler.sync([Job(later, None, _noop, "new", id="a", name="a")], m.Queue.IOT)
+    [job] = scheduler.jobs(m.Queue.IOT)
+    assert (job.payload, job.runs) == ("new", 3)
 
 
 def test_tag_clock_needs_a_key_row():

@@ -55,7 +55,7 @@ def receive(topic: str, payload: bytes, trigger: m.Broker) -> None:
         _log.exception("mqtt: message handling failed for %s", topic)
         return
     for status in statuses:
-        _fire(status_listeners, topic, status)
+        _fire(status_listeners, topic, status, replace(trigger, name=status.device.id, origin=status.device.source))
 
 
 # The adapter always sees a dict: the parsed object, or {} for an empty payload (the
